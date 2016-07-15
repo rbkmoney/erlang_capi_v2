@@ -6,14 +6,9 @@ SUBTARGETS = $(patsubst %,%/.git,$(SUBMODULES))
 SWAGGER_SCHEME = schemes/swag/swagger.yaml
 SWAGGER_APP_PATH = apps/swagger
 SWAGGER_APP_TARGET = $(SWAGGER_APP_PATH)/rebar.config
-
-which = $(if $(shell which $(1) 2>/dev/null),\
-	$(shell which $(1) 2>/dev/null),\
-	$(error "Error: could not locate $(1)!"))
-
-DOCKER = $(call which, docker)
-PACKER = $(call which, packer)
-SWAGGER_CODEGEN = $(call which, SWAGGER_CODEGEN)
+ifndef SWAGGER_CODEGEN
+$(error SWAGGER_CODEGEN is not set)
+endif
 
 .PHONY: all submodules compile devrel start test clean distclean dialyze release containerize swagger_regenerate
 
@@ -56,6 +51,8 @@ distclean:
 dialyze:
 	$(REBAR) dialyzer
 
+DOCKER := $(shell which docker 2>/dev/null)
+PACKER := $(shell which packer 2>/dev/null)
 BASE_DIR := $(shell pwd)
 
 release: ~/.docker/config.json distclean
@@ -73,8 +70,9 @@ define swagger_regenerate
 	$(SWAGGER_CODEGEN) generate -i $(SWAGGER_SCHEME) -l erlang-server -o $(SWAGGER_APP_PATH);
 endef
 
-$(SWAGGER_APP_TARGET): $(SWAGGER_SCHEME)
+$(SWAGGER_APP_TARGET):
 	$(call swagger_regenerate)
 
 swagger_regenerate:
 	$(call swagger_regenerate)
+

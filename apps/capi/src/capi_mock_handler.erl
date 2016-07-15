@@ -17,87 +17,71 @@
 -export([code_change/3]).
 
 -record(state, {
-    tid :: ets:tid(),
-    last_id = 0 ::integer()
+    tid,
+    last_id = 0
 }).
 
--spec start_link() -> {ok, Pid :: pid()} | ignore | {error, Error :: any()}.
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
--spec authorize_api_key(ApiKey :: binary(), OperationID :: atom()) -> Result :: boolean() | {boolean(), #{binary() => any()}}.
 authorize_api_key(ApiKey, OperationID) -> capi_auth:auth_api_key(ApiKey, OperationID).
 
--spec handle_request(OperationID :: atom(), Req :: #{}) -> {Code :: integer, Headers :: [], Response :: #{}}.
 handle_request('CreateInvoice', Req) ->
-    InvoiceParams = maps:get('CreateInvoiceArgs', Req),
+    Params = maps:get('CreateInvoiceArgs', Req),
     ID = new_id(),
     Invoice = #{
-        <<"id">> => ID,
-        <<"amount">> => maps:get(<<"amount">>, InvoiceParams),
-        <<"context">> => maps:get(<<"context">>, InvoiceParams),
-        <<"currency">> => maps:get(<<"currency">>, InvoiceParams),
-        <<"description">> => maps:get(<<"description">>, InvoiceParams),
-        <<"dueDate">> => maps:get(<<"dueDate">>, InvoiceParams),
-        <<"product">> => maps:get(<<"product">>, InvoiceParams),
-        <<"shopID">> => maps:get(<<"shopID">>, InvoiceParams)
+        <<"id">> => new_id(),
+        <<"amount">> => maps:get(<<"amount">>, Params),
+        <<"context">> => maps:get(<<"context">>, Params),
+        <<"currency">> => maps:get(<<"currency">>, Params),
+        <<"description">> => maps:get(<<"description">>, Params),
+        <<"dueDate">> => maps:get(<<"dueDate">>, Params),
+        <<"product">> => maps:get(<<"product">>, Params),
+        <<"shopID">> => maps:get(<<"shopID">>, Params)
     },
-    put_data(ID, invoice, Invoice),
+    put_data(ID, Invoice),
     Resp = #{
         <<"id">> => ID
     },
     {201, [], Resp};
 
-handle_request('CreatePayment', Req) ->
-    InvoiceID = maps:get('invoice_id', Req),
-    PaymentParams = maps:get('CreatePaymentArgs', Req),
-    PaymentSession = maps:get(<<"paymentSession">>, PaymentParams),
-    case match_data({{'$1', session}, PaymentSession}) of
-        [[_SessionID]] ->
-            delete_data({{'$1', session}, '_'}),
-            PaymentID = new_id(),
-            Payment = #{
-                <<"id">> => PaymentID ,
-                <<"invoiceID">> => InvoiceID,
-                <<"createdAt">> => <<"2016-12-12 17:00:00">>,
-                <<"status">> => <<"pending">>,
-                <<"paymentToolToken">> => maps:get(<<"paymentToolToken">>, PaymentParams)
-            },
-            put_data(PaymentID, payment, Payment),
-            Resp = #{
-                <<"id">> => PaymentID
-            },
-            {201, [], Resp};
-        _ ->
-            Resp = logic_error(<<"expired_session">>, <<"Payment session is not valid">>),
-            {400, [], Resp}
-    end;
+handle_request('CreatePayment', _Req) ->
+    {501, [], <<"Not implemented">>};
 
 handle_request('CreatePaymentToolToken', Req) ->
     Params = maps:get('PaymentTool', Req),
     Token = tokenize_payment_tool(Params),
-    put_data(new_id(), token, Token),
-    Session = generate_session(),
-    put_data(new_id(), session, Session),
+    put_data(new_id(), Token),
     Resp = #{
         <<"token">> => Token,
-        <<"session">> => Session
+        <<"session">> => generate_session()
     },
     {201, [], Resp};
 
-handle_request('GetInvoiceByID', Req) ->
-    InvoiceID = maps:get(invoice_id, Req),
-    [{_, Invoice}] = get_data(InvoiceID, invoice),
+handle_request('CreateProfile', _Req) ->
+    {501, [], <<"Not implemented">>};
+
+handle_request('DeleteProfile', _Req) ->
+    {501, [], <<"Not implemented">>};
+
+handle_request('GetInvoiceByID', _Req = #{<<"id">> := ID}) ->
+    Invoice = get_data(ID),
     {200, [], Invoice};
 
 handle_request('GetInvoiceEvents', _Req) ->
-    Events = [],
-    {200, [], Events};
+    {501, [], <<"Not implemented">>};
 
-handle_request('GetPaymentByID', Req) ->
-    PaymentID = maps:get(payment_id, Req),
-    [{_, Payment}] = get_data(PaymentID, payment),
-    {200, [], Payment};
+handle_request('GetPaymentByID', _Req) ->
+    {501, [], <<"Not implemented">>};
+
+handle_request('GetProfileByID', _Req) ->
+    {501, [], <<"Not implemented">>};
+
+handle_request('GetProfiles', _Req) ->
+    {501, [], <<"Not implemented">>};
+
+handle_request('UpdateProfile', _Req) ->
+    {501, [], <<"Not implemented">>};
 
 handle_request(OperationID, Req) ->
     io:format(user, "Got request to process: ~p~n", [{OperationID, Req}]),
@@ -105,67 +89,43 @@ handle_request(OperationID, Req) ->
 
 
 %%%
-
--type callref() :: {pid(), Tag :: reference()}.
--type st() :: #state{}.
-
--spec init( Args :: any()) -> {ok, st()}.
 init(_Args) ->
     TID = ets:new(mock_storage, [ordered_set, private, {heir, none}]),
     {ok, #state{tid = TID}}.
 
--spec handle_call(Request :: any(), From :: callref(), st()) -> {reply, term(), st()} | {noreply, st()}.
-handle_call({put, ID, Type, Data}, _From, State = #state{tid = TID}) ->
-    Result = ets:insert(TID, {wrap_id(ID, Type), Data}),
+handle_call({put, ID, Data}, _From, State = #state{tid = TID}) ->
+    Result = ets:insert(TID, {ID, Data}),
     {reply, Result, State};
 
-handle_call({get, ID, Type}, _From, State = #state{tid = TID}) ->
-    Result = ets:lookup(TID, wrap_id(ID, Type)),
-    {reply, Result, State};
-
-handle_call({match, Pattern}, _From, State = #state{tid = TID}) ->
-    Result = ets:match(TID, Pattern),
-    {reply, Result, State};
-
-handle_call({delete, Pattern}, _From, State = #state{tid = TID}) ->
-    Result = ets:match_delete(TID, Pattern),
+handle_call({get, ID}, _From, State = #state{tid = TID}) ->
+    Result = ets:lookup(TID, ID),
     {reply, Result, State};
 
 handle_call(id, _From, State = #state{last_id = ID}) ->
     NewID = ID + 1,
     {reply, NewID, State#state{last_id = NewID}}.
 
--spec handle_cast(Request :: any(), st()) -> {noreply, st()}.
 handle_cast(_Request, State) ->
     {noreply, State}.
 
--spec handle_info(any(), st()) -> {noreply, st()}.
 handle_info(_Info, State) ->
     {noreply, State}.
 
--spec terminate(any(), st()) -> ok.
 terminate(_Reason, _State) ->
     ok.
 
--spec code_change(Vsn :: term() | {down, Vsn :: term()}, st(), term()) -> {error, noimpl}.
-code_change(_OldVsn, _State, _Extra) ->
-    {error, noimpl}.
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
 
-put_data(ID, Type, Data) ->
-    gen_server:call(?MODULE, {put, ID, Type, Data}).
+put_data(ID, Data) ->
+    gen_server:call(?MODULE, {put, ID, Data}).
 
-get_data(ID, Type) ->
-    gen_server:call(?MODULE, {get, ID, Type}).
-
-match_data(Pattern) ->
-    gen_server:call(?MODULE, {match, Pattern}).
-
-delete_data(Pattern) ->
-    gen_server:call(?MODULE, {delete, Pattern}).
+get_data(ID) ->
+    gen_server:call(?MODULE, {get, ID}).
 
 new_id() ->
     ID = gen_server:call(?MODULE, id),
-    genlib:to_binary(ID).
+    integer_to_binary(ID).
 
 tokenize_payment_tool(Params = #{<<"paymentToolType">> := <<"cardData">>}) ->
     CardNumber = genlib:to_binary(maps:get(<<"cardNumber">>, Params)),
@@ -177,9 +137,3 @@ tokenize_payment_tool(_) ->
 
 generate_session() ->
     integer_to_binary(rand:uniform(100000)).
-
-logic_error(Code, Message) ->
-    #{code => Code, message => Message}.
-
-wrap_id(ID, Type) ->
-    {ID, Type}.
