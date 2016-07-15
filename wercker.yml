@@ -1,0 +1,16 @@
+box: erlang:18
+
+dev:
+    steps:
+      - internal/shell:
+        code: make compile
+
+build:
+    steps:
+      - script:
+        name: run test suite
+        code: make test
+    after-steps:
+      - slack-notifier:
+        url: ${SLACK_WEBHOOK_URL}
+        username: "wercker"

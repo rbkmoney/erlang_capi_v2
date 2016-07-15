@@ -1,0 +1,6 @@
+-sname capi
+
+-setcookie capi_cookie
+
++K true
++A 10
