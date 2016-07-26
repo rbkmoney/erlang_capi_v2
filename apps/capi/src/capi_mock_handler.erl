@@ -27,17 +27,17 @@ start_link() ->
 authorize_api_key(ApiKey, OperationID) -> capi_auth:auth_api_key(ApiKey, OperationID).
 
 handle_request('CreateInvoice', Req) ->
-    Params = maps:get('CreateInvoiceArgs', Req),
+    InvoiceParams = maps:get('CreateInvoiceArgs', Req),
     ID = new_id(),
     Invoice = #{
-        <<"id">> => new_id(),
-        <<"amount">> => maps:get(<<"amount">>, Params),
-        <<"context">> => maps:get(<<"context">>, Params),
-        <<"currency">> => maps:get(<<"currency">>, Params),
-        <<"description">> => maps:get(<<"description">>, Params),
-        <<"dueDate">> => maps:get(<<"dueDate">>, Params),
-        <<"product">> => maps:get(<<"product">>, Params),
-        <<"shopID">> => maps:get(<<"shopID">>, Params)
+        <<"id">> => ID,
+        <<"amount">> => maps:get(<<"amount">>, InvoiceParams),
+        <<"context">> => maps:get(<<"context">>, InvoiceParams),
+        <<"currency">> => maps:get(<<"currency">>, InvoiceParams),
+        <<"description">> => maps:get(<<"description">>, InvoiceParams),
+        <<"dueDate">> => maps:get(<<"dueDate">>, InvoiceParams),
+        <<"product">> => maps:get(<<"product">>, InvoiceParams),
+        <<"shopID">> => maps:get(<<"shopID">>, InvoiceParams)
     },
     put_data(ID, Invoice),
     Resp = #{
@@ -45,8 +45,22 @@ handle_request('CreateInvoice', Req) ->
     },
     {201, [], Resp};
 
-handle_request('CreatePayment', _Req) ->
-    {501, [], <<"Not implemented">>};
+handle_request('CreatePayment', Req) ->
+    InvoiceID = maps:get('invoice_id', Req),
+    PaymentParams = maps:get('CreatePaymentArgs', Req),
+    ID = new_id(),
+    Payment = #{
+        <<"id">> => ID ,
+        <<"invoiceID">> => InvoiceID,
+        <<"createdAt">> => <<"2016-12-12 17:00:00">>,
+        <<"status">> => <<"pending">>,
+        <<"paymentToolToken">> => maps:get(<<"paymentToolToken">>, PaymentParams)
+    },
+    put_data(ID, Payment),
+    Resp = #{
+        <<"id">> => ID
+    },
+    {201, [], Resp};
 
 handle_request('CreatePaymentToolToken', Req) ->
     Params = maps:get('PaymentTool', Req),
@@ -58,30 +72,19 @@ handle_request('CreatePaymentToolToken', Req) ->
     },
     {201, [], Resp};
 
-handle_request('CreateProfile', _Req) ->
-    {501, [], <<"Not implemented">>};
-
-handle_request('DeleteProfile', _Req) ->
-    {501, [], <<"Not implemented">>};
-
-handle_request('GetInvoiceByID', _Req = #{<<"id">> := ID}) ->
-    Invoice = get_data(ID),
+handle_request('GetInvoiceByID', Req) ->
+    InvoiceID = maps:get(invoice_id, Req),
+    [{_, Invoice}] = get_data(InvoiceID),
     {200, [], Invoice};
 
 handle_request('GetInvoiceEvents', _Req) ->
-    {501, [], <<"Not implemented">>};
+    Events = [],
+    {200, [], Events};
 
-handle_request('GetPaymentByID', _Req) ->
-    {501, [], <<"Not implemented">>};
-
-handle_request('GetProfileByID', _Req) ->
-    {501, [], <<"Not implemented">>};
-
-handle_request('GetProfiles', _Req) ->
-    {501, [], <<"Not implemented">>};
-
-handle_request('UpdateProfile', _Req) ->
-    {501, [], <<"Not implemented">>};
+handle_request('GetPaymentByID', Req) ->
+    PaymentID = maps:get(payment_id, Req),
+    [{_, Payment}] = get_data(PaymentID),
+    {200, [], Payment};
 
 handle_request(OperationID, Req) ->
     io:format(user, "Got request to process: ~p~n", [{OperationID, Req}]),

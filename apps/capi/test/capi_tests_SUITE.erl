@@ -63,48 +63,49 @@ authorization_error_test(_) ->
     {ok, 401, _RespHeaders, _ClientRef} = call(get, "/invoices/22?limit=22", #{}, []).
 
 create_invoice_badard_test(_) ->
-    Method = post,
-    {ok, 400, _RespHeaders, _ClientRef} = default_call(Method, "/invoices", #{}),
-    {skip, "Not implemented"}.
+    {ok, 400, _RespHeaders, _ClientRef} = default_call(post, "/invoices", #{}).
 
 create_invoice_ok_test(_) ->
-    Method = post,
-    Req = #{
-        <<"shopID">> => <<"test_shop_id">>,
-        <<"amount">> => 100000,
-        <<"currency">> => <<"RUB">>,
-        <<"context">> => #{
-            <<"invoice_dummy_context">> => <<"test_value">>
-        },
-        <<"dueDate">> => <<"2017-07-11 10:00:00">>,
-        <<"product">> => <<"test_product">>,
-        <<"description">> => <<"test_invoice_description">>
-    },
-    {ok, 201, _RespHeaders, _ClientRef} = default_call(Method, "/invoices", Req).
+    #{<<"id">> := _InvoiceID} = default_create_invoice().
 
 create_payment_ok_test(_) ->
-    {skip, "Not implemented"}.
+    #{<<"id">> := InvoiceID} = default_create_invoice(),
+    #{
+        <<"session">> := PaymentSession,
+        <<"token">> := PaymentToolToken
+    } = default_tokenize_card(),
+    #{<<"id">> := _PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken).
 
 create_payment_tool_token_ok_test(_) ->
-    Method = post,
-    Req = #{
-        <<"paymentToolType">> => <<"cardData">>,
-        <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
-        <<"cardNumber">> => 4111111111111111,
-        <<"expDate">> => <<"08/27">>,
-        <<"cvv">> => <<"232">>
-    },
-    {ok, 201, _RespHeaders, _ClientRef} = default_call(Method, "/payment_tools", Req).
+    #{<<"token">> := _Token, <<"session">> := _Session} = default_tokenize_card().
 
 get_invoice_by_id_ok_test(_) ->
-    {skip, "Not implemented"}.
+    #{<<"id">> := InvoiceID} = default_create_invoice(),
+    Path = "/invoices/" ++ genlib:to_list(InvoiceID),
+    {ok, 200, _RespHeaders, _ClientRef} = default_call(get, Path, #{}).
 
 get_invoice_events_ok_test(_) ->
-    {skip, "Not implemented"}.
+    #{<<"id">> := InvoiceID} = default_create_invoice(),
+    #{
+        <<"session">> := PaymentSession,
+        <<"token">> := PaymentToolToken
+    } = default_tokenize_card(),
+    #{<<"id">> := _PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken),
+
+    timer:sleep(1000),
+    Path = "/invoices/" ++ genlib:to_list(InvoiceID) ++ "/events/?limit=100",
+    {ok, 200, _RespHeaders, _ClientRef} = default_call(get, Path, #{}).
 
 get_payment_by_id_ok_test(_) ->
-    {skip, "Not implemented"}.
+    #{<<"id">> := InvoiceID} = default_create_invoice(),
+    #{
+        <<"session">> := PaymentSession,
+        <<"token">> := PaymentToolToken
+    } = default_tokenize_card(),
+    #{<<"id">> := PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken),
 
+    Path = "/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments/" ++  genlib:to_list(PaymentID),
+    {ok, 200, _RespHeaders, _ClientRef} = default_call(get, Path, #{}).
 %% helpers
 
 test_configuration() ->
@@ -134,3 +135,42 @@ auth_token() ->
 
 json_content_type_header() ->
     {<<"Content-Type">>, <<"application/json">>}.
+
+default_create_invoice() ->
+    Req = #{
+        <<"shopID">> => <<"test_shop_id">>,
+        <<"amount">> => 100000,
+        <<"currency">> => <<"RUB">>,
+        <<"context">> => #{
+            <<"invoice_dummy_context">> => <<"test_value">>
+        },
+        <<"dueDate">> => <<"2017-07-11 10:00:00">>,
+        <<"product">> => <<"test_product">>,
+        <<"description">> => <<"test_invoice_description">>
+    },
+    {ok, 201, _RespHeaders, ClientRef} = default_call(post, "/invoices", Req),
+    get_body(ClientRef).
+
+default_tokenize_card() ->
+    Req = #{
+        <<"paymentToolType">> => <<"cardData">>,
+        <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
+        <<"cardNumber">> => 4111111111111111,
+        <<"expDate">> => <<"08/27">>,
+        <<"cvv">> => <<"232">>
+    },
+    {ok, 201, _RespHeaders, ClientRef} = default_call(post, "/payment_tools", Req),
+    get_body(ClientRef).
+
+default_create_payment(InvoiceID, PaymentSession, PaymentToolToken) ->
+    Req =  #{
+        <<"paymentSession">> => PaymentSession,
+        <<"paymentToolToken">> => PaymentToolToken
+    },
+    Path = "/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments",
+    {ok, 201, _RespHeaders, ClientRef} = default_call(post, Path, Req),
+    get_body(ClientRef).
+
+get_body(ClientRef) ->
+    {ok, Body} = hackney:body(ClientRef),
+    jsx:decode(Body, [return_maps]).
