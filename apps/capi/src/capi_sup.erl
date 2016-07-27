@@ -19,30 +19,28 @@ start_link() ->
 
 %%
 
+-spec init([]) -> {ok, tuple()}.
 init([]) ->
-    Spec = swagger_server:child_spec(swagger, #{
+    {LogicHandler, LogicHandlerSpec} = get_logic_handler_info(),
+    SwaggerSpec = swagger_server:child_spec(swagger, #{
         ip            => capi_utils:get_hostname_ip(genlib_app:env(capi, host, "0.0.0.0")),
         port          => genlib_app:env(capi, port, 8080),
         net_opts      => [],
-        logic_handler => get_logic_handler_name()
+        logic_handler => LogicHandler
     }),
     {ok, {
-        {one_for_all, 0, 1}, [Spec] ++ [get_logic_handler_spec()]
+        {one_for_all, 0, 1}, [LogicHandlerSpec, SwaggerSpec]
     }}.
 
-
-get_logic_handler_name() ->
+-spec get_logic_handler_info() -> {Handler :: atom(), Spec :: supervisor:child_spec()}.
+get_logic_handler_info() ->
     case genlib_app:env(capi, service_type) of
-        mock -> capi_mock_handler;
-        undefined -> exit(undefined_service_type)
-    end.
-
-get_logic_handler_spec() ->
-    case genlib_app:env(capi, service_type) of
-        mock -> genlib_app:permanent(
-            {capi_mock_handler, capi_mock_handler, start_link},
-            none,
-            []
-        );
+        mock ->
+            Spec = genlib_app:permanent(
+                {capi_mock_handler, capi_mock_handler, start_link},
+                none,
+                []
+            ),
+            {capi_mock_handler, Spec};
         undefined -> exit(undefined_service_type)
     end.
