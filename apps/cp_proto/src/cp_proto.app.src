@@ -1,4 +1,4 @@
-{application, capi_proto, [
+{application, cp_proto, [
     {description, "Processing protocol definitions"},
     {vsn, "0"},
     {registered, []},

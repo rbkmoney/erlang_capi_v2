@@ -1,6 +1,6 @@
 # capi
 
-A service that does something
+Сервис предоставляющий третьим сторонам REST API для доступа к нашим системам.
 
 ## Сборка
 
@@ -14,17 +14,16 @@ A service that does something
 
 > _Хозяйке на заметку._ При этом используется стандартный Erlang релиз, собранный при помощи [relx][3] в режиме разработчика.
 
-Рекомендуется вести разработку и сборку проекта в рамках локальной виртуальной среды, предоставляемой [wercker][1]. Настоятельно рекомендуется прогоны тестовых сценариев проводить только в этой среде.
-
-    $ wercker dev
-
-> _Хозяйке на заметку._ В зависимости от вашего окружения и операционной системы вам может понадобиться [Docker Machine][4].
-
 ## Документация
 
 Дальнейшую документацию можно почерпнуть, пройдясь по ссылкам в [соответствующем документе](doc/index.md). 
 
-[1]: http://devcenter.wercker.com/learn/basics/the-wercker-cli.html
-[2]: http://erlang.org/doc/man/shell.html
-[3]: https://github.com/erlware/relx
-[4]: https://docs.docker.com/machine/install-machine/
+[1]: http://erlang.org/doc/man/shell.html
+[2]: https://github.com/erlware/relx
+[3]: https://docs.docker.com/machine/install-machine/
+
+##TODO
+- Ленивое создание мерчанта
+- Error Mapping
+- CORS
+- Тотальное логирование
