@@ -1,0 +1,2 @@
+include/capi_*_thrift.hrl
+src/capi_*_thrift.erl
