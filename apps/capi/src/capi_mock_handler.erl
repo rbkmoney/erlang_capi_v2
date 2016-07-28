@@ -99,8 +99,7 @@ handle_request('GetPaymentByID', Req) ->
     [{_, Payment}] = get_data(PaymentID, payment),
     {200, [], Payment};
 
-handle_request(OperationID, Req) ->
-    io:format(user, "Got request to process: ~p~n", [{OperationID, Req}]),
+handle_request(_OperationID, _Req) ->
     {501, [], <<"Not implemented">>}.
 
 

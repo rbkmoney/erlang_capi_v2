@@ -6,7 +6,10 @@
     {applications, [
         kernel,
         stdlib,
+        lager,
         genlib,
+        woody,
+        capi_proto,
         swagger
     ]},
     {env, []},

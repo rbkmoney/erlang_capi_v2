@@ -1,50 +1,61 @@
 REBAR := $(shell which rebar3 2>/dev/null || which ./rebar3)
-RELNAME = capi
-SUBMODULES = schemes/swag
+SUBMODULES = schemes/swag apps/capi_proto/damsel
 SUBTARGETS = $(patsubst %,%/.git,$(SUBMODULES))
 
-SWAGGER_SCHEME = schemes/swag/swagger.yaml
-SWAGGER_APP_PATH = apps/swagger
-SWAGGER_APP_TARGET = $(SWAGGER_APP_PATH)/rebar.config
+REGISTRY := dr.rbkmoney.com
+ORG_NAME := rbkmoney
+BASE_IMAGE := "$(REGISTRY)/$(ORG_NAME)/build:latest"
 
-which = $(if $(shell which $(1) 2>/dev/null),\
-	$(shell which $(1) 2>/dev/null),\
-	$(error "Error: could not locate $(1)!"))
+# Note: RELNAME should match the name of
+# the first service in docker-compose.yml
+RELNAME := capi
 
-DOCKER = $(call which, docker)
-PACKER = $(call which, packer)
+TAG = latest
+IMAGE_NAME = "$(REGISTRY)/$(ORG_NAME)/$(RELNAME):$(TAG)"
+
+CALL_ANYWHERE := submodules rebar-update compile xref lint dialyze start devrel release clean distclean swagger_regenerate
+
+CALL_W_CONTAINER := $(CALL_ANYWHERE) test
+
 SWAGGER_CODEGEN = $(call which, SWAGGER_CODEGEN)
 
-.PHONY: all submodules compile devrel start test clean distclean dialyze release containerize swagger_regenerate
+
+.PHONY: $(CALL_W_CONTAINER) all containerize push $(UTIL_TARGETS)
 
 all: compile
 
-rebar-update:
-	$(REBAR) update
+include utils.mk
 
+# CALL_ANYWHERE
 $(SUBTARGETS): %/.git: %
 	git submodule update --init $<
 	touch $@
 
-submodules: $(SUBTARGETS) $(SWAGGER_APP_TARGET)
+submodules: $(SUBTARGETS)
 
-compile: submodules
+rebar-update:
+	$(REBAR) update
+
+compile: submodules rebar-update
 	$(REBAR) compile
 
-devrel: submodules
-	$(REBAR) release
-
-start: submodules
-	$(REBAR) run
-
-test: submodules
-	$(REBAR) ct
+xref: submodules
+	$(REBAR) xref
 
 lint: compile
 	elvis rock
 
-xref: submodules
-	$(REBAR) xref
+dialyze:
+	$(REBAR) dialyzer
+
+start: submodules
+	$(REBAR) run
+
+devrel: submodules
+	$(REBAR) release
+
+release: distclean
+	$(REBAR) as prod release
 
 clean:
 	$(REBAR) clean
@@ -53,19 +64,16 @@ distclean:
 	$(REBAR) clean -a
 	rm -rfv _build _builds _cache _steps _temp
 
-dialyze:
-	$(REBAR) dialyzer
+# CALL_W_CONTAINER
+test: submodules
+	$(REBAR) ct
 
-BASE_DIR := $(shell pwd)
+# OTHER
+containerize: w_container_release
+	$(DOCKER) build --force-rm --tag $(IMAGE_NAME) .
 
-release: ~/.docker/config.json distclean
-	$(DOCKER) run --rm -v $(BASE_DIR):$(BASE_DIR) --workdir $(BASE_DIR) rbkmoney/build rebar3 as prod release
-
-containerize: release ./packer.json
-	$(PACKER) build packer.json
-
-~/.docker/config.json:
-	test -f ~/.docker/config.json || (echo "Please run: docker login" ; exit 1)
+push: containerize
+	$(DOCKER) push "$(IMAGE_NAME)"
 
 # Shitty generation. Will be replaced when a container with swagger-codegen appear
 define swagger_regenerate
