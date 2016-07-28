@@ -9,8 +9,9 @@
         lager,
         genlib,
         woody,
-        capi_proto,
-        swagger
+        cp_proto,
+        swagger,
+        jose
     ]},
     {env, []},
     {modules, []},

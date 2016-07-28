@@ -5,7 +5,7 @@
 
 %% API callbacks
 -export([start_link/0]).
--export([handle_request/2]).
+-export([handle_request/3]).
 -export([authorize_api_key/2]).
 
 %% gen_server callbacks
@@ -28,8 +28,8 @@ start_link() ->
 -spec authorize_api_key(ApiKey :: binary(), OperationID :: atom()) -> Result :: boolean() | {boolean(), #{binary() => any()}}.
 authorize_api_key(ApiKey, OperationID) -> capi_auth:auth_api_key(ApiKey, OperationID).
 
--spec handle_request(OperationID :: atom(), Req :: #{}) -> {Code :: integer, Headers :: [], Response :: #{}}.
-handle_request('CreateInvoice', Req) ->
+-spec handle_request(OperationID :: atom(), Req :: #{}, Context :: #{}) -> {Code :: integer, Headers :: [], Response :: #{}}.
+handle_request('CreateInvoice', Req, _Context) ->
     InvoiceParams = maps:get('CreateInvoiceArgs', Req),
     ID = new_id(),
     Invoice = #{
@@ -48,7 +48,7 @@ handle_request('CreateInvoice', Req) ->
     },
     {201, [], Resp};
 
-handle_request('CreatePayment', Req) ->
+handle_request('CreatePayment', Req, _Context) ->
     InvoiceID = maps:get('invoice_id', Req),
     PaymentParams = maps:get('CreatePaymentArgs', Req),
     PaymentSession = maps:get(<<"paymentSession">>, PaymentParams),
@@ -73,7 +73,7 @@ handle_request('CreatePayment', Req) ->
             {400, [], Resp}
     end;
 
-handle_request('CreatePaymentToolToken', Req) ->
+handle_request('CreatePaymentToolToken', Req, _Context) ->
     Params = maps:get('PaymentTool', Req),
     Token = tokenize_payment_tool(Params),
     put_data(new_id(), token, Token),
@@ -85,21 +85,21 @@ handle_request('CreatePaymentToolToken', Req) ->
     },
     {201, [], Resp};
 
-handle_request('GetInvoiceByID', Req) ->
+handle_request('GetInvoiceByID', Req, _Context) ->
     InvoiceID = maps:get(invoice_id, Req),
     [{_, Invoice}] = get_data(InvoiceID, invoice),
     {200, [], Invoice};
 
-handle_request('GetInvoiceEvents', _Req) ->
+handle_request('GetInvoiceEvents', _Req, _Context) ->
     Events = [],
     {200, [], Events};
 
-handle_request('GetPaymentByID', Req) ->
+handle_request('GetPaymentByID', Req, _Context) ->
     PaymentID = maps:get(payment_id, Req),
     [{_, Payment}] = get_data(PaymentID, payment),
     {200, [], Payment};
 
-handle_request(_OperationID, _Req) ->
+handle_request(_OperationID, _Req, _Context) ->
     {501, [], <<"Not implemented">>}.
 
 

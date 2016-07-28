@@ -7,6 +7,18 @@ services:
       - .:/code
     working_dir: /code
     command: /sbin/init
+    links:
+      - hellgate
+      - cds
+  hellgate:
+    image: dr.rbkmoney.com/rbkmoney/hellgate:latest
+    command: /opt/hellgate/bin/hellgate foreground
+  cds:
+    image: rbkmoney/cds:latest
+    command: /usr/local/cds/bin/cds foreground
+  maintenance:
+    image: rbkmoney/build:latest
+    command:
 
 networks:
   default:

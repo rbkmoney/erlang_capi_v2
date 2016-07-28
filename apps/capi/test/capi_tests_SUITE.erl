@@ -8,7 +8,8 @@
 
 %% test cases
 -export([
-    authorization_error_test/1,
+    authorization_error_no_header_test/1,
+    authorization_error_expired_test/1,
     create_invoice_badard_test/1,
     create_invoice_ok_test/1,
     create_payment_ok_test/1,
@@ -22,28 +23,30 @@
 -define(CAPI_PORT, 8080).
 -define(CAPI_SERVICE_TYPE, mock).
 
+
 all() ->
     [
-        authorization_error_test,
-        create_invoice_badard_test,
-        create_invoice_ok_test,
-        create_payment_ok_test,
-        create_payment_tool_token_ok_test,
-        get_invoice_by_id_ok_test,
-        get_invoice_events_ok_test,
-        get_payment_by_id_ok_test
+         authorization_error_no_header_test,
+         authorization_error_expired_test,
+         create_invoice_badard_test,
+         create_invoice_ok_test,
+         create_payment_ok_test,
+         create_payment_tool_token_ok_test,
+         get_invoice_by_id_ok_test,
+         get_invoice_events_ok_test,
+         get_payment_by_id_ok_test
     ].
 
 %%
 %% starting/stopping
 %%
-init_per_suite(C) ->
+init_per_suite(Config) ->
     {_, Seed} = calendar:local_time(),
     random:seed(Seed),
-    test_configuration(),
+    test_configuration(Config),
     {ok, Apps1} = application:ensure_all_started(capi),
     {ok, Apps2} = application:ensure_all_started(hackney),
-    [{apps, Apps1 ++ Apps2} | C].
+    [{apps, Apps1 ++ Apps2} | Config].
 
 end_per_suite(C) ->
     [application_stop(App) || App <- proplists:get_value(apps, C)].
@@ -59,62 +62,70 @@ application_stop(App) ->
     application:stop(App).
 
 %% tests
-authorization_error_test(_) ->
+authorization_error_no_header_test(_Config) ->
     {ok, 401, _RespHeaders, _Body} = call(get, "/invoices/22?limit=22", #{}, []).
 
-create_invoice_badard_test(_) ->
-    {ok, 400, _RespHeaders, _Body} = default_call(post, "/invoices", #{}).
+authorization_error_expired_test(Config) ->
+    Token = auth_token(#{}, genlib_time:unow() - 10, Config),
+    AuthHeader = auth_header(Token),
+    {ok, 401, _RespHeaders, _Body} = call(get, "/invoices/22?limit=22", #{}, [AuthHeader]).
 
-create_invoice_ok_test(_) ->
-    #{<<"id">> := _InvoiceID} = default_create_invoice().
+create_invoice_badard_test(Config) ->
+    {ok, 400, _RespHeaders, _Body} = default_call(post, "/invoices", #{}, Config).
 
-create_payment_ok_test(_) ->
-    #{<<"id">> := InvoiceID} = default_create_invoice(),
+create_invoice_ok_test(Config) ->
+    #{<<"id">> := _InvoiceID} = default_create_invoice(Config).
+
+create_payment_ok_test(Config) ->
+    #{<<"id">> := InvoiceID} = default_create_invoice(Config),
     #{
         <<"session">> := PaymentSession,
         <<"token">> := PaymentToolToken
-    } = default_tokenize_card(),
-    #{<<"id">> := _PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken).
+    } = default_tokenize_card(Config),
+    #{<<"id">> := _PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config).
 
-create_payment_tool_token_ok_test(_) ->
-    #{<<"token">> := _Token, <<"session">> := _Session} = default_tokenize_card().
+create_payment_tool_token_ok_test(Config) ->
+    #{<<"token">> := _Token, <<"session">> := _Session} = default_tokenize_card(Config).
 
-get_invoice_by_id_ok_test(_) ->
-    #{<<"id">> := InvoiceID} = default_create_invoice(),
+get_invoice_by_id_ok_test(Config) ->
+    #{<<"id">> := InvoiceID} = default_create_invoice(Config),
     Path = "/invoices/" ++ genlib:to_list(InvoiceID),
-    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}).
+    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
-get_invoice_events_ok_test(_) ->
-    #{<<"id">> := InvoiceID} = default_create_invoice(),
+get_invoice_events_ok_test(Config) ->
+    #{<<"id">> := InvoiceID} = default_create_invoice(Config),
     #{
         <<"session">> := PaymentSession,
         <<"token">> := PaymentToolToken
-    } = default_tokenize_card(),
-    #{<<"id">> := _PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken),
+    } = default_tokenize_card(Config),
+    #{<<"id">> := _PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config),
 
     timer:sleep(1000),
     Path = "/invoices/" ++ genlib:to_list(InvoiceID) ++ "/events/?limit=100",
-    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}).
+    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
-get_payment_by_id_ok_test(_) ->
-    #{<<"id">> := InvoiceID} = default_create_invoice(),
+get_payment_by_id_ok_test(Config) ->
+    #{<<"id">> := InvoiceID} = default_create_invoice(Config),
     #{
         <<"session">> := PaymentSession,
         <<"token">> := PaymentToolToken
-    } = default_tokenize_card(),
-    #{<<"id">> := PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken),
+    } = default_tokenize_card(Config),
+    #{<<"id">> := PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config),
 
     Path = "/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments/" ++  genlib:to_list(PaymentID),
-    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}).
+    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 %% helpers
 
-test_configuration() ->
+test_configuration(Config) ->
     application:set_env(capi, host, ?CAPI_HOST),
     application:set_env(capi, port, ?CAPI_PORT),
-    application:set_env(capi, service_type, ?CAPI_SERVICE_TYPE).
+    application:set_env(capi, service_type, ?CAPI_SERVICE_TYPE),
+    % application:set_env(capi, cds_url, "http://localhost:8322"),
+    % application:set_env(capi, hg_url, "http://localhost:8122"),
+    application:set_env(capi, api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")).
 
-default_call(Method, Path, Body) ->
-    call(Method, Path, Body, [x_request_id_header(), auth_header(), json_content_type_header()]).
+default_call(Method, Path, Body, Config) ->
+    call(Method, Path, Body, [x_request_id_header(), default_auth_header(Config), json_content_type_header()]).
 
 call(Method, Path, Body, Headers) ->
     Url = get_url(Path),
@@ -128,16 +139,53 @@ get_url(Path) ->
 x_request_id_header() ->
     {<<"X-Request-ID">>, integer_to_binary(rand:uniform(100000))}.
 
-auth_header() ->
-    {<<"Authorization">>, <<"Bearer ", (auth_token())/binary>>} .
+default_auth_header(Config) ->
+   auth_header(default_auth_token(Config)).
 
-auth_token() ->
-    <<"I can't find JWT library :(">>.
+auth_header(Token) ->
+    {<<"Authorization">>, <<"Bearer ", Token/binary>>} .
+
+default_auth_token(Config) ->
+    ResourseAccess = #{
+        <<"common-api">> => #{
+            <<"roles">> =>
+                [
+                    <<"invoices:create">>,
+                    <<"payments:create">>,
+                    <<"payment_tool_tokens:create">>,
+                    <<"profiles:create">>,
+                    <<"profiles:delete">>,
+                    <<"invoices:get">>,
+                    <<"invoices.events:get">>,
+                    <<"payments:get">>,
+                    <<"profiles:get">>,
+                    <<"profiles:get">>,
+                    <<"profiles:update">>
+                ]
+        }
+    },
+    auth_token(ResourseAccess, default_token_expiration(), Config).
+
+auth_token(ResourseAccess, Exp, Config) ->
+    Message = #{
+        <<"sub">> => <<"kek">>,
+        <<"resourse_access">> => ResourseAccess,
+        <<"exp">> => Exp
+    },
+    RSAPrivateJWK = jose_jwk:from_pem_file(filename:join(?config(data_dir, Config), "private_api_key.pem")),
+    Signed = jose_jwk:sign(jsx:encode(Message), #{ <<"alg">> => <<"RS256">> }, RSAPrivateJWK),
+    {_Alg, Payload} = jose_jws:compact(Signed),
+    Payload.
+
+default_token_expiration() ->
+    genlib_time:unow() + 60.
 
 json_content_type_header() ->
     {<<"Content-Type">>, <<"application/json">>}.
 
-default_create_invoice() ->
+default_create_invoice(Config) ->
+    {{Y, M, D}, Time} = calendar:local_time(),
+    {ok, DueDate} = rfc3339:format({{Y + 1, M, D}, Time}),
     Req = #{
         <<"shopID">> => <<"test_shop_id">>,
         <<"amount">> => 100000,
@@ -145,14 +193,14 @@ default_create_invoice() ->
         <<"context">> => #{
             <<"invoice_dummy_context">> => <<"test_value">>
         },
-        <<"dueDate">> => <<"2017-07-11 10:00:00">>,
+        <<"dueDate">> => DueDate,
         <<"product">> => <<"test_product">>,
         <<"description">> => <<"test_invoice_description">>
     },
-    {ok, 201, _RespHeaders, Body} = default_call(post, "/invoices", Req),
+    {ok, 201, _RespHeaders, Body} = default_call(post, "/invoices", Req, Config),
     decode_body(Body).
 
-default_tokenize_card() ->
+default_tokenize_card(Config) ->
     Req = #{
         <<"paymentToolType">> => <<"cardData">>,
         <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
@@ -160,16 +208,16 @@ default_tokenize_card() ->
         <<"expDate">> => <<"08/27">>,
         <<"cvv">> => <<"232">>
     },
-    {ok, 201, _RespHeaders, Body} = default_call(post, "/payment_tools", Req),
+    {ok, 201, _RespHeaders, Body} = default_call(post, "/payment_tools", Req, Config),
     decode_body(Body).
 
-default_create_payment(InvoiceID, PaymentSession, PaymentToolToken) ->
+default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
     Req =  #{
         <<"paymentSession">> => PaymentSession,
         <<"paymentToolToken">> => PaymentToolToken
     },
     Path = "/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments",
-    {ok, 201, _RespHeaders, Body} = default_call(post, Path, Req),
+    {ok, 201, _RespHeaders, Body} = default_call(post, Path, Req, Config),
     decode_body(Body).
 
 get_body(ClientRef) ->
@@ -178,3 +226,4 @@ get_body(ClientRef) ->
 
 decode_body(Body) ->
     jsx:decode(Body, [return_maps]).
+

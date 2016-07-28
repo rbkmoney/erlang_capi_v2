@@ -15,6 +15,7 @@ erl_crash.dump
 /_steps/
 /_temp/
 /.wercker/
+/_checkouts/
 
 # compiled
 swagger

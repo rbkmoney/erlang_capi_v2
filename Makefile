@@ -1,5 +1,5 @@
 REBAR := $(shell which rebar3 2>/dev/null || which ./rebar3)
-SUBMODULES = schemes/swag apps/capi_proto/damsel
+SUBMODULES = schemes/swag apps/cp_proto/damsel
 SUBTARGETS = $(patsubst %,%/.git,$(SUBMODULES))
 
 REGISTRY := dr.rbkmoney.com
@@ -18,7 +18,9 @@ CALL_ANYWHERE := submodules rebar-update compile xref lint dialyze start devrel 
 CALL_W_CONTAINER := $(CALL_ANYWHERE) test
 
 SWAGGER_CODEGEN = $(call which, SWAGGER_CODEGEN)
-
+SWAGGER_SCHEME = schemes/swag/swagger.yaml
+SWAGGER_APP_PATH = apps/swagger
+SWAGGER_APP_TARGET = $(SWAGGER_APP_PATH)/rebar.config
 
 .PHONY: $(CALL_W_CONTAINER) all containerize push $(UTIL_TARGETS)
 
