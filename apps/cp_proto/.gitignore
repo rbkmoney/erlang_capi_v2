@@ -1,2 +1,2 @@
-include/capi_*_thrift.hrl
-src/capi_*_thrift.erl
+include/cp_*_thrift.hrl
+src/cp_*_thrift.erl

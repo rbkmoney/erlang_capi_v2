@@ -26,15 +26,15 @@
 
 all() ->
     [
-         authorization_error_no_header_test,
-         authorization_error_expired_test,
-         create_invoice_badard_test,
-         create_invoice_ok_test,
-         create_payment_ok_test,
-         create_payment_tool_token_ok_test,
-         get_invoice_by_id_ok_test,
-         get_invoice_events_ok_test,
-         get_payment_by_id_ok_test
+        authorization_error_no_header_test,
+        authorization_error_expired_test,
+        create_invoice_badard_test,
+        create_invoice_ok_test,
+        create_payment_ok_test,
+        create_payment_tool_token_ok_test,
+        get_invoice_by_id_ok_test,
+        get_invoice_events_ok_test,
+        get_payment_by_id_ok_test
     ].
 
 %%
@@ -63,15 +63,15 @@ application_stop(App) ->
 
 %% tests
 authorization_error_no_header_test(_Config) ->
-    {ok, 401, _RespHeaders, _Body} = call(get, "/invoices/22?limit=22", #{}, []).
+    {ok, 401, _RespHeaders, _Body} = call(get, "/processing/invoices/22?limit=22", #{}, []).
 
 authorization_error_expired_test(Config) ->
     Token = auth_token(#{}, genlib_time:unow() - 10, Config),
     AuthHeader = auth_header(Token),
-    {ok, 401, _RespHeaders, _Body} = call(get, "/invoices/22?limit=22", #{}, [AuthHeader]).
+    {ok, 401, _RespHeaders, _Body} = call(get, "/processing/invoices/22?limit=22", #{}, [AuthHeader]).
 
 create_invoice_badard_test(Config) ->
-    {ok, 400, _RespHeaders, _Body} = default_call(post, "/invoices", #{}, Config).
+    {ok, 400, _RespHeaders, _Body} = default_call(post, "/processing/invoices", #{}, Config).
 
 create_invoice_ok_test(Config) ->
     #{<<"id">> := _InvoiceID} = default_create_invoice(Config).
@@ -89,7 +89,7 @@ create_payment_tool_token_ok_test(Config) ->
 
 get_invoice_by_id_ok_test(Config) ->
     #{<<"id">> := InvoiceID} = default_create_invoice(Config),
-    Path = "/invoices/" ++ genlib:to_list(InvoiceID),
+    Path = "/processing/invoices/" ++ genlib:to_list(InvoiceID),
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 get_invoice_events_ok_test(Config) ->
@@ -101,7 +101,7 @@ get_invoice_events_ok_test(Config) ->
     #{<<"id">> := _PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config),
 
     timer:sleep(1000),
-    Path = "/invoices/" ++ genlib:to_list(InvoiceID) ++ "/events/?limit=100",
+    Path = "/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/events/?limit=100",
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 get_payment_by_id_ok_test(Config) ->
@@ -112,7 +112,7 @@ get_payment_by_id_ok_test(Config) ->
     } = default_tokenize_card(Config),
     #{<<"id">> := PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config),
 
-    Path = "/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments/" ++  genlib:to_list(PaymentID),
+    Path = "/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments/" ++  genlib:to_list(PaymentID),
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 %% helpers
 
@@ -197,7 +197,7 @@ default_create_invoice(Config) ->
         <<"product">> => <<"test_product">>,
         <<"description">> => <<"test_invoice_description">>
     },
-    {ok, 201, _RespHeaders, Body} = default_call(post, "/invoices", Req, Config),
+    {ok, 201, _RespHeaders, Body} = default_call(post, "/processing/invoices", Req, Config),
     decode_body(Body).
 
 default_tokenize_card(Config) ->
@@ -208,7 +208,7 @@ default_tokenize_card(Config) ->
         <<"expDate">> => <<"08/27">>,
         <<"cvv">> => <<"232">>
     },
-    {ok, 201, _RespHeaders, Body} = default_call(post, "/payment_tools", Req, Config),
+    {ok, 201, _RespHeaders, Body} = default_call(post, "/processing/payment_tools", Req, Config),
     decode_body(Body).
 
 default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
@@ -216,7 +216,7 @@ default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
         <<"paymentSession">> => PaymentSession,
         <<"paymentToolToken">> => PaymentToolToken
     },
-    Path = "/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments",
+    Path = "/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments",
     {ok, 201, _RespHeaders, Body} = default_call(post, Path, Req, Config),
     decode_body(Body).
 

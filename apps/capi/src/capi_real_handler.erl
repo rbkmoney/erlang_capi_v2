@@ -39,7 +39,7 @@ handle_request('CreateInvoice', Req, Context) ->
     end;
 
 handle_request('CreatePayment', Req, Context) ->
-    InvoiceID = maps:get('invoice_id', Req),
+    InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('CreatePaymentArgs', Req),
     RequestID = maps:get('X-Request-ID', Req),
     Token = genlib_map:get(<<"paymentToolToken">>, PaymentParams),
@@ -110,7 +110,7 @@ handle_request('CreatePaymentToolToken', Req, _Context) ->
     end;
 
 handle_request('GetInvoiceByID', Req, Context) ->
-    InvoiceID = maps:get(invoice_id, Req),
+    InvoiceID = maps:get(invoiceID, Req),
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
     {Result, _NewContext} = service_call(invoicing, 'Get', [UserInfo, InvoiceID], create_context(RequestID)),
@@ -148,13 +148,13 @@ handle_request('GetInvoiceByID', Req, Context) ->
     end;
 
 handle_request('GetInvoiceEvents', Req, Context) ->
-    InvoiceID = maps:get(invoice_id, Req),
-    _EventID = maps:get(event_id, Req),
+    InvoiceID = maps:get(invoiceID, Req),
+    _EventID = maps:get(eventID, Req),
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
     EventRange = #'payproc_EventRange'{
         limit = maps:get(limit, Req),
-        'after' = maps:get(event_id, Req)
+        'after' = maps:get(eventID, Req)
     },
     {Result, _NewContext} = service_call(invoicing, 'GetEvents', [UserInfo, InvoiceID, EventRange], create_context(RequestID)),
     case Result of
@@ -166,7 +166,7 @@ handle_request('GetInvoiceEvents', Req, Context) ->
     end;
 
 handle_request('GetPaymentByID', Req, Context) ->
-    PaymentID = maps:get(payment_id, Req),
+    PaymentID = maps:get(paymentID, Req),
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
     {Result, _NewContext} = service_call(invoicing, 'GetPayment', [UserInfo, PaymentID], create_context(RequestID)),
