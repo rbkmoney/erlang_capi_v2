@@ -49,7 +49,7 @@ handle_request('CreateInvoice', Req, _Context) ->
     {201, [], Resp};
 
 handle_request('CreatePayment', Req, _Context) ->
-    InvoiceID = maps:get('invoice_id', Req),
+    InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('CreatePaymentArgs', Req),
     PaymentSession = maps:get(<<"paymentSession">>, PaymentParams),
     case match_data({{'$1', session}, PaymentSession}) of
@@ -86,7 +86,7 @@ handle_request('CreatePaymentToolToken', Req, _Context) ->
     {201, [], Resp};
 
 handle_request('GetInvoiceByID', Req, _Context) ->
-    InvoiceID = maps:get(invoice_id, Req),
+    InvoiceID = maps:get(invoiceID, Req),
     [{_, Invoice}] = get_data(InvoiceID, invoice),
     {200, [], Invoice};
 
@@ -95,7 +95,7 @@ handle_request('GetInvoiceEvents', _Req, _Context) ->
     {200, [], Events};
 
 handle_request('GetPaymentByID', Req, _Context) ->
-    PaymentID = maps:get(payment_id, Req),
+    PaymentID = maps:get(paymentID, Req),
     [{_, Payment}] = get_data(PaymentID, payment),
     {200, [], Payment};
 
