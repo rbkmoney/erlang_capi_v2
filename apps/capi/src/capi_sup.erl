@@ -23,10 +23,11 @@ start_link() ->
 init([]) ->
     {LogicHandler, LogicHandlerSpec} = get_logic_handler_info(),
     SwaggerSpec = swagger_server:child_spec(swagger, #{
-        ip            => capi_utils:get_hostname_ip(genlib_app:env(capi, host, "0.0.0.0")),
-        port          => genlib_app:env(capi, port, 8080),
-        net_opts      => [],
-        logic_handler => LogicHandler
+        ip                => capi_utils:get_hostname_ip(genlib_app:env(capi, host, "0.0.0.0")),
+        port              => genlib_app:env(capi, port, 8080),
+        net_opts          => [],
+        logic_handler     => LogicHandler,
+        cowboy_extra_opts => get_cowboy_extra_opts()
     }),
     {ok, {
         {one_for_all, 0, 1}, [SwaggerSpec | LogicHandlerSpec]
@@ -46,3 +47,13 @@ get_logic_handler_info() ->
             {capi_real_handler, []};
         undefined -> exit(undefined_service_type)
     end.
+
+get_cowboy_extra_opts() ->
+    [
+        {env, [{cors_policy, capi_cors_policy}]},
+        {middlewares, [
+            cowboy_router,
+            cowboy_cors,
+            cowboy_handler
+       ]}
+    ].

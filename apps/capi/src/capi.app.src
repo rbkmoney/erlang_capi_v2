@@ -11,7 +11,10 @@
         woody,
         cp_proto,
         swagger,
-        jose
+        jose,
+        cowboy_cors,
+        rfc3339,
+        base64url
     ]},
     {env, []},
     {modules, []},
