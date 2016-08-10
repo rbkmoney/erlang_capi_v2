@@ -3,6 +3,7 @@
 -include_lib("cp_proto/include/cp_payment_processing_thrift.hrl").
 -include_lib("cp_proto/include/cp_domain_thrift.hrl").
 -include_lib("cp_proto/include/cp_cds_thrift.hrl").
+-include_lib("cp_proto/include/cp_merch_stat_thrift.hrl").
 
 -behaviour(swagger_logic_handler).
 
@@ -159,7 +160,7 @@ handle_request('GetInvoiceEvents', Req, Context) ->
     {Result, _NewContext} = service_call(invoicing, 'GetEvents', [UserInfo, InvoiceID, EventRange], create_context(RequestID)),
     case Result of
         {ok, Events} when is_list(Events) ->
-            Resp = [decode_event(E) || E <- Events],
+            Resp = [decode_event(I) || I <- Events],
             {200, [], Resp};
         _Error ->
             {500, [], <<"">>}
@@ -173,6 +174,90 @@ handle_request('GetPaymentByID', Req, Context) ->
     case Result of
         {ok, Payment} ->
             Resp = decode_payment(Payment),
+            {200, [], Resp};
+       _Error ->
+            {500, [], <<"">>}
+    end;
+
+handle_request('GetInvoices', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+    Limit = genlib_map:get('limit', Req),
+    Offset = genlib_map:get('offset', Req),
+    [InvoiceStatus] = genlib_map:get('status', Req),  %%@TODO deal with many statuses
+    Query = #{
+        <<"merchant_id">> => get_merchant_id(Context),
+        <<"shop_id">> => genlib_map:get('shopID', Req),
+        <<"invoice_id">> =>  genlib_map:get('invoiceID', Req),
+        <<"from_time">> => encode_datetime(genlib_map:get('fromTime', Req)),
+        <<"to_time">> => encode_datetime(genlib_map:get('fromTime', Req)),
+        <<"invoice_status">> => InvoiceStatus
+    },
+    QueryParams = #{
+        <<"size">> => Limit,
+        <<"from">> => Offset
+    },
+    Dsl = create_dsl(invoices, Query, QueryParams),
+    {Result, _NewContext} = service_call(merchant_stat, 'GetInvoices', [encode_stat_request(Dsl)], create_context(RequestID)),
+    case Result of
+        {ok, Invoices} ->
+            Resp = [decode_invoice(I) || #merchstat_StatInvoice{invoice = I} <- Invoices],
+            {200, [], Resp};
+       _Error ->
+            {500, [], <<"">>}
+    end;
+
+handle_request('GetPaymentConversionStats', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+
+    StatType = payments_conversion_stat,
+    Dsl = create_stat_dsl(StatType, Req, Context),
+    {Result, _NewContext} = service_call(merchant_stat, 'GetStat', [encode_stat_request(Dsl)], create_context(RequestID)),
+    case Result of
+        {ok, Stats} ->
+            Resp = [decode_stat_response(StatType, S) || S <- Stats],
+            {200, [], Resp};
+       _Error ->
+            {500, [], <<"">>}
+    end;
+
+
+handle_request('GetPaymentRevenueStats', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+
+    StatType = payments_turnover,
+    Dsl = create_stat_dsl(StatType, Req, Context),
+    {Result, _NewContext} = service_call(merchant_stat, 'GetStat', [encode_stat_request(Dsl)], create_context(RequestID)),
+    case Result of
+        {ok, Stats} ->
+            Resp = [decode_stat_response(StatType, S) || S <- Stats],
+            {200, [], Resp};
+       _Error ->
+            {500, [], <<"">>}
+    end;
+
+handle_request('GetPaymentGeoStats', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+
+    StatType = payments_geo_stat,
+    Dsl = create_stat_dsl(StatType, Req, Context),
+    {Result, _NewContext} = service_call(merchant_stat, 'GetStat', [encode_stat_request(Dsl)], create_context(RequestID)),
+    case Result of
+        {ok, Stats} ->
+            Resp = [decode_stat_response(StatType, S) || S <- Stats],
+            {200, [], Resp};
+       _Error ->
+            {500, [], <<"">>}
+    end;
+
+handle_request('GetPaymentRateStats', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+
+    StatType = customers_rate_stat,
+    Dsl = create_stat_dsl(StatType, Req, Context),
+    {Result, _NewContext} = service_call(merchant_stat, 'GetStat', [encode_stat_request(Dsl)], create_context(RequestID)),
+    case Result of
+        {ok, Stats} ->
+            Resp = [decode_stat_response(StatType, S) || S <- Stats],
             {200, [], Resp};
        _Error ->
             {500, [], <<"">>}
@@ -199,6 +284,9 @@ get_service_base_url(cds_storage) ->
     genlib_app:env(capi, cds_url).
 
 
+encode_datetime(undefined) ->
+    undefined;
+
 encode_datetime(RawDateTime) ->
     {ok, DateTime} = rfc3339:parse(RawDateTime),
     {ok, Formatted} = rfc3339:format(DateTime),
@@ -212,10 +300,12 @@ parse_exp_date(ExpDate) when is_binary(ExpDate) ->
     {genlib:to_int(Month), 2000 + genlib:to_int(Year)}.
 
 get_user_info(Context) ->
-    ID = maps:get(<<"sub">>, Context),
     #payproc_UserInfo{
-        id = ID
+        id = get_merchant_id(Context)
     }.
+
+get_merchant_id(Context) ->
+    maps:get(<<"sub">>, Context).
 
 encode_bank_card(#domain_BankCard{
     'token'  = Token,
@@ -327,3 +417,116 @@ decode_payment(#domain_InvoicePayment{
         <<"status">> => genlib:to_binary(Status),
         <<"paymentToolToken">> => PaymentToolToken
     }.
+
+decode_invoice(#domain_Invoice{
+    'id' = InvoiceID,
+    'created_at' = _CreatedAt, %%@TODO add it to the swagger spec
+    'status' = {Status, _},
+    'due'  = DueDate,
+    'product' = Product,
+    'description' = Description,
+    'cost' = #domain_Funds{
+        amount = Amount,
+        currency = #domain_Currency{
+            symbolic_code = Currency
+        }
+    },
+    'context' = RawContext
+}) ->
+    Context = jsx:decode(RawContext, [return_maps]),
+    #{
+        <<"id">> => InvoiceID,
+        <<"shopID">> => 42, %%TODO get the shop id!
+        <<"amount">> => Amount,
+        <<"currency">> => Currency,
+        <<"context">> => Context,
+        <<"dueDate">> => DueDate,
+        <<"status">> => genlib:to_binary(Status),
+        <<"product">> => Product,
+        <<"description">> => Description
+    }.
+
+decode_stat_response(payments_conversion_stat, Response) ->
+    #{
+        <<"offset">> => maps:get(<<"offset">>, Response),
+        <<"successfulCount">> => maps:get(<<"successful_count">>, Response),
+        <<"totalCount">> => maps:get(<<"total_count">>, Response),
+        <<"conversion">> => maps:get(<<"conversion">>, Response)
+    };
+
+decode_stat_response(payments_geo_stat, Response) ->
+    #{
+        <<"offset">> => maps:get(<<"offset">>, Response),
+        <<"cityName">> => maps:get(<<"city_name">>, Response),
+        <<"currency">> => maps:get(<<"currency_symbolic_code">>, Response),
+        <<"profit">> => maps:get(<<"amount_with_fee">>, Response),
+        <<"revenue">> => maps:get(<<"amount_without_fee">>, Response)
+    };
+
+decode_stat_response(payments_turnover, Response) ->
+    #{
+        <<"offset">> => maps:get(<<"offset">>, Response),
+        <<"currency">> => maps:get(<<"currency_symbolic_code">>, Response),
+        <<"profit">> => maps:get(<<"amount_with_fee">>, Response),
+        <<"revenue">> => maps:get(<<"amount_without_fee">>, Response)
+    };
+
+decode_stat_response(customers_rate_stat, Response) ->
+    #{
+        <<"uniqueCount">> => maps:get(<<"unic_count">>, Response)
+    }.
+
+create_dsl(QueryType, QueryBody, QueryParams) when
+    is_atom(QueryType),
+    is_map(QueryBody),
+    is_map(QueryParams) ->
+    Query = maps:put(genlib:to_binary(QueryType), genlib_map:compact(QueryBody), #{}),
+    Basic = #{
+        <<"query">> => Query
+    },
+    maps:fold(
+        fun(Key, Value, Acc) ->
+            maps:put(Key, Value, Acc)
+        end,
+        Basic,
+        genlib_map:compact(QueryParams)
+    ).
+
+encode_stat_request(Dsl) when is_map(Dsl) ->
+    encode_stat_request(jsx:encode(Dsl));
+
+encode_stat_request(Dsl) when is_binary(Dsl) ->
+    #merchstat_StatRequest{
+        dsl = Dsl
+    }.
+
+create_stat_dsl(StatType, Req, Context) ->
+    SplitUnit = genlib_map:get('splitUnit', Req),
+    SplitSize = genlib_map:get('splitSize', Req),
+
+    Query = #{
+        <<"merchant_id">> => get_merchant_id(Context),
+        <<"shop_id">> => genlib_map:get('shopID', Req),
+        <<"from_time">> => encode_datetime(genlib_map:get('fromTime', Req)),
+        <<"to_time">> => encode_datetime(genlib_map:get('fromTime', Req)),
+        <<"split_interval">> => get_split_interval(SplitUnit, SplitSize)
+    },
+    create_dsl(StatType, Query, #{}).
+
+get_split_interval(SplitUnit, minute) ->
+    SplitUnit * 60;
+
+get_split_interval(SplitUnit, hour) ->
+    SplitUnit * 60 * 60;
+
+get_split_interval(SplitUnit, day) ->
+    SplitUnit * 60 * 60 * 24;
+
+get_split_interval(SplitUnit, week) ->
+    SplitUnit * 60 * 60 * 24 * 7;
+
+get_split_interval(SplitUnit, month) ->
+    SplitUnit * 60 * 60 * 24 * 30;
+
+get_split_interval(SplitUnit, year) ->
+    SplitUnit * 60 * 60 * 24 * 365.

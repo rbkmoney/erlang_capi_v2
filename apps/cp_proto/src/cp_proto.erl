@@ -17,7 +17,9 @@ get_service_specs() ->
         {invoicing, VersionPrefix ++ "/processing/invoicing",
             {cp_payment_processing_thrift, 'Invoicing'}},
         {cds_storage, VersionPrefix ++ "/storage",
-            {cp_cds_thrift, 'Storage'}}
+            {cp_cds_thrift, 'Storage'}},
+        {merchant_stat, VersionPrefix ++ "/fucking_stat_url",
+            {cp_merch_stat_thrift, 'MerchantStatistics'}}
     ].
 
 -spec get_service_spec(Name :: atom()) -> service_spec() | false.
