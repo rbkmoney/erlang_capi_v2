@@ -19,3 +19,10 @@ erl_crash.dump
 
 # compiled
 swagger
+
+
+# containerization
+\#*
+.\#*
+Dockerfile
+docker-compose.yml

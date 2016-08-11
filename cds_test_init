@@ -1,0 +1,25 @@
+#!/bin/bash
+
+CDS_HOST=${CDS_HOST:-cds}
+CDS_PORT=${CDS_PORT:-8022}
+CDS_ENDPOINT="${CDS_HOST}:${CDS_PORT}"
+CDS_URL="http://${CDS_ENDPOINT}/v1/keyring"
+
+SCHEMA_DIR=${SCHEMA_DIR:-.}
+SCHEMA_FILE="${SCHEMA_DIR}/cds.thrift"
+
+WOORL=${WOORL:-woorl}
+
+CONNECTION=1
+while [ "${CONNECTION}" -ne "0" ]; do
+    timeout 1 bash -c "cat < /dev/null > /dev/tcp/${CDS_HOST}/${CDS_PORT}"
+    CONNECTION=$?
+    echo $CONNECTION
+    echo "Looks like CDS hasn't started yet."
+    sleep 1
+done
+
+echo "Looks like CDS is started!"
+
+KEYSHARE=$(woorl -s "${SCHEMA_FILE}" "${CDS_URL}" Keyring Init 1 1 | grep -Fv '[' | grep -Fv ']')
+${WOORL} -s "${SCHEMA_FILE}" "${CDS_URL}" Keyring Unlock "${KEYSHARE}"

@@ -18,7 +18,7 @@ get_service_specs() ->
             {cp_payment_processing_thrift, 'Invoicing'}},
         {cds_storage, VersionPrefix ++ "/storage",
             {cp_cds_thrift, 'Storage'}},
-        {merchant_stat, VersionPrefix ++ "/fucking_stat_url",
+        {merchant_stat, "/stat",
             {cp_merch_stat_thrift, 'MerchantStatistics'}}
     ].
 

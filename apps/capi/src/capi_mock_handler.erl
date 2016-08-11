@@ -74,8 +74,9 @@ handle_request('CreatePayment', Req, _Context) ->
     end;
 
 handle_request('CreatePaymentToolToken', Req, _Context) ->
-    Params = maps:get('PaymentTool', Req),
-    Token = tokenize_payment_tool(Params),
+    Params = maps:get('CreatePaymentToolTokenArgs', Req),
+    PaymentTool = maps:get(<<"paymentTool">>, Params),
+    Token = tokenize_payment_tool(PaymentTool),
     put_data(new_id(), token, Token),
     Session = generate_session(),
     put_data(new_id(), session, Session),
@@ -175,7 +176,7 @@ tokenize_payment_tool(_) ->
     error(unsupported_payment_tool). %%@TODO move this error to upper level
 
 generate_session() ->
-    integer_to_binary(rand:uniform(100000)).
+    genlib:unique().
 
 logic_error(Code, Message) ->
     #{code => Code, message => Message}.

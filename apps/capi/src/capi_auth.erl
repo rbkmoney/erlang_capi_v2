@@ -59,7 +59,7 @@ verify_alg(AuthToken) ->
 authorize(Claims, OperationID) ->
     Action = maps:get(OperationID, get_actions()),
     case Claims of
-        #{<<"resourse_access">> := #{<<"common-api">> := #{<<"roles">> := Roles}}} ->
+        #{<<"resource_access">> := #{<<"common-api">> := #{<<"roles">> := Roles}}} ->
             case lists:member(Action, Roles) of
                 true ->
                     {ok, Claims};
@@ -73,7 +73,7 @@ authorize(Claims, OperationID) ->
 is_valid_exp(Claims) ->
     case maps:get(<<"exp">>, Claims, undefined) of
         undefined ->
-            true;
+            false;
         I when is_integer(I) ->
             genlib_time:unow() =< I
     end.
@@ -90,6 +90,11 @@ get_actions() ->
         'GetPaymentByID' => <<"payments:get">>,
         'GetProfileByID' => <<"profiles:get">>,
         'GetProfiles' => <<"profiles:get">>,
-        'UpdateProfile' => <<"profiles:update">>
+        'UpdateProfile' => <<"profiles:update">>,
+        'GetInvoices' => <<"invoices_stats:get">>,
+        'GetPaymentConversionStats' => <<"payments_conversion_stats:get">>,
+        'GetPaymentRevenueStats' => <<"payments_revenue_stats:get">>,
+        'GetPaymentGeoStats' => <<"payments_geo_stats:get">>,
+        'GetPaymentRateStats' => <<"payments_rate_stats:get">>
     }.
 
