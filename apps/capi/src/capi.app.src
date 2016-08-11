@@ -1,0 +1,26 @@
+{application, capi , [
+    {description, "A service that does something"},
+    {vsn, "1"},
+    {registered, []},
+    {mod, { capi , []}},
+    {applications, [
+        kernel,
+        stdlib,
+        lager,
+        genlib,
+        woody,
+        cp_proto,
+        swagger,
+        jose,
+        cowboy_cors,
+        rfc3339,
+        base64url
+    ]},
+    {env, []},
+    {modules, []},
+    {maintainers, [
+        "Artem Ocheredko <galaxie.stern@gmail.com>"
+    ]},
+    {licenses, []},
+    {links, []}
+]}.

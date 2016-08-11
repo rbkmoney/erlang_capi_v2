@@ -1,0 +1,28 @@
+version: '2'
+
+services:
+  capi:
+    image: rbkmoney/build:latest
+    volumes:
+      - .:/code
+    working_dir: /code
+    command: /sbin/init
+    links:
+      - hellgate
+      - cds
+  hellgate:
+    image: dr.rbkmoney.com/rbkmoney/hellgate:latest
+    command: /opt/hellgate/bin/hellgate foreground
+  cds:
+    image: rbkmoney/cds:latest
+    command: /usr/local/cds/bin/cds foreground
+  maintenance:
+    image: rbkmoney/build:latest
+    command:
+
+networks:
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.enable_ipv6: "true"
+      com.docker.network.bridge.enable_ip_masquerade: "false"

@@ -1,0 +1,2 @@
+include/cp_*_thrift.hrl
+src/cp_*_thrift.erl

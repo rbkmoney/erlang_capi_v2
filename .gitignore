@@ -1,10 +1,21 @@
-.eunit
-deps
-*.o
-*.beam
-*.plt
+# general
+log
+/_build/
+*~
 erl_crash.dump
-ebin
-rel/example_project
-.concrete/DEV_MODE
-.rebar
+/*.config
+.tags*
+*.sublime-workspace
+.DS_Store
+
+# wercker
+/_builds/
+/_cache/
+/_projects/
+/_steps/
+/_temp/
+/.wercker/
+/_checkouts/
+
+# compiled
+swagger
