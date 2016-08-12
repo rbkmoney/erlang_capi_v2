@@ -3,12 +3,10 @@ cat <<EOF
 FROM $BASE_IMAGE
 MAINTAINER Artem Ocheredko <a.ocheredko@rbkmoney.com>
 COPY ./_build/prod/rel/capi /opt/capi
-CMD /opt/capi/bin/capi foreground
+WORKDIR /opt/capi
+CMD bin/fetch-api-pubkey && bin/capi foreground
 LABEL base_image_tag=$BASE_IMAGE_TAG
 LABEL build_image_tag=$BUILD_IMAGE_TAG
-# A bit of magic to get a proper branch name
-# even when the HEAD is detached (Hey Jenkins!
-# BRANCH_NAME is available in Jenkins env).
 LABEL branch=$( \
   if [ "HEAD" != $(git rev-parse --abbrev-ref HEAD) ]; then \
     echo $(git rev-parse --abbrev-ref HEAD); \
@@ -19,5 +17,4 @@ LABEL branch=$( \
   fi)
 LABEL commit=$(git rev-parse HEAD)
 LABEL commit_number=$(git rev-list --count HEAD)
-WORKDIR /opt
 EOF

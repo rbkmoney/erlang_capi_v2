@@ -291,21 +291,10 @@ handle_request(_OperationID, _Req, _Context) ->
 %%%
 
 service_call(ServiceName, Function, Args, Context) ->
-    ServiceUrl = get_service_base_url(ServiceName),
-    {ServiceName, Path, Service} = cp_proto:get_service_spec(ServiceName),
-    Url = iolist_to_binary([ServiceUrl, Path]),
-    Request = {Service, Function, Args},
-    {_Result, _ContextNext} = woody_client:call_safe(Context, Request, #{url => Url}).
+    cp_proto:call_service_safe(ServiceName, Function, Args, Context).
 
 create_context(ID) ->
     woody_client:new_context(genlib:to_binary(ID), capi_woody_event_handler).
-
-get_service_base_url(invoicing) ->
-    genlib_app:env(capi, hg_url);
-get_service_base_url(cds_storage) ->
-    genlib_app:env(capi, cds_url);
-get_service_base_url(merchant_stat) ->
-    genlib_app:env(capi, merchant_stat_url).
 
 logic_error(Code, Message) ->
     #{code => Code, message => Message}.
