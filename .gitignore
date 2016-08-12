@@ -3,7 +3,6 @@ log
 /_build/
 *~
 erl_crash.dump
-/*.config
 .tags*
 *.sublime-workspace
 .DS_Store
