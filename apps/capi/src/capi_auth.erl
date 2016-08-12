@@ -46,9 +46,11 @@ verify_token(AuthToken) ->
             Error
     end.
 
+-include_lib("jose/include/jose_jwk.hrl").
+
 verify_alg(AuthToken) ->
     PemFilePath = genlib_app:env(capi, api_secret_path),
-    RSAPublicJWK = jose_jwk:from_pem_file(PemFilePath),
+    RSAPublicJWK = #jose_jwk{} = jose_jwk:from_pem_file(PemFilePath),
     case jose_jwk:verify(AuthToken, RSAPublicJWK) of
         {true, Claims, _} ->
             {ok, Claims};

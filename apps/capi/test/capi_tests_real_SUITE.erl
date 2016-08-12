@@ -1,4 +1,4 @@
--module(capi_tests_SUITE).
+-module(capi_tests_real_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
 
@@ -16,13 +16,21 @@
     create_payment_tool_token_ok_test/1,
     get_invoice_by_id_ok_test/1,
     get_invoice_events_ok_test/1,
-    get_payment_by_id_ok_test/1
+    get_payment_by_id_ok_test/1,
+    %%%%
+    get_invoices_stats_ok_test/1,
+    get_payment_conversion_stats_ok_test/1,
+    get_payment_revenue_stats_ok_test/1,
+    get_payment_geo_stats_ok_test/1,
+    get_payment_rate_stats_ok_test/1
 ]).
 
 -define(CAPI_HOST, "0.0.0.0").
 -define(CAPI_PORT, 8080).
--define(CAPI_SERVICE_TYPE, mock).
-
+-define(CAPI_SERVICE_TYPE, real).
+-define(CAPI_CDS_URL, "http://localhost:8322").
+-define(CAPI_HG_URL, "http://localhost:8122").
+-define(CAPI_MERCHANT_STAT_URL, "http://192.168.40.129:8081").
 
 all() ->
     [
@@ -30,11 +38,13 @@ all() ->
         authorization_error_expired_test,
         create_invoice_badard_test,
         create_invoice_ok_test,
-        create_payment_ok_test,
         create_payment_tool_token_ok_test,
-        get_invoice_by_id_ok_test,
-        get_invoice_events_ok_test,
-        get_payment_by_id_ok_test
+        get_invoices_stats_ok_test,
+        get_payment_conversion_stats_ok_test,
+        get_payment_revenue_stats_ok_test,
+        get_payment_geo_stats_ok_test,
+        get_payment_rate_stats_ok_test
+
     ].
 
 %%
@@ -115,15 +125,34 @@ get_payment_by_id_ok_test(Config) ->
     Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments/" ++  genlib:to_list(PaymentID),
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
+get_invoices_stats_ok_test(Config) ->
+    Path = "/v1/analytics/shops/THRIFT-SHOP/invoices?limit=2&offset=0&fromTime=2015-08-11T19%3A42%3A35Z&toTime=2020-08-11T19%3A42%3A35Z",
+    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+
+get_payment_conversion_stats_ok_test(Config) ->
+    Path = "/v1/analytics/shops/THRIFT-SHOP/payments/stats/conversion?splitUnit=minute&splitSize=1&limit=2&offset=0&fromTime=2015-08-11T19%3A42%3A35Z&toTime=2020-08-11T19%3A42%3A35Z",
+    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+
+get_payment_revenue_stats_ok_test(Config) ->
+    Path = "/v1/analytics/shops/THRIFT-SHOP/payments/stats/revenue?splitUnit=minute&splitSize=1&limit=2&offset=0&fromTime=2015-08-11T19%3A42%3A35Z&toTime=2020-08-11T19%3A42%3A35Z",
+    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+
+get_payment_geo_stats_ok_test(Config) ->
+    Path = "/v1/analytics/shops/THRIFT-SHOP/payments/stats/geo?splitUnit=minute&splitSize=1&limit=2&offset=0&fromTime=2015-08-11T19%3A42%3A35Z&toTime=2020-08-11T19%3A42%3A35Z",
+    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+
+get_payment_rate_stats_ok_test(Config) ->
+    Path = "/v1/analytics/shops/THRIFT-SHOP/customers/stats/rate?splitUnit=minute&splitSize=1&limit=2&offset=0&fromTime=2015-08-11T19%3A42%3A35Z&toTime=2020-08-11T19%3A42%3A35Z",
+    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 %% helpers
 
 test_configuration(Config) ->
     application:set_env(capi, host, ?CAPI_HOST),
     application:set_env(capi, port, ?CAPI_PORT),
     application:set_env(capi, service_type, ?CAPI_SERVICE_TYPE),
-    % application:set_env(capi, cds_url, "http://localhost:8322"),
-    % application:set_env(capi, hg_url, "http://localhost:8122"),
-    % application:set_env(capi, merchant_stat_url, "http://192.168.40.129:8081"),
+    application:set_env(capi, cds_url, ?CAPI_CDS_URL),
+    application:set_env(capi, hg_url, ?CAPI_HG_URL),
+    application:set_env(capi, merchant_stat_url, ?CAPI_MERCHANT_STAT_URL),
     application:set_env(capi, api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")).
 
 default_call(Method, Path, Body, Config) ->

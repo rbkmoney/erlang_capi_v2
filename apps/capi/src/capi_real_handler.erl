@@ -25,7 +25,8 @@ handle_request('CreateInvoice', Req, Context) ->
         amount   = genlib_map:get(<<"amount">>, InvoiceParams),
         due      = genlib_map:get(<<"dueDate">>, InvoiceParams),
         currency = #'domain_CurrencyRef'{symbolic_code = genlib_map:get(<<"currency">>, InvoiceParams)},
-        context  = InvoiceContext
+        context  = InvoiceContext,
+        shop_id = genlib_map:get(<<"shopID">>, InvoiceParams)
     },
     UserInfo = get_user_info(Context),
     {Result, _NewContext} = service_call(invoicing, 'Create', [UserInfo, Params], create_context(RequestID)), %%@TODO deal with bad request
@@ -76,16 +77,16 @@ handle_request('CreatePaymentToolToken', Req, _Context) ->
     PaymentTool = maps:get(<<"paymentTool">>, Params),
     case PaymentTool of
         #{<<"paymentToolType">> := <<"cardData">>} ->
-            {Month, Year} = parse_exp_date(genlib_map:get(<<"expDate">>, Params)),
-            CardNumber = genlib:to_binary(genlib_map:get(<<"cardNumber">>, Params)),
+            {Month, Year} = parse_exp_date(genlib_map:get(<<"expDate">>, PaymentTool)),
+            CardNumber = genlib:to_binary(genlib_map:get(<<"cardNumber">>, PaymentTool)),
             CardData = #'CardData'{
                 pan  = CardNumber,
                 exp_date = #'ExpDate'{
                     month = Month,
                     year = Year
                 },
-                cardholder_name = genlib_map:get(<<"cardHolder">>, Params),
-                cvv = genlib_map:get(<<"cvv">>, Params)
+                cardholder_name = genlib_map:get(<<"cardHolder">>, PaymentTool),
+                cvv = genlib_map:get(<<"cvv">>, PaymentTool)
             },
             {Result, _NewContext} = service_call(
                 cds_storage,
@@ -227,7 +228,6 @@ handle_request('GetPaymentConversionStats', Req, Context) ->
     Dsl = create_stat_dsl(StatType, Req, Context),
     {Result, _NewContext} = service_call(merchant_stat, 'GetStatistics', [encode_stat_request(Dsl)], create_context(RequestID)),
 
-
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
             Resp = [decode_stat_response(StatType, S) || S <- Stats],
@@ -244,7 +244,6 @@ handle_request('GetPaymentRevenueStats', Req, Context) ->
     Dsl = create_stat_dsl(StatType, Req, Context),
     {Result, _NewContext} = service_call(merchant_stat, 'GetStatistics', [encode_stat_request(Dsl)], create_context(RequestID)),
 
-
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
             Resp = [decode_stat_response(StatType, S) || S <- Stats],
@@ -259,7 +258,6 @@ handle_request('GetPaymentGeoStats', Req, Context) ->
     StatType = payments_geo_stat,
     Dsl = create_stat_dsl(StatType, Req, Context),
     {Result, _NewContext} = service_call(merchant_stat, 'GetStatistics', [encode_stat_request(Dsl)], create_context(RequestID)),
-
 
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
