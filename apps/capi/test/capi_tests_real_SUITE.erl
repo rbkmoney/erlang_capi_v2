@@ -28,9 +28,9 @@
 -define(CAPI_HOST, "0.0.0.0").
 -define(CAPI_PORT, 8080).
 -define(CAPI_SERVICE_TYPE, real).
--define(CAPI_CDS_URL, "http://localhost:8322").
--define(CAPI_HG_URL, "http://localhost:8122").
--define(CAPI_MERCHANT_STAT_URL, "http://192.168.40.129:8081").
+-define(CAPI_CDS_STORAGE_URL, "http://cds:8022/v1/storage").
+-define(CAPI_INVOICING_URL, "http://hellgate:8022/v1/processing/invoicing").
+-define(CAPI_MERCHANT_STAT_URL, "http://magista:8022/stat").
 
 all() ->
     [
@@ -54,9 +54,12 @@ init_per_suite(Config) ->
     {_, Seed} = calendar:local_time(),
     random:seed(Seed),
     test_configuration(Config),
-    {ok, Apps1} = application:ensure_all_started(capi),
-    {ok, Apps2} = application:ensure_all_started(hackney),
-    [{apps, Apps1 ++ Apps2} | Config].
+    Apps = [
+        capi_ct_helper:start_app(lager),
+        capi_ct_helper:start_app(woody),
+        capi_ct_helper:start_app(capi)
+    ],
+    [{apps, lists:reverse(Apps)} | Config].
 
 end_per_suite(C) ->
     [application_stop(App) || App <- proplists:get_value(apps, C)].
@@ -150,9 +153,11 @@ test_configuration(Config) ->
     application:set_env(capi, host, ?CAPI_HOST),
     application:set_env(capi, port, ?CAPI_PORT),
     application:set_env(capi, service_type, ?CAPI_SERVICE_TYPE),
-    application:set_env(capi, cds_url, ?CAPI_CDS_URL),
-    application:set_env(capi, hg_url, ?CAPI_HG_URL),
-    application:set_env(capi, merchant_stat_url, ?CAPI_MERCHANT_STAT_URL),
+    application:set_env(cp_proto, service_urls, #{
+        cds_storage => ?CAPI_CDS_STORAGE_URL,
+        invoicing => ?CAPI_INVOICING_URL,
+        merchant_stat => ?CAPI_MERCHANT_STAT_URL
+    }),
     application:set_env(capi, api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")).
 
 default_call(Method, Path, Body, Config) ->

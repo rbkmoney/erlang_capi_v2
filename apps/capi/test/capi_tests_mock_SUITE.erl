@@ -26,15 +26,15 @@
 
 all() ->
     [
-        % authorization_error_no_header_test,
-        % authorization_error_expired_test,
-        % create_invoice_badard_test,
-        % create_invoice_ok_test,
-        % create_payment_ok_test,
-        % create_payment_tool_token_ok_test,
-        % get_invoice_by_id_ok_test,
-        % get_invoice_events_ok_test,
-        % get_payment_by_id_ok_test
+        authorization_error_no_header_test,
+        authorization_error_expired_test,
+        create_invoice_badard_test,
+        create_invoice_ok_test,
+        create_payment_ok_test,
+        create_payment_tool_token_ok_test,
+        get_invoice_by_id_ok_test,
+        get_invoice_events_ok_test,
+        get_payment_by_id_ok_test
     ].
 
 %%
@@ -44,9 +44,12 @@ init_per_suite(Config) ->
     {_, Seed} = calendar:local_time(),
     random:seed(Seed),
     test_configuration(Config),
-    {ok, Apps1} = application:ensure_all_started(capi),
-    {ok, Apps2} = application:ensure_all_started(hackney),
-    [{apps, Apps1 ++ Apps2} | Config].
+    Apps = [
+        capi_ct_helper:start_app(lager),
+        capi_ct_helper:start_app(woody),
+        capi_ct_helper:start_app(capi)
+    ],
+    [{apps, lists:reverse(Apps)} | Config].
 
 end_per_suite(C) ->
     [application_stop(App) || App <- proplists:get_value(apps, C)].
@@ -121,9 +124,6 @@ test_configuration(Config) ->
     application:set_env(capi, host, ?CAPI_HOST),
     application:set_env(capi, port, ?CAPI_PORT),
     application:set_env(capi, service_type, ?CAPI_SERVICE_TYPE),
-    % application:set_env(capi, cds_url, "http://localhost:8322"),
-    % application:set_env(capi, hg_url, "http://localhost:8122"),
-    % application:set_env(capi, merchant_stat_url, "http://192.168.40.129:8081"),
     application:set_env(capi, api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")).
 
 default_call(Method, Path, Body, Config) ->

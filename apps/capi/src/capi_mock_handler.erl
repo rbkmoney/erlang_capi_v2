@@ -29,7 +29,8 @@ start_link() ->
 authorize_api_key(ApiKey, OperationID) -> capi_auth:auth_api_key(ApiKey, OperationID).
 
 -spec handle_request(OperationID :: atom(), Req :: #{}, Context :: #{}) -> {Code :: integer, Headers :: [], Response :: #{}}.
-handle_request('CreateInvoice', Req, _Context) ->
+handle_request(OperationID = 'CreateInvoice', Req, _Context) ->
+    lager:info("Processing operation ~p", [OperationID]),
     InvoiceParams = maps:get('CreateInvoiceArgs', Req),
     ID = new_id(),
     Invoice = #{
@@ -48,7 +49,8 @@ handle_request('CreateInvoice', Req, _Context) ->
     },
     {201, [], Resp};
 
-handle_request('CreatePayment', Req, _Context) ->
+handle_request(OperationID = 'CreatePayment', Req, _Context) ->
+    lager:info("Processing operation ~p", [OperationID]),
     InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('CreatePaymentArgs', Req),
     PaymentSession = maps:get(<<"paymentSession">>, PaymentParams),
@@ -73,7 +75,8 @@ handle_request('CreatePayment', Req, _Context) ->
             {400, [], Resp}
     end;
 
-handle_request('CreatePaymentToolToken', Req, _Context) ->
+handle_request(OperationID = 'CreatePaymentToolToken', Req, _Context) ->
+    lager:info("Processing operation ~p", [OperationID]),
     Params = maps:get('CreatePaymentToolTokenArgs', Req),
     PaymentTool = maps:get(<<"paymentTool">>, Params),
     Token = tokenize_payment_tool(PaymentTool),
@@ -86,16 +89,19 @@ handle_request('CreatePaymentToolToken', Req, _Context) ->
     },
     {201, [], Resp};
 
-handle_request('GetInvoiceByID', Req, _Context) ->
+handle_request(OperationID = 'GetInvoiceByID', Req, _Context) ->
+    lager:info("Processing operation ~p", [OperationID]),
     InvoiceID = maps:get(invoiceID, Req),
     [{_, Invoice}] = get_data(InvoiceID, invoice),
     {200, [], Invoice};
 
-handle_request('GetInvoiceEvents', _Req, _Context) ->
+handle_request(OperationID = 'GetInvoiceEvents', _Req, _Context) ->
+    lager:info("Processing operation ~p", [OperationID]),
     Events = [],
     {200, [], Events};
 
-handle_request('GetPaymentByID', Req, _Context) ->
+handle_request(OperationID = 'GetPaymentByID', Req, _Context) ->
+    lager:info("Processing operation ~p", [OperationID]),
     PaymentID = maps:get(paymentID, Req),
     [{_, Payment}] = get_data(PaymentID, payment),
     {200, [], Payment};

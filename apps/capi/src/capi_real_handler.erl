@@ -15,7 +15,9 @@
 authorize_api_key(ApiKey, OperationID) -> capi_auth:auth_api_key(ApiKey, OperationID).
 
 -spec handle_request(OperationID :: atom(), Req :: #{}, Context :: #{}) -> {Code :: integer, Headers :: [], Response :: #{}}.
-handle_request('CreateInvoice', Req, Context) ->
+handle_request(OperationID = 'CreateInvoice', Req, Context) ->
+    capi_utils:logtag_process(operation_id, OperationID),
+    lager:info("Processing request ~p", [OperationID]),
     InvoiceParams = maps:get('CreateInvoiceArgs', Req),
     RequestID = maps:get('X-Request-ID', Req),
     InvoiceContext = jsx:encode(genlib_map:get(<<"context">>, InvoiceParams)),
@@ -40,7 +42,9 @@ handle_request('CreateInvoice', Req, Context) ->
             {500, [], <<"">>}
     end;
 
-handle_request('CreatePayment', Req, Context) ->
+handle_request(OperationID = 'CreatePayment', Req, Context) ->
+    capi_utils:logtag_process(operation_id, OperationID),
+    lager:info("Processing request ~p", [OperationID]),
     InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('CreatePaymentArgs', Req),
     RequestID = maps:get('X-Request-ID', Req),
@@ -70,7 +74,9 @@ handle_request('CreatePayment', Req, Context) ->
             {500, [], <<"">>}
     end;
 
-handle_request('CreatePaymentToolToken', Req, _Context) ->
+handle_request(OperationID = 'CreatePaymentToolToken', Req, _Context) ->
+    capi_utils:logtag_process(operation_id, OperationID),
+    lager:info("Processing request ~p", [OperationID]),
     Params = maps:get('CreatePaymentToolTokenArgs', Req),
     RequestID = maps:get('X-Request-ID', Req),
     ClientInfo = maps:get(<<"clientInfo">>, Params),
@@ -113,7 +119,9 @@ handle_request('CreatePaymentToolToken', Req, _Context) ->
             {400, [], logic_error(<<"wrong_payment_tool">>, <<"">>)}
     end;
 
-handle_request('GetInvoiceByID', Req, Context) ->
+handle_request(OperationID = 'GetInvoiceByID', Req, Context) ->
+    capi_utils:logtag_process(operation_id, OperationID),
+    lager:info("Processing request ~p", [OperationID]),
     InvoiceID = maps:get(invoiceID, Req),
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
@@ -155,7 +163,9 @@ handle_request('GetInvoiceByID', Req, Context) ->
             {500, [], <<"">>}
     end;
 
-handle_request('GetInvoiceEvents', Req, Context) ->
+handle_request(OperationID = 'GetInvoiceEvents', Req, Context) ->
+    capi_utils:logtag_process(operation_id, OperationID),
+    lager:info("Processing request ~p", [OperationID]),
     InvoiceID = maps:get(invoiceID, Req),
     _EventID = maps:get(eventID, Req),
     RequestID = maps:get('X-Request-ID', Req),
@@ -173,7 +183,9 @@ handle_request('GetInvoiceEvents', Req, Context) ->
             {500, [], <<"">>}
     end;
 
-handle_request('GetPaymentByID', Req, Context) ->
+handle_request(OperationID = 'GetPaymentByID', Req, Context) ->
+    capi_utils:logtag_process(operation_id, OperationID),
+    lager:info("Processing request ~p", [OperationID]),
     PaymentID = maps:get(paymentID, Req),
     InvoiceID = maps:get(invoiceID, Req),
     RequestID = maps:get('X-Request-ID', Req),
@@ -187,7 +199,9 @@ handle_request('GetPaymentByID', Req, Context) ->
             {500, [], <<"">>}
     end;
 
-handle_request('GetInvoices', Req, Context) ->
+handle_request(OperationID = 'GetInvoices', Req, Context) ->
+    capi_utils:logtag_process(operation_id, OperationID),
+    lager:info("Processing request ~p", [OperationID]),
     RequestID = maps:get('X-Request-ID', Req),
     Limit = genlib_map:get('limit', Req),
     Offset = genlib_map:get('offset', Req),
@@ -221,7 +235,9 @@ handle_request('GetInvoices', Req, Context) ->
             {500, [], <<"">>}
     end;
 
-handle_request('GetPaymentConversionStats', Req, Context) ->
+handle_request(OperationID = 'GetPaymentConversionStats', Req, Context) ->
+    capi_utils:logtag_process(operation_id, OperationID),
+    lager:info("Processing request ~p", [OperationID]),
     RequestID = maps:get('X-Request-ID', Req),
 
     StatType = payments_conversion_stat,
@@ -237,7 +253,9 @@ handle_request('GetPaymentConversionStats', Req, Context) ->
     end;
 
 
-handle_request('GetPaymentRevenueStats', Req, Context) ->
+handle_request(OperationID = 'GetPaymentRevenueStats', Req, Context) ->
+    capi_utils:logtag_process(operation_id, OperationID),
+    lager:info("Processing request ~p", [OperationID]),
     RequestID = maps:get('X-Request-ID', Req),
 
     StatType = payments_turnover,
@@ -252,7 +270,9 @@ handle_request('GetPaymentRevenueStats', Req, Context) ->
             {500, [], <<"">>}
     end;
 
-handle_request('GetPaymentGeoStats', Req, Context) ->
+handle_request(OperationID = 'GetPaymentGeoStats', Req, Context) ->
+    capi_utils:logtag_process(operation_id, OperationID),
+    lager:info("Processing request ~p", [OperationID]),
     RequestID = maps:get('X-Request-ID', Req),
 
     StatType = payments_geo_stat,
@@ -267,7 +287,9 @@ handle_request('GetPaymentGeoStats', Req, Context) ->
             {500, [], <<"">>}
     end;
 
-handle_request('GetPaymentRateStats', Req, Context) ->
+handle_request(OperationID = 'GetPaymentRateStats', Req, Context) ->
+    capi_utils:logtag_process(operation_id, OperationID),
+    lager:info("Processing request ~p", [OperationID]),
     RequestID = maps:get('X-Request-ID', Req),
 
     StatType = customers_rate_stat,
@@ -289,7 +311,9 @@ handle_request(_OperationID, _Req, _Context) ->
 %%%
 
 service_call(ServiceName, Function, Args, Context) ->
-    cp_proto:call_service_safe(ServiceName, Function, Args, Context).
+    Result = cp_proto:call_service_safe(ServiceName, Function, Args, Context),
+    lager:debug("Service call result ~p", [Result]),
+    Result.
 
 create_context(ID) ->
     woody_client:new_context(genlib:to_binary(ID), capi_woody_event_handler).

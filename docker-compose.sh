@@ -13,12 +13,18 @@ services:
       - hellgate
       - cds
       - starter
+      - machinegun
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:latest
+    image: dr.rbkmoney.com/rbkmoney/hellgate:02e8d2b8f6091db6a3272b43d862248213dbd27a
     command: /opt/hellgate/bin/hellgate foreground
+    depends_on:
+      - machinegun
   cds:
     image: rbkmoney/cds:latest
     command: /opt/cds/bin/cds foreground
+  machinegun:
+    image: dr.rbkmoney.com/rbkmoney/mg_prototype:3455e7b
+    command: /opt/mgun/bin/mgun foreground
   starter:
     image: dr.rbkmoney.com/rbkmoney/build:latest
     volumes:
