@@ -18,17 +18,16 @@ services:
     command: /opt/hellgate/bin/hellgate foreground
   cds:
     image: rbkmoney/cds:latest
-    command: /usr/local/cds/bin/cds foreground
+    command: /opt/cds/bin/cds foreground
   starter:
     image: dr.rbkmoney.com/rbkmoney/build:latest
     volumes:
       - .:/code
-    working_dir: /code
     environment:
       - CDS_HOST=cds
       - SCHEMA_DIR=/code/apps/cp_proto/damsel/proto
     command:
-      /code/cds_test_init
+      /code/script/cds_test_init
     depends_on:
       - cds
 

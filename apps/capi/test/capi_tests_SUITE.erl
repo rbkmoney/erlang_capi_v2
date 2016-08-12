@@ -123,7 +123,7 @@ test_configuration(Config) ->
     application:set_env(capi, service_type, ?CAPI_SERVICE_TYPE),
     % application:set_env(capi, cds_url, "http://localhost:8322"),
     % application:set_env(capi, hg_url, "http://localhost:8122"),
-    application:set_env(capi, merchant_stat_url, "http://192.168.40.129:8081"),
+    % application:set_env(capi, merchant_stat_url, "http://192.168.40.129:8081"),
     application:set_env(capi, api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")).
 
 default_call(Method, Path, Body, Config) ->
@@ -216,7 +216,10 @@ default_tokenize_card(Config) ->
             <<"expDate">> => <<"08/27">>,
             <<"cvv">> => <<"232">>
         },
-        <<"fingerprint">> => <<"test fingerprint">>
+        <<"clientInfo">> => #{
+            <<"fingerprint">> => <<"test fingerprint">>,
+            <<"ipAddress">> => <<"127.0.0.1">>
+        }
     },
     {ok, 201, _RespHeaders, Body} = default_call(post, "/v1/processing/payment_tools", Req, Config),
     decode_body(Body).

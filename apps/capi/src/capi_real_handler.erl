@@ -46,13 +46,14 @@ handle_request('CreatePayment', Req, Context) ->
     Token = genlib_map:get(<<"paymentToolToken">>, PaymentParams),
     PaymentTool = decode_bank_card(Token),
     EncodedSession = genlib_map:get(<<"paymentSession">>, PaymentParams),
-    {Fingerprint, PaymentSession} = unwrap_session(EncodedSession),
+    {ClientInfo, PaymentSession} = unwrap_session(EncodedSession),
     Params =  #payproc_InvoicePaymentParams{
         'payer' = #domain_Payer{
             payment_tool = PaymentTool,
             session = PaymentSession,
             client_info = #domain_ClientInfo{
-                fingerprint = Fingerprint
+                fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
+                ip_address = maps:get(<<"ipAddress">>, ClientInfo)
             }
         }
     },
@@ -71,7 +72,7 @@ handle_request('CreatePayment', Req, Context) ->
 handle_request('CreatePaymentToolToken', Req, _Context) ->
     Params = maps:get('CreatePaymentToolTokenArgs', Req),
     RequestID = maps:get('X-Request-ID', Req),
-    Fingerprint = maps:get(<<"fingerprint">>, Params),
+    ClientInfo = maps:get(<<"clientInfo">>, Params),
     PaymentTool = maps:get(<<"paymentTool">>, Params),
     case PaymentTool of
         #{<<"paymentToolType">> := <<"cardData">>} ->
@@ -98,7 +99,7 @@ handle_request('CreatePaymentToolToken', Req, _Context) ->
                     bank_card = BankCard
                 }} ->
                     Token = encode_bank_card(BankCard),
-                    Session = wrap_session(Fingerprint, PaymentSession),
+                    Session = wrap_session(ClientInfo, PaymentSession),
                     Resp = #{
                         <<"token">> => Token,
                         <<"session">> => Session
@@ -327,7 +328,7 @@ encode_bank_card(#domain_BankCard{
     'bin' = Bin,
     'masked_pan' = MaskedPan
 }) ->
-    base64:encode(jsx:encode(#{
+    base64url:encode(jsx:encode(#{
         <<"token">> => Token,
         <<"payment_system">> => PaymentSystem,
         <<"bin">> => Bin,
@@ -348,18 +349,18 @@ decode_bank_card(Encoded) ->
         'masked_pan' = MaskedPan
     }}.
 
-wrap_session(Fingerprint, PaymentSession) ->
-    base64:encode(jsx:encode(#{
-        <<"fingerprint">> => Fingerprint,
+wrap_session(ClientInfo, PaymentSession) ->
+    base64url:encode(jsx:encode(#{
+        <<"clientInfo">> => ClientInfo,
         <<"paymentSession">> => PaymentSession
     })).
 
 unwrap_session(Encoded) ->
     #{
-        <<"fingerprint">> := Fingerprint,
+        <<"clientInfo">> := ClientInfo,
         <<"paymentSession">> := PaymentSession
     } = jsx:decode(base64url:decode(Encoded), [return_maps]),
-    {Fingerprint, PaymentSession}.
+    {ClientInfo, PaymentSession}.
 
 decode_event(#'payproc_Event'{
     'id' = EventID,
@@ -368,12 +369,12 @@ decode_event(#'payproc_Event'{
     'source' =  {'invoice', InvoiceID} %%@TODO deal with Party source
 }) ->
     {EventType, EventBody} = decode_invoice_event(InvoiceID, InvoiceEvent),
-    maps:put(#{
+    #{
         <<"id">> => EventID,
         <<"createdAt">> => CreatedAt,
         <<"eventType">> => EventType,
         <<"eventBody">> => EventBody
-    }).
+    }.
 
 decode_invoice_event(_, {invoice_created, #payproc_InvoiceCreated{invoice = Invoice}}) ->
     {<<"invoiceCreated">>, #{
@@ -462,31 +463,31 @@ decode_invoice(#domain_Invoice{
 decode_stat_response(payments_conversion_stat, Response) ->
     #{
         <<"offset">> => maps:get(<<"offset">>, Response),
-        <<"successfulCount">> => maps:get(<<"successful_count">>, Response),
-        <<"totalCount">> => maps:get(<<"total_count">>, Response),
-        <<"conversion">> => maps:get(<<"conversion">>, Response)
+        <<"successfulCount">> => genlib:to_int(maps:get(<<"successful_count">>, Response)),
+        <<"totalCount">> => genlib:to_int(maps:get(<<"total_count">>, Response)),
+        <<"conversion">> => genlib:to_float(maps:get(<<"conversion">>, Response))
     };
 
 decode_stat_response(payments_geo_stat, Response) ->
     #{
-        <<"offset">> => maps:get(<<"offset">>, Response),
+        <<"offset">> => genlib:to_int(maps:get(<<"offset">>, Response)),
         <<"cityName">> => maps:get(<<"city_name">>, Response),
         <<"currency">> => maps:get(<<"currency_symbolic_code">>, Response),
-        <<"profit">> => maps:get(<<"amount_with_fee">>, Response),
-        <<"revenue">> => maps:get(<<"amount_without_fee">>, Response)
+        <<"profit">> => genlib:to_int(maps:get(<<"amount_with_fee">>, Response)),
+        <<"revenue">> => genlib:to_int(maps:get(<<"amount_without_fee">>, Response))
     };
 
 decode_stat_response(payments_turnover, Response) ->
     #{
-        <<"offset">> => maps:get(<<"offset">>, Response),
+        <<"offset">> => genlib:to_int(maps:get(<<"offset">>, Response)),
         <<"currency">> => maps:get(<<"currency_symbolic_code">>, Response),
-        <<"profit">> => maps:get(<<"amount_with_fee">>, Response),
-        <<"revenue">> => maps:get(<<"amount_without_fee">>, Response)
+        <<"profit">> => genlib:to_int(maps:get(<<"amount_with_fee">>, Response)),
+        <<"revenue">> => genlib:to_int(maps:get(<<"amount_without_fee">>, Response))
     };
 
 decode_stat_response(customers_rate_stat, Response) ->
     #{
-        <<"uniqueCount">> => maps:get(<<"unic_count">>, Response)
+        <<"uniqueCount">> => genlib:to_int(maps:get(<<"unic_count">>, Response))
     }.
 
 create_dsl(QueryType, QueryBody, QueryParams) when
@@ -497,13 +498,8 @@ create_dsl(QueryType, QueryBody, QueryParams) when
     Basic = #{
         <<"query">> => Query
     },
-    maps:fold(
-        fun(Key, Value, Acc) ->
-            maps:put(Key, Value, Acc)
-        end,
-        Basic,
-        genlib_map:compact(QueryParams)
-    ).
+    maps:merge(Basic, genlib_map:compact(QueryParams)).
+
 
 encode_stat_request(Dsl) when is_map(Dsl) ->
     encode_stat_request(jsx:encode(Dsl));
@@ -525,13 +521,13 @@ create_stat_dsl(StatType, Req, Context) ->
             get_split_interval(SplitSize, SplitUnit)
     end,
 
-    Query = genlib_map:compact(#{
+    Query = #{
         <<"merchant_id">> => get_merchant_id(Context),
         <<"shop_id">> => genlib_map:get('shopID', Req),
         <<"from_time">> => FromTime,
         <<"to_time">> => ToTime,
         <<"split_interval">> => SplitInterval
-    }),
+    },
     create_dsl(StatType, Query, #{}).
 
 get_split_interval(SplitSize, minute) ->

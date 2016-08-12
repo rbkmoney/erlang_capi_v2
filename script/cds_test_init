@@ -14,7 +14,6 @@ CONNECTION=1
 while [ "${CONNECTION}" -ne "0" ]; do
     timeout 1 bash -c "cat < /dev/null > /dev/tcp/${CDS_HOST}/${CDS_PORT}"
     CONNECTION=$?
-    echo $CONNECTION
     echo "Looks like CDS hasn't started yet."
     sleep 1
 done
