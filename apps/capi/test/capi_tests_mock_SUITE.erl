@@ -41,8 +41,6 @@ all() ->
 %% starting/stopping
 %%
 init_per_suite(Config) ->
-    {_, Seed} = calendar:local_time(),
-    random:seed(Seed),
     test_configuration(Config),
     Apps = [
         capi_ct_helper:start_app(lager),
