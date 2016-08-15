@@ -6,8 +6,9 @@ services:
   ${SERVICE_NAME}:
     image: ${BUILD_IMAGE}
     volumes:
-      - .:/code
-    working_dir: /code
+      - .:/$PWD
+      - $HOME/.cache:/home/$UNAME/.cache
+    working_dir: /$PWD
     command: /sbin/init
     depends_on:
       - hellgate
