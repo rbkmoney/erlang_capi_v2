@@ -473,7 +473,7 @@ decode_invoice(#domain_Invoice{
 
 decode_stat_response(payments_conversion_stat, Response) ->
     #{
-        <<"offset">> => maps:get(<<"offset">>, Response),
+        <<"offset">> => genlib:to_int(maps:get(<<"offset">>, Response)),
         <<"successfulCount">> => genlib:to_int(maps:get(<<"successful_count">>, Response)),
         <<"totalCount">> => genlib:to_int(maps:get(<<"total_count">>, Response)),
         <<"conversion">> => genlib:to_float(maps:get(<<"conversion">>, Response))
