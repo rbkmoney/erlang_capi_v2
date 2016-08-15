@@ -41,26 +41,19 @@ all() ->
 %% starting/stopping
 %%
 init_per_suite(Config) ->
-    test_configuration(Config),
-    Apps = [
-        capi_ct_helper:start_app(lager),
-        capi_ct_helper:start_app(woody),
-        capi_ct_helper:start_app(capi)
-    ],
+    Apps =
+        capi_ct_helper:start_app(lager) ++
+        capi_ct_helper:start_app(woody) ++
+        capi_ct_helper:start_app(capi, [
+            {host, ?CAPI_HOST},
+            {port, ?CAPI_PORT},
+            {service_type, ?CAPI_SERVICE_TYPE},
+            {api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")}
+        ]),
     [{apps, lists:reverse(Apps)} | Config].
 
 end_per_suite(C) ->
-    [application_stop(App) || App <- proplists:get_value(apps, C)].
-
-application_stop(App = sasl) ->
-    %% hack for preventing sasl deadlock
-    %% http://erlang.org/pipermail/erlang-questions/2014-May/079012.html
-    error_logger:delete_report_handler(cth_log_redirect),
-    _ = application:stop(App),
-    error_logger:add_report_handler(cth_log_redirect),
-    ok;
-application_stop(App) ->
-    application:stop(App).
+    [application:stop(App) || App <- proplists:get_value(apps, C)].
 
 %% tests
 authorization_error_no_header_test(_Config) ->
@@ -117,12 +110,6 @@ get_payment_by_id_ok_test(Config) ->
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 %% helpers
-
-test_configuration(Config) ->
-    application:set_env(capi, host, ?CAPI_HOST),
-    application:set_env(capi, port, ?CAPI_PORT),
-    application:set_env(capi, service_type, ?CAPI_SERVICE_TYPE),
-    application:set_env(capi, api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")).
 
 default_call(Method, Path, Body, Config) ->
     call(Method, Path, Body, [x_request_id_header(), default_auth_header(Config), json_content_type_header()]).

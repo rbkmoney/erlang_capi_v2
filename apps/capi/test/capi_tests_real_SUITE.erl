@@ -30,7 +30,7 @@
 -define(CAPI_SERVICE_TYPE, real).
 -define(CAPI_CDS_STORAGE_URL, "http://cds:8022/v1/storage").
 -define(CAPI_INVOICING_URL, "http://hellgate:8022/v1/processing/invoicing").
--define(CAPI_MERCHANT_STAT_URL, "http://magista:8022/stat").
+-define(CAPI_MERCHANT_STAT_URL, "http://magista:8081/stat").
 
 all() ->
     [
@@ -52,25 +52,26 @@ all() ->
 %%
 init_per_suite(Config) ->
     test_configuration(Config),
-    Apps = [
-        capi_ct_helper:start_app(lager),
-        capi_ct_helper:start_app(woody),
-        capi_ct_helper:start_app(capi)
-    ],
+    Apps =
+        capi_ct_helper:start_app(lager) ++
+        capi_ct_helper:start_app(woody) ++
+        capi_ct_helper:start_app(cp_proto, [
+            {service_urls, #{
+                cds_storage => ?CAPI_CDS_STORAGE_URL,
+                invoicing => ?CAPI_INVOICING_URL,
+                merchant_stat => ?CAPI_MERCHANT_STAT_URL
+            }}
+        ]) ++
+        capi_ct_helper:start_app(capi, [
+            {host, ?CAPI_HOST},
+            {port, ?CAPI_PORT},
+            {service_type, ?CAPI_SERVICE_TYPE},
+            {api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")}
+        ]),
     [{apps, lists:reverse(Apps)} | Config].
 
 end_per_suite(C) ->
-    [application_stop(App) || App <- proplists:get_value(apps, C)].
-
-application_stop(App = sasl) ->
-    %% hack for preventing sasl deadlock
-    %% http://erlang.org/pipermail/erlang-questions/2014-May/079012.html
-    error_logger:delete_report_handler(cth_log_redirect),
-    _ = application:stop(App),
-    error_logger:add_report_handler(cth_log_redirect),
-    ok;
-application_stop(App) ->
-    application:stop(App).
+    [application:stop(App) || App <- proplists:get_value(apps, C)].
 
 %% tests
 authorization_error_no_header_test(_Config) ->
