@@ -18,7 +18,9 @@ build('capi', 'docker-host', finalHook) {
 
   pipeDefault() {
     runStage('compile') {
-      sh 'make wc_compile'
+      withGithubPrivkey {
+        sh 'make wc_compile'
+      }
     }
     // TODO fix issues
     // runStage('lint') {
