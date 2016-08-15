@@ -20,5 +20,4 @@ done
 
 echo "Looks like CDS is started!"
 
-KEYSHARE=$(woorl -s "${SCHEMA_FILE}" "${CDS_URL}" Keyring Init 1 1 | grep -Fv '[' | grep -Fv ']')
-${WOORL} -s "${SCHEMA_FILE}" "${CDS_URL}" Keyring Unlock "${KEYSHARE}"
+woorl -s "${SCHEMA_FILE}" "${CDS_URL}" Keyring Init 1 1

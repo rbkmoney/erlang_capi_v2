@@ -9,22 +9,18 @@ services:
       - .:/code
     working_dir: /code
     command: /sbin/init
-    links:
+    depends_on:
       - hellgate
       - cds
       - starter
-      - machinegun
   hellgate:
     image: dr.rbkmoney.com/rbkmoney/hellgate:02e8d2b8f6091db6a3272b43d862248213dbd27a
-    command: /opt/hellgate/bin/hellgate foreground
     depends_on:
       - machinegun
   cds:
-    image: rbkmoney/cds:latest
-    command: /opt/cds/bin/cds foreground
+    image: dr.rbkmoney.com/rbkmoney/cds:dbbf05f7bcdb39a85ca12d290aeecea1bada89d1
   machinegun:
-    image: dr.rbkmoney.com/rbkmoney/mg_prototype:3455e7b
-    command: /opt/mgun/bin/mgun foreground
+    image: dr.rbkmoney.com/rbkmoney/mg_prototype:f981bdc338631fbdc991c78af8fd22f676c26fc7
   starter:
     image: dr.rbkmoney.com/rbkmoney/build:latest
     volumes:
