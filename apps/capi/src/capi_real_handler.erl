@@ -387,32 +387,43 @@ decode_event(#'payproc_Event'{
         <<"eventBody">> => EventBody
     }.
 
-decode_invoice_event(_, {invoice_created, #payproc_InvoiceCreated{invoice = Invoice}}) ->
+decode_invoice_event(_, {
+    invoice_created,
+    #payproc_InvoiceCreated{invoice = Invoice}
+}) ->
     {<<"invoiceCreated">>, #{
         <<"invoice">> => decode_invoice(Invoice)
     }};
 
-decode_invoice_event(_, {invoice_status_changed, #payproc_InvoiceStatusChanged{status = {Status, _}}}) ->
+decode_invoice_event(_, {
+    invoice_status_changed,
+    #payproc_InvoiceStatusChanged{status = {Status, _}}
+}) ->
     {<<"invoiceStatusChanged">>, #{
         <<"status">> => genlib:to_binary(Status)
     }};
-decode_invoice_event(InvoiceID, {'invoice_payment_started', #'payproc_InvoicePaymentStarted'{payment = Payment}}) ->
+
+decode_invoice_event(InvoiceID, {invoice_payment_event, Event}) ->
+    decode_payment_event(InvoiceID, Event).
+
+decode_payment_event(InvoiceID, {
+    invoice_payment_started,
+    #'payproc_InvoicePaymentStarted'{payment = Payment}
+}) ->
     {<<"paymentStarted">>, #{
         <<"payment">> => decode_payment(InvoiceID, Payment)
     }};
 
-decode_invoice_event(_, {
-    'invoice_payment_bound',
-    #'payproc_InvoicePaymentBound'{
-        payment_id = PaymentID
-    }
+decode_payment_event(_, {
+    invoice_payment_bound,
+    #'payproc_InvoicePaymentBound'{payment_id = PaymentID}
 }) ->
     {<<"paymentBound">>, #{
         <<"paymentID">> => PaymentID
     }};
 
-decode_invoice_event(_, {
-    'invoice_payment_status_changed',
+decode_payment_event(_, {
+    invoice_payment_status_changed,
     #'payproc_InvoicePaymentStatusChanged'{payment_id = PaymentID, status = {Status, _}}
 }) ->
     {<<"paymentStatusChanged">>, #{
