@@ -5,6 +5,7 @@ MAINTAINER Artem Ocheredko <a.ocheredko@rbkmoney.com>
 COPY ./_build/prod/rel/capi /opt/capi
 WORKDIR /opt/capi
 CMD bin/fetch-api-pubkey && bin/capi foreground
+EXPOSE 8080
 LABEL base_image_tag=$BASE_IMAGE_TAG
 LABEL build_image_tag=$BUILD_IMAGE_TAG
 LABEL branch=$( \
