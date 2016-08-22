@@ -54,6 +54,7 @@ init_per_suite(Config) ->
     test_configuration(Config),
     Apps =
         capi_ct_helper:start_app(lager) ++
+        capi_ct_helper:start_app(cowlib) ++
         capi_ct_helper:start_app(woody) ++
         capi_ct_helper:start_app(cp_proto, [
             {service_urls, #{
@@ -128,23 +129,61 @@ get_payment_by_id_ok_test(Config) ->
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 get_invoices_stats_ok_test(Config) ->
-    Path = "/v1/analytics/shops/THRIFT-SHOP/invoices?limit=2&offset=0&fromTime=2015-08-11T19%3A42%3A35Z&toTime=2020-08-11T19%3A42%3A35Z",
+    Qs = qs([
+        {<<"limit">>, <<"2">>},
+        {<<"offset">>, <<"0">>},
+        {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
+        {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
+    ]),
+    Path = "/v1/analytics/shops/THRIFT-SHOP/invoices?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 get_payment_conversion_stats_ok_test(Config) ->
-    Path = "/v1/analytics/shops/THRIFT-SHOP/payments/stats/conversion?splitUnit=minute&splitSize=1&limit=2&offset=0&fromTime=2015-08-11T19%3A42%3A35Z&toTime=2020-08-11T19%3A42%3A35Z",
+    Qs = qs([
+        {<<"splitUnit">>, <<"minute">>},
+        {<<"splitSize">>, <<"1">>},
+        {<<"limit">>, <<"2">>},
+        {<<"offset">>, <<"0">>},
+        {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
+        {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
+    ]),
+    Path = "/v1/analytics/shops/THRIFT-SHOP/payments/stats/conversion?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 get_payment_revenue_stats_ok_test(Config) ->
-    Path = "/v1/analytics/shops/THRIFT-SHOP/payments/stats/revenue?splitUnit=minute&splitSize=1&limit=2&offset=0&fromTime=2015-08-11T19%3A42%3A35Z&toTime=2020-08-11T19%3A42%3A35Z",
+    Qs = qs([
+        {<<"splitUnit">>, <<"minute">>},
+        {<<"splitSize">>, <<"1">>},
+        {<<"limit">>, <<"2">>},
+        {<<"offset">>, <<"0">>},
+        {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
+        {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
+    ]),
+    Path = "/v1/analytics/shops/THRIFT-SHOP/payments/stats/revenue?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 get_payment_geo_stats_ok_test(Config) ->
-    Path = "/v1/analytics/shops/THRIFT-SHOP/payments/stats/geo?splitUnit=minute&splitSize=1&limit=2&offset=0&fromTime=2015-08-11T19%3A42%3A35Z&toTime=2020-08-11T19%3A42%3A35Z",
+    Qs = qs([
+        {<<"splitUnit">>, <<"minute">>},
+        {<<"splitSize">>, <<"1">>},
+        {<<"limit">>, <<"2">>},
+        {<<"offset">>, <<"0">>},
+        {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
+        {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
+    ]),
+    Path = "/v1/analytics/shops/THRIFT-SHOP/payments/stats/geo?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 get_payment_rate_stats_ok_test(Config) ->
-    Path = "/v1/analytics/shops/THRIFT-SHOP/customers/stats/rate?splitUnit=minute&splitSize=1&limit=2&offset=0&fromTime=2015-08-11T19%3A42%3A35Z&toTime=2020-08-11T19%3A42%3A35Z",
+    Qs = qs([
+        {<<"splitUnit">>, <<"minute">>},
+        {<<"splitSize">>, <<"1">>},
+        {<<"limit">>, <<"2">>},
+        {<<"offset">>, <<"0">>},
+        {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
+        {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
+    ]),
+    Path = "/v1/analytics/shops/THRIFT-SHOP/customers/stats/rate?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 %% helpers
 
@@ -273,3 +312,6 @@ get_body(ClientRef) ->
 decode_body(Body) ->
     jsx:decode(Body, [return_maps]).
 
+-spec qs([{binary(), binary() | true}]) -> list().
+qs(QsVals) ->
+    genlib:to_list(cow_qs:qs(QsVals)).
