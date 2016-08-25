@@ -14,10 +14,14 @@
 -spec authorize_api_key(ApiKey :: binary(), OperationID :: atom()) -> Result :: boolean() | {boolean(), #{binary() => any()}}.
 authorize_api_key(ApiKey, OperationID) -> capi_auth:auth_api_key(ApiKey, OperationID).
 
--spec handle_request(OperationID :: atom(), Req :: #{}, Context :: #{}) -> {Code :: integer, Headers :: [], Response :: #{}}.
-handle_request(OperationID = 'CreateInvoice', Req, Context) ->
+-spec handle_request(OperationID :: atom(), Req :: #{}, Context :: #{}) -> {Code :: integer(), Headers :: [], Response :: #{}}.
+handle_request(OperationID, Req, Context) ->
     capi_utils:logtag_process(operation_id, OperationID),
     lager:info("Processing request ~p", [OperationID]),
+    process_request(OperationID, Req, Context).
+
+-spec process_request(OperationID :: atom(), Req :: #{}, Context :: #{}) -> {Code :: integer(), Headers :: [], Response :: #{}}.
+process_request('CreateInvoice', Req, Context) ->
     InvoiceParams = maps:get('CreateInvoiceArgs', Req),
     RequestID = maps:get('X-Request-ID', Req),
     InvoiceContext = jsx:encode(genlib_map:get(<<"context">>, InvoiceParams)),
@@ -38,13 +42,16 @@ handle_request(OperationID = 'CreateInvoice', Req, Context) ->
                 <<"id">> => InvoiceID
             },
             {201, [], Resp};
+        {exception, #payproc_InvalidUser{}} ->
+            {403, [], <<"">>};
+        {exception, #'InvalidRequest'{}} ->
+            {400, [], logic_error(invalid_request, <<"Request can't be processed">>)};
         _Error ->
             {500, [], <<"">>}
+
     end;
 
-handle_request(OperationID = 'CreatePayment', Req, Context) ->
-    capi_utils:logtag_process(operation_id, OperationID),
-    lager:info("Processing request ~p", [OperationID]),
+process_request('CreatePayment', Req, Context) ->
     InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('CreatePaymentArgs', Req),
     RequestID = maps:get('X-Request-ID', Req),
@@ -70,13 +77,22 @@ handle_request(OperationID = 'CreatePayment', Req, Context) ->
                 <<"id">> => PaymentID
             },
             {201, [], Resp};
+        {exception, #payproc_InvalidUser{}} ->
+            {403, [], <<"">>};
+        {exception, #payproc_UserInvoiceNotFound{}} ->
+            {404, [], general_error(<<"Entity not found">>)};
+        {exception, #payproc_InvalidInvoiceStatus{}} ->
+            {400, [], logic_error(invalid_request, <<"Request can't be processed">>)};
+        {exception, #payproc_InvoicePaymentPending{}} ->
+            {400, [], logic_error(invalid_request, <<"Request can't be processed">>)};
+        {exception, #'InvalidRequest'{}} ->
+            {400, [], logic_error(invalid_request, <<"Request can't be processed">>)};
         _Error ->
             {500, [], <<"">>}
+
     end;
 
-handle_request(OperationID = 'CreatePaymentToolToken', Req, _Context) ->
-    capi_utils:logtag_process(operation_id, OperationID),
-    lager:info("Processing request ~p", [OperationID]),
+process_request('CreatePaymentToolToken', Req, _Context) ->
     Params = maps:get('CreatePaymentToolTokenArgs', Req),
     RequestID = maps:get('X-Request-ID', Req),
     ClientInfo = maps:get(<<"clientInfo">>, Params),
@@ -112,16 +128,18 @@ handle_request(OperationID = 'CreatePaymentToolToken', Req, _Context) ->
                         <<"session">> => Session
                     },
                     {201, [], Resp};
+                {exception, #'InvalidCardData'{}} ->
+                    {400, [], logic_error(invalid_request, <<"Request can't be processed">>)};
+                {exception, #'KeyringLocked'{}} ->
+                    {500, [], <<"">>};
                 _Error ->
                     {500, [], <<"">>}
             end;
         _ ->
-            {400, [], logic_error(<<"wrong_payment_tool">>, <<"">>)}
+            {400, [], logic_error(wrong_payment_tool, <<"">>)}
     end;
 
-handle_request(OperationID = 'GetInvoiceByID', Req, Context) ->
-    capi_utils:logtag_process(operation_id, OperationID),
-    lager:info("Processing request ~p", [OperationID]),
+process_request('GetInvoiceByID', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
@@ -159,13 +177,16 @@ handle_request(OperationID = 'GetInvoiceByID', Req, Context) ->
                 <<"shopID">> => ShopID
             },
             {200, [], Resp};
+        {exception, #payproc_InvalidUser{}} ->
+            {403, [], <<"">>};
+        {exception, #payproc_UserInvoiceNotFound{}} ->
+            {404, [], general_error(<<"Entity not found">>)};
         _Error ->
             {500, [], <<"">>}
+
     end;
 
-handle_request(OperationID = 'GetInvoiceEvents', Req, Context) ->
-    capi_utils:logtag_process(operation_id, OperationID),
-    lager:info("Processing request ~p", [OperationID]),
+process_request('GetInvoiceEvents', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     _EventID = maps:get(eventID, Req),
     RequestID = maps:get('X-Request-ID', Req),
@@ -179,13 +200,20 @@ handle_request(OperationID = 'GetInvoiceEvents', Req, Context) ->
         {ok, Events} when is_list(Events) ->
             Resp = [decode_event(I) || I <- Events],
             {200, [], Resp};
+        {exception, #payproc_InvalidUser{}} ->
+            {403, [], <<"">>};
+        {exception, #payproc_UserInvoiceNotFound{}} ->
+            {404, [], general_error(<<"Entity not found">>)};
+        {exception, #payproc_EventNotFound{}} ->
+            {404, [], general_error(<<"Entity not found">>)};
+        {exception, #'InvalidRequest'{}} ->
+            {400, [], logic_error(invalid_request, <<"Request can't be processed">>)};
         _Error ->
             {500, [], <<"">>}
+
     end;
 
-handle_request(OperationID = 'GetPaymentByID', Req, Context) ->
-    capi_utils:logtag_process(operation_id, OperationID),
-    lager:info("Processing request ~p", [OperationID]),
+process_request('GetPaymentByID', Req, Context) ->
     PaymentID = maps:get(paymentID, Req),
     InvoiceID = maps:get(invoiceID, Req),
     RequestID = maps:get('X-Request-ID', Req),
@@ -195,13 +223,16 @@ handle_request(OperationID = 'GetPaymentByID', Req, Context) ->
         {ok, Payment} ->
             Resp = decode_payment(InvoiceID, Payment),
             {200, [], Resp};
-       _Error ->
+        {exception, #payproc_InvalidUser{}} ->
+            {403, [], <<"">>};
+        {exception, #payproc_InvoicePaymentNotFound{}} ->
+            {404, [], general_error(<<"Entity not found">>)};
+        _Error ->
             {500, [], <<"">>}
+
     end;
 
-handle_request(OperationID = 'GetInvoices', Req, Context) ->
-    capi_utils:logtag_process(operation_id, OperationID),
-    lager:info("Processing request ~p", [OperationID]),
+process_request('GetInvoices', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
     Limit = genlib_map:get('limit', Req),
     Offset = genlib_map:get('offset', Req),
@@ -231,13 +262,16 @@ handle_request(OperationID = 'GetInvoices', Req, Context) ->
                 <<"totalCount">> => TotalCount
             },
             {200, [], Resp};
-       _Error ->
+        {exception, #merchstat_DatasetTooBig{limit = Limit}} ->
+            {400, [], limit_exceeded_error(Limit)};
+        {exception, #'InvalidRequest'{}} ->
+            {400, [], logic_error(invalid_request, <<"Request can't be processed">>)};
+        _Error ->
             {500, [], <<"">>}
+
     end;
 
-handle_request(OperationID = 'GetPaymentConversionStats', Req, Context) ->
-    capi_utils:logtag_process(operation_id, OperationID),
-    lager:info("Processing request ~p", [OperationID]),
+process_request('GetPaymentConversionStats', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
 
     StatType = payments_conversion_stat,
@@ -248,14 +282,17 @@ handle_request(OperationID = 'GetPaymentConversionStats', Req, Context) ->
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
             Resp = [decode_stat_response(StatType, S) || S <- Stats],
             {200, [], Resp};
-       _Error ->
+        {exception, #merchstat_DatasetTooBig{limit = Limit}} ->
+            {400, [], limit_exceeded_error(Limit)};
+        {exception, #'InvalidRequest'{}} ->
+            {400, [], logic_error(invalid_request, <<"Request can't be processed">>)};
+        _Error ->
             {500, [], <<"">>}
+
     end;
 
 
-handle_request(OperationID = 'GetPaymentRevenueStats', Req, Context) ->
-    capi_utils:logtag_process(operation_id, OperationID),
-    lager:info("Processing request ~p", [OperationID]),
+process_request('GetPaymentRevenueStats', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
 
     StatType = payments_turnover,
@@ -266,13 +303,17 @@ handle_request(OperationID = 'GetPaymentRevenueStats', Req, Context) ->
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
             Resp = [decode_stat_response(StatType, S) || S <- Stats],
             {200, [], Resp};
-       _Error ->
+        {exception, #merchstat_DatasetTooBig{limit = Limit}} ->
+            io:format(user, "FUCK ~p~n~n~n", [limit_exceeded_error(Limit)]),
+            {400, [], limit_exceeded_error(Limit)};
+        {exception, #'InvalidRequest'{}} ->
+            {400, [], logic_error(invalid_request, <<"Request can't be processed">>)};
+        _Error ->
             {500, [], <<"">>}
+
     end;
 
-handle_request(OperationID = 'GetPaymentGeoStats', Req, Context) ->
-    capi_utils:logtag_process(operation_id, OperationID),
-    lager:info("Processing request ~p", [OperationID]),
+process_request('GetPaymentGeoStats', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
 
     StatType = payments_geo_stat,
@@ -283,43 +324,70 @@ handle_request(OperationID = 'GetPaymentGeoStats', Req, Context) ->
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
             Resp = [decode_stat_response(StatType, S) || S <- Stats],
             {200, [], Resp};
-       _Error ->
+        {exception, #merchstat_DatasetTooBig{limit = Limit}} ->
+            {400, [], limit_exceeded_error(Limit)};
+        {exception, #'InvalidRequest'{}} ->
+            {400, [], logic_error(invalid_request, <<"Request can't be processed">>)};
+        _Error ->
             {500, [], <<"">>}
+
     end;
 
-handle_request(OperationID = 'GetPaymentRateStats', Req, Context) ->
-    capi_utils:logtag_process(operation_id, OperationID),
-    lager:info("Processing request ~p", [OperationID]),
+process_request('GetPaymentRateStats', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
 
     StatType = customers_rate_stat,
     Dsl = create_stat_dsl(StatType, Req, Context),
     {Result, _NewContext} = service_call(merchant_stat, 'GetStatistics', [encode_stat_request(Dsl)], create_context(RequestID)),
 
-
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
             Resp = [decode_stat_response(StatType, S) || S <- Stats],
             {200, [], Resp};
-       _Error ->
+        {exception, #merchstat_DatasetTooBig{limit = Limit}} ->
+            {400, [], limit_exceeded_error(Limit)};
+        {exception, #'InvalidRequest'{}} ->
+            {400, [], logic_error(invalid_request, <<"Request can't be processed">>)};
+        _Error ->
             {500, [], <<"">>}
+
     end;
 
-handle_request(_OperationID, _Req, _Context) ->
+process_request(OperationID, _Req, _Context) ->
+    lager:info("Skipping not implemented operation: ~p", [OperationID]),
     {501, [], <<"Not implemented">>}.
 
 %%%
 
 service_call(ServiceName, Function, Args, Context) ->
-    Result = cp_proto:call_service_safe(ServiceName, Function, Args, Context),
+    R = {Result, _Context} = cp_proto:call_service_safe(ServiceName, Function, Args, Context),
+    _ = log_service_call_result(Result),
+    R.
+
+log_service_call_result(Result) ->
     lager:debug("Service call result ~p", [Result]),
-    Result.
+    log_service_call_result_(Result).
+
+log_service_call_result_({ok, _}) ->
+    lager:info("Service call result success");
+
+log_service_call_result_({exception, Exception}) ->
+    lager:error("Service call result exception ~p", [Exception]);
+
+log_service_call_result_(_) ->
+    ok.
 
 create_context(ID) ->
     woody_client:new_context(genlib:to_binary(ID), capi_woody_event_handler).
 
 logic_error(Code, Message) ->
-    #{code => Code, message => Message}.
+    #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)}.
+
+limit_exceeded_error(Limit) ->
+    logic_error(limit_exceeded, io_lib:format("Max limit: ~p", [Limit])).
+
+general_error(Message) ->
+    #{<<"message">> => genlib:to_binary(Message)}.
 
 parse_exp_date(ExpDate) when is_binary(ExpDate) ->
     [Month,  Year] = binary:split(ExpDate, <<"/">>),

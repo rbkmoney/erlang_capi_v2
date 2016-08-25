@@ -44,7 +44,6 @@ all() ->
         get_payment_revenue_stats_ok_test,
         get_payment_geo_stats_ok_test,
         get_payment_rate_stats_ok_test
-
     ].
 
 %%

@@ -28,7 +28,7 @@ start_link() ->
 -spec authorize_api_key(ApiKey :: binary(), OperationID :: atom()) -> Result :: boolean() | {boolean(), #{binary() => any()}}.
 authorize_api_key(ApiKey, OperationID) -> capi_auth:auth_api_key(ApiKey, OperationID).
 
--spec handle_request(OperationID :: atom(), Req :: #{}, Context :: #{}) -> {Code :: integer, Headers :: [], Response :: #{}}.
+-spec handle_request(OperationID :: atom(), Req :: #{}, Context :: #{}) -> {Code :: integer(), Headers :: [], Response :: #{}}.
 handle_request(OperationID = 'CreateInvoice', Req, _Context) ->
     lager:info("Processing operation ~p", [OperationID]),
     InvoiceParams = maps:get('CreateInvoiceArgs', Req),
