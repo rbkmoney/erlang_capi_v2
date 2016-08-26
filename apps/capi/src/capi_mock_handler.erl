@@ -71,6 +71,7 @@ handle_request(OperationID = 'CreatePayment', Req, _Context) ->
             Resp = #{
                 <<"id">> => PaymentID
             },
+            add_delayed_fake_payment(PaymentID),
             {201, [], Resp};
         {error, expried} ->
             Resp = logic_error(<<"expired_session">>, <<"Payment session is not valid">>),
@@ -103,8 +104,11 @@ handle_request(OperationID = 'GetInvoiceByID', Req, _Context) ->
 
 handle_request(OperationID = 'GetInvoiceEvents', _Req, _Context) ->
     lager:info("Processing operation ~p", [OperationID]),
-    Events = [],
-    {200, [], Events};
+    AllEvents = lists:map(
+        fun([E]) -> E end,
+        get_data_by_pattern({{'_', event}, '$1'})
+    ),
+    {200, [], AllEvents};
 
 handle_request(OperationID = 'GetPaymentByID', Req, _Context) ->
     lager:info("Processing operation ~p", [OperationID]),
@@ -229,6 +233,34 @@ logic_error(Code, Message) ->
 general_error(Message) ->
     #{<<"message">> => genlib:to_binary(Message)}.
 
+add_delayed_fake_payment(PaymentID) ->
+    spawn(
+        fun() ->
+            random:seed(now()),
+            timer:sleep(random:uniform(3) * 200),
+            add_fake_payment(PaymentID)
+        end
+    ).
+
+add_fake_payment(PaymentID) ->
+    {ok, Payment} = get_data_by_id(PaymentID, payment),
+    put_data(PaymentID, payment, Payment#{
+        <<"status">> => <<"paid">>
+    }),
+
+    {{Y, M, D}, Time} = calendar:local_time(),
+    {ok, CreatedAt} = rfc3339:format({{Y + 1, M, D}, Time}),
+    EventID = new_id(),
+    Event = #{
+        <<"id">> => EventID,
+        <<"createdAt">> => CreatedAt,
+        <<"eventType">> => <<"paymentStatusChanged">>,
+        <<"eventBody">> => #{
+            <<"paymentID">> => PaymentID,
+            <<"status">> => <<"paid">>
+        }
+    },
+    put_data(EventID, event, Event).
 
 wrap_id(ID, Type) ->
     {ID, Type}.
