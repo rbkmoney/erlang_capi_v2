@@ -12,15 +12,18 @@
 -export([authorize_api_key/2]).
 
 -spec authorize_api_key(ApiKey :: binary(), OperationID :: atom()) -> Result :: boolean() | {boolean(), #{binary() => any()}}.
+
 authorize_api_key(ApiKey, OperationID) -> capi_auth:auth_api_key(ApiKey, OperationID).
 
 -spec handle_request(OperationID :: atom(), Req :: #{}, Context :: #{}) -> {Code :: integer(), Headers :: [], Response :: #{}}.
+
 handle_request(OperationID, Req, Context) ->
     capi_utils:logtag_process(operation_id, OperationID),
     lager:info("Processing request ~p", [OperationID]),
     process_request(OperationID, Req, Context).
 
 -spec process_request(OperationID :: atom(), Req :: #{}, Context :: #{}) -> {Code :: integer(), Headers :: [], Response :: #{}}.
+
 process_request('CreateInvoice', Req, Context) ->
     InvoiceParams = maps:get('CreateInvoiceArgs', Req),
     RequestID = maps:get('X-Request-ID', Req),
