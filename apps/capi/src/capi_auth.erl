@@ -4,7 +4,7 @@
 
 -type context() :: #{binary() => any()}.
 
--spec auth_api_key(OperationID :: atom(), ApiKey :: binary()) -> {true, Context :: context()} | false.
+-spec auth_api_key(OperationID :: swagger_api:operation_id(), ApiKey :: binary()) -> {true, Context :: context()} | false.
 
 auth_api_key(OperationID, ApiKey) ->
     {ok, Type, Credentials} = parse_auth_token(ApiKey),
@@ -26,7 +26,7 @@ parse_auth_token(ApiKey) ->
             {error, unsupported_auth_scheme}
     end.
 
--spec process_auth(Type :: atom(), AuthToken :: binary(), OperationID :: atom()) ->
+-spec process_auth(Type :: atom(), AuthToken :: binary(), OperationID :: swagger_api:operation_id()) ->
     {ok, Context :: context()} | {error, Reason :: atom()}.
 
 process_auth(bearer, AuthToken, OperationID) ->

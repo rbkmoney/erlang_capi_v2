@@ -11,7 +11,7 @@
 policy_init(Req) ->
     {ok, Req, undefined_state}.
 
--spec allowed_origins(cowboy_req:req(), any()) -> {atom() | [binary()], cowboy_req:req(), any()}.
+-spec allowed_origins(cowboy_req:req(), any()) -> {'*', cowboy_req:req(), any()}.
 
 allowed_origins(Req, State) ->
     {'*', Req, State}.

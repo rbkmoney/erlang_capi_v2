@@ -636,7 +636,7 @@ get_time_diff(From, To) ->
     UnixTo - UnixFrom.
 
 process_request_error(_, {exception, #payproc_InvalidUser{}}) ->
-    {403, [], <<"">>};
+    {400, [], <<"">>};
 
 process_request_error(_, {exception, #'InvalidRequest'{}}) ->
     {400, [], logic_error(invalid_request, <<"Request can't be processed">>)};
