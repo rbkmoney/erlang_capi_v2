@@ -19,7 +19,8 @@ start_link() ->
 
 %%
 
--spec init([]) -> {ok, tuple()}.
+-spec init([]) -> {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
+
 init([]) ->
     {LogicHandler, LogicHandlerSpec} = get_logic_handler_info(),
     SwaggerSpec = swagger_server:child_spec(swagger, #{
@@ -34,6 +35,7 @@ init([]) ->
     }}.
 
 -spec get_logic_handler_info() -> {Handler :: atom(), [Spec :: supervisor:child_spec()] | []} .
+
 get_logic_handler_info() ->
     case genlib_app:env(capi, service_type) of
         mock ->

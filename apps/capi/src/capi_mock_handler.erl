@@ -26,14 +26,16 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
--spec authorize_api_key(ApiKey :: binary(), OperationID :: atom()) -> Result :: boolean() | {boolean(), #{binary() => any()}}.
+-spec authorize_api_key(OperationID :: atom(), ApiKey :: binary()) ->
+    Result :: false | {true, #{binary() => any()}}.
 
-authorize_api_key(ApiKey, OperationID) -> capi_auth:auth_api_key(ApiKey, OperationID).
+authorize_api_key(OperationID, ApiKey) -> capi_auth:auth_api_key(OperationID, ApiKey).
 
--spec handle_request(OperationID :: atom(), Req :: #{}, Context :: #{}) -> {Code :: integer(), Headers :: [], Response :: #{}}.
+-spec handle_request(OperationID :: atom(), Req :: #{}, Context :: #{}) ->
+    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
 
 handle_request(OperationID = 'CreateInvoice', Req, _Context) ->
-    lager:info("Processing operation ~p", [OperationID]),
+    _ = lager:info("Processing operation ~p", [OperationID]),
     InvoiceParams = maps:get('CreateInvoiceArgs', Req),
     ID = new_id(),
     Invoice = #{
@@ -53,7 +55,7 @@ handle_request(OperationID = 'CreateInvoice', Req, _Context) ->
     {201, [], Resp};
 
 handle_request(OperationID = 'CreatePayment', Req, _Context) ->
-    lager:info("Processing operation ~p", [OperationID]),
+    _ = lager:info("Processing operation ~p", [OperationID]),
     InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('CreatePaymentArgs', Req),
     PaymentSession = maps:get(<<"paymentSession">>, PaymentParams),
@@ -73,13 +75,13 @@ handle_request(OperationID = 'CreatePayment', Req, _Context) ->
             },
             add_delayed_fake_payment(PaymentID),
             {201, [], Resp};
-        {error, expried} ->
+        {error, expired} ->
             Resp = logic_error(<<"expired_session">>, <<"Payment session is not valid">>),
             {400, [], Resp}
     end;
 
 handle_request(OperationID = 'CreatePaymentToolToken', Req, _Context) ->
-    lager:info("Processing operation ~p", [OperationID]),
+    _ = lager:info("Processing operation ~p", [OperationID]),
     Params = maps:get('CreatePaymentToolTokenArgs', Req),
     PaymentTool = maps:get(<<"paymentTool">>, Params),
     Token = tokenize_payment_tool(PaymentTool),
@@ -93,7 +95,7 @@ handle_request(OperationID = 'CreatePaymentToolToken', Req, _Context) ->
     {201, [], Resp};
 
 handle_request(OperationID = 'GetInvoiceByID', Req, _Context) ->
-    lager:info("Processing operation ~p", [OperationID]),
+    _ = lager:info("Processing operation ~p", [OperationID]),
     InvoiceID = maps:get(invoiceID, Req),
     case get_data_by_id(InvoiceID, invoice) of
         {ok, Invoice} ->
@@ -103,7 +105,7 @@ handle_request(OperationID = 'GetInvoiceByID', Req, _Context) ->
     end;
 
 handle_request(OperationID = 'GetInvoiceEvents', _Req, _Context) ->
-    lager:info("Processing operation ~p", [OperationID]),
+    _ = lager:info("Processing operation ~p", [OperationID]),
     AllEvents = lists:map(
         fun([E]) -> E end,
         get_data_by_pattern({{'_', event}, '$1'})
@@ -111,7 +113,7 @@ handle_request(OperationID = 'GetInvoiceEvents', _Req, _Context) ->
     {200, [], AllEvents};
 
 handle_request(OperationID = 'GetPaymentByID', Req, _Context) ->
-    lager:info("Processing operation ~p", [OperationID]),
+    _ = lager:info("Processing operation ~p", [OperationID]),
     PaymentID = maps:get(paymentID, Req),
     case get_data_by_id(PaymentID, payment) of
         {ok, Payment} ->
@@ -224,7 +226,7 @@ exhaust_session(Session) ->
     case get_data_by_pattern(Pattern) of
         [_ID] ->
             delete_data(Pattern);
-        [] -> {error, expried}
+        [] -> {error, expired}
     end.
 
 logic_error(Code, Message) ->
@@ -236,7 +238,7 @@ general_error(Message) ->
 add_delayed_fake_payment(PaymentID) ->
     spawn(
         fun() ->
-            random:seed(now()),
+            _ = random:seed(erlang:system_time(milli_seconds)),
             timer:sleep(random:uniform(3) * 200),
             add_fake_payment(PaymentID)
         end

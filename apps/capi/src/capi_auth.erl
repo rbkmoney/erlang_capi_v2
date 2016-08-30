@@ -4,8 +4,9 @@
 
 -type context() :: #{binary() => any()}.
 
--spec auth_api_key(ApiKey :: binary(), OperationID :: atom()) -> {true, Context :: context()} | false.
-auth_api_key(ApiKey, OperationID) ->
+-spec auth_api_key(OperationID :: atom(), ApiKey :: binary()) -> {true, Context :: context()} | false.
+
+auth_api_key(OperationID, ApiKey) ->
     {ok, Type, Credentials} = parse_auth_token(ApiKey),
     case  process_auth(Type, Credentials, OperationID) of
         {ok, Context} ->
@@ -14,7 +15,9 @@ auth_api_key(ApiKey, OperationID) ->
             false
     end.
 
--spec parse_auth_token(ApiKey :: binary()) -> {ok, bearer, Credentials :: binary()} | {error, Reason :: atom()}.
+-spec parse_auth_token(ApiKey :: binary()) ->
+    {ok, bearer, Credentials :: binary()} | {error, Reason :: atom()}.
+
 parse_auth_token(ApiKey) ->
     case ApiKey of
         <<"Bearer ", Credentials/binary>> ->
@@ -23,7 +26,9 @@ parse_auth_token(ApiKey) ->
             {error, unsupported_auth_scheme}
     end.
 
--spec process_auth(Type :: atom(), AuthToken :: binary(), OperationID :: atom()) -> {ok, Context :: context()} | {error, Reason :: atom()}.
+-spec process_auth(Type :: atom(), AuthToken :: binary(), OperationID :: atom()) ->
+    {ok, Context :: context()} | {error, Reason :: atom()}.
+
 process_auth(bearer, AuthToken, OperationID) ->
     case verify_token(AuthToken) of
         {ok, Claims} ->

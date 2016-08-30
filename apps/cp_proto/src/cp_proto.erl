@@ -7,7 +7,7 @@
 -type service_name() :: atom().
 
 -spec call_service_safe(service_name(), woody_t:func(), [term()], woody_client:context()) ->
-    {woody_client:result_ok() | woody_client:result_error(), woody_client:context()}.
+    woody_client:result_ok() | woody_client:result_error().
 
 call_service_safe(ServiceName, Function, Args, Context) ->
     {Url, Service} = get_service_spec(ServiceName),

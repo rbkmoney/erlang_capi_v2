@@ -23,6 +23,11 @@
 -define(CAPI_PORT, 8080).
 -define(CAPI_SERVICE_TYPE, mock).
 
+-type config() :: [{atom(), any()}].
+
+-spec all() -> [
+    TestCase :: atom()
+].
 
 all() ->
     [
@@ -40,6 +45,9 @@ all() ->
 %%
 %% starting/stopping
 %%
+
+-spec init_per_suite(config()) -> config().
+
 init_per_suite(Config) ->
     Apps =
         capi_ct_helper:start_app(lager) ++
@@ -52,23 +60,36 @@ init_per_suite(Config) ->
         ]),
     [{apps, lists:reverse(Apps)} | Config].
 
+-spec end_per_suite(config()) -> _.
+
 end_per_suite(C) ->
     [application:stop(App) || App <- proplists:get_value(apps, C)].
 
 %% tests
+
+-spec authorization_error_no_header_test(config()) -> _.
+
 authorization_error_no_header_test(_Config) ->
     {ok, 401, _RespHeaders, _Body} = call(get, "/v1/processing/invoices/22?limit=22", #{}, []).
+
+-spec authorization_error_expired_test(config()) -> _.
 
 authorization_error_expired_test(Config) ->
     Token = auth_token(#{}, genlib_time:unow() - 10, Config),
     AuthHeader = auth_header(Token),
     {ok, 401, _RespHeaders, _Body} = call(get, "/v1/processing/invoices/22?limit=22", #{}, [AuthHeader]).
 
+-spec create_invoice_badard_test(config()) -> _.
+
 create_invoice_badard_test(Config) ->
     {ok, 400, _RespHeaders, _Body} = default_call(post, "/v1/processing/invoices", #{}, Config).
 
+-spec create_invoice_ok_test(config()) -> _.
+
 create_invoice_ok_test(Config) ->
     #{<<"id">> := _InvoiceID} = default_create_invoice(Config).
+
+-spec create_payment_ok_test(config()) -> _.
 
 create_payment_ok_test(Config) ->
     #{<<"id">> := InvoiceID} = default_create_invoice(Config),
@@ -78,13 +99,19 @@ create_payment_ok_test(Config) ->
     } = default_tokenize_card(Config),
     #{<<"id">> := _PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config).
 
+-spec create_payment_tool_token_ok_test(config()) -> _.
+
 create_payment_tool_token_ok_test(Config) ->
     #{<<"token">> := _Token, <<"session">> := _Session} = default_tokenize_card(Config).
+
+-spec get_invoice_by_id_ok_test(config()) -> _.
 
 get_invoice_by_id_ok_test(Config) ->
     #{<<"id">> := InvoiceID} = default_create_invoice(Config),
     Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID),
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+
+-spec get_invoice_events_ok_test(config()) -> _.
 
 get_invoice_events_ok_test(Config) ->
     #{<<"id">> := InvoiceID} = default_create_invoice(Config),
@@ -97,6 +124,8 @@ get_invoice_events_ok_test(Config) ->
     timer:sleep(1000),
     Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/events/?limit=100",
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+
+-spec get_payment_by_id_ok_test(config()) -> _.
 
 get_payment_by_id_ok_test(Config) ->
     #{<<"id">> := InvoiceID} = default_create_invoice(Config),
