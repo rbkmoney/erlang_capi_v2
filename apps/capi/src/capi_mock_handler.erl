@@ -26,12 +26,12 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
--spec authorize_api_key(OperationID :: atom(), ApiKey :: binary()) ->
+-spec authorize_api_key(OperationID :: swagger_api:operation_id(), ApiKey :: binary()) ->
     Result :: false | {true, #{binary() => any()}}.
 
 authorize_api_key(OperationID, ApiKey) -> capi_auth:auth_api_key(OperationID, ApiKey).
 
--spec handle_request(OperationID :: atom(), Req :: #{}, Context :: #{}) ->
+-spec handle_request(OperationID :: swagger_api:operation_id(), Req :: #{}, Context :: #{}) ->
     {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
 
 handle_request(OperationID = 'CreateInvoice', Req, _Context) ->

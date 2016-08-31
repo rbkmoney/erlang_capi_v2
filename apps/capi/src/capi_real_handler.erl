@@ -46,7 +46,7 @@ process_request(OperationID = 'CreateInvoice', Req, Context) ->
         'Create',
         [UserInfo, Params],
         create_context(RequestID)
-    ), %%@TODO deal with bad request
+    ),
     case Result of
         {ok, InvoiceID} ->
             Resp = #{
@@ -343,8 +343,7 @@ process_request(OperationID = 'GetPaymentRateStats', Req, Context) ->
             process_request_error(OperationID, Error)
     end;
 
-process_request(OperationID, _Req, _Context) ->
-    _ = lager:info("Skipping not implemented operation: ~p", [OperationID]),
+process_request(_OperationID, _Req, _Context) ->
     {501, [], <<"Not implemented">>}.
 
 %%%
@@ -636,7 +635,7 @@ get_time_diff(From, To) ->
     UnixTo - UnixFrom.
 
 process_request_error(_, {exception, #payproc_InvalidUser{}}) ->
-    {400, [], <<"">>};
+    {400, [], logic_error(invalid_user, <<"Ivalid user">>)};
 
 process_request_error(_, {exception, #'InvalidRequest'{}}) ->
     {400, [], logic_error(invalid_request, <<"Request can't be processed">>)};
