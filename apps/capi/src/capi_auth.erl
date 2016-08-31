@@ -4,8 +4,9 @@
 
 -type context() :: #{binary() => any()}.
 
--spec auth_api_key(ApiKey :: binary(), OperationID :: atom()) -> {true, Context :: context()} | false.
-auth_api_key(ApiKey, OperationID) ->
+-spec auth_api_key(OperationID :: swagger_api:operation_id(), ApiKey :: binary()) -> {true, Context :: context()} | false.
+
+auth_api_key(OperationID, ApiKey) ->
     {ok, Type, Credentials} = parse_auth_token(ApiKey),
     case  process_auth(Type, Credentials, OperationID) of
         {ok, Context} ->
@@ -14,7 +15,9 @@ auth_api_key(ApiKey, OperationID) ->
             false
     end.
 
--spec parse_auth_token(ApiKey :: binary()) -> {ok, bearer, Credentials :: binary()} | {error, Reason :: atom()}.
+-spec parse_auth_token(ApiKey :: binary()) ->
+    {ok, bearer, Credentials :: binary()} | {error, Reason :: atom()}.
+
 parse_auth_token(ApiKey) ->
     case ApiKey of
         <<"Bearer ", Credentials/binary>> ->
@@ -23,7 +26,9 @@ parse_auth_token(ApiKey) ->
             {error, unsupported_auth_scheme}
     end.
 
--spec process_auth(Type :: atom(), AuthToken :: binary(), OperationID :: atom()) -> {ok, Context :: context()} | {error, Reason :: atom()}.
+-spec process_auth(Type :: atom(), AuthToken :: binary(), OperationID :: swagger_api:operation_id()) ->
+    {ok, Context :: context()} | {error, Reason :: atom()}.
+
 process_auth(bearer, AuthToken, OperationID) ->
     case verify_token(AuthToken) of
         {ok, Claims} ->
@@ -46,9 +51,11 @@ verify_token(AuthToken) ->
             Error
     end.
 
+-include_lib("jose/include/jose_jwk.hrl").
+
 verify_alg(AuthToken) ->
     PemFilePath = genlib_app:env(capi, api_secret_path),
-    RSAPublicJWK = jose_jwk:from_pem_file(PemFilePath),
+    RSAPublicJWK = #jose_jwk{} = jose_jwk:from_pem_file(PemFilePath),
     case jose_jwk:verify(AuthToken, RSAPublicJWK) of
         {true, Claims, _} ->
             {ok, Claims};
@@ -59,7 +66,7 @@ verify_alg(AuthToken) ->
 authorize(Claims, OperationID) ->
     Action = maps:get(OperationID, get_actions()),
     case Claims of
-        #{<<"resourse_access">> := #{<<"common-api">> := #{<<"roles">> := Roles}}} ->
+        #{<<"resource_access">> := #{<<"common-api">> := #{<<"roles">> := Roles}}} ->
             case lists:member(Action, Roles) of
                 true ->
                     {ok, Claims};
@@ -73,7 +80,7 @@ authorize(Claims, OperationID) ->
 is_valid_exp(Claims) ->
     case maps:get(<<"exp">>, Claims, undefined) of
         undefined ->
-            true;
+            false;
         I when is_integer(I) ->
             genlib_time:unow() =< I
     end.
@@ -90,6 +97,11 @@ get_actions() ->
         'GetPaymentByID' => <<"payments:get">>,
         'GetProfileByID' => <<"profiles:get">>,
         'GetProfiles' => <<"profiles:get">>,
-        'UpdateProfile' => <<"profiles:update">>
+        'UpdateProfile' => <<"profiles:update">>,
+        'GetInvoices' => <<"invoices_stats:get">>,
+        'GetPaymentConversionStats' => <<"payments_conversion_stats:get">>,
+        'GetPaymentRevenueStats' => <<"payments_revenue_stats:get">>,
+        'GetPaymentGeoStats' => <<"payments_geo_stats:get">>,
+        'GetPaymentRateStats' => <<"payments_rate_stats:get">>
     }.
 

@@ -22,14 +22,20 @@
 }).
 
 -spec start_link() -> {ok, Pid :: pid()} | ignore | {error, Error :: any()}.
+
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
--spec authorize_api_key(ApiKey :: binary(), OperationID :: atom()) -> Result :: boolean() | {boolean(), #{binary() => any()}}.
-authorize_api_key(ApiKey, OperationID) -> capi_auth:auth_api_key(ApiKey, OperationID).
+-spec authorize_api_key(OperationID :: swagger_api:operation_id(), ApiKey :: binary()) ->
+    Result :: false | {true, #{binary() => any()}}.
 
--spec handle_request(OperationID :: atom(), Req :: #{}, Context :: #{}) -> {Code :: integer, Headers :: [], Response :: #{}}.
-handle_request('CreateInvoice', Req, _Context) ->
+authorize_api_key(OperationID, ApiKey) -> capi_auth:auth_api_key(OperationID, ApiKey).
+
+-spec handle_request(OperationID :: swagger_api:operation_id(), Req :: #{}, Context :: #{}) ->
+    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
+
+handle_request(OperationID = 'CreateInvoice', Req, _Context) ->
+    _ = lager:info("Processing operation ~p", [OperationID]),
     InvoiceParams = maps:get('CreateInvoiceArgs', Req),
     ID = new_id(),
     Invoice = #{
@@ -48,13 +54,13 @@ handle_request('CreateInvoice', Req, _Context) ->
     },
     {201, [], Resp};
 
-handle_request('CreatePayment', Req, _Context) ->
+handle_request(OperationID = 'CreatePayment', Req, _Context) ->
+    _ = lager:info("Processing operation ~p", [OperationID]),
     InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('CreatePaymentArgs', Req),
     PaymentSession = maps:get(<<"paymentSession">>, PaymentParams),
-    case match_data({{'$1', session}, PaymentSession}) of
-        [[_SessionID]] ->
-            delete_data({{'$1', session}, '_'}),
+    case exhaust_session(PaymentSession) of
+        ok ->
             PaymentID = new_id(),
             Payment = #{
                 <<"id">> => PaymentID ,
@@ -67,15 +73,18 @@ handle_request('CreatePayment', Req, _Context) ->
             Resp = #{
                 <<"id">> => PaymentID
             },
+            add_delayed_fake_payment(PaymentID),
             {201, [], Resp};
-        _ ->
+        {error, expired} ->
             Resp = logic_error(<<"expired_session">>, <<"Payment session is not valid">>),
             {400, [], Resp}
     end;
 
-handle_request('CreatePaymentToolToken', Req, _Context) ->
-    Params = maps:get('PaymentTool', Req),
-    Token = tokenize_payment_tool(Params),
+handle_request(OperationID = 'CreatePaymentToolToken', Req, _Context) ->
+    _ = lager:info("Processing operation ~p", [OperationID]),
+    Params = maps:get('CreatePaymentToolTokenArgs', Req),
+    PaymentTool = maps:get(<<"paymentTool">>, Params),
+    Token = tokenize_payment_tool(PaymentTool),
     put_data(new_id(), token, Token),
     Session = generate_session(),
     put_data(new_id(), session, Session),
@@ -85,19 +94,33 @@ handle_request('CreatePaymentToolToken', Req, _Context) ->
     },
     {201, [], Resp};
 
-handle_request('GetInvoiceByID', Req, _Context) ->
+handle_request(OperationID = 'GetInvoiceByID', Req, _Context) ->
+    _ = lager:info("Processing operation ~p", [OperationID]),
     InvoiceID = maps:get(invoiceID, Req),
-    [{_, Invoice}] = get_data(InvoiceID, invoice),
-    {200, [], Invoice};
+    case get_data_by_id(InvoiceID, invoice) of
+        {ok, Invoice} ->
+            {200, [], Invoice};
+        {error, not_found} ->
+            {404, [], general_error(<<"Entity not found">>)}
+    end;
 
-handle_request('GetInvoiceEvents', _Req, _Context) ->
-    Events = [],
-    {200, [], Events};
+handle_request(OperationID = 'GetInvoiceEvents', _Req, _Context) ->
+    _ = lager:info("Processing operation ~p", [OperationID]),
+    AllEvents = lists:map(
+        fun([E]) -> E end,
+        get_data_by_pattern({{'_', event}, '$1'})
+    ),
+    {200, [], AllEvents};
 
-handle_request('GetPaymentByID', Req, _Context) ->
+handle_request(OperationID = 'GetPaymentByID', Req, _Context) ->
+    _ = lager:info("Processing operation ~p", [OperationID]),
     PaymentID = maps:get(paymentID, Req),
-    [{_, Payment}] = get_data(PaymentID, payment),
-    {200, [], Payment};
+    case get_data_by_id(PaymentID, payment) of
+        {ok, Payment} ->
+            {200, [], Payment};
+        {error, not_found} ->
+            {404, [], general_error(<<"Entity not found">>)}
+    end;
 
 handle_request(_OperationID, _Req, _Context) ->
     {501, [], <<"Not implemented">>}.
@@ -109,17 +132,22 @@ handle_request(_OperationID, _Req, _Context) ->
 -type st() :: #state{}.
 
 -spec init( Args :: any()) -> {ok, st()}.
+
 init(_Args) ->
     TID = ets:new(mock_storage, [ordered_set, private, {heir, none}]),
     {ok, #state{tid = TID}}.
 
 -spec handle_call(Request :: any(), From :: callref(), st()) -> {reply, term(), st()} | {noreply, st()}.
+
 handle_call({put, ID, Type, Data}, _From, State = #state{tid = TID}) ->
-    Result = ets:insert(TID, {wrap_id(ID, Type), Data}),
-    {reply, Result, State};
+    true = ets:insert(TID, {wrap_id(ID, Type), Data}),
+    {reply, ok, State};
 
 handle_call({get, ID, Type}, _From, State = #state{tid = TID}) ->
-    Result = ets:lookup(TID, wrap_id(ID, Type)),
+    Result = case ets:lookup(TID, wrap_id(ID, Type)) of
+        [{_, Data}] -> {ok, Data};
+        [] -> {error, not_found}
+    end,
     {reply, Result, State};
 
 handle_call({match, Pattern}, _From, State = #state{tid = TID}) ->
@@ -127,40 +155,54 @@ handle_call({match, Pattern}, _From, State = #state{tid = TID}) ->
     {reply, Result, State};
 
 handle_call({delete, Pattern}, _From, State = #state{tid = TID}) ->
-    Result = ets:match_delete(TID, Pattern),
-    {reply, Result, State};
+    true = ets:match_delete(TID, Pattern),
+    {reply, ok, State};
 
 handle_call(id, _From, State = #state{last_id = ID}) ->
     NewID = ID + 1,
     {reply, NewID, State#state{last_id = NewID}}.
 
 -spec handle_cast(Request :: any(), st()) -> {noreply, st()}.
+
 handle_cast(_Request, State) ->
     {noreply, State}.
 
 -spec handle_info(any(), st()) -> {noreply, st()}.
+
 handle_info(_Info, State) ->
     {noreply, State}.
 
 -spec terminate(any(), st()) -> ok.
+
 terminate(_Reason, _State) ->
     ok.
 
 -spec code_change(Vsn :: term() | {down, Vsn :: term()}, st(), term()) -> {error, noimpl}.
+
 code_change(_OldVsn, _State, _Extra) ->
     {error, noimpl}.
+
+-spec put_data(ID :: any(), Type :: atom(), Data :: any()) -> ok.
 
 put_data(ID, Type, Data) ->
     gen_server:call(?MODULE, {put, ID, Type, Data}).
 
-get_data(ID, Type) ->
+-spec get_data_by_id(ID :: any(), Type :: atom()) -> {ok, Data :: any()} | {error, Reason :: any()}.
+
+get_data_by_id(ID, Type) ->
     gen_server:call(?MODULE, {get, ID, Type}).
 
-match_data(Pattern) ->
+-spec get_data_by_pattern(Pattern :: ets:match_pattern()) -> [Data :: any()].
+
+get_data_by_pattern(Pattern) ->
     gen_server:call(?MODULE, {match, Pattern}).
+
+-spec delete_data(Pattern :: ets:match_pattern()) -> ok.
 
 delete_data(Pattern) ->
     gen_server:call(?MODULE, {delete, Pattern}).
+
+-spec new_id() -> ID :: binary().
 
 new_id() ->
     ID = gen_server:call(?MODULE, id),
@@ -175,10 +217,52 @@ tokenize_payment_tool(_) ->
     error(unsupported_payment_tool). %%@TODO move this error to upper level
 
 generate_session() ->
-    integer_to_binary(rand:uniform(100000)).
+    genlib:unique().
+
+-spec exhaust_session(Session :: any()) -> ok | error.
+
+exhaust_session(Session) ->
+    Pattern = {{'$1', session}, Session},
+    case get_data_by_pattern(Pattern) of
+        [_ID] ->
+            delete_data(Pattern);
+        [] -> {error, expired}
+    end.
 
 logic_error(Code, Message) ->
-    #{code => Code, message => Message}.
+    #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)}.
+
+general_error(Message) ->
+    #{<<"message">> => genlib:to_binary(Message)}.
+
+add_delayed_fake_payment(PaymentID) ->
+    spawn(
+        fun() ->
+            _ = random:seed(erlang:system_time(milli_seconds)),
+            timer:sleep(random:uniform(3) * 200),
+            add_fake_payment(PaymentID)
+        end
+    ).
+
+add_fake_payment(PaymentID) ->
+    {ok, Payment} = get_data_by_id(PaymentID, payment),
+    put_data(PaymentID, payment, Payment#{
+        <<"status">> => <<"paid">>
+    }),
+
+    {{Y, M, D}, Time} = calendar:local_time(),
+    {ok, CreatedAt} = rfc3339:format({{Y + 1, M, D}, Time}),
+    EventID = new_id(),
+    Event = #{
+        <<"id">> => EventID,
+        <<"createdAt">> => CreatedAt,
+        <<"eventType">> => <<"paymentStatusChanged">>,
+        <<"eventBody">> => #{
+            <<"paymentID">> => PaymentID,
+            <<"status">> => <<"paid">>
+        }
+    },
+    put_data(EventID, event, Event).
 
 wrap_id(ID, Type) ->
     {ID, Type}.

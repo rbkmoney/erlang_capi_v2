@@ -3,7 +3,6 @@ log
 /_build/
 *~
 erl_crash.dump
-/*.config
 .tags*
 *.sublime-workspace
 .DS_Store
@@ -19,3 +18,10 @@ erl_crash.dump
 
 # compiled
 swagger
+
+
+# containerization
+\#*
+.\#*
+Dockerfile
+docker-compose.yml

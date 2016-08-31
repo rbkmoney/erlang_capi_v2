@@ -1,4 +1,4 @@
--module(capi_tests_SUITE).
+-module(capi_tests_mock_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
 
@@ -23,6 +23,11 @@
 -define(CAPI_PORT, 8080).
 -define(CAPI_SERVICE_TYPE, mock).
 
+-type config() :: [{atom(), any()}].
+
+-spec all() -> [
+    TestCase :: atom()
+].
 
 all() ->
     [
@@ -40,41 +45,51 @@ all() ->
 %%
 %% starting/stopping
 %%
+
+-spec init_per_suite(config()) -> config().
+
 init_per_suite(Config) ->
-    {_, Seed} = calendar:local_time(),
-    random:seed(Seed),
-    test_configuration(Config),
-    {ok, Apps1} = application:ensure_all_started(capi),
-    {ok, Apps2} = application:ensure_all_started(hackney),
-    [{apps, Apps1 ++ Apps2} | Config].
+    Apps =
+        capi_ct_helper:start_app(lager) ++
+        capi_ct_helper:start_app(woody) ++
+        capi_ct_helper:start_app(capi, [
+            {host, ?CAPI_HOST},
+            {port, ?CAPI_PORT},
+            {service_type, ?CAPI_SERVICE_TYPE},
+            {api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")}
+        ]),
+    [{apps, lists:reverse(Apps)} | Config].
+
+-spec end_per_suite(config()) -> _.
 
 end_per_suite(C) ->
-    [application_stop(App) || App <- proplists:get_value(apps, C)].
-
-application_stop(App = sasl) ->
-    %% hack for preventing sasl deadlock
-    %% http://erlang.org/pipermail/erlang-questions/2014-May/079012.html
-    error_logger:delete_report_handler(cth_log_redirect),
-    _ = application:stop(App),
-    error_logger:add_report_handler(cth_log_redirect),
-    ok;
-application_stop(App) ->
-    application:stop(App).
+    [application:stop(App) || App <- proplists:get_value(apps, C)].
 
 %% tests
+
+-spec authorization_error_no_header_test(config()) -> _.
+
 authorization_error_no_header_test(_Config) ->
-    {ok, 401, _RespHeaders, _Body} = call(get, "/processing/invoices/22?limit=22", #{}, []).
+    {ok, 401, _RespHeaders, _Body} = call(get, "/v1/processing/invoices/22?limit=22", #{}, []).
+
+-spec authorization_error_expired_test(config()) -> _.
 
 authorization_error_expired_test(Config) ->
     Token = auth_token(#{}, genlib_time:unow() - 10, Config),
     AuthHeader = auth_header(Token),
-    {ok, 401, _RespHeaders, _Body} = call(get, "/processing/invoices/22?limit=22", #{}, [AuthHeader]).
+    {ok, 401, _RespHeaders, _Body} = call(get, "/v1/processing/invoices/22?limit=22", #{}, [AuthHeader]).
+
+-spec create_invoice_badard_test(config()) -> _.
 
 create_invoice_badard_test(Config) ->
-    {ok, 400, _RespHeaders, _Body} = default_call(post, "/processing/invoices", #{}, Config).
+    {ok, 400, _RespHeaders, _Body} = default_call(post, "/v1/processing/invoices", #{}, Config).
+
+-spec create_invoice_ok_test(config()) -> _.
 
 create_invoice_ok_test(Config) ->
     #{<<"id">> := _InvoiceID} = default_create_invoice(Config).
+
+-spec create_payment_ok_test(config()) -> _.
 
 create_payment_ok_test(Config) ->
     #{<<"id">> := InvoiceID} = default_create_invoice(Config),
@@ -84,13 +99,19 @@ create_payment_ok_test(Config) ->
     } = default_tokenize_card(Config),
     #{<<"id">> := _PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config).
 
+-spec create_payment_tool_token_ok_test(config()) -> _.
+
 create_payment_tool_token_ok_test(Config) ->
     #{<<"token">> := _Token, <<"session">> := _Session} = default_tokenize_card(Config).
 
+-spec get_invoice_by_id_ok_test(config()) -> _.
+
 get_invoice_by_id_ok_test(Config) ->
     #{<<"id">> := InvoiceID} = default_create_invoice(Config),
-    Path = "/processing/invoices/" ++ genlib:to_list(InvoiceID),
+    Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID),
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+
+-spec get_invoice_events_ok_test(config()) -> _.
 
 get_invoice_events_ok_test(Config) ->
     #{<<"id">> := InvoiceID} = default_create_invoice(Config),
@@ -101,8 +122,10 @@ get_invoice_events_ok_test(Config) ->
     #{<<"id">> := _PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config),
 
     timer:sleep(1000),
-    Path = "/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/events/?limit=100",
+    Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/events/?limit=100",
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+
+-spec get_payment_by_id_ok_test(config()) -> _.
 
 get_payment_by_id_ok_test(Config) ->
     #{<<"id">> := InvoiceID} = default_create_invoice(Config),
@@ -112,17 +135,10 @@ get_payment_by_id_ok_test(Config) ->
     } = default_tokenize_card(Config),
     #{<<"id">> := PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config),
 
-    Path = "/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments/" ++  genlib:to_list(PaymentID),
+    Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments/" ++  genlib:to_list(PaymentID),
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
-%% helpers
 
-test_configuration(Config) ->
-    application:set_env(capi, host, ?CAPI_HOST),
-    application:set_env(capi, port, ?CAPI_PORT),
-    application:set_env(capi, service_type, ?CAPI_SERVICE_TYPE),
-    % application:set_env(capi, cds_url, "http://localhost:8322"),
-    % application:set_env(capi, hg_url, "http://localhost:8122"),
-    application:set_env(capi, api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")).
+%% helpers
 
 default_call(Method, Path, Body, Config) ->
     call(Method, Path, Body, [x_request_id_header(), default_auth_header(Config), json_content_type_header()]).
@@ -146,7 +162,7 @@ auth_header(Token) ->
     {<<"Authorization">>, <<"Bearer ", Token/binary>>} .
 
 default_auth_token(Config) ->
-    ResourseAccess = #{
+    ResourceAccess = #{
         <<"common-api">> => #{
             <<"roles">> =>
                 [
@@ -160,16 +176,21 @@ default_auth_token(Config) ->
                     <<"payments:get">>,
                     <<"profiles:get">>,
                     <<"profiles:get">>,
-                    <<"profiles:update">>
+                    <<"profiles:update">>,
+                    <<"invoices_stats:get">>,
+                    <<"payments_conversion_stats:get">>,
+                    <<"payments_revenue_stats:get">>,
+                    <<"payments_geo_stats:get">>,
+                    <<"payments_rate_stats:get">>
                 ]
         }
     },
-    auth_token(ResourseAccess, default_token_expiration(), Config).
+    auth_token(ResourceAccess, default_token_expiration(), Config).
 
 auth_token(ResourseAccess, Exp, Config) ->
     Message = #{
-        <<"sub">> => <<"kek">>,
-        <<"resourse_access">> => ResourseAccess,
+        <<"sub">> => <<"hg_tests_SUITE">>,
+        <<"resource_access">> => ResourseAccess,
         <<"exp">> => Exp
     },
     RSAPrivateJWK = jose_jwk:from_pem_file(filename:join(?config(data_dir, Config), "private_api_key.pem")),
@@ -197,18 +218,24 @@ default_create_invoice(Config) ->
         <<"product">> => <<"test_product">>,
         <<"description">> => <<"test_invoice_description">>
     },
-    {ok, 201, _RespHeaders, Body} = default_call(post, "/processing/invoices", Req, Config),
+    {ok, 201, _RespHeaders, Body} = default_call(post, "/v1/processing/invoices", Req, Config),
     decode_body(Body).
 
 default_tokenize_card(Config) ->
     Req = #{
-        <<"paymentToolType">> => <<"cardData">>,
-        <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
-        <<"cardNumber">> => 4111111111111111,
-        <<"expDate">> => <<"08/27">>,
-        <<"cvv">> => <<"232">>
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"cardData">>,
+            <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
+            <<"cardNumber">> => 4111111111111111,
+            <<"expDate">> => <<"08/27">>,
+            <<"cvv">> => <<"232">>
+        },
+        <<"clientInfo">> => #{
+            <<"fingerprint">> => <<"test fingerprint">>,
+            <<"ipAddress">> => <<"127.0.0.1">>
+        }
     },
-    {ok, 201, _RespHeaders, Body} = default_call(post, "/processing/payment_tools", Req, Config),
+    {ok, 201, _RespHeaders, Body} = default_call(post, "/v1/processing/payment_tools", Req, Config),
     decode_body(Body).
 
 default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
@@ -216,7 +243,7 @@ default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
         <<"paymentSession">> => PaymentSession,
         <<"paymentToolToken">> => PaymentToolToken
     },
-    Path = "/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments",
+    Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments",
     {ok, 201, _RespHeaders, Body} = default_call(post, Path, Req, Config),
     decode_body(Body).
 

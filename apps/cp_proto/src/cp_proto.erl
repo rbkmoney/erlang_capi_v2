@@ -1,26 +1,27 @@
 -module(cp_proto).
 
--export([get_service_specs/0]).
--export([get_service_spec/1]).
-
--export_type([service_spec/0]).
+-export([call_service_safe/4]).
 
 %%
 
--type service_spec() :: {Name :: atom(), Path :: string(), Service :: {module(), atom()}}.
+-type service_name() :: atom().
 
--spec get_service_specs() -> [service_spec()].
+-spec call_service_safe(service_name(), woody_t:func(), [term()], woody_client:context()) ->
+    woody_client:result_ok() | woody_client:result_error().
 
-get_service_specs() ->
-    VersionPrefix = "/v1",
-    [
-        {invoicing, VersionPrefix ++ "/processing/invoicing",
-            {cp_payment_processing_thrift, 'Invoicing'}},
-        {cds_storage, VersionPrefix ++ "/storage",
-            {cp_cds_thrift, 'Storage'}}
-    ].
+call_service_safe(ServiceName, Function, Args, Context) ->
+    {Url, Service} = get_service_spec(ServiceName),
+    woody_client:call_safe(Context, {Service, Function, Args}, #{url => Url}).
 
--spec get_service_spec(Name :: atom()) -> service_spec() | false.
+get_service_spec(ServiceName) ->
+    {get_service_url(ServiceName), get_service_modname(ServiceName)}.
 
-get_service_spec(Name) ->
-    lists:keyfind(Name, 1, get_service_specs()).
+get_service_url(ServiceName) ->
+    maps:get(ServiceName, genlib_app:env(?MODULE, service_urls)).
+
+get_service_modname(invoicing) ->
+    {cp_payment_processing_thrift, 'Invoicing'};
+get_service_modname(cds_storage) ->
+    {cp_cds_thrift, 'Storage'};
+get_service_modname(merchant_stat) ->
+    {cp_merch_stat_thrift, 'MerchantStatistics'}.
