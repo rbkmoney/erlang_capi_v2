@@ -1,0 +1,3 @@
+[submodule "schemes/swag"]
+	path = schemes/swag
+	url = git@github.com:rbkmoney/swag.git
