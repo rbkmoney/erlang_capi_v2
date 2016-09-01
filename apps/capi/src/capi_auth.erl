@@ -4,7 +4,10 @@
 
 -type context() :: #{binary() => any()}.
 
--spec auth_api_key(OperationID :: swagger_api:operation_id(), ApiKey :: binary()) -> {true, Context :: context()} | false.
+-spec auth_api_key(
+    OperationID :: swagger_api:operation_id(),
+    ApiKey :: binary()
+) -> {true, Context :: context()} | false.
 
 auth_api_key(OperationID, ApiKey) ->
     {ok, Type, Credentials} = parse_auth_token(ApiKey),

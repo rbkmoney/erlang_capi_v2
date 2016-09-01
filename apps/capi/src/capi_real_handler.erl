@@ -266,13 +266,7 @@ process_request(OperationID = 'GetPaymentConversionStats', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
 
     StatType = payments_conversion_stat,
-    Dsl = create_stat_dsl(StatType, Req, Context),
-    {Result, _NewContext} = service_call(
-        merchant_stat,
-        'GetStatistics',
-        [encode_stat_request(Dsl)],
-        create_context(RequestID)
-    ),
+    Result = call_merchant_stat(StatType, Req, Context, RequestID),
 
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
@@ -287,13 +281,7 @@ process_request(OperationID = 'GetPaymentRevenueStats', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
 
     StatType = payments_turnover,
-    Dsl = create_stat_dsl(StatType, Req, Context),
-    {Result, _NewContext} = service_call(
-        merchant_stat,
-        'GetStatistics',
-        [encode_stat_request(Dsl)],
-        create_context(RequestID)
-    ),
+    Result = call_merchant_stat(StatType, Req, Context, RequestID),
 
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
@@ -307,13 +295,7 @@ process_request(OperationID = 'GetPaymentGeoStats', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
 
     StatType = payments_geo_stat,
-    Dsl = create_stat_dsl(StatType, Req, Context),
-    {Result, _NewContext} = service_call(
-        merchant_stat,
-        'GetStatistics',
-        [encode_stat_request(Dsl)],
-        create_context(RequestID)
-    ),
+    Result = call_merchant_stat(StatType, Req, Context, RequestID),
 
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
@@ -327,13 +309,7 @@ process_request(OperationID = 'GetPaymentRateStats', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
 
     StatType = customers_rate_stat,
-    Dsl = create_stat_dsl(StatType, Req, Context),
-    {Result, _NewContext} = service_call(
-        merchant_stat,
-        'GetStatistics',
-        [encode_stat_request(Dsl)],
-        create_context(RequestID)
-    ),
+    Result = call_merchant_stat(StatType, Req, Context, RequestID),
 
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
@@ -609,6 +585,16 @@ create_stat_dsl(StatType, Req, Context) ->
     },
     create_dsl(StatType, Query, #{}).
 
+call_merchant_stat(StatType, Req, Context, RequestID) ->
+    Dsl = create_stat_dsl(StatType, Req, Context),
+    {Result, _NewContext} = service_call(
+        merchant_stat,
+        'GetStatistics',
+        [encode_stat_request(Dsl)],
+        create_context(RequestID)
+    ),
+    Result.
+
 get_split_interval(SplitSize, minute) ->
     SplitSize * 60;
 
@@ -628,11 +614,15 @@ get_split_interval(SplitSize, year) ->
     SplitSize * 60 * 60 * 24 * 365.
 
 get_time_diff(From, To) ->
-    {ok, {DateFrom, TimeFrom, _, _}} = rfc3339:parse(From),
-    {ok, {DateTo, TimeTo, _, _}} = rfc3339:parse(To),
+    {DateFrom, TimeFrom} = parse_rfc3339_datetime(From),
+    {DateTo, TimeTo} = parse_rfc3339_datetime(To),
     UnixFrom = genlib_time:daytime_to_unixtime({DateFrom, TimeFrom}),
     UnixTo = genlib_time:daytime_to_unixtime({DateTo, TimeTo}),
     UnixTo - UnixFrom.
+
+parse_rfc3339_datetime(DateTime) ->
+    {ok, {DateFrom, TimeFrom, _, _}} = rfc3339:parse(DateTime),
+    {DateFrom, TimeFrom}.
 
 process_request_error(_, {exception, #payproc_InvalidUser{}}) ->
     {400, [], logic_error(invalid_user, <<"Ivalid user">>)};
