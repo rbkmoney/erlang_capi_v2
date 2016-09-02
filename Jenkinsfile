@@ -37,9 +37,7 @@ build('capi', 'docker-host', finalHook) {
       sh "make wdeps_test"
     }
 
-    // TODO should be built on master only
-    // if (env.BRANCH_NAME == 'master') {
-    if (true) {
+    if (env.BRANCH_NAME == 'master') {
       runStage('make release') {
         withGithubPrivkey {
           sh "make wc_release"
