@@ -58,7 +58,7 @@ services:
       - POSTGRES_PASSWORD=bustermaze
       - POSTGRES_ROOT_PASSWORD=bustermaze
   starter:
-    image: dr.rbkmoney.com/rbkmoney/build:latest
+    image: ${BUILD_IMAGE}
     volumes:
       - .:/code
     environment:
