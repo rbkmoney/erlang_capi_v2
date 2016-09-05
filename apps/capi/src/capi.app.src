@@ -6,8 +6,15 @@
     {applications, [
         kernel,
         stdlib,
+        lager,
         genlib,
-        swagger
+        woody,
+        cp_proto,
+        swagger,
+        jose,
+        cowboy_cors,
+        rfc3339,
+        base64url
     ]},
     {env, []},
     {modules, []},

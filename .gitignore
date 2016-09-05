@@ -3,18 +3,19 @@ log
 /_build/
 *~
 erl_crash.dump
-/*.config
 .tags*
 *.sublime-workspace
 .DS_Store
 
-# wercker
-/_builds/
-/_cache/
-/_projects/
-/_steps/
-/_temp/
-/.wercker/
+# rebar
+/_checkouts/
 
 # compiled
 swagger
+
+
+# containerization
+\#*
+.\#*
+Dockerfile
+docker-compose.yml
