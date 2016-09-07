@@ -19,7 +19,7 @@ SERVICE_IMAGE_PUSH_TAG ?= $(SERVICE_IMAGE_TAG)
 
 # Base image for the service
 BASE_IMAGE_NAME := service_erlang
-BASE_IMAGE_TAG := 170b7dd12d62431303f8bb514abe2b43468223a1
+BASE_IMAGE_TAG := 4e3dffd76a6aeb580f80381b50dcc8a130eb3345
 
 BUILD_IMAGE_TAG := 753126790c9ecd763840d9fe58507335af02b875
 
@@ -61,7 +61,7 @@ start: submodules
 devrel: submodules
 	$(REBAR) release
 
-release: distclean
+release: distclean $(SWAGGER_APP_TARGET)
 	$(REBAR) as prod release
 
 clean:
@@ -69,7 +69,7 @@ clean:
 
 distclean:
 	$(REBAR) clean -a
-	rm -rfv _build _builds _cache _steps _temp
+	rm -rfv _build apps/swagger
 
 # CALL_W_CONTAINER
 test: submodules
