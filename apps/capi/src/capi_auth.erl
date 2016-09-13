@@ -105,6 +105,7 @@ get_actions() ->
         'GetPaymentConversionStats' => <<"payments_conversion_stats:get">>,
         'GetPaymentRevenueStats' => <<"payments_revenue_stats:get">>,
         'GetPaymentGeoStats' => <<"payments_geo_stats:get">>,
-        'GetPaymentRateStats' => <<"payments_rate_stats:get">>
+        'GetPaymentRateStats' => <<"payments_rate_stats:get">>,
+        'GetMyParty' => <<"parties:get">>
     }.
 

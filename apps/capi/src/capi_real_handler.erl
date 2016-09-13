@@ -319,6 +319,28 @@ process_request(OperationID = 'GetPaymentRateStats', Req, Context) ->
             process_request_error(OperationID, Error)
     end;
 
+process_request(OperationID = 'GetMyParty', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+    prepare_party(OperationID, RequestID, Context, fun(RequestContext) ->
+        UserInfo = get_user_info(Context),
+        PartyID = get_merchant_id(Context),
+        {Result, _} = service_call(
+            party_management,
+            'Get',
+            [UserInfo, PartyID],
+            RequestContext
+        ),
+        case Result of
+            {ok, #payproc_PartyState{
+                party = Party
+            }} ->
+                Resp = decode_party(Party),
+                {200, [], Resp};
+            Error ->
+                process_request_error(OperationID, Error)
+        end
+    end);
+
 process_request(_OperationID, _Req, _Context) ->
     {501, [], <<"Not implemented">>}.
 
@@ -515,6 +537,97 @@ decode_invoice(#domain_Invoice{
         <<"description">> => Description
     }).
 
+decode_party(#domain_Party{
+    id = PartyID,
+    blocking = Blocking,
+    suspension = Suspension,
+    shops = Shops
+}) ->
+    PreparedShops = maps:fold(
+        fun(_, Shop, Acc) -> [decode_shop(Shop) | Acc] end,
+        [],
+        Shops
+    ),
+    #{
+        <<"partyID">> => PartyID,
+        <<"isBlocked">> => is_blocked(Blocking),
+        <<"isSuspended">> => is_suspended(Suspension),
+        <<"shops">> => PreparedShops
+    }.
+
+decode_shop(#domain_Shop{
+    id = ShopID,
+    blocking = Blocking,
+    suspension = Suspension,
+    category  = #domain_CategoryObject{
+        ref = #domain_CategoryRef{
+            id = CategoryRef
+        }
+    },
+    details  = ShopDetails,
+    contractor = Contractor,
+    contract  = ShopContract
+}) ->
+    #{
+        <<"shopID">> => ShopID,
+        <<"isBlocked">> => is_blocked(Blocking),
+        <<"isSuspended">> => is_suspended(Suspension),
+        <<"categoryRef">> => CategoryRef,
+        <<"shopDetails">> => decode_shop_details(ShopDetails),
+        <<"contractor">> => decode_contractor(Contractor),
+        <<"contract">> => decode_shop_contract(ShopContract)
+    }.
+
+decode_shop_details(#domain_ShopDetails{
+    name = Name,
+    description = Description,
+    location = Location
+}) ->
+    #{
+      <<"name">> => Name,
+      <<"description">> => Description,
+      <<"location">> => Location
+    }.
+
+decode_contractor(#domain_Contractor{
+    registered_name = RegisteredName,
+    legal_entity = _LegalEntity
+}) ->
+    #{
+        <<"registeredName">> => RegisteredName,
+        <<"legalEntity">> => <<"dummy_entity">> %% @TODO Fix legal entity when thrift is ready
+    }.
+
+decode_shop_contract(#domain_ShopContract{
+    number = Number,
+    system_contractor = #domain_ContractorObject{
+        ref = #domain_ContractorRef{
+            id = ContractorRef
+        }
+    },
+    concluded_at = ConcludedAt,
+    valid_since = ValidSince,
+    valid_until = ValidUntil,
+    terminated_at = _TerminatedAt %% @TODO show it to the client?
+}) ->
+    #{
+        <<"number">> => Number,
+        <<"systemContractorRef">> => ContractorRef,
+        <<"concludedAt">> => ConcludedAt,
+        <<"validSince">> => ValidSince,
+        <<"validUntil">> => ValidUntil
+    }.
+
+is_blocked({blocked, _}) ->
+    true;
+is_blocked({unblocked, _}) ->
+    false.
+
+is_suspended({suspended, _}) ->
+    true;
+is_suspended({active, _}) ->
+    false.
+
 decode_stat_response(payments_conversion_stat, Response) ->
     #{
         <<"offset">> => genlib:to_int(maps:get(<<"offset">>, Response)),
@@ -653,3 +766,33 @@ process_request_error(_, {exception, #payproc_InvoicePaymentNotFound{}} ) ->
 
 process_request_error(_, {exception, #merchstat_DatasetTooBig{limit = Limit}}) ->
     {400, [], limit_exceeded_error(Limit)}.
+
+
+prepare_party(OperationID, RequestID, Context, ProcessReqFun) ->
+    {Result, RequestContext} = create_party(RequestID, Context),
+    case Result of
+        ok ->
+            ProcessReqFun(RequestContext);
+        Error ->
+            process_request_error(OperationID, Error)
+    end.
+
+create_party(RequestID, Context) ->
+    PartyID = get_merchant_id(Context),
+    UserInfo = get_user_info(Context),
+    {Result, RequestContext} = service_call(
+        party_management,
+        'Create',
+        [UserInfo, PartyID],
+        create_context(RequestID)
+    ),
+    R = case Result of
+        ok ->
+            ok;
+        {exception, #payproc_PartyExists{}} ->
+            ok;
+        Error ->
+            Error
+    end,
+    {R, RequestContext}.
+

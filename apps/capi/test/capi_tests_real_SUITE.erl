@@ -22,7 +22,9 @@
     get_payment_conversion_stats_ok_test/1,
     get_payment_revenue_stats_ok_test/1,
     get_payment_geo_stats_ok_test/1,
-    get_payment_rate_stats_ok_test/1
+    get_payment_rate_stats_ok_test/1,
+    %%%%
+    get_my_party_ok_test/1
 ]).
 
 -define(CAPI_HOST, "0.0.0.0").
@@ -31,6 +33,7 @@
 -define(CAPI_CDS_STORAGE_URL, "http://cds:8022/v1/storage").
 -define(CAPI_INVOICING_URL, "http://hellgate:8022/v1/processing/invoicing").
 -define(CAPI_MERCHANT_STAT_URL, "http://magista:8081/stat").
+-define(CAPI_PARTY_MANAGEMENT_URL, "http://hellgate:8022/v1/processing/partymgmt").
 
 
 -type config() :: [{atom(), any()}].
@@ -50,7 +53,8 @@ all() ->
         get_payment_conversion_stats_ok_test,
         get_payment_revenue_stats_ok_test,
         get_payment_geo_stats_ok_test,
-        get_payment_rate_stats_ok_test
+        get_payment_rate_stats_ok_test,
+        get_my_party_ok_test
     ].
 
 %%
@@ -59,7 +63,6 @@ all() ->
 -spec init_per_suite(config()) -> config().
 
 init_per_suite(Config) ->
-    test_configuration(Config),
     Apps =
         capi_ct_helper:start_app(lager) ++
         capi_ct_helper:start_app(cowlib) ++
@@ -68,7 +71,8 @@ init_per_suite(Config) ->
             {service_urls, #{
                 cds_storage => ?CAPI_CDS_STORAGE_URL,
                 invoicing => ?CAPI_INVOICING_URL,
-                merchant_stat => ?CAPI_MERCHANT_STAT_URL
+                merchant_stat => ?CAPI_MERCHANT_STAT_URL,
+                party_management => ?CAPI_PARTY_MANAGEMENT_URL
             }}
         ]) ++
         capi_ct_helper:start_app(capi, [
@@ -223,18 +227,13 @@ get_payment_rate_stats_ok_test(Config) ->
     ]),
     Path = "/v1/analytics/shops/THRIFT-SHOP/customers/stats/rate?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
-%% helpers
 
-test_configuration(Config) ->
-    application:set_env(capi, host, ?CAPI_HOST),
-    application:set_env(capi, port, ?CAPI_PORT),
-    application:set_env(capi, service_type, ?CAPI_SERVICE_TYPE),
-    application:set_env(cp_proto, service_urls, #{
-        cds_storage => ?CAPI_CDS_STORAGE_URL,
-        invoicing => ?CAPI_INVOICING_URL,
-        merchant_stat => ?CAPI_MERCHANT_STAT_URL
-    }),
-    application:set_env(capi, api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")).
+-spec get_my_party_ok_test(config()) -> _.
+
+get_my_party_ok_test(Config) ->
+    {ok, 200, _RespHeaders, _Body} = default_get_party(Config).
+
+%% helpers
 
 default_call(Method, Path, Body, Config) ->
     call(Method, Path, Body, [x_request_id_header(), default_auth_header(Config), json_content_type_header()]).
@@ -277,7 +276,8 @@ default_auth_token(Config) ->
                     <<"payments_conversion_stats:get">>,
                     <<"payments_revenue_stats:get">>,
                     <<"payments_geo_stats:get">>,
-                    <<"payments_rate_stats:get">>
+                    <<"payments_rate_stats:get">>,
+                    <<"parties:get">>
                 ]
         }
     },
@@ -341,6 +341,11 @@ default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
     },
     Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments",
     {ok, 201, _RespHeaders, Body} = default_call(post, Path, Req, Config),
+    decode_body(Body).
+
+default_get_party(Config) ->
+    Path = "/v1/processing/me",
+    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
     decode_body(Body).
 
 get_body(ClientRef) ->
