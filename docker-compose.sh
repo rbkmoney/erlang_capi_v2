@@ -22,7 +22,9 @@ services:
   cds:
     image: dr.rbkmoney.com/rbkmoney/cds:dbbf05f7bcdb39a85ca12d290aeecea1bada89d1
   machinegun:
-    image: dr.rbkmoney.com/rbkmoney/mg_prototype:f981bdc338631fbdc991c78af8fd22f676c26fc7
+    image: dr.rbkmoney.com/rbkmoney/machinegun:cc5985c4b1ea385eba141995c37ebc67093a1fe7
+    volumes:
+      - ./test/machinegun/sys.config:/opt/machinegun/releases/0.1.0/sys.config
   magista:
     image: dr.rbkmoney.com/rbkmoney/magista:75c188d1b5da9d232625e53203790ecc580b3c55
     command: |

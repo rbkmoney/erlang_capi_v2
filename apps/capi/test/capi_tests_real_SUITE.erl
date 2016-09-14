@@ -231,7 +231,12 @@ get_payment_rate_stats_ok_test(Config) ->
 -spec get_my_party_ok_test(config()) -> _.
 
 get_my_party_ok_test(Config) ->
-    {ok, 200, _RespHeaders, _Body} = default_get_party(Config).
+    #{
+        <<"isBlocked">> := false,
+        <<"isSuspended">> := false,
+        <<"partyID">> := <<"hg_tests_SUITE">>,
+        <<"shops">> := []
+    } = default_get_party(Config).
 
 %% helpers
 
