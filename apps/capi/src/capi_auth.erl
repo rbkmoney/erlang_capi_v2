@@ -67,13 +67,13 @@ verify_alg(AuthToken) ->
     end.
 
 authorize(Claims, OperationID) ->
-    Action = maps:get(OperationID, get_actions()),
+    RequiredRoles = maps:get(OperationID, get_actions()),
     case Claims of
         #{<<"resource_access">> := #{<<"common-api">> := #{<<"roles">> := Roles}}} ->
-            case lists:member(Action, Roles) of
-                true ->
+            case RequiredRoles -- Roles of
+                [] ->
                     {ok, Claims};
-                false ->
+                _ ->
                     {error, unauthorized}
             end;
         _ ->
@@ -90,22 +90,22 @@ is_valid_exp(Claims) ->
 
 get_actions() ->
     #{
-        'CreateInvoice' => <<"invoices:create">>,
-        'CreatePayment' => <<"payments:create">>,
-        'CreatePaymentToolToken' => <<"payment_tool_tokens:create">>,
-        'CreateProfile' => <<"profiles:create">>,
-        'DeleteProfile' => <<"profiles:delete">>,
-        'GetInvoiceByID' => <<"invoices:get">>,
-        'GetInvoiceEvents' => <<"invoices.events:get">>,
-        'GetPaymentByID' => <<"payments:get">>,
-        'GetProfileByID' => <<"profiles:get">>,
-        'GetProfiles' => <<"profiles:get">>,
-        'UpdateProfile' => <<"profiles:update">>,
-        'GetInvoices' => <<"invoices_stats:get">>,
-        'GetPaymentConversionStats' => <<"payments_conversion_stats:get">>,
-        'GetPaymentRevenueStats' => <<"payments_revenue_stats:get">>,
-        'GetPaymentGeoStats' => <<"payments_geo_stats:get">>,
-        'GetPaymentRateStats' => <<"payments_rate_stats:get">>,
-        'GetMyParty' => <<"parties:get">>
+        'CreateInvoice' => [<<"invoices:create">>],
+        'CreatePayment' => [<<"payments:create">>],
+        'CreatePaymentToolToken' => [<<"payment_tool_tokens:create">>],
+        'CreateProfile' => [<<"profiles:create">>],
+        'DeleteProfile' => [<<"profiles:delete">>],
+        'GetInvoiceByID' => [<<"invoices:get">>],
+        'GetInvoiceEvents' => [<<"invoices.events:get">>],
+        'GetPaymentByID' => [<<"payments:get">>],
+        'GetProfileByID' => [<<"profiles:get">>],
+        'GetProfiles' => [<<"profiles:get">>],
+        'UpdateProfile' => [<<"profiles:update">>],
+        'GetInvoices' => [<<"invoices_stats:get">>],
+        'GetPaymentConversionStats' => [<<"payments_conversion_stats:get">>],
+        'GetPaymentRevenueStats' => [<<"payments_revenue_stats:get">>],
+        'GetPaymentGeoStats' => [<<"payments_geo_stats:get">>],
+        'GetPaymentRateStats' => [<<"payments_rate_stats:get">>],
+        'GetMyParty' => [<<"party:get">>, <<"party:create">>]
     }.
 

@@ -282,7 +282,8 @@ default_auth_token(Config) ->
                     <<"payments_revenue_stats:get">>,
                     <<"payments_geo_stats:get">>,
                     <<"payments_rate_stats:get">>,
-                    <<"parties:get">>
+                    <<"party:get">>,
+                    <<"party:create">>
                 ]
         }
     },
