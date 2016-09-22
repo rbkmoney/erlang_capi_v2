@@ -319,6 +319,32 @@ process_request(OperationID = 'GetPaymentRateStats', Req, Context) ->
             process_request_error(OperationID, Error)
     end;
 
+process_request(OperationID = 'GetMyParty', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+    UserInfo = get_user_info(Context),
+    PartyID = get_merchant_id(Context),
+    {Result, _} = prepare_party(
+        Context,
+        create_context(RequestID),
+        fun(RequestContext) ->
+            service_call(
+                party_management,
+                'Get',
+                [UserInfo, PartyID],
+                RequestContext
+            )
+        end
+    ),
+    case Result of
+        {ok, #payproc_PartyState{
+            party = Party
+        }} ->
+            Resp = decode_party(Party),
+            {200, [], Resp};
+        Error ->
+            process_request_error(OperationID, Error)
+    end;
+
 process_request(_OperationID, _Req, _Context) ->
     {501, [], <<"Not implemented">>}.
 
@@ -515,6 +541,103 @@ decode_invoice(#domain_Invoice{
         <<"description">> => Description
     }).
 
+decode_party(#domain_Party{
+    id = PartyID,
+    blocking = Blocking,
+    suspension = Suspension,
+    shops = Shops
+}) ->
+    PreparedShops = maps:fold(
+        fun(_, Shop, Acc) -> [decode_shop(Shop) | Acc] end,
+        [],
+        Shops
+    ),
+    #{
+        <<"partyID">> => PartyID,
+        <<"isBlocked">> => is_blocked(Blocking),
+        <<"isSuspended">> => is_suspended(Suspension),
+        <<"shops">> => PreparedShops
+    }.
+
+decode_shop(#domain_Shop{
+    id = ShopID,
+    blocking = Blocking,
+    suspension = Suspension,
+    category  = #domain_CategoryObject{
+        ref = #domain_CategoryRef{
+            id = CategoryRef
+        }
+    },
+    details  = ShopDetails,
+    contractor = Contractor,
+    contract  = ShopContract
+}) ->
+    genlib_map:compact(#{
+        <<"shopID">> => ShopID,
+        <<"isBlocked">> => is_blocked(Blocking),
+        <<"isSuspended">> => is_suspended(Suspension),
+        <<"categoryRef">> => CategoryRef,
+        <<"shopDetails">> => decode_shop_details(ShopDetails),
+        <<"contractor">> => decode_contractor(Contractor),
+        <<"contract">> => decode_shop_contract(ShopContract)
+    }).
+
+decode_shop_details(#domain_ShopDetails{
+    name = Name,
+    description = Description,
+    location = Location
+}) ->
+    genlib_map:compact(#{
+      <<"name">> => Name,
+      <<"description">> => Description,
+      <<"location">> => Location
+    }).
+
+decode_contractor(undefined) ->
+    undefined;
+
+decode_contractor(#domain_Contractor{
+    registered_name = RegisteredName,
+    legal_entity = _LegalEntity
+}) ->
+    #{
+        <<"registeredName">> => RegisteredName,
+        <<"legalEntity">> => <<"dummy_entity">> %% @TODO Fix legal entity when thrift is ready
+    }.
+
+decode_shop_contract(undefined) ->
+    undefined;
+
+decode_shop_contract(#domain_ShopContract{
+    number = Number,
+    system_contractor = #domain_ContractorObject{
+        ref = #domain_ContractorRef{
+            id = ContractorRef
+        }
+    },
+    concluded_at = ConcludedAt,
+    valid_since = ValidSince,
+    valid_until = ValidUntil,
+    terminated_at = _TerminatedAt %% @TODO show it to the client?
+}) ->
+    #{
+        <<"number">> => Number,
+        <<"systemContractorRef">> => ContractorRef,
+        <<"concludedAt">> => ConcludedAt,
+        <<"validSince">> => ValidSince,
+        <<"validUntil">> => ValidUntil
+    }.
+
+is_blocked({blocked, _}) ->
+    true;
+is_blocked({unblocked, _}) ->
+    false.
+
+is_suspended({suspended, _}) ->
+    true;
+is_suspended({active, _}) ->
+    false.
+
 decode_stat_response(payments_conversion_stat, Response) ->
     #{
         <<"offset">> => genlib:to_int(maps:get(<<"offset">>, Response)),
@@ -653,3 +776,38 @@ process_request_error(_, {exception, #payproc_InvoicePaymentNotFound{}} ) ->
 
 process_request_error(_, {exception, #merchstat_DatasetTooBig{limit = Limit}}) ->
     {400, [], limit_exceeded_error(Limit)}.
+
+
+prepare_party(Context, RequestContext0, ServiceCall) ->
+    {Result0, RequestContext1} = ServiceCall(RequestContext0),
+    case Result0 of
+        {exception, #payproc_PartyNotFound{}} ->
+            _ = lager:info("Attempting to create a missing party"),
+            {Result1, RequestContext2} = create_party(Context, RequestContext1),
+            case Result1 of
+                ok -> ServiceCall(RequestContext2);
+                Error -> {Error, RequestContext2}
+            end;
+        _ ->
+            {Result0, RequestContext1}
+    end.
+
+create_party(Context, RequestContext) ->
+    PartyID = get_merchant_id(Context),
+    UserInfo = get_user_info(Context),
+    {Result, NewRequestContext} = service_call(
+        party_management,
+        'Create',
+        [UserInfo, PartyID],
+        RequestContext
+    ),
+    R = case Result of
+        ok ->
+            ok;
+        {exception, #payproc_PartyExists{}} ->
+            ok;
+        Error ->
+            Error
+    end,
+    {R, NewRequestContext}.
+

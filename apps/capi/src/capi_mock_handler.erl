@@ -252,7 +252,7 @@ add_fake_payment(PaymentID) ->
 
     {{Y, M, D}, Time} = calendar:local_time(),
     {ok, CreatedAt} = rfc3339:format({{Y + 1, M, D}, Time}),
-    EventID = new_id(),
+    EventID = genlib:to_int(new_id()),
     Event = #{
         <<"id">> => EventID,
         <<"createdAt">> => CreatedAt,

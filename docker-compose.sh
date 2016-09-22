@@ -16,13 +16,15 @@ services:
       - magista
       - starter
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:02e8d2b8f6091db6a3272b43d862248213dbd27a
+    image: dr.rbkmoney.com/rbkmoney/hellgate:ee85cc90d487c2d7d870a6912171da4bbc41af4d
     depends_on:
       - machinegun
   cds:
     image: dr.rbkmoney.com/rbkmoney/cds:dbbf05f7bcdb39a85ca12d290aeecea1bada89d1
   machinegun:
-    image: dr.rbkmoney.com/rbkmoney/mg_prototype:f981bdc338631fbdc991c78af8fd22f676c26fc7
+    image: dr.rbkmoney.com/rbkmoney/machinegun:cc5985c4b1ea385eba141995c37ebc67093a1fe7
+    volumes:
+      - ./test/machinegun/sys.config:/opt/machinegun/releases/0.1.0/sys.config
   magista:
     image: dr.rbkmoney.com/rbkmoney/magista:75c188d1b5da9d232625e53203790ecc580b3c55
     command: |
