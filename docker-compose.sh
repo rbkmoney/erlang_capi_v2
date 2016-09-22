@@ -16,7 +16,7 @@ services:
       - magista
       - starter
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:02e8d2b8f6091db6a3272b43d862248213dbd27a
+    image: dr.rbkmoney.com/rbkmoney/hellgate:ee85cc90d487c2d7d870a6912171da4bbc41af4d
     depends_on:
       - machinegun
   cds:
