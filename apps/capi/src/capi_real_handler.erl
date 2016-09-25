@@ -181,6 +181,43 @@ process_request(OperationID = 'GetInvoiceByID', Req, Context) ->
             process_request_error(OperationID, Error)
     end;
 
+process_request(OperationID = 'FullfillInvoice', Req, Context) ->
+    InvoiceID = maps:get(invoiceID, Req),
+    RequestID = maps:get('X-Request-ID', Req),
+    Reason = maps:get(reason, Req),
+    UserInfo = get_user_info(Context),
+    {Result, _NewContext} = service_call(
+        invoicing,
+        'Fulfill',
+        [UserInfo, InvoiceID, Reason],
+        create_context(RequestID)
+    ),
+    case Result of
+        {ok, _} ->
+            {200, [], <<>>};
+        Error ->
+            process_request_error(OperationID, Error)
+    end;
+
+process_request(OperationID = 'RescindInvoice', Req, Context) ->
+    InvoiceID = maps:get(invoiceID, Req),
+    RequestID = maps:get('X-Request-ID', Req),
+    Reason = maps:get(reason, Req),
+
+    UserInfo = get_user_info(Context),
+    {Result, _NewContext} = service_call(
+        invoicing,
+        'Rescind',
+        [UserInfo, InvoiceID, Reason],
+        create_context(RequestID)
+    ),
+    case Result of
+        {ok, _} ->
+            {200, [], <<>>};
+        Error ->
+            process_request_error(OperationID, Error)
+    end;
+
 process_request(OperationID = 'GetInvoiceEvents', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     _EventID = maps:get(eventID, Req),
@@ -319,6 +356,272 @@ process_request(OperationID = 'GetPaymentRateStats', Req, Context) ->
             process_request_error(OperationID, Error)
     end;
 
+process_request(OperationID = 'GetPaymentInstrumentStats', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+    case maps:get(paymentInstrument, Req) of
+        <<"card">> ->
+            StatType = payments_card_stat,
+            Dsl = create_stat_dsl(StatType, Req, Context),
+            {Result, _NewContext} = service_call(merchant_stat, 'GetStatistics', [encode_stat_request(Dsl)], create_context(RequestID)),
+
+            case Result of
+                {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
+                    Resp = [decode_stat_response(StatType, S) || S <- Stats],
+                    {200, [], Resp};
+                Error ->
+                    process_request_error(OperationID, Error)
+            end
+    end;
+
+process_request(OperationID = 'CreateShop', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+    UserInfo = get_user_info(Context),
+    PartyID = get_merchant_id(Context),
+    Params = maps:get('CreateShopArgs', Req),
+
+    ShopParams = #payproc_ShopParams{
+        category = #domain_CategoryObject{
+
+        },
+        details = encode_shop_details(maps:get(<<"shopDetails">>, Params)),
+        contractor = encode_contractor(maps:get(<<"contractor">>, Params))
+    },
+
+    {Result, _} = prepare_party(
+        Context,
+        create_context(RequestID),
+        fun(RequestContext) ->
+            service_call(
+                party_management,
+                'CreateShop',
+                [UserInfo, PartyID, ShopParams],
+                RequestContext
+            )
+        end
+    ),
+
+    case Result of
+        {ok, #payproc_Claim{id = ID}} ->
+            Resp = #{<<"claimID">> => ID},
+            {200, [], Resp};
+        Error ->
+            process_request_error(OperationID, Error)
+    end;
+
+process_request(OperationID = 'ActivateShop', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+    UserInfo = get_user_info(Context),
+
+    PartyID = get_merchant_id(Context),
+    ShopID = maps:get(shopID, Req),
+
+    {Result, _} = prepare_party(
+        Context,
+        create_context(RequestID),
+        fun(RequestContext) ->
+            service_call(
+                party_management,
+                'ActivateShop',
+                [UserInfo, PartyID, ShopID],
+                RequestContext
+            )
+        end
+    ),
+
+    case Result of
+        {ok, #payproc_Claim{id = ID}} ->
+            Resp = #{<<"claimID">> => ID},
+            {200, [], Resp};
+        Error ->
+            process_request_error(OperationID, Error)
+    end;
+
+process_request(OperationID = 'SuspendShop', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+    UserInfo = get_user_info(Context),
+
+    PartyID = get_merchant_id(Context),
+    ShopID = maps:get(shopID, Req),
+
+    {Result, _} = prepare_party(
+        Context,
+        create_context(RequestID),
+        fun(RequestContext) ->
+            service_call(
+                party_management,
+                'SuspendShop',
+                [UserInfo, PartyID, ShopID],
+                RequestContext
+            )
+        end
+    ),
+
+    case Result of
+        {ok, #payproc_Claim{id = ID}} ->
+            Resp = #{<<"claimID">> => ID},
+            {200, [], Resp};
+        Error ->
+            process_request_error(OperationID, Error)
+    end;
+
+process_request(OperationID = 'UpdateShop', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+    UserInfo = get_user_info(Context),
+    PartyID = get_merchant_id(Context),
+    ShopID = maps:get(shopID, Req),
+    Params = maps:get('UpdateShopArgs', Req),
+    ShopUpdate = #payproc_ShopUpdate{
+        category = #domain_CategoryObject{},
+        details = encode_shop_details(genlib_map:get(<<"shopDetails">>, Params)),
+        contractor = encode_contractor(genlib_map:get(<<"contractor">>, Params))
+    },
+    {Result, _} = prepare_party(
+        Context,
+        create_context(RequestID),
+        fun(RequestContext) ->
+            service_call(
+                party_management,
+                'UpdateShop',
+                [UserInfo, PartyID, ShopID, ShopUpdate],
+                RequestContext
+            )
+        end
+    ),
+
+    case Result of
+        {ok, #payproc_Claim{id = ID}} ->
+            Resp = #{<<"claimID">> => ID},
+            {200, [], Resp};
+        Error ->
+            process_request_error(OperationID, Error)
+    end;
+
+process_request(OperationID = 'GetCurrentClaim', Req, Context) ->
+    <<"pending">> = maps:get(claimStatus, Req), %% @TODO think about other claim statuses here
+    RequestID = maps:get('X-Request-ID', Req),
+    UserInfo = get_user_info(Context),
+    PartyID = get_merchant_id(Context),
+    ClaimID = maps:get(claimID, Req),
+
+    {Result, _} = prepare_party(
+        Context,
+        create_context(RequestID),
+        fun(RequestContext) ->
+            service_call(
+                party_management,
+                'GetPendingClaim',
+                [UserInfo, PartyID, ClaimID],
+                RequestContext
+            )
+        end
+    ),
+    case Result of
+        {ok, Claim = #payproc_Claim{}} ->
+            Resp = decode_claim(Claim),
+            {200, [], Resp};
+        Error ->
+            process_request_error(OperationID, Error)
+    end;
+
+process_request(OperationID = 'GetClaimByID', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+    UserInfo = get_user_info(Context),
+    PartyID = get_merchant_id(Context),
+    ClaimID = maps:get(claimID, Req),
+    {Result, _} = prepare_party(
+        Context,
+        create_context(RequestID),
+        fun(RequestContext) ->
+            service_call(
+                party_management,
+                'GetClaim',
+                [UserInfo, PartyID, ClaimID],
+                RequestContext
+            )
+        end
+    ),
+    case Result of
+        {ok, Claim = #payproc_Claim{}} ->
+            Resp = decode_claim(Claim),
+            {200, [], Resp};
+        Error ->
+            process_request_error(OperationID, Error)
+    end;
+
+process_request(OperationID = 'RevokeClaimByID', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+    UserInfo = get_user_info(Context),
+    PartyID = get_merchant_id(Context),
+    ClaimID = maps:get(claimID, Req),
+    Reason = maps:get(reason, Req),
+
+    {Result, _} = prepare_party(
+        Context,
+        create_context(RequestID),
+        fun(RequestContext) ->
+            service_call(
+                party_management,
+                'RevokeClaim',
+                [UserInfo, PartyID, ClaimID, Reason],
+                RequestContext
+            )
+        end
+    ),
+    case Result of
+        ok ->
+            {200, [], <<>>};
+        Error ->
+            process_request_error(OperationID, Error)
+    end;
+
+process_request(OperationID = 'SuspendMyParty', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+    UserInfo = get_user_info(Context),
+    PartyID = get_merchant_id(Context),
+    {Result, _} = prepare_party(
+        Context,
+        create_context(RequestID),
+        fun(RequestContext) ->
+            service_call(
+                party_management,
+                'Suspend',
+                [UserInfo, PartyID],
+                RequestContext
+            )
+        end
+    ),
+    case Result of
+        {ok, #payproc_ClaimResult{id = ClaimID}} ->
+            Resp = #{<<"claimID">> => ClaimID},
+            {200, [], Resp};
+        Error ->
+            process_request_error(OperationID, Error)
+    end;
+
+process_request(OperationID = 'ActivateMyParty', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+    UserInfo = get_user_info(Context),
+    PartyID = get_merchant_id(Context),
+    {Result, _} = prepare_party(
+        Context,
+        create_context(RequestID),
+        fun(RequestContext) ->
+            service_call(
+                party_management,
+                'Activate',
+                [UserInfo, PartyID],
+                RequestContext
+            )
+        end
+    ),
+    case Result of
+        {ok, #payproc_ClaimResult{id = ClaimID}} ->
+            Resp = #{<<"claimID">> => ClaimID},
+            {200, [], Resp};
+        Error ->
+            process_request_error(OperationID, Error)
+    end;
+
 process_request(OperationID = 'GetMyParty', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
@@ -404,6 +707,30 @@ encode_bank_card(#domain_BankCard{
         <<"bin">> => Bin,
         <<"masked_pan">> => MaskedPan
     })).
+
+encode_shop_details(undefined) ->
+    encode_shop_details;
+
+encode_shop_details(Details = #{
+    <<"name">> := Name
+}) ->
+    #domain_ShopDetails{
+        name = Name,
+        description = genlib_map:get(<<"details">>, Details),
+        location = genlib_map:get(<<"location">>, Details)
+    }.
+
+encode_contractor(undefined) ->
+    undefined;
+
+encode_contractor(#{
+    <<"registeredName">> := RegisteredName,
+    <<"legalEntity">> := _LegalEntity
+}) ->
+    #domain_Contractor{
+        registered_name = RegisteredName,
+        legal_entity = undefined
+    }.
 
 decode_bank_card(Encoded) ->
     #{
@@ -582,6 +909,9 @@ decode_shop(#domain_Shop{
         <<"contract">> => decode_shop_contract(ShopContract)
     }).
 
+decode_shop_details(undefined) ->
+    undefined;
+
 decode_shop_details(#domain_ShopDetails{
     name = Name,
     description = Description,
@@ -638,6 +968,12 @@ is_suspended({suspended, _}) ->
 is_suspended({active, _}) ->
     false.
 
+decode_suspension({suspended, _}) ->
+    #{<<"suspensionType">> => <<"suspended">>};
+
+decode_suspension({active, _}) ->
+    #{<<"suspensionType">> => <<"active">>}.
+
 decode_stat_response(payments_conversion_stat, Response) ->
     #{
         <<"offset">> => genlib:to_int(maps:get(<<"offset">>, Response)),
@@ -666,6 +1002,15 @@ decode_stat_response(payments_turnover, Response) ->
 decode_stat_response(customers_rate_stat, Response) ->
     #{
         <<"uniqueCount">> => genlib:to_int(maps:get(<<"unic_count">>, Response))
+    };
+
+decode_stat_response(payments_card_stat, Response) ->
+    #{
+        <<"offset">> => genlib:to_int(maps:get(<<"offset">>, Response)),
+        <<"totalCount">> =>  genlib:to_int(maps:get(<<"total_count">>, Response)),
+        <<"paymentSystem">> =>  maps:get(<<"payment_system">>, Response),
+        <<"profit">> => genlib:to_int(maps:get(<<"amount_with_fee">>, Response)),
+        <<"revenue">> =>  genlib:to_int(maps:get(<<"amount_without_fee">>, Response))
     }.
 
 create_dsl(QueryType, QueryBody, QueryParams) when
@@ -678,6 +1023,89 @@ create_dsl(QueryType, QueryBody, QueryParams) when
     },
     maps:merge(Basic, genlib_map:compact(QueryParams)).
 
+decode_claim(#payproc_Claim{
+    id = ID,
+    status = Status,
+    changeset = ChangeSet
+}) ->
+    #{
+        <<"id">> => ID,
+        <<"status">> => decode_claim_status(Status),
+        <<"changeset">> => decode_party_changeset(ChangeSet)
+    }.
+
+decode_claim_status({'pending', _}) ->
+    <<"pending">>;
+decode_claim_status({'accepted', _}) ->
+    <<"accepted">>;
+decode_claim_status({'denied', _}) ->
+    <<"denied">>;
+decode_claim_status({'revoked', _}) ->
+    <<"revoked">>.
+
+decode_party_changeset(PartyChangeset) ->
+    [decode_party_modification(PartyModification) || PartyModification <- PartyChangeset].
+
+decode_party_modification(Suspension = {S, _}) when
+    S =:= active;
+    S =:= suspended ->
+    #{
+        <<"modificationType">> => <<"PartySuspension">>,
+        <<"details">> => decode_suspension(Suspension)
+    };
+
+decode_party_modification(Shop = #domain_Shop{}) ->
+    #{
+        <<"modificationType">> => <<"ShopCreation">>,
+        <<"shop">> => decode_shop(Shop)
+    };
+
+decode_party_modification(
+    #payproc_ShopModificationUnit{
+        id = ShopID,
+        modification = ShopModification
+    }) ->
+    #{
+        <<"modificationType">> => <<"ShopModificationUnit">>,
+        <<"shopID">> => ShopID,
+        <<"details">> => decode_shop_modification(ShopModification)
+    }.
+
+decode_shop_modification(Suspension = {S, _}) when
+    S =:= active;
+    S =:= suspended ->
+    #{
+        <<"modificationType">> => <<"ShopSuspension">>,
+        <<"details">> => decode_suspension(Suspension)
+    };
+
+decode_shop_modification(#payproc_ShopUpdate{
+        category = Category,
+        details = ShopDetails,
+        contractor = Contractor
+    }) ->
+    #{
+        <<"modificationType">> => <<"ShopUpdate">>,
+        <<"details">> => genlib_map:compact(#{
+            <<"shopDetails">> => decode_shop_details(ShopDetails),
+            <<"contractor">> => decode_contractor(Contractor),
+            <<"category">> => decode_category(Category)
+        })
+    }.
+
+decode_category(undefined) ->
+    undefined;
+
+decode_category(#domain_CategoryObject{
+    data = #domain_Category{
+        name = Name,
+        description = Description
+    }
+}) ->
+    genlib_map:compact(#{
+        <<"name">> => Name,
+        <<"description">> => Description
+    }).
 
 encode_stat_request(Dsl) when is_map(Dsl) ->
     encode_stat_request(jsx:encode(Dsl));

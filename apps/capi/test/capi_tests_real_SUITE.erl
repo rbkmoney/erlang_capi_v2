@@ -24,7 +24,16 @@
     get_payment_geo_stats_ok_test/1,
     get_payment_rate_stats_ok_test/1,
     %%%%
-    get_my_party_ok_test/1
+    get_my_party_ok_test/1,
+    suspend_my_party_ok_test/1,
+    activate_my_party_ok_test/1,
+    get_claim_by_id_ok_test/1,
+    revoke_claim_ok_test/1,
+    get_pendind_claim_ok_test/1,
+    create_shop_ok_test/1,
+    update_shop_ok_test/1,
+    suspend_shop_ok_test/1,
+    activate_shop_ok_test/1
 ]).
 
 -define(CAPI_HOST, "0.0.0.0").
@@ -54,7 +63,16 @@ all() ->
         get_payment_revenue_stats_ok_test,
         get_payment_geo_stats_ok_test,
         get_payment_rate_stats_ok_test,
-        get_my_party_ok_test
+        get_my_party_ok_test,
+        suspend_my_party_ok_test,
+        activate_my_party_ok_test,
+        get_claim_by_id_ok_test,
+        revoke_claim_ok_test,
+        get_pendind_claim_ok_test,
+        create_shop_ok_test,
+        update_shop_ok_test,
+        suspend_shop_ok_test,
+        activate_shop_ok_test
     ].
 
 %%
@@ -237,6 +255,51 @@ get_my_party_ok_test(Config) ->
         <<"partyID">> := <<"hg_tests_SUITE">>,
         <<"shops">> := []
     } = default_get_party(Config).
+
+-spec suspend_my_party_ok_test(config()) -> _.
+
+suspend_my_party_ok_test(Config) ->
+    Config.
+
+-spec activate_my_party_ok_test(config()) -> _.
+
+activate_my_party_ok_test(Config) ->
+    Config.
+
+-spec get_claim_by_id_ok_test(config()) -> _.
+
+get_claim_by_id_ok_test(Config) ->
+    Config.
+
+-spec revoke_claim_ok_test(config()) -> _.
+
+revoke_claim_ok_test(Config) ->
+    Config.
+
+-spec get_pendind_claim_ok_test(config()) -> _.
+
+get_pendind_claim_ok_test(Config) ->
+    Config.
+
+-spec create_shop_ok_test(config()) -> _.
+
+create_shop_ok_test(Config) ->
+    Config.
+
+-spec update_shop_ok_test(config()) -> _.
+
+update_shop_ok_test(Config) ->
+    Config.
+
+-spec suspend_shop_ok_test(config()) -> _.
+
+suspend_shop_ok_test(Config) ->
+    Config.
+
+-spec activate_shop_ok_test(config()) -> _.
+
+activate_shop_ok_test(Config) ->
+    Config.
 
 %% helpers
 

@@ -67,7 +67,7 @@ verify_alg(AuthToken) ->
     end.
 
 authorize(Claims, OperationID) ->
-    RequiredRoles = maps:get(OperationID, get_actions()),
+    RequiredRoles = genlib_map:get(OperationID, get_actions()),
     case Claims of
         #{<<"resource_access">> := #{<<"common-api">> := #{<<"roles">> := Roles}}} ->
             case RequiredRoles -- Roles of
@@ -81,7 +81,7 @@ authorize(Claims, OperationID) ->
     end.
 
 is_valid_exp(Claims) ->
-    case maps:get(<<"exp">>, Claims, undefined) of
+    case genlib_map:get(<<"exp">>, Claims) of
         undefined ->
             false;
         I when is_integer(I) ->
@@ -96,16 +96,25 @@ get_actions() ->
         'CreateProfile' => [<<"profiles:create">>],
         'DeleteProfile' => [<<"profiles:delete">>],
         'GetInvoiceByID' => [<<"invoices:get">>],
+        'FulfillInvoice' => [<<"invoices:fulfill">>],
+        'RescindInvoice' => [<<"invoices:rescind">>],
         'GetInvoiceEvents' => [<<"invoices.events:get">>],
         'GetPaymentByID' => [<<"payments:get">>],
-        'GetProfileByID' => [<<"profiles:get">>],
-        'GetProfiles' => [<<"profiles:get">>],
-        'UpdateProfile' => [<<"profiles:update">>],
         'GetInvoices' => [<<"invoices_stats:get">>],
         'GetPaymentConversionStats' => [<<"payments_conversion_stats:get">>],
         'GetPaymentRevenueStats' => [<<"payments_revenue_stats:get">>],
         'GetPaymentGeoStats' => [<<"payments_geo_stats:get">>],
         'GetPaymentRateStats' => [<<"payments_rate_stats:get">>],
-        'GetMyParty' => [<<"party:get">>, <<"party:create">>]
+        'GetPaymentInstrumentStats' => [<<"payments_instrument_stats:get">>],
+        'GetMyParty' => [<<"party:get">>, <<"party:create">>],
+        'ActivateShop' => [<<"shops:activate">>, <<"party:create">>],
+        'CreateShop' => [<<"shop:create">>, <<"party:create">>],
+        'SuspendShop' => [<<"shops:suspend">>, <<"party:create">>],
+        'UpdateShop' => [<<"shops:update">>, <<"party:create">>],
+        'GetParty' => [<<"party:get">>, <<"party:create">>],
+        'SuspendMyParty' => [<<"party:suspend">>, <<"party:create">>],
+        'ActivateMyParty' => [<<"party:activate">>, <<"party:create">>],
+        'GetClaimByID' => [<<"claims:get">>, <<"party:create">>],
+        'GetCurrentClaim' => [<<"claims:get">>, <<"party:create">>],
+        'RevokeClaimByID' => [<<"claims:revoke">>, <<"party:create">>]
     }.
-
