@@ -5,6 +5,8 @@
 -include_lib("cp_proto/include/cp_cds_thrift.hrl").
 -include_lib("cp_proto/include/cp_merch_stat_thrift.hrl").
 
+-include_lib("swagger/include/swagger_context.hrl").
+
 -behaviour(swagger_logic_handler).
 
 %% API callbacks
@@ -16,7 +18,11 @@
 
 authorize_api_key(OperationID, ApiKey) -> capi_auth:auth_api_key(OperationID, ApiKey).
 
--spec handle_request(OperationID :: swagger_api:operation_id(), Req :: #{}, Context :: #{}) ->
+-spec handle_request(
+    OperationID :: swagger_api:operation_id(),
+    Req :: #{},
+    Context :: swagger_api:request_context()
+) ->
     {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
 
 handle_request(OperationID, Req, Context) ->
@@ -24,7 +30,10 @@ handle_request(OperationID, Req, Context) ->
     _ = lager:info("Processing request ~p", [OperationID]),
     process_request(OperationID, Req, Context).
 
--spec process_request(OperationID :: swagger_api:operation_id(), Req :: #{}, Context :: #{}) ->
+-spec process_request(
+    OperationID :: swagger_api:operation_id(),
+    Req :: #{},
+    Context :: swagger_api:request_context()) ->
     {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
 
 process_request(OperationID = 'CreateInvoice', Req, Context) ->
@@ -692,8 +701,10 @@ get_user_info(Context) ->
         id = get_merchant_id(Context)
     }.
 
-get_merchant_id(Context) ->
-    maps:get(<<"sub">>, Context).
+get_merchant_id(#request_context{
+    auth = AuthContext
+}) ->
+    maps:get(<<"sub">>, AuthContext).
 
 encode_bank_card(#domain_BankCard{
     'token'  = Token,
@@ -1046,44 +1057,45 @@ decode_claim_status({'revoked', _}) ->
 decode_party_changeset(PartyChangeset) ->
     [decode_party_modification(PartyModification) || PartyModification <- PartyChangeset].
 
-decode_party_modification(Suspension = {S, _}) when
-    S =:= active;
-    S =:= suspended ->
+decode_party_modification({suspension, Suspension}) ->
     #{
         <<"modificationType">> => <<"PartySuspension">>,
         <<"details">> => decode_suspension(Suspension)
     };
 
-decode_party_modification(Shop = #domain_Shop{}) ->
+decode_party_modification({shop_creation, Shop}) ->
     #{
         <<"modificationType">> => <<"ShopCreation">>,
         <<"shop">> => decode_shop(Shop)
     };
 
-decode_party_modification(
+decode_party_modification({
+    shop_modification,
     #payproc_ShopModificationUnit{
         id = ShopID,
         modification = ShopModification
-    }) ->
+    }
+}) ->
     #{
         <<"modificationType">> => <<"ShopModificationUnit">>,
         <<"shopID">> => ShopID,
         <<"details">> => decode_shop_modification(ShopModification)
     }.
 
-decode_shop_modification(Suspension = {S, _}) when
-    S =:= active;
-    S =:= suspended ->
+decode_shop_modification({suspension, Suspension}) ->
     #{
         <<"modificationType">> => <<"ShopSuspension">>,
         <<"details">> => decode_suspension(Suspension)
     };
 
-decode_shop_modification(#payproc_ShopUpdate{
+decode_shop_modification({
+    update,
+    #payproc_ShopUpdate{
         category = Category,
         details = ShopDetails,
         contractor = Contractor
-    }) ->
+    }
+}) ->
     #{
         <<"modificationType">> => <<"ShopUpdate">>,
         <<"details">> => genlib_map:compact(#{
