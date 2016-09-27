@@ -392,8 +392,8 @@ process_request(OperationID = 'CreateShop', Req, Context) ->
         category = #domain_CategoryObject{
 
         },
-        details = encode_shop_details(maps:get(<<"shopDetails">>, Params)),
-        contractor = encode_contractor(maps:get(<<"contractor">>, Params))
+        details = encode_shop_details(genlib_map:get(<<"shopDetails">>, Params)),
+        contractor = encode_contractor(genlib_map:get(<<"contractor">>, Params))
     },
 
     {Result, _} = prepare_party(
@@ -412,7 +412,7 @@ process_request(OperationID = 'CreateShop', Req, Context) ->
     case Result of
         {ok, #payproc_Claim{id = ID}} ->
             Resp = #{<<"claimID">> => ID},
-            {200, [], Resp};
+            {202, [], Resp};
         Error ->
             process_request_error(OperationID, Error)
     end;
@@ -440,7 +440,7 @@ process_request(OperationID = 'ActivateShop', Req, Context) ->
     case Result of
         {ok, #payproc_Claim{id = ID}} ->
             Resp = #{<<"claimID">> => ID},
-            {200, [], Resp};
+            {202, [], Resp};
         Error ->
             process_request_error(OperationID, Error)
     end;
@@ -468,7 +468,7 @@ process_request(OperationID = 'SuspendShop', Req, Context) ->
     case Result of
         {ok, #payproc_Claim{id = ID}} ->
             Resp = #{<<"claimID">> => ID},
-            {200, [], Resp};
+            {202, [], Resp};
         Error ->
             process_request_error(OperationID, Error)
     end;
@@ -500,7 +500,7 @@ process_request(OperationID = 'UpdateShop', Req, Context) ->
     case Result of
         {ok, #payproc_Claim{id = ID}} ->
             Resp = #{<<"claimID">> => ID},
-            {200, [], Resp};
+            {202, [], Resp};
         Error ->
             process_request_error(OperationID, Error)
     end;
@@ -602,7 +602,7 @@ process_request(OperationID = 'SuspendMyParty', Req, Context) ->
     case Result of
         {ok, #payproc_ClaimResult{id = ClaimID}} ->
             Resp = #{<<"claimID">> => ClaimID},
-            {200, [], Resp};
+            {202, [], Resp};
         Error ->
             process_request_error(OperationID, Error)
     end;
@@ -626,7 +626,7 @@ process_request(OperationID = 'ActivateMyParty', Req, Context) ->
     case Result of
         {ok, #payproc_ClaimResult{id = ClaimID}} ->
             Resp = #{<<"claimID">> => ClaimID},
-            {200, [], Resp};
+            {202, [], Resp};
         Error ->
             process_request_error(OperationID, Error)
     end;

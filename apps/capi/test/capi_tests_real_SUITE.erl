@@ -3,6 +3,7 @@
 -include_lib("common_test/include/ct.hrl").
 
 -export([all/0]).
+-export([groups/0]).
 -export([init_per_suite/1]).
 -export([end_per_suite/1]).
 
@@ -48,33 +49,62 @@
 -type config() :: [{atom(), any()}].
 
 -spec all() -> [
-    TestCase :: atom()
+    {group, GroupName :: atom()}
 ].
 
 all() ->
     [
-        authorization_error_no_header_test,
-        authorization_error_expired_test,
-        create_invoice_badard_test,
-        create_invoice_ok_test,
-        create_payment_tool_token_ok_test,
-        get_invoices_stats_ok_test,
-        get_payment_conversion_stats_ok_test,
-        get_payment_revenue_stats_ok_test,
-        get_payment_geo_stats_ok_test,
-        get_payment_rate_stats_ok_test,
-        get_my_party_ok_test,
-        suspend_my_party_ok_test,
-        activate_my_party_ok_test,
-        get_claim_by_id_ok_test,
-        revoke_claim_ok_test,
-        get_pendind_claim_ok_test,
-        create_shop_ok_test,
-        update_shop_ok_test,
-        suspend_shop_ok_test,
-        activate_shop_ok_test
+        {group, authorization},
+        {group, card_payment},
+        {group, statistics},
+        {group, party_management},
+        {group, claims_management},
+        {group, shops_management}
     ].
 
+-spec groups() -> [
+    Group :: {
+        Name :: atom(),
+        [parallel | sequence],
+        [TestCase :: atom()]
+    }
+].
+
+groups() ->
+    [
+        {authorization, [parallel], [
+            authorization_error_no_header_test,
+            authorization_error_expired_test
+        ]},
+        {card_payment, [sequence], [
+            create_invoice_badard_test,
+            create_invoice_ok_test,
+            create_payment_tool_token_ok_test
+        ]},
+        {statistics, [parallel], [
+            get_invoices_stats_ok_test,
+            get_payment_conversion_stats_ok_test,
+            get_payment_revenue_stats_ok_test,
+            get_payment_geo_stats_ok_test,
+            get_payment_rate_stats_ok_test
+        ]},
+        {party_management, [sequence], [
+            get_my_party_ok_test,
+            suspend_my_party_ok_test,
+            activate_my_party_ok_test
+        ]},
+        {claims_management, [sequence], [
+            get_claim_by_id_ok_test,
+            get_pendind_claim_ok_test,
+            revoke_claim_ok_test
+        ]},
+        {shops_management, [sequence], [
+            create_shop_ok_test,
+            update_shop_ok_test,
+            suspend_shop_ok_test,
+            activate_shop_ok_test
+        ]}
+    ].
 %%
 %% starting/stopping
 %%
@@ -259,12 +289,19 @@ get_my_party_ok_test(Config) ->
 -spec suspend_my_party_ok_test(config()) -> _.
 
 suspend_my_party_ok_test(Config) ->
+    #{} = default_suspend_my_party(Config),
+    #{
+        <<"isSuspended">> := true
+    } = default_get_party(Config),
     Config.
 
 -spec activate_my_party_ok_test(config()) -> _.
 
 activate_my_party_ok_test(Config) ->
-    Config.
+    #{} = default_activate_my_party(Config),
+    #{
+        <<"isSuspended">> := false
+    } = default_get_party(Config).
 
 -spec get_claim_by_id_ok_test(config()) -> _.
 
@@ -284,7 +321,10 @@ get_pendind_claim_ok_test(Config) ->
 -spec create_shop_ok_test(config()) -> _.
 
 create_shop_ok_test(Config) ->
-    Config.
+    #{
+        <<"claimID">> := ClaimID
+    } = default_create_shop(Config),
+    {save_config, [{shop_claim_id, ClaimID} | Config]}.
 
 -spec update_shop_ok_test(config()) -> _.
 
@@ -335,17 +375,25 @@ default_auth_token(Config) ->
                     <<"profiles:create">>,
                     <<"profiles:delete">>,
                     <<"invoices:get">>,
+                    <<"invoices:fulfill">>,
+                    <<"invoices:rescind">>,
                     <<"invoices.events:get">>,
                     <<"payments:get">>,
-                    <<"profiles:get">>,
-                    <<"profiles:get">>,
-                    <<"profiles:update">>,
                     <<"invoices_stats:get">>,
                     <<"payments_conversion_stats:get">>,
                     <<"payments_revenue_stats:get">>,
                     <<"payments_geo_stats:get">>,
                     <<"payments_rate_stats:get">>,
+                    <<"payments_instrument_stats:get">>,
                     <<"party:get">>,
+                    <<"shops:activate">>,
+                    <<"shop:create">>,
+                    <<"shops:suspend">>,
+                    <<"shops:update">>,
+                    <<"party:suspend">>,
+                    <<"party:activate">>,
+                    <<"claims:get">>,
+                    <<"claims:revoke">>,
                     <<"party:create">>
                 ]
         }
@@ -415,6 +463,30 @@ default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
 default_get_party(Config) ->
     Path = "/v1/processing/me",
     {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    decode_body(Body).
+
+default_suspend_my_party(Config) ->
+    Path = "/v1/processing/me/suspend",
+    {ok, 202, _RespHeaders, Body} = default_call(put, Path, #{}, Config),
+    decode_body(Body).
+
+default_activate_my_party(Config) ->
+    Path = "/v1/processing/me/activate",
+    {ok, 202, _RespHeaders, Body} = default_call(put, Path, #{}, Config),
+    decode_body(Body).
+
+default_create_shop(Config) ->
+    Path = "/v1/processing/shops",
+    Req = #{
+        <<"category">> => #{
+            <<"name">> => <<"toys">>
+        },
+        <<"shopDetails">> => #{
+            <<"name">> => <<"OOOBlackMaster">>,
+            <<"description">> => <<"Goods for education">>
+        }
+    },
+    {ok, 201, _RespHeaders, Body} = default_call(post, Path, Req, Config),
     decode_body(Body).
 
 get_body(ClientRef) ->
