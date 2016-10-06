@@ -66,19 +66,30 @@ verify_alg(AuthToken) ->
             {error, invalid_token}
     end.
 
-authorize(Claims, OperationID) ->
-    RequiredRoles = genlib_map:get(OperationID, get_actions()),
-    case Claims of
-        #{<<"resource_access">> := #{<<"common-api">> := #{<<"roles">> := Roles}}} ->
+authorize(
+    #{
+        <<"resource_access">> := #{
+            <<"common-api">> := #{
+                <<"roles">> := Roles
+            }
+        }
+    } = Claims,
+    OperationID
+) ->
+    case genlib_map:get(OperationID, get_actions()) of
+        undefined ->
+            {error, unauthorized};
+        RequiredRoles ->
             case RequiredRoles -- Roles of
                 [] ->
                     {ok, Claims};
                 _ ->
                     {error, unauthorized}
-            end;
-        _ ->
-            {error, unauthorized}
-    end.
+            end
+    end;
+
+authorize(_Claims, _OperationID) ->
+    {error, unauthorized}.
 
 is_valid_exp(Claims) ->
     case genlib_map:get(<<"exp">>, Claims) of
@@ -111,10 +122,11 @@ get_actions() ->
         'CreateShop' => [<<"shop:create">>, <<"party:create">>],
         'SuspendShop' => [<<"shops:suspend">>, <<"party:create">>],
         'UpdateShop' => [<<"shops:update">>, <<"party:create">>],
-        'GetParty' => [<<"party:get">>, <<"party:create">>],
         'SuspendMyParty' => [<<"party:suspend">>, <<"party:create">>],
         'ActivateMyParty' => [<<"party:activate">>, <<"party:create">>],
         'GetClaimByID' => [<<"claims:get">>, <<"party:create">>],
-        'GetCurrentClaim' => [<<"claims:get">>, <<"party:create">>],
-        'RevokeClaimByID' => [<<"claims:revoke">>, <<"party:create">>]
+        'GetClaimByStatus' => [<<"claims:get">>, <<"party:create">>],
+        'RevokeClaimByID' => [<<"claims:revoke">>, <<"party:create">>],
+        'GetCategories' => [<<"categories:get">>],
+        'GetCategoryByRef' => [<<"categories:get">>]
     }.

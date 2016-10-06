@@ -5,8 +5,6 @@
 -include_lib("cp_proto/include/cp_cds_thrift.hrl").
 -include_lib("cp_proto/include/cp_merch_stat_thrift.hrl").
 
--include_lib("swagger/include/swagger_context.hrl").
-
 -behaviour(swagger_logic_handler).
 
 %% API callbacks
@@ -72,6 +70,10 @@ process_request(OperationID = 'CreatePayment', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
     Token = genlib_map:get(<<"paymentToolToken">>, PaymentParams),
     PaymentTool = decode_bank_card(Token),
+    #{
+        ip_address := IP
+    } = get_peer_info(Context),
+    PreparedIP = genlib:to_binary(inet:ntoa(IP)),
     EncodedSession = genlib_map:get(<<"paymentSession">>, PaymentParams),
     {ClientInfo, PaymentSession} = unwrap_session(EncodedSession),
     Params =  #payproc_InvoicePaymentParams{
@@ -80,7 +82,7 @@ process_request(OperationID = 'CreatePayment', Req, Context) ->
             session = PaymentSession,
             client_info = #domain_ClientInfo{
                 fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
-                ip_address = maps:get(<<"ipAddress">>, ClientInfo)
+                ip_address = PreparedIP
             }
         }
     },
@@ -387,11 +389,10 @@ process_request(OperationID = 'CreateShop', Req, Context) ->
     UserInfo = get_user_info(Context),
     PartyID = get_merchant_id(Context),
     Params = maps:get('CreateShopArgs', Req),
-
+    _ = genlib_map:get(<<"categoryRef">>, Params),
+    [C | _] = capi_domain:get_categories(), %% @FIXME do it honestly not like an asshole
     ShopParams = #payproc_ShopParams{
-        category = #domain_CategoryObject{
-
-        },
+        category = C,
         details = encode_shop_details(genlib_map:get(<<"shopDetails">>, Params)),
         contractor = encode_contractor(genlib_map:get(<<"contractor">>, Params))
     },
@@ -410,7 +411,7 @@ process_request(OperationID = 'CreateShop', Req, Context) ->
     ),
 
     case Result of
-        {ok, #payproc_Claim{id = ID}} ->
+        {ok, #payproc_ClaimResult{id = ID}} ->
             Resp = #{<<"claimID">> => ID},
             {202, [], Resp};
         Error ->
@@ -438,7 +439,7 @@ process_request(OperationID = 'ActivateShop', Req, Context) ->
     ),
 
     case Result of
-        {ok, #payproc_Claim{id = ID}} ->
+        {ok, #payproc_ClaimResult{id = ID}} ->
             Resp = #{<<"claimID">> => ID},
             {202, [], Resp};
         Error ->
@@ -466,7 +467,7 @@ process_request(OperationID = 'SuspendShop', Req, Context) ->
     ),
 
     case Result of
-        {ok, #payproc_Claim{id = ID}} ->
+        {ok, #payproc_ClaimResult{id = ID}} ->
             Resp = #{<<"claimID">> => ID},
             {202, [], Resp};
         Error ->
@@ -479,8 +480,10 @@ process_request(OperationID = 'UpdateShop', Req, Context) ->
     PartyID = get_merchant_id(Context),
     ShopID = maps:get(shopID, Req),
     Params = maps:get('UpdateShopArgs', Req),
+    [C | _] = capi_domain:get_categories(), %% @FIXME do it honestly not like an asshole
+
     ShopUpdate = #payproc_ShopUpdate{
-        category = #domain_CategoryObject{},
+        category = C,
         details = encode_shop_details(genlib_map:get(<<"shopDetails">>, Params)),
         contractor = encode_contractor(genlib_map:get(<<"contractor">>, Params))
     },
@@ -498,14 +501,14 @@ process_request(OperationID = 'UpdateShop', Req, Context) ->
     ),
 
     case Result of
-        {ok, #payproc_Claim{id = ID}} ->
+        {ok, #payproc_ClaimResult{id = ID}} ->
             Resp = #{<<"claimID">> => ID},
             {202, [], Resp};
         Error ->
             process_request_error(OperationID, Error)
     end;
 
-process_request(OperationID = 'GetCurrentClaim', Req, Context) ->
+process_request(OperationID = 'GetClaimByStatus', Req, Context) ->
     <<"pending">> = maps:get(claimStatus, Req), %% @TODO think about other claim statuses here
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
@@ -657,6 +660,27 @@ process_request(OperationID = 'GetMyParty', Req, Context) ->
             process_request_error(OperationID, Error)
     end;
 
+process_request(_OperationID = 'GetCategories', Req, Context) ->
+    _ = maps:get('X-Request-ID', Req),
+    _ = get_user_info(Context),
+    _ = get_merchant_id(Context),
+    Categories = capi_domain:get_categories(),
+    Resp = [decode_category(C) || C <- Categories],
+    {200, [], Resp};
+
+process_request(_OperationID = 'GetCategoryByRef', Req, Context) ->
+    _ = maps:get('X-Request-ID', Req),
+    _ = get_user_info(Context),
+    _ = get_merchant_id(Context),
+    Ref = maps:get('categoryRef', Req),
+    case capi_domain:get_category_by_ref(Ref) of
+        {ok, Category} ->
+            Resp = decode_category(Category),
+            {200, [], Resp};
+        {error, not_found} ->
+            {404, [], #{}}
+    end;
+
 process_request(_OperationID, _Req, _Context) ->
     {501, [], <<"Not implemented">>}.
 
@@ -701,10 +725,12 @@ get_user_info(Context) ->
         id = get_merchant_id(Context)
     }.
 
-get_merchant_id(#request_context{
-    auth = AuthContext
+get_merchant_id(#{
+    auth_context := AuthContext
 }) ->
     maps:get(<<"sub">>, AuthContext).
+
+get_peer_info(#{peer := Peer}) -> Peer.
 
 encode_bank_card(#domain_BankCard{
     'token'  = Token,
@@ -1101,14 +1127,14 @@ decode_shop_modification({
         <<"details">> => genlib_map:compact(#{
             <<"shopDetails">> => decode_shop_details(ShopDetails),
             <<"contractor">> => decode_contractor(Contractor),
-            <<"category">> => decode_category(Category)
+            <<"categoryRef">> => decode_category_ref(Category)
         })
     }.
 
-decode_category(undefined) ->
-    undefined;
-
 decode_category(#domain_CategoryObject{
+    ref = #domain_CategoryRef{
+        id = CategoryRef
+    },
     data = #domain_Category{
         name = Name,
         description = Description
@@ -1116,8 +1142,19 @@ decode_category(#domain_CategoryObject{
 }) ->
     genlib_map:compact(#{
         <<"name">> => Name,
+        <<"categoryRef">> => CategoryRef,
         <<"description">> => Description
     }).
+
+decode_category_ref(undefined) ->
+    undefined;
+
+decode_category_ref(#domain_CategoryObject{
+    ref = #domain_CategoryRef{
+        id = CategoryRef
+    }
+}) ->
+    CategoryRef.
 
 encode_stat_request(Dsl) when is_map(Dsl) ->
     encode_stat_request(jsx:encode(Dsl));

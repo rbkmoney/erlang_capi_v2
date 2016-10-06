@@ -31,6 +31,8 @@
     get_claim_by_id_ok_test/1,
     revoke_claim_ok_test/1,
     get_pendind_claim_ok_test/1,
+    get_categories_ok_test/1,
+    get_category_by_ref_ok_test/1,
     create_shop_ok_test/1,
     update_shop_ok_test/1,
     suspend_shop_ok_test/1,
@@ -99,6 +101,8 @@ groups() ->
             revoke_claim_ok_test
         ]},
         {shops_management, [sequence], [
+            get_categories_ok_test,
+            get_category_by_ref_ok_test,
             create_shop_ok_test,
             update_shop_ok_test,
             suspend_shop_ok_test,
@@ -318,6 +322,24 @@ revoke_claim_ok_test(Config) ->
 get_pendind_claim_ok_test(Config) ->
     Config.
 
+-spec get_categories_ok_test(config()) -> _.
+
+get_categories_ok_test(Config) ->
+    [Category | _] = default_get_categories(Config),
+    #{
+        <<"name">> := _Name,
+        <<"categoryRef">> := CategoryRef
+    } = Category,
+    {save_config, CategoryRef}.
+
+-spec get_category_by_ref_ok_test(config()) -> _.
+
+get_category_by_ref_ok_test(Config) ->
+    {get_categories_ok_test,
+        CategoryRef
+    } = ?config(saved_config, Config),
+    _ = default_get_category_by_ref(CategoryRef, Config).
+
 -spec create_shop_ok_test(config()) -> _.
 
 create_shop_ok_test(Config) ->
@@ -386,6 +408,7 @@ default_auth_token(Config) ->
                     <<"payments_rate_stats:get">>,
                     <<"payments_instrument_stats:get">>,
                     <<"party:get">>,
+                    <<"party:create">>,
                     <<"shops:activate">>,
                     <<"shop:create">>,
                     <<"shops:suspend">>,
@@ -394,7 +417,7 @@ default_auth_token(Config) ->
                     <<"party:activate">>,
                     <<"claims:get">>,
                     <<"claims:revoke">>,
-                    <<"party:create">>
+                    <<"categories:get">>
                 ]
         }
     },
@@ -444,8 +467,7 @@ default_tokenize_card(Config) ->
             <<"cvv">> => <<"232">>
         },
         <<"clientInfo">> => #{
-            <<"fingerprint">> => <<"test fingerprint">>,
-            <<"ipAddress">> => <<"127.0.0.1">>
+            <<"fingerprint">> => <<"test fingerprint">>
         }
     },
     {ok, 201, _RespHeaders, Body} = default_call(post, "/v1/processing/payment_tools", Req, Config),
@@ -478,15 +500,23 @@ default_activate_my_party(Config) ->
 default_create_shop(Config) ->
     Path = "/v1/processing/shops",
     Req = #{
-        <<"category">> => #{
-            <<"name">> => <<"toys">>
-        },
+        <<"categoryRef">> => 228,
         <<"shopDetails">> => #{
             <<"name">> => <<"OOOBlackMaster">>,
             <<"description">> => <<"Goods for education">>
         }
     },
-    {ok, 201, _RespHeaders, Body} = default_call(post, Path, Req, Config),
+    {ok, 202, _RespHeaders, Body} = default_call(post, Path, Req, Config),
+    decode_body(Body).
+
+default_get_categories(Config) ->
+    Path = "/v1/processing/categories",
+    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    decode_body(Body).
+
+default_get_category_by_ref(CategoryRef, Config) ->
+    Path = "/v1/processing/categories/" ++ genlib:to_list(CategoryRef),
+    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
     decode_body(Body).
 
 get_body(ClientRef) ->
