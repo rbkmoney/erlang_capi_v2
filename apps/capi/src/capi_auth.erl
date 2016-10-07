@@ -128,5 +128,7 @@ get_actions() ->
         'GetClaimByStatus' => [<<"claims:get">>, <<"party:create">>],
         'RevokeClaimByID' => [<<"claims:revoke">>, <<"party:create">>],
         'GetCategories' => [<<"categories:get">>],
-        'GetCategoryByRef' => [<<"categories:get">>]
+        'GetCategoryByRef' => [<<"categories:get">>],
+        'GetShopAccounts' => [<<"accounts:get">>],
+        'GetAccountByID' => [<<"accounts:get">>]
     }.

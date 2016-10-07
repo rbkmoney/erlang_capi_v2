@@ -1,6 +1,7 @@
 -module(capi_tests_real_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
+-include_lib("cp_proto/include/cp_payment_processing_thrift.hrl").
 
 -export([all/0]).
 -export([groups/0]).
@@ -36,7 +37,11 @@
     create_shop_ok_test/1,
     update_shop_ok_test/1,
     suspend_shop_ok_test/1,
-    activate_shop_ok_test/1
+    activate_shop_ok_test/1,
+    %%%%
+    get_shop_accounts_ok_test/1,
+    get_shop_account_by_id_ok_test/1
+
 ]).
 
 -define(CAPI_HOST, "0.0.0.0").
@@ -47,6 +52,7 @@
 -define(CAPI_MERCHANT_STAT_URL, "http://magista:8081/stat").
 -define(CAPI_PARTY_MANAGEMENT_URL, "http://hellgate:8022/v1/processing/partymgmt").
 
+-define(MERCHANT_ID, <<"hg_tests_SUITE">>).
 
 -type config() :: [{atom(), any()}].
 
@@ -61,7 +67,8 @@ all() ->
         {group, statistics},
         {group, party_management},
         {group, claims_management},
-        {group, shops_management}
+        {group, shops_management},
+        {group, accounts_management}
     ].
 
 -spec groups() -> [
@@ -107,6 +114,13 @@ groups() ->
             update_shop_ok_test,
             suspend_shop_ok_test,
             activate_shop_ok_test
+        ]},
+        {accounts_management, [sequence], [
+            get_categories_ok_test,
+            get_category_by_ref_ok_test,
+            create_shop_ok_test,
+            get_shop_accounts_ok_test,
+            get_shop_account_by_id_ok_test
         ]}
     ].
 %%
@@ -286,7 +300,7 @@ get_my_party_ok_test(Config) ->
     #{
         <<"isBlocked">> := false,
         <<"isSuspended">> := false,
-        <<"partyID">> := <<"hg_tests_SUITE">>,
+        <<"partyID">> := ?MERCHANT_ID,
         <<"shops">> := []
     } = default_get_party(Config).
 
@@ -346,7 +360,9 @@ create_shop_ok_test(Config) ->
     #{
         <<"claimID">> := ClaimID
     } = default_create_shop(Config),
-    {save_config, [{shop_claim_id, ClaimID} | Config]}.
+
+    {ok, _} = default_approve_claim(ClaimID),
+    {save_config, ClaimID}.
 
 -spec update_shop_ok_test(config()) -> _.
 
@@ -362,6 +378,30 @@ suspend_shop_ok_test(Config) ->
 
 activate_shop_ok_test(Config) ->
     Config.
+
+-spec get_shop_accounts_ok_test(config()) -> _.
+
+get_shop_accounts_ok_test(Config) ->
+    {create_shop_ok_test,
+        ShopID
+    } = ?config(saved_config, Config),
+    [ShopAccountSet | _] = default_get_shop_accounts(ShopID, Config),
+    #{
+        <<"generalID">> := _,
+        <<"guaranteeID">> := _
+    } = ShopAccountSet,
+    {save_config, {ShopID, ShopAccountSet}}.
+
+-spec get_shop_account_by_id_ok_test(config()) -> _.
+
+get_shop_account_by_id_ok_test(Config) ->
+    {get_shop_accounts_ok_test,
+        ShopID, ShopAccountSet
+    } = ?config(saved_config, Config),
+    #{
+        <<"guaranteeID">> := GuaranteeID
+    }  = ShopAccountSet,
+    default_get_shop_account_by_id(GuaranteeID, ShopID, Config).
 
 %% helpers
 
@@ -417,7 +457,8 @@ default_auth_token(Config) ->
                     <<"party:activate">>,
                     <<"claims:get">>,
                     <<"claims:revoke">>,
-                    <<"categories:get">>
+                    <<"categories:get">>,
+                    <<"accounts:get">>
                 ]
         }
     },
@@ -425,7 +466,7 @@ default_auth_token(Config) ->
 
 auth_token(ResourseAccess, Exp, Config) ->
     Message = #{
-        <<"sub">> => <<"hg_tests_SUITE">>,
+        <<"sub">> => ?MERCHANT_ID,
         <<"resource_access">> => ResourseAccess,
         <<"exp">> => Exp
     },
@@ -516,6 +557,32 @@ default_get_categories(Config) ->
 
 default_get_category_by_ref(CategoryRef, Config) ->
     Path = "/v1/processing/categories/" ++ genlib:to_list(CategoryRef),
+    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    decode_body(Body).
+
+%% @FIXME thats dirty
+default_approve_claim(ClaimID) ->
+    UserInfo = #payproc_UserInfo{
+        id = ?MERCHANT_ID
+    },
+    RequestContext  = woody_client:new_context(genlib:unique(), capi_woody_event_handler),
+    cp_proto:call_service_safe(
+        party_management,
+        'Create',
+        [UserInfo, ClaimID],
+        RequestContext
+    ).
+
+default_get_shop_accounts(ShopID, Config) ->
+    Path = "/v1/processing/shops/" ++ genlib:to_list(ShopID) ++  "/accounts",
+    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    decode_body(Body).
+
+default_get_shop_account_by_id(AccountID, ShopID, Config) ->
+    Path = "/v1/processing/shops/"
+        ++ genlib:to_list(ShopID)
+        ++ "/accounts"
+        ++ genlib:to_list(AccountID),
     {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
     decode_body(Body).
 

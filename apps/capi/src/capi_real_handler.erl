@@ -681,6 +681,56 @@ process_request(_OperationID = 'GetCategoryByRef', Req, Context) ->
             {404, [], #{}}
     end;
 
+process_request(OperationID = 'GetShopAccounts', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+    UserInfo = get_user_info(Context),
+    PartyID = get_merchant_id(Context),
+    ShopID = maps:get('shopID', Req),
+    {Result, _} = prepare_party(
+        Context,
+        create_context(RequestID),
+        fun(RequestContext) ->
+            service_call(
+                party_management,
+                'GetShopAccountSet',
+                [UserInfo, PartyID, ShopID],
+                RequestContext
+            )
+        end
+    ),
+    case Result of
+        {ok, Accounts} ->
+            Resp = [decode_account_set(A) || A <- Accounts],
+            {200, [], Resp};
+        Error ->
+            process_request_error(OperationID, Error)
+    end;
+
+process_request(OperationID = 'GetAccountByID', Req, Context) ->
+    RequestID = maps:get('X-Request-ID', Req),
+    UserInfo = get_user_info(Context),
+    PartyID = get_merchant_id(Context),
+    AccountID = maps:get('accountID', Req),
+    {Result, _} = prepare_party(
+        Context,
+        create_context(RequestID),
+        fun(RequestContext) ->
+            service_call(
+                party_management,
+                'GetShopAccountState',
+                [UserInfo, PartyID, AccountID],
+                RequestContext
+            )
+        end
+    ),
+    case Result of
+        {ok, #payproc_ShopAccountState{} = S} ->
+            Resp = decode_shop_account_state(S),
+            {202, [], Resp};
+        Error ->
+            process_request_error(OperationID, Error)
+    end;
+
 process_request(_OperationID, _Req, _Context) ->
     {501, [], <<"Not implemented">>}.
 
@@ -1155,6 +1205,31 @@ decode_category_ref(#domain_CategoryObject{
     }
 }) ->
     CategoryRef.
+
+decode_account_set(#domain_ShopAccountSet{
+    general = GeneralID,
+    guarantee = GuaranteeID
+}) ->
+    #{
+        <<"generalID">> => GeneralID,
+        <<"guaranteeID">> => GuaranteeID
+    }.
+
+decode_shop_account_state(#payproc_ShopAccountState{
+    account_id = AccountID,
+    own_amount = OwnAmount,
+    available_amount = AvailableAmount,
+    currency = #domain_Currency{
+        symbolic_code = SymbolicCode
+    }
+}) ->
+    #{
+        <<"id">> => AccountID,
+        <<"ownAmount">> => OwnAmount,
+        <<"availableAmount">> => AvailableAmount,
+        <<"currency">> => SymbolicCode
+    }.
+
 
 encode_stat_request(Dsl) when is_map(Dsl) ->
     encode_stat_request(jsx:encode(Dsl));
