@@ -517,7 +517,10 @@ default_tokenize_card(Config) ->
 default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
     Req =  #{
         <<"paymentSession">> => PaymentSession,
-        <<"paymentToolToken">> => PaymentToolToken
+        <<"paymentToolToken">> => PaymentToolToken,
+        <<"contactInfo">> => #{
+            <<"email">> => <<"bla@bla.ru">>
+        }
     },
     Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments",
     {ok, 201, _RespHeaders, Body} = default_call(post, Path, Req, Config),

@@ -44,7 +44,10 @@ process_request(OperationID = 'CreateInvoice', Req, Context) ->
         amount   = genlib_map:get(<<"amount">>, InvoiceParams),
         due      = genlib_map:get(<<"dueDate">>, InvoiceParams),
         currency = #'domain_CurrencyRef'{symbolic_code = genlib_map:get(<<"currency">>, InvoiceParams)},
-        context  = InvoiceContext,
+        context  = #'Content'{
+            type = <<"text/plain">>,
+            data = InvoiceContext
+        },
         shop_id = genlib_map:get(<<"shopID">>, InvoiceParams)
     },
     UserInfo = get_user_info(Context),
@@ -163,7 +166,7 @@ process_request(OperationID = 'GetInvoiceByID', Req, Context) ->
             'due' = DueDate,
             'product'= Product,
             'description' = Description,
-            'cost' = #domain_Funds{
+            'cost' = #domain_Cash{
                 amount = Amount,
                 currency = #domain_Currency{
                     symbolic_code = Currency
@@ -389,10 +392,8 @@ process_request(OperationID = 'CreateShop', Req, Context) ->
     UserInfo = get_user_info(Context),
     PartyID = get_merchant_id(Context),
     Params = maps:get('CreateShopArgs', Req),
-    _ = genlib_map:get(<<"categoryRef">>, Params),
-    [C | _] = capi_domain:get_categories(), %% @FIXME do it honestly not like an asshole
     ShopParams = #payproc_ShopParams{
-        category = C,
+        category = encode_category_ref(genlib_map:get(<<"categoryRef">>, Params)),
         details = encode_shop_details(genlib_map:get(<<"shopDetails">>, Params)),
         contractor = encode_contractor(genlib_map:get(<<"contractor">>, Params))
     },
@@ -796,7 +797,7 @@ encode_bank_card(#domain_BankCard{
     })).
 
 encode_shop_details(undefined) ->
-    encode_shop_details;
+    undefined;
 
 encode_shop_details(Details = #{
     <<"name">> := Name
@@ -805,6 +806,14 @@ encode_shop_details(Details = #{
         name = Name,
         description = genlib_map:get(<<"details">>, Details),
         location = genlib_map:get(<<"location">>, Details)
+    }.
+
+encode_category_ref(undefined) ->
+    undefined;
+
+encode_category_ref(Ref) ->
+    #domain_CategoryRef{
+        id = Ref
     }.
 
 encode_contractor(undefined) ->
@@ -930,7 +939,7 @@ decode_invoice(#domain_Invoice{
     'due'  = DueDate,
     'product' = Product,
     'description' = Description,
-    'cost' = #domain_Funds{
+    'cost' = #domain_Cash{
         amount = Amount,
         currency = #domain_Currency{
             symbolic_code = Currency
