@@ -3,7 +3,7 @@
   "preStart": "/opt/capi/bin/fetch-api-pubkey",
   "services": [
     {
-      "name": "{{if .SERVICE_NAME}}{{ .SERVICE_NAME }}{{else}}capi{{end}}",
+      "name": "{{ .SERVICE_NAME }}",
       "port": 8080,
       "health": "/usr/bin/curl --silent --show-error --output /dev/null localhost:8080",
       "poll": 1,
