@@ -3,8 +3,9 @@ cat <<EOF
 FROM $BASE_IMAGE
 MAINTAINER Artem Ocheredko <a.ocheredko@rbkmoney.com>
 COPY ./_build/prod/rel/capi /opt/capi
+COPY containerpilot.json /etc/containerpilot.json
 WORKDIR /opt/capi
-CMD bin/fetch-api-pubkey && bin/capi foreground
+CMD /bin/containerpilot -config file:///etc/containerpilot.json /opt/capi/bin/capi foreground
 EXPOSE 8080
 # A bit of magic below to get a proper branch name
 # even when the HEAD is detached (Hey Jenkins!
