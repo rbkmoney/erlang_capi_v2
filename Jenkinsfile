@@ -22,17 +22,15 @@ build('capi', 'docker-host', finalHook) {
         sh 'make wc_compile'
       }
     }
-    // TODO fix issues
-    // runStage('lint') {
-    //   sh 'make wc_lint'
-    // }
+    runStage('lint') {
+      sh 'make wc_lint'
+    }
     runStage('xref') {
       sh 'make wc_xref'
     }
-    // TODO fix issues
-    // runStage('dialyze') {
-    //   sh 'make wc_dialyze'
-    // }
+    runStage('dialyze') {
+      sh 'make wc_dialyze'
+    }
     runStage('test') {
       sh "make wdeps_test"
     }
@@ -44,6 +42,7 @@ build('capi', 'docker-host', finalHook) {
     runStage('build image') {
       sh "make build_image"
     }
+
     try {
       if (env.BRANCH_NAME == 'master') {
         runStage('push image') {
