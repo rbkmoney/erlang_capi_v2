@@ -19,15 +19,14 @@ services:
       - SERVICE_NAME=capi
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:5e900f7e9234cdddcd389a0233027d3bc7e37372
+    image: dr.rbkmoney.com/rbkmoney/hellgate:d4c8e330cc7b744eb7d51d1298898f1306ae25b3
+    command: /opt/hellgate/bin/hellgate foreground
     depends_on:
       - machinegun
       - shumway
-    environment:
-      - SERVICE_NAME=hellgate
 
   cds:
-    image: dr.rbkmoney.com/rbkmoney/cds:dbbf05f7bcdb39a85ca12d290aeecea1bada89d1
+    image: dr.rbkmoney.com/rbkmoney/cds:42c814a7d6b1caddfd3ad96e5e28b659d15af89a
     environment:
       - SERVICE_NAME=cds
 
@@ -39,7 +38,7 @@ services:
       - SERVICE_NAME=machinegun
 
   magista:
-    image: dr.rbkmoney.com/rbkmoney/magista:75c188d1b5da9d232625e53203790ecc580b3c55
+    image: dr.rbkmoney.com/rbkmoney/magista:b18a1b11388238775d9bc330b9b89bc425ca735d
     command: |
       --db.jdbc.url=jdbc:postgresql://magista_psql:5432/magista
       --db.username=magista
@@ -61,7 +60,7 @@ services:
       - SERVICE_NAME=magista_psql
 
   bustermaze:
-    image: dr.rbkmoney.com/rbkmoney/bustermaze:c205978e6ce9533eda06191da34883c71159ecc1
+    image: dr.rbkmoney.com/rbkmoney/bustermaze:dd60a565671e34ff743218e6cb52f07e5ce632ea
     command: |
         --db.jdbc.url=jdbc:postgresql://bustermaze_psql:5432/bustermaze
         --db.username=bustermaze
@@ -83,7 +82,7 @@ services:
       - SERVICE_NAME=bustermaze_psql
 
   shumway:
-    image: dr.rbkmoney.com/rbkmoney/shumway:b9487a2313ede02780a90895eb74d43e57b931f6
+    image: dr.rbkmoney.com/rbkmoney/shumway:cd00af9d70b28a7851295fca39bdeded5a3606b0
     entrypoint: |
       java
       -Xmx512m

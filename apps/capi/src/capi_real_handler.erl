@@ -39,14 +39,16 @@ process_request(OperationID = 'CreateInvoice', Req, Context) ->
     InvoiceParams = maps:get('CreateInvoiceArgs', Req),
     RequestID = maps:get('X-Request-ID', Req),
     InvoiceContext = jsx:encode(genlib_map:get(<<"context">>, InvoiceParams)),
+    MerchantID = get_merchant_id(Context),
     Params =  #'payproc_InvoiceParams'{
+        party_id = MerchantID,
         description = genlib_map:get(<<"description">>, InvoiceParams),
         product  = genlib_map:get(<<"product">>, InvoiceParams),
         amount   = genlib_map:get(<<"amount">>, InvoiceParams),
         due      = genlib_map:get(<<"dueDate">>, InvoiceParams),
         currency = #'domain_CurrencyRef'{symbolic_code = genlib_map:get(<<"currency">>, InvoiceParams)},
         context  = #'Content'{
-            type = <<"text/plain">>,
+            type = <<"application/json">>,
             data = InvoiceContext
         },
         shop_id = genlib_map:get(<<"shopID">>, InvoiceParams)
@@ -112,7 +114,7 @@ process_request(OperationID = 'CreatePaymentToolToken', Req, _Context) ->
     ClientInfo = maps:get(<<"clientInfo">>, Params),
     PaymentTool = maps:get(<<"paymentTool">>, Params),
     case PaymentTool of
-        #{<<"paymentToolType">> := <<"cardData">>} ->
+        #{<<"paymentToolType">> := <<"CardData">>} ->
             {Month, Year} = parse_exp_date(genlib_map:get(<<"expDate">>, PaymentTool)),
             CardNumber = genlib:to_binary(genlib_map:get(<<"cardNumber">>, PaymentTool)),
             CardData = #'CardData'{
@@ -261,10 +263,11 @@ process_request(OperationID = 'GetPaymentByID', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
+    MerchantID = get_merchant_id(Context),
     {Result, _NewContext} = service_call(
         invoicing,
         'GetPayment',
-        [UserInfo, PaymentID],
+        [UserInfo, MerchantID, PaymentID],
         create_context(RequestID)
     ),
     case Result of
@@ -481,9 +484,11 @@ process_request(OperationID = 'UpdateShop', Req, Context) ->
     ShopID = maps:get(shopID, Req),
     Params = maps:get('UpdateShopArgs', Req),
     [C | _] = capi_domain:get_categories(), %% @FIXME do it honestly not like an asshole
-
+    #domain_CategoryObject{
+        ref = CategoryRef
+    } = C,
     ShopUpdate = #payproc_ShopUpdate{
-        category = C,
+        category = CategoryRef,
         details = encode_shop_details(genlib_map:get(<<"shopDetails">>, Params)),
         contractor = encode_contractor(genlib_map:get(<<"contractor">>, Params))
     },
@@ -726,7 +731,7 @@ process_request(OperationID = 'GetAccountByID', Req, Context) ->
     case Result of
         {ok, #payproc_ShopAccountState{} = S} ->
             Resp = decode_shop_account_state(S),
-            {202, [], Resp};
+            {200, [], Resp};
         Error ->
             process_request_error(OperationID, Error)
     end;
@@ -871,7 +876,7 @@ decode_invoice_event(_, {
     invoice_created,
     #payproc_InvoiceCreated{invoice = Invoice}
 }) ->
-    {<<"invoiceCreated">>, #{
+    {<<"EventInvoiceCreated">>, #{
         <<"invoice">> => decode_invoice(Invoice)
     }};
 
@@ -879,7 +884,7 @@ decode_invoice_event(_, {
     invoice_status_changed,
     #payproc_InvoiceStatusChanged{status = {Status, _}}
 }) ->
-    {<<"invoiceStatusChanged">>, #{
+    {<<"EventInvoiceStatusChanged">>, #{
         <<"status">> => genlib:to_binary(Status)
     }};
 
@@ -890,7 +895,7 @@ decode_payment_event(InvoiceID, {
     invoice_payment_started,
     #'payproc_InvoicePaymentStarted'{payment = Payment}
 }) ->
-    {<<"paymentStarted">>, #{
+    {<<"EventPaymentStarted">>, #{
         <<"payment">> => decode_payment(InvoiceID, Payment)
     }};
 
@@ -898,7 +903,7 @@ decode_payment_event(_, {
     invoice_payment_bound,
     #'payproc_InvoicePaymentBound'{payment_id = PaymentID}
 }) ->
-    {<<"paymentBound">>, #{
+    {<<"EventPaymentBound">>, #{
         <<"paymentID">> => PaymentID
     }};
 
@@ -909,7 +914,7 @@ decode_payment_event(_, {
         interaction = Interaction
     }
 }) ->
-    {<<"invoicePaymentInteractionRequested">>, #{
+    {<<"EventInvoicePaymentInteractionRequested">>, #{
         <<"paymentID">> => PaymentID,
         <<"userInteraction">> => decode_user_interaction(Interaction)
     }};
@@ -1240,7 +1245,7 @@ decode_shop_account_state(#payproc_ShopAccountState{
     }
 }) ->
     #{
-        <<"id">> => AccountID,
+        <<"id">> => genlib:to_binary(AccountID),
         <<"ownAmount">> => OwnAmount,
         <<"availableAmount">> => AvailableAmount,
         <<"currency">> => SymbolicCode
@@ -1367,7 +1372,7 @@ process_request_error(_, {exception, #payproc_InvoicePaymentPending{}}) ->
     {400, [], logic_error(invalid_payment_status, <<"Invalid payment status">>)};
 
 process_request_error(_, {exception, #payproc_InvalidShopStatus{}}) ->
-    {400, [], logic_error(invalid_payment_status, <<"Invalid shop status">>)};
+    {400, [], logic_error(invalid_shop_status, <<"Invalid shop status">>)};
 
 process_request_error(_,  {exception, #'InvalidCardData'{}}) ->
     {400, [], logic_error(invalid_request, <<"Card data is invalid">>)};

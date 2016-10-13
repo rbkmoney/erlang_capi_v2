@@ -367,8 +367,7 @@ create_shop_ok_test(Config) ->
         changeset = [
             {shop_creation, #domain_Shop{
                 id = ShopID
-            }},
-            _
+            }} | _
         ]
     }}, _Context} = default_get_claim_by_id(ClaimID, Config),
 
@@ -396,7 +395,7 @@ update_shop_ok_test(Config) ->
     {ok, #{
         <<"shopDetails">> := NewShopDetails
     }} = default_get_shop_by_id(ShopID, Config),
-    Config.
+    {save_config, ShopID}.
 
 -spec suspend_shop_ok_test(config()) -> _.
 
@@ -554,7 +553,7 @@ default_create_invoice(Config) ->
 default_tokenize_card(Config) ->
     Req = #{
         <<"paymentTool">> => #{
-            <<"paymentToolType">> => <<"cardData">>,
+            <<"paymentToolType">> => <<"CardData">>,
             <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
             <<"cardNumber">> => 4111111111111111,
             <<"expDate">> => <<"08/27">>,
