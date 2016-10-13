@@ -4,6 +4,7 @@
 -include_lib("cp_proto/include/cp_domain_thrift.hrl").
 -include_lib("cp_proto/include/cp_cds_thrift.hrl").
 -include_lib("cp_proto/include/cp_merch_stat_thrift.hrl").
+-include_lib("cp_proto/include/cp_user_interaction_thrift.hrl").
 
 -behaviour(swagger_logic_handler).
 
@@ -860,12 +861,11 @@ decode_event(#'payproc_Event'{
     'source' =  {'invoice', InvoiceID} %%@TODO deal with Party source
 }) ->
     {EventType, EventBody} = decode_invoice_event(InvoiceID, InvoiceEvent),
-    #{
+    maps:merge(#{
         <<"id">> => EventID,
         <<"createdAt">> => CreatedAt,
-        <<"eventType">> => EventType,
-        <<"eventBody">> => EventBody
-    }.
+        <<"eventType">> => EventType
+    }, EventBody).
 
 decode_invoice_event(_, {
     invoice_created,
@@ -900,6 +900,18 @@ decode_payment_event(_, {
 }) ->
     {<<"paymentBound">>, #{
         <<"paymentID">> => PaymentID
+    }};
+
+decode_payment_event(_, {
+    invoice_payment_interaction_requested,
+    #'payproc_InvoicePaymentInteractionRequested'{
+        payment_id = PaymentID,
+        interaction = Interaction
+    }
+}) ->
+    {<<"invoicePaymentInteractionRequested">>, #{
+        <<"paymentID">> => PaymentID,
+        <<"userInteraction">> => decode_user_interaction(Interaction)
     }};
 
 decode_payment_event(_, {
@@ -1234,6 +1246,42 @@ decode_shop_account_state(#payproc_ShopAccountState{
         <<"currency">> => SymbolicCode
     }.
 
+decode_user_interaction({redirect, BrowserRequest}) ->
+    #{
+        <<"interactionType">> => <<"redirect">>,
+        <<"request">> => decode_browser_request(BrowserRequest)
+    }.
+
+decode_browser_request({get_request, #'BrowserGetRequest'{
+    uri = UriTemplate
+}}) ->
+    #{
+        <<"requestType">> => <<"browserGetRequest">>,
+        <<"uriTemplate">> => UriTemplate
+    };
+
+decode_browser_request({post_request, #'BrowserPostRequest'{
+    uri = UriTemplate,
+    form = UserInteractionForm
+}}) ->
+    #{
+        <<"requestType">> => <<"browserPostRequest">>,
+        <<"uriTemplate">> => UriTemplate,
+        <<"form">> => decode_user_interaction_form(UserInteractionForm)
+    }.
+
+decode_user_interaction_form(Form) ->
+    maps:fold(
+        fun(K, V, Acc) ->
+            F = #{
+                <<"key">> => K,
+                <<"template">> => V
+            },
+            [F | Acc]
+        end,
+        [],
+        Form
+    ).
 
 encode_stat_request(Dsl) when is_map(Dsl) ->
     encode_stat_request(jsx:encode(Dsl));

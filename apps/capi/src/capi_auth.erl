@@ -104,8 +104,6 @@ get_actions() ->
         'CreateInvoice' => [<<"invoices:create">>],
         'CreatePayment' => [<<"payments:create">>],
         'CreatePaymentToolToken' => [<<"payment_tool_tokens:create">>],
-        'CreateProfile' => [<<"profiles:create">>],
-        'DeleteProfile' => [<<"profiles:delete">>],
         'GetInvoiceByID' => [<<"invoices:get">>],
         'FulfillInvoice' => [<<"invoices:fulfill">>],
         'RescindInvoice' => [<<"invoices:rescind">>],
