@@ -1,8 +1,8 @@
 #!/bin/bash
 cat <<EOF
 version: '2'
-
 services:
+
   ${SERVICE_NAME}:
     image: ${BUILD_IMAGE}
     volumes:
@@ -15,20 +15,29 @@ services:
       - cds
       - magista
       - starter
+    environment:
+      - SERVICE_NAME=capi
 
   hellgate:
     image: dr.rbkmoney.com/rbkmoney/hellgate:5e900f7e9234cdddcd389a0233027d3bc7e37372
     depends_on:
       - machinegun
       - shumway
+    environment:
+      - SERVICE_NAME=hellgate
 
   cds:
     image: dr.rbkmoney.com/rbkmoney/cds:dbbf05f7bcdb39a85ca12d290aeecea1bada89d1
+    environment:
+      - SERVICE_NAME=cds
 
   machinegun:
     image: dr.rbkmoney.com/rbkmoney/machinegun:4c29acdcdce065dbba1f3c8ee1683caea837869c
     volumes:
       - ./test/machinegun/sys.config:/opt/machinegun/releases/0.1.0/sys.config
+    environment:
+      - SERVICE_NAME=machinegun
+
   magista:
     image: dr.rbkmoney.com/rbkmoney/magista:75c188d1b5da9d232625e53203790ecc580b3c55
     command: |
@@ -39,6 +48,8 @@ services:
     depends_on:
       - magista_psql
       - bustermaze
+    environment:
+      - SERVICE_NAME=magista
 
   magista_psql:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
@@ -47,6 +58,7 @@ services:
       - POSTGRES_USER=magista
       - POSTGRES_PASSWORD=magista
       - POSTGRES_ROOT_PASSWORD=magista
+      - SERVICE_NAME=magista_psql
 
   bustermaze:
     image: dr.rbkmoney.com/rbkmoney/bustermaze:c205978e6ce9533eda06191da34883c71159ecc1
@@ -58,6 +70,8 @@ services:
     depends_on:
       - hellgate
       - bustermaze_psql
+    environment:
+      - SERVICE_NAME=bustermaze
 
   bustermaze_psql:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
@@ -66,6 +80,7 @@ services:
       - POSTGRES_USER=bustermaze
       - POSTGRES_PASSWORD=bustermaze
       - POSTGRES_ROOT_PASSWORD=bustermaze
+      - SERVICE_NAME=bustermaze_psql
 
   shumway:
     image: dr.rbkmoney.com/rbkmoney/shumway:b9487a2313ede02780a90895eb74d43e57b931f6
@@ -80,6 +95,8 @@ services:
       --spring.datasource.password=shumway
     depends_on:
       - shumway_psql
+    environment:
+      - SERVICE_NAME=shumway
 
   shumway_psql:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
@@ -87,6 +104,7 @@ services:
       - POSTGRES_DATABASE=shumway
       - POSTGRES_USER=shumway
       - POSTGRES_PASSWORD=shumway
+      - SERVICE_NAME=shumway_psql
 
   starter:
     image: ${BUILD_IMAGE}

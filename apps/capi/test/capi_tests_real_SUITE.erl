@@ -301,7 +301,7 @@ get_my_party_ok_test(Config) ->
         <<"isBlocked">> := false,
         <<"isSuspended">> := false,
         <<"partyID">> := ?MERCHANT_ID,
-        <<"shops">> := []
+        <<"shops">> := _
     } = default_get_party(Config).
 
 -spec suspend_my_party_ok_test(config()) -> _.
@@ -360,9 +360,19 @@ create_shop_ok_test(Config) ->
     #{
         <<"claimID">> := ClaimID
     } = default_create_shop(Config),
-
     {ok, _} = default_approve_claim(ClaimID),
-    {save_config, ClaimID}.
+    {{ok, #payproc_Claim{
+        id = ClaimID,
+        status = {accepted, _},
+        changeset = [
+            {shop_creation, #domain_Shop{
+                id = ShopID
+            }},
+            _
+        ]
+    }}, _Context} = default_get_claim_by_id(ClaimID, Config),
+
+    {save_config, ShopID}.
 
 -spec update_shop_ok_test(config()) -> _.
 
@@ -396,12 +406,17 @@ get_shop_accounts_ok_test(Config) ->
 
 get_shop_account_by_id_ok_test(Config) ->
     {get_shop_accounts_ok_test,
-        ShopID, ShopAccountSet
+        {ShopID, ShopAccountSet}
     } = ?config(saved_config, Config),
     #{
         <<"guaranteeID">> := GuaranteeID
     }  = ShopAccountSet,
-    default_get_shop_account_by_id(GuaranteeID, ShopID, Config).
+    #{
+        <<"id">> := _,
+        <<"ownAmount">> := _,
+        <<"availableAmount">> := _,
+        <<"currency">> := _
+    } = default_get_shop_account_by_id(GuaranteeID, ShopID, Config).
 
 %% helpers
 
@@ -531,6 +546,18 @@ default_get_party(Config) ->
     {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
     decode_body(Body).
 
+default_get_claim_by_id(ClaimID, _Config) ->
+    UserInfo = #payproc_UserInfo{
+        id = ?MERCHANT_ID
+    },
+    RequestContext  = woody_client:new_context(genlib:unique(), capi_woody_event_handler),
+    cp_proto:call_service_safe(
+        party_management,
+        'GetClaim',
+        [UserInfo, ?MERCHANT_ID, ClaimID],
+        RequestContext
+    ).
+
 default_suspend_my_party(Config) ->
     Path = "/v1/processing/me/suspend",
     {ok, 202, _RespHeaders, Body} = default_call(put, Path, #{}, Config),
@@ -571,8 +598,8 @@ default_approve_claim(ClaimID) ->
     RequestContext  = woody_client:new_context(genlib:unique(), capi_woody_event_handler),
     cp_proto:call_service_safe(
         party_management,
-        'Create',
-        [UserInfo, ClaimID],
+        'AcceptClaim',
+        [UserInfo, ?MERCHANT_ID, ClaimID],
         RequestContext
     ).
 
@@ -584,7 +611,7 @@ default_get_shop_accounts(ShopID, Config) ->
 default_get_shop_account_by_id(AccountID, ShopID, Config) ->
     Path = "/v1/processing/shops/"
         ++ genlib:to_list(ShopID)
-        ++ "/accounts"
+        ++ "/accounts/"
         ++ genlib:to_list(AccountID),
     {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
     decode_body(Body).

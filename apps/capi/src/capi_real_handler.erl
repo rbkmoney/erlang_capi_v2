@@ -700,8 +700,8 @@ process_request(OperationID = 'GetShopAccounts', Req, Context) ->
         end
     ),
     case Result of
-        {ok, Accounts} ->
-            Resp = [decode_account_set(A) || A <- Accounts],
+        {ok, A = #domain_ShopAccountSet{}} ->
+            Resp = [decode_account_set(A)],
             {200, [], Resp};
         Error ->
             process_request_error(OperationID, Error)
@@ -719,7 +719,7 @@ process_request(OperationID = 'GetAccountByID', Req, Context) ->
             service_call(
                 party_management,
                 'GetShopAccountState',
-                [UserInfo, PartyID, AccountID],
+                [UserInfo, PartyID, genlib:to_int(AccountID)],
                 RequestContext
             )
         end
@@ -986,10 +986,8 @@ decode_shop(#domain_Shop{
     id = ShopID,
     blocking = Blocking,
     suspension = Suspension,
-    category  = #domain_CategoryObject{
-        ref = #domain_CategoryRef{
-            id = CategoryRef
-        }
+    category  = #domain_CategoryRef{
+        id = CategoryRef
     },
     details  = ShopDetails,
     contractor = Contractor,
@@ -1220,8 +1218,9 @@ decode_account_set(#domain_ShopAccountSet{
     guarantee = GuaranteeID
 }) ->
     #{
-        <<"generalID">> => GeneralID,
-        <<"guaranteeID">> => GuaranteeID
+        %% @FIXME Why this ints are promised as strings in swagger?
+        <<"generalID">> => genlib:to_binary(GeneralID),
+        <<"guaranteeID">> => genlib:to_binary(GuaranteeID)
     }.
 
 decode_shop_account_state(#payproc_ShopAccountState{
@@ -1331,6 +1330,9 @@ process_request_error(_, {exception, #'KeyringLocked'{}}) ->
 
 process_request_error(_, {exception, #payproc_EventNotFound{}}) ->
     {404, [], general_error(<<"Event not found">>)};
+
+process_request_error(_, {exception, #payproc_ShopNotFound{}}) ->
+    {404, [], general_error(<<"Shop not found">>)};
 
 process_request_error(_, {exception, #payproc_InvoicePaymentNotFound{}} ) ->
     {404, [], general_error(<<"Payment not found">>)};
