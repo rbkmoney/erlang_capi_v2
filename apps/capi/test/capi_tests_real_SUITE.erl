@@ -111,9 +111,9 @@ groups() ->
             get_categories_ok_test,
             get_category_by_ref_ok_test,
             create_shop_ok_test,
+            activate_shop_ok_test,
             update_shop_ok_test,
-            suspend_shop_ok_test,
-            activate_shop_ok_test
+            suspend_shop_ok_test
         ]},
         {accounts_management, [sequence], [
             get_categories_ok_test,
@@ -377,17 +377,55 @@ create_shop_ok_test(Config) ->
 -spec update_shop_ok_test(config()) -> _.
 
 update_shop_ok_test(Config) ->
+    {activate_shop_ok_test,
+        ShopID
+    } = ?config(saved_config, Config),
+    {ok, #{
+        <<"shopDetails">> := ShopDetails
+    }} = default_get_shop_by_id(ShopID, Config),
+    NewShopDetails = ShopDetails#{
+        <<"location">> => genlib:unique()
+    },
+    Req = #{
+        <<"shopDetails">> => NewShopDetails
+    },
+    #{
+        <<"claimID">> := ClaimID
+    } = update_shop(Req, ShopID, Config),
+    default_approve_claim(ClaimID),
+    {ok, #{
+        <<"shopDetails">> := NewShopDetails
+    }} = default_get_shop_by_id(ShopID, Config),
     Config.
 
 -spec suspend_shop_ok_test(config()) -> _.
 
 suspend_shop_ok_test(Config) ->
-    Config.
+    {update_shop_ok_test,
+        ShopID
+    } = ?config(saved_config, Config),
+    #{
+        <<"claimID">> := _
+    } = default_suspend_shop(ShopID, Config),
+    {ok, #{
+        <<"isSuspended">> := true
+    }} = default_get_shop_by_id(ShopID, Config),
+    {save_config, ShopID}.
+
 
 -spec activate_shop_ok_test(config()) -> _.
 
 activate_shop_ok_test(Config) ->
-    Config.
+    {create_shop_ok_test,
+        ShopID
+    } = ?config(saved_config, Config),
+    #{
+        <<"claimID">> := _
+    } = default_activate_shop(ShopID, Config),
+    {ok, #{
+        <<"isSuspended">> := false
+    }} = default_get_shop_by_id(ShopID, Config),
+    {save_config, ShopID}.
 
 -spec get_shop_accounts_ok_test(config()) -> _.
 
@@ -568,6 +606,36 @@ default_activate_my_party(Config) ->
     {ok, 202, _RespHeaders, Body} = default_call(put, Path, #{}, Config),
     decode_body(Body).
 
+default_suspend_shop(ShopID, Config) ->
+    Path = "/v1/processing/shops/" ++ genlib:to_list(ShopID) ++ "/suspend",
+    {ok, 202, _RespHeaders, Body} = default_call(put, Path, #{}, Config),
+    decode_body(Body).
+
+default_activate_shop(ShopID, Config) ->
+    Path = "/v1/processing/shops/" ++ genlib:to_list(ShopID) ++ "/activate",
+    {ok, 202, _RespHeaders, Body} = default_call(put, Path, #{}, Config),
+    decode_body(Body).
+
+default_get_shop_by_id(ShopID, Config) ->
+    #{
+        <<"shops">> := Shops
+    } = default_get_party(Config),
+    Result = lists:filter(
+        fun
+            (#{<<"shopID">> := ID}) ->
+                case ID of
+                    ShopID -> true;
+                    _ -> false
+                end;
+            (_) -> false
+        end,
+        Shops
+    ),
+    case Result of
+        [Shop] -> {ok, Shop};
+        _ -> {error, {wrong_result, Result}}
+    end.
+
 default_create_shop(Config) ->
     Path = "/v1/processing/shops",
     Req = #{
@@ -577,6 +645,11 @@ default_create_shop(Config) ->
             <<"description">> => <<"Goods for education">>
         }
     },
+    {ok, 202, _RespHeaders, Body} = default_call(post, Path, Req, Config),
+    decode_body(Body).
+
+update_shop(Req, ShopID, Config) ->
+    Path = "/v1/processing/shops/" ++ genlib:to_list(ShopID),
     {ok, 202, _RespHeaders, Body} = default_call(post, Path, Req, Config),
     decode_body(Body).
 

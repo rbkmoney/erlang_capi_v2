@@ -375,9 +375,7 @@ process_request(OperationID = 'GetPaymentInstrumentStats', Req, Context) ->
     case maps:get(paymentInstrument, Req) of
         <<"card">> ->
             StatType = payments_card_stat,
-            Dsl = create_stat_dsl(StatType, Req, Context),
-            {Result, _NewContext} = service_call(merchant_stat, 'GetStatistics', [encode_stat_request(Dsl)], create_context(RequestID)),
-
+            Result = call_merchant_stat(StatType, Req, Context, RequestID),
             case Result of
                 {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
                     Resp = [decode_stat_response(StatType, S) || S <- Stats],
@@ -1034,10 +1032,8 @@ decode_shop_contract(undefined) ->
 
 decode_shop_contract(#domain_ShopContract{
     number = Number,
-    system_contractor = #domain_ContractorObject{
-        ref = #domain_ContractorRef{
-            id = ContractorRef
-        }
+    system_contractor = #domain_ContractorRef{
+        id = ContractorRef
     },
     concluded_at = ConcludedAt,
     valid_since = ValidSince,
@@ -1321,6 +1317,9 @@ process_request_error(_,  {exception, #payproc_InvalidInvoiceStatus{}} ) ->
 
 process_request_error(_, {exception, #payproc_InvoicePaymentPending{}}) ->
     {400, [], logic_error(invalid_payment_status, <<"Invalid payment status">>)};
+
+process_request_error(_, {exception, #payproc_InvalidShopStatus{}}) ->
+    {400, [], logic_error(invalid_payment_status, <<"Invalid shop status">>)};
 
 process_request_error(_,  {exception, #'InvalidCardData'{}}) ->
     {400, [], logic_error(invalid_request, <<"Card data is invalid">>)};
