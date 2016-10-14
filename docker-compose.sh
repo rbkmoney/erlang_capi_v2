@@ -5,6 +5,7 @@ services:
 
   ${SERVICE_NAME}:
     image: ${BUILD_IMAGE}
+    restart: always
     volumes:
       - .:/$PWD
       - $HOME/.cache:/home/$UNAME/.cache
@@ -21,6 +22,7 @@ services:
 
   hellgate:
     image: dr.rbkmoney.com/rbkmoney/hellgate:d4c8e330cc7b744eb7d51d1298898f1306ae25b3
+    restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
       - machinegun
@@ -30,11 +32,14 @@ services:
 
   cds:
     image: dr.rbkmoney.com/rbkmoney/cds:42c814a7d6b1caddfd3ad96e5e28b659d15af89a
+    restart: always
+    command: /opt/cds/bin/cds foreground
     environment:
       - SERVICE_NAME=cds
 
   machinegun:
     image: dr.rbkmoney.com/rbkmoney/machinegun:4c29acdcdce065dbba1f3c8ee1683caea837869c
+    restart: always
     volumes:
       - ./test/machinegun/sys.config:/opt/machinegun/releases/0.1.0/sys.config
     environment:
@@ -42,79 +47,78 @@ services:
 
   magista:
     image: dr.rbkmoney.com/rbkmoney/magista:b18a1b11388238775d9bc330b9b89bc425ca735d
-    entrypoint: |
+    restart: always
+    command: |
       java
       -Xmx512m
-      -jar
-      /opt/magista/magista-0.0.1-SNAPSHOT.jar
-    command: |
-      --db.jdbc.url=jdbc:postgresql://magista_psql:5432/magista
-      --db.username=magista
-      --db.password=magista
-      --bm.pooling.url=http://bustermaze:8081/repo
+      -jar /opt/magista/magista-1.0.4.jar
+      --db.jdbc.url=jdbc:postgresql://magista-db:5432/magista
+      --db.username=postgres
+      --db.password=postgres
+      --bm.pooling.url=http://bustermaze:8022/repo
     depends_on:
-      - magista_psql
+      - magista-db
       - bustermaze
     environment:
       - SERVICE_NAME=magista
 
-  magista_psql:
+  magista-db:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
     environment:
-      - POSTGRES_DATABASE=magista
-      - POSTGRES_USER=magista
-      - POSTGRES_PASSWORD=magista
-      - POSTGRES_ROOT_PASSWORD=magista
-      - SERVICE_NAME=magista_psql
+      - POSTGRES_DB=magista
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - SERVICE_NAME=magista-db
 
   bustermaze:
     image: dr.rbkmoney.com/rbkmoney/bustermaze:dd60a565671e34ff743218e6cb52f07e5ce632ea
+    restart: always
     command: |
-        --db.jdbc.url=jdbc:postgresql://bustermaze_psql:5432/bustermaze
-        --db.username=bustermaze
-        --db.password=bustermaze
-        --hg.pooling.url=http://hellgate:8022/v1/processing/eventsink
+      -Xmx512m
+      -jar /opt/bustermaze/bustermaze.jar
+      --spring.datasource.url=jdbc:postgresql://bustermaze-db:5432/bustermaze
+      --spring.datasource.username=postgres
+      --spring.datasource.password=postgres
+      --hg.pooling.url=http://hellgate:8022/v1/processing/eventsink
     depends_on:
       - hellgate
-      - bustermaze_psql
+      - bustermaze-db
     environment:
       - SERVICE_NAME=bustermaze
 
-  bustermaze_psql:
+  bustermaze-db:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
     environment:
-      - POSTGRES_DATABASE=bustermaze
-      - POSTGRES_USER=bustermaze
-      - POSTGRES_PASSWORD=bustermaze
-      - POSTGRES_ROOT_PASSWORD=bustermaze
-      - SERVICE_NAME=bustermaze_psql
+      - POSTGRES_DB=bustermaze
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - SERVICE_NAME=bustermaze-db
 
   shumway:
     image: dr.rbkmoney.com/rbkmoney/shumway:cd00af9d70b28a7851295fca39bdeded5a3606b0
-    entrypoint: |
-      java
-      -Xmx512m
-      -jar
-      /opt/shumway/shumway-0.0.1-SNAPSHOT.jar
+    restart: always
     command: |
-      --spring.datasource.url=jdbc:postgresql://shumway_psql:5432/shumway
-      --spring.datasource.username=shumway
-      --spring.datasource.password=shumway
+      -Xmx512m
+      -jar /opt/shumway/shumway.jar
+      --spring.datasource.url=jdbc:postgresql://shumway-db:5432/shumway
+      --spring.datasource.username=postgres
+      --spring.datasource.password=postgres
     depends_on:
-      - shumway_psql
+      - shumway-db
     environment:
       - SERVICE_NAME=shumway
 
-  shumway_psql:
+  shumway-db:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
     environment:
-      - POSTGRES_DATABASE=shumway
-      - POSTGRES_USER=shumway
-      - POSTGRES_PASSWORD=shumway
-      - SERVICE_NAME=shumway_psql
+      - POSTGRES_DB=shumway
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - SERVICE_NAME=shumway-db
 
   dominant:
     image: dr.rbkmoney.com/rbkmoney/dominant:c24f4d85678b8e37ee13ac3bc2c1ce0aca9fe83f
+    restart: always
     command: /opt/dominant/bin/dominant foreground
     depends_on:
       - machinegun
