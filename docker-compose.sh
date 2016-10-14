@@ -21,7 +21,7 @@ services:
       - SERVICE_NAME=capi
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:b8b9ab84074a154bba32acd23b9c3e3d68b7a91e
+    image: dr.rbkmoney.com/rbkmoney/hellgate:84f3403275c8ea9db424ae6d2ea909d8dd630421
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
