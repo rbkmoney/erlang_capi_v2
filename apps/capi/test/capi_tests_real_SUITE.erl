@@ -51,7 +51,7 @@
 -define(CAPI_SERVICE_TYPE, real).
 -define(CAPI_CDS_STORAGE_URL, "http://cds:8022/v1/storage").
 -define(CAPI_INVOICING_URL, "http://hellgate:8022/v1/processing/invoicing").
--define(CAPI_MERCHANT_STAT_URL, "http://magista:8081/stat").
+-define(CAPI_MERCHANT_STAT_URL, "http://magista:8082/stat").
 -define(CAPI_PARTY_MANAGEMENT_URL, "http://hellgate:8022/v1/processing/partymgmt").
 -define(CAPI_REPOSITORY_URL, "http://dominant:8022/v1/domain/repository").
 
@@ -358,14 +358,18 @@ get_category_by_ref_ok_test(Config) ->
     {get_categories_ok_test,
         CategoryRef
     } = ?config(saved_config, Config),
-    _ = default_get_category_by_ref(CategoryRef, Config).
+    _ = default_get_category_by_ref(CategoryRef, Config),
+    {save_config, CategoryRef}.
 
 -spec create_shop_ok_test(config()) -> _.
 
 create_shop_ok_test(Config) ->
+    {get_category_by_ref_ok_test,
+        CategoryRef
+    } = ?config(saved_config, Config),
     #{
         <<"claimID">> := ClaimID
-    } = default_create_shop(Config),
+    } = default_create_shop(CategoryRef, Config),
     {ok, _} = default_approve_claim(ClaimID),
     {{ok, #payproc_Claim{
         id = ClaimID,
@@ -542,8 +546,9 @@ json_content_type_header() ->
 default_create_invoice(Config) ->
     {{Y, M, D}, Time} = calendar:local_time(),
     {ok, DueDate} = rfc3339:format({{Y + 1, M, D}, Time}),
+    ShopID = create_and_activate_shop(Config),
     Req = #{
-        <<"shopID">> => <<"test_shop_id">>,
+        <<"shopID">> => ShopID,
         <<"amount">> => 100000,
         <<"currency">> => <<"RUB">>,
         <<"context">> => #{
@@ -640,10 +645,10 @@ default_get_shop_by_id(ShopID, Config) ->
         _ -> {error, {wrong_result, Result}}
     end.
 
-default_create_shop(Config) ->
+default_create_shop(CategoryRef, Config) ->
     Path = "/v1/processing/shops",
     Req = #{
-        <<"categoryRef">> => 228,
+        <<"categoryRef">> => CategoryRef,
         <<"shopDetails">> => #{
             <<"name">> => <<"OOOBlackMaster">>,
             <<"description">> => <<"Goods for education">>
@@ -690,13 +695,13 @@ populate_categories() ->
         {'insert', #'InsertOp'{
             object = {category, #domain_CategoryObject{
                     ref = #domain_CategoryRef{
-                        id = I
+                        id = rand:uniform(10000)
                     },
                     data = #domain_Category{
                         name = genlib:unique()
                     }
                 }}
-        }} || I <- lists:seq(1, 10)
+        }} || _I <- lists:seq(1, 10)
     ],
     Commit = #'Commit'{
         ops = Ops
@@ -735,3 +740,27 @@ qs(QsVals) ->
 
 create_context() ->
     woody_client:new_context(genlib:unique(), capi_woody_event_handler).
+
+create_and_activate_shop(Config) ->
+    [Category | _] = default_get_categories(Config),
+    #{
+        <<"name">> := _Name,
+        <<"categoryRef">> := CategoryRef
+    } = Category,
+    #{
+        <<"claimID">> := ClaimID
+    } = default_create_shop(CategoryRef, Config),
+    {ok, _} = default_approve_claim(ClaimID),
+    {{ok, #payproc_Claim{
+        id = ClaimID,
+        status = {accepted, _},
+        changeset = [
+            {shop_creation, #domain_Shop{
+                id = ShopID
+            }} | _
+        ]
+    }}, _Context} = default_get_claim_by_id(ClaimID, Config),
+    #{
+        <<"claimID">> := _
+    } = default_activate_shop(ShopID, Config),
+    ShopID.

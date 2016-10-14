@@ -54,11 +54,18 @@ process_request(OperationID = 'CreateInvoice', Req, Context) ->
         shop_id = genlib_map:get(<<"shopID">>, InvoiceParams)
     },
     UserInfo = get_user_info(Context),
-    {Result, _NewContext} = service_call(
-        invoicing,
-        'Create',
-        [UserInfo, Params],
-        create_context(RequestID)
+
+    {Result, _} = prepare_party(
+        Context,
+        create_context(RequestID),
+        fun(RequestContext) ->
+            service_call(
+                invoicing,
+                'Create',
+                [UserInfo, Params],
+                RequestContext
+            )
+        end
     ),
     case Result of
         {ok, InvoiceID} ->
@@ -1367,6 +1374,9 @@ process_request_error(_, {exception, #payproc_InvoicePaymentPending{}}) ->
 
 process_request_error(_, {exception, #payproc_InvalidShopStatus{}}) ->
     {400, [], logic_error(invalid_shop_status, <<"Invalid shop status">>)};
+
+process_request_error(_, {exception, #payproc_PartyNotFound{}}) ->
+    {404, [],  general_error(<<"Party not found">>)};
 
 process_request_error(_,  {exception, #'InvalidCardData'{}}) ->
     {400, [], logic_error(invalid_request, <<"Card data is invalid">>)};

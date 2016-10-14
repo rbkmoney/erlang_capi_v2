@@ -21,7 +21,7 @@ services:
       - SERVICE_NAME=capi
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:d4c8e330cc7b744eb7d51d1298898f1306ae25b3
+    image: dr.rbkmoney.com/rbkmoney/hellgate:b8b9ab84074a154bba32acd23b9c3e3d68b7a91e
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -38,7 +38,7 @@ services:
       - SERVICE_NAME=cds
 
   machinegun:
-    image: dr.rbkmoney.com/rbkmoney/machinegun:4c29acdcdce065dbba1f3c8ee1683caea837869c
+    image: dr.rbkmoney.com/rbkmoney/machinegun:a48f9e93dd5a709d5f14db0c9785d43039282e86
     restart: always
     volumes:
       - ./test/machinegun/sys.config:/opt/machinegun/releases/0.1.0/sys.config
