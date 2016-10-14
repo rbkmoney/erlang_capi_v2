@@ -2,6 +2,8 @@
 
 -include_lib("common_test/include/ct.hrl").
 -include_lib("cp_proto/include/cp_payment_processing_thrift.hrl").
+-include_lib("cp_proto/include/cp_domain_config_thrift.hrl").
+
 
 -export([all/0]).
 -export([groups/0]).
@@ -51,6 +53,7 @@
 -define(CAPI_INVOICING_URL, "http://hellgate:8022/v1/processing/invoicing").
 -define(CAPI_MERCHANT_STAT_URL, "http://magista:8081/stat").
 -define(CAPI_PARTY_MANAGEMENT_URL, "http://hellgate:8022/v1/processing/partymgmt").
+-define(CAPI_REPOSITORY_URL, "http://dominant:8022/v1/domain/repository").
 
 -define(MERCHANT_ID, <<"hg_tests_SUITE">>).
 
@@ -138,7 +141,8 @@ init_per_suite(Config) ->
                 cds_storage => ?CAPI_CDS_STORAGE_URL,
                 invoicing => ?CAPI_INVOICING_URL,
                 merchant_stat => ?CAPI_MERCHANT_STAT_URL,
-                party_management => ?CAPI_PARTY_MANAGEMENT_URL
+                party_management => ?CAPI_PARTY_MANAGEMENT_URL,
+                repository => ?CAPI_REPOSITORY_URL
             }}
         ]) ++
         capi_ct_helper:start_app(capi, [
@@ -147,6 +151,8 @@ init_per_suite(Config) ->
             {service_type, ?CAPI_SERVICE_TYPE},
             {api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")}
         ]),
+    {{ok, _}, _Context} = populate_categories(),
+
     [{apps, lists:reverse(Apps)} | Config].
 
 -spec end_per_suite(config()) -> _.
@@ -587,12 +593,11 @@ default_get_claim_by_id(ClaimID, _Config) ->
     UserInfo = #payproc_UserInfo{
         id = ?MERCHANT_ID
     },
-    RequestContext  = woody_client:new_context(genlib:unique(), capi_woody_event_handler),
     cp_proto:call_service_safe(
         party_management,
         'GetClaim',
         [UserInfo, ?MERCHANT_ID, ClaimID],
-        RequestContext
+        create_context()
     ).
 
 default_suspend_my_party(Config) ->
@@ -667,12 +672,41 @@ default_approve_claim(ClaimID) ->
     UserInfo = #payproc_UserInfo{
         id = ?MERCHANT_ID
     },
-    RequestContext  = woody_client:new_context(genlib:unique(), capi_woody_event_handler),
     cp_proto:call_service_safe(
         party_management,
         'AcceptClaim',
         [UserInfo, ?MERCHANT_ID, ClaimID],
-        RequestContext
+        create_context()
+    ).
+
+populate_categories() ->
+     {{ok, #'Snapshot'{version = Version}}, Context0} = cp_proto:call_service_safe(
+        repository,
+        'Checkout',
+        [{head, #'Head'{}}],
+        create_context()
+    ),
+    Ops = [
+        {'insert', #'InsertOp'{
+            object = {category, #domain_CategoryObject{
+                    ref = #domain_CategoryRef{
+                        id = I
+                    },
+                    data = #domain_Category{
+                        name = genlib:unique()
+                    }
+                }}
+        }} || I <- lists:seq(1, 10)
+    ],
+    Commit = #'Commit'{
+        ops = Ops
+    },
+
+    cp_proto:call_service_safe(
+        repository,
+        'Commit',
+        [Version, Commit],
+        Context0
     ).
 
 default_get_shop_accounts(ShopID, Config) ->
@@ -698,3 +732,6 @@ decode_body(Body) ->
 -spec qs([{binary(), binary() | true}]) -> list().
 qs(QsVals) ->
     genlib:to_list(cow_qs:qs(QsVals)).
+
+create_context() ->
+    woody_client:new_context(genlib:unique(), capi_woody_event_handler).

@@ -15,6 +15,7 @@ services:
       - cds
       - magista
       - starter
+      - dominant
     environment:
       - SERVICE_NAME=capi
 
@@ -24,6 +25,8 @@ services:
     depends_on:
       - machinegun
       - shumway
+    environment:
+      - SERVICE_NAME=hellgate
 
   cds:
     image: dr.rbkmoney.com/rbkmoney/cds:42c814a7d6b1caddfd3ad96e5e28b659d15af89a
@@ -39,6 +42,11 @@ services:
 
   magista:
     image: dr.rbkmoney.com/rbkmoney/magista:b18a1b11388238775d9bc330b9b89bc425ca735d
+    entrypoint: |
+      java
+      -Xmx512m
+      -jar
+      /opt/magista/magista-0.0.1-SNAPSHOT.jar
     command: |
       --db.jdbc.url=jdbc:postgresql://magista_psql:5432/magista
       --db.username=magista
@@ -104,6 +112,14 @@ services:
       - POSTGRES_USER=shumway
       - POSTGRES_PASSWORD=shumway
       - SERVICE_NAME=shumway_psql
+
+  dominant:
+    image: dr.rbkmoney.com/rbkmoney/dominant:c24f4d85678b8e37ee13ac3bc2c1ce0aca9fe83f
+    command: /opt/dominant/bin/dominant foreground
+    depends_on:
+      - machinegun
+    environment:
+      - SERVICE_NAME=dominant
 
   starter:
     image: ${BUILD_IMAGE}

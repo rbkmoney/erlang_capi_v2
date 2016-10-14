@@ -483,12 +483,8 @@ process_request(OperationID = 'UpdateShop', Req, Context) ->
     PartyID = get_merchant_id(Context),
     ShopID = maps:get(shopID, Req),
     Params = maps:get('UpdateShopArgs', Req),
-    [C | _] = capi_domain:get_categories(), %% @FIXME do it honestly not like an asshole
-    #domain_CategoryObject{
-        ref = CategoryRef
-    } = C,
     ShopUpdate = #payproc_ShopUpdate{
-        category = CategoryRef,
+        category = genlib_map:get(<<"categoryRef">>, Params), %% @TODO check category ref later
         details = encode_shop_details(genlib_map:get(<<"shopDetails">>, Params)),
         contractor = encode_contractor(genlib_map:get(<<"contractor">>, Params))
     },
@@ -666,24 +662,24 @@ process_request(OperationID = 'GetMyParty', Req, Context) ->
     end;
 
 process_request(_OperationID = 'GetCategories', Req, Context) ->
-    _ = maps:get('X-Request-ID', Req),
+    RequestID = maps:get('X-Request-ID', Req),
     _ = get_user_info(Context),
     _ = get_merchant_id(Context),
-    Categories = capi_domain:get_categories(),
+    {{ok, Categories}, _Context} = capi_domain:get_categories(create_context(RequestID)),
     Resp = [decode_category(C) || C <- Categories],
     {200, [], Resp};
 
-process_request(_OperationID = 'GetCategoryByRef', Req, Context) ->
-    _ = maps:get('X-Request-ID', Req),
-    _ = get_user_info(Context),
-    _ = get_merchant_id(Context),
+process_request(_OperationID = 'GetCategoryByRef', Req, Context0) ->
+    RequestID = maps:get('X-Request-ID', Req),
+    _ = get_user_info(Context0),
+    _ = get_merchant_id(Context0),
     Ref = maps:get('categoryRef', Req),
-    case capi_domain:get_category_by_ref(Ref) of
-        {ok, Category} ->
+    case capi_domain:get_category_by_ref(genlib:to_int(Ref), create_context(RequestID)) of
+        {{ok, Category}, _Context} ->
             Resp = decode_category(Category),
             {200, [], Resp};
-        {error, not_found} ->
-            {404, [], #{}}
+        {{error, not_found}, _Context} ->
+            {404, [], general_error(<<"Category not found">>)}
     end;
 
 process_request(OperationID = 'GetShopAccounts', Req, Context) ->
@@ -1219,10 +1215,8 @@ decode_category(#domain_CategoryObject{
 decode_category_ref(undefined) ->
     undefined;
 
-decode_category_ref(#domain_CategoryObject{
-    ref = #domain_CategoryRef{
-        id = CategoryRef
-    }
+decode_category_ref(#domain_CategoryRef{
+    id = CategoryRef
 }) ->
     CategoryRef.
 
