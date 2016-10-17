@@ -33,7 +33,7 @@
     activate_my_party_ok_test/1,
     get_claim_by_id_ok_test/1,
     revoke_claim_ok_test/1,
-    get_pendind_claim_ok_test/1,
+    get_pending_claim_ok_test/1,
     get_categories_ok_test/1,
     get_category_by_ref_ok_test/1,
     create_shop_ok_test/1,
@@ -107,7 +107,7 @@ groups() ->
         ]},
         {claims_management, [sequence], [
             get_claim_by_id_ok_test,
-            get_pendind_claim_ok_test,
+            get_pending_claim_ok_test,
             revoke_claim_ok_test
         ]},
         {shops_management, [sequence], [
@@ -322,7 +322,9 @@ suspend_my_party_ok_test(Config) ->
 -spec activate_my_party_ok_test(config()) -> _.
 
 activate_my_party_ok_test(Config) ->
-    #{} = default_activate_my_party(Config),
+    #{
+        <<"claimID">> := _ClaimID
+    } = default_activate_my_party(Config),
     #{
         <<"isSuspended">> := false
     } = default_get_party(Config).
@@ -330,16 +332,40 @@ activate_my_party_ok_test(Config) ->
 -spec get_claim_by_id_ok_test(config()) -> _.
 
 get_claim_by_id_ok_test(Config) ->
-    Config.
+    #{
+        <<"categoryRef">> := CategoryRef
+    } = get_any_category(Config),
+    #{
+        <<"claimID">> := ClaimID
+    } = default_create_shop(CategoryRef, Config),
+    #{
+        <<"id">> := ClaimID
+    } = default_get_claim_by_id(ClaimID, Config),
+    {save_config, ClaimID}.
+
+-spec get_pending_claim_ok_test(config()) -> _.
+
+get_pending_claim_ok_test(Config) ->
+    {get_claim_by_id_ok_test,
+        ClaimID
+    } = ?config(saved_config, Config),
+    #{
+        <<"id">> := ClaimID,
+        <<"status">> := #{<<"status">> := <<"ClaimPending">>}
+    } = default_get_claim_by_status(pending, Config),
+    {save_config, ClaimID}.
 
 -spec revoke_claim_ok_test(config()) -> _.
 
 revoke_claim_ok_test(Config) ->
-    Config.
-
--spec get_pendind_claim_ok_test(config()) -> _.
-
-get_pendind_claim_ok_test(Config) ->
+    {get_pending_claim_ok_test,
+        ClaimID
+    } = ?config(saved_config, Config),
+    #{} = default_revoke_claim(ClaimID, Config),
+    #{
+        <<"id">> := ClaimID,
+        <<"status">> := #{<<"status">> := <<"ClaimRevoked">>}
+    } = default_get_claim_by_id(ClaimID, Config),
     Config.
 
 -spec get_categories_ok_test(config()) -> _.
@@ -371,15 +397,18 @@ create_shop_ok_test(Config) ->
         <<"claimID">> := ClaimID
     } = default_create_shop(CategoryRef, Config),
     {ok, _} = default_approve_claim(ClaimID),
-    {{ok, #payproc_Claim{
-        id = ClaimID,
-        status = {accepted, _},
-        changeset = [
-            {shop_creation, #domain_Shop{
-                id = ShopID
-            }} | _
+    #{
+        <<"id">> := ClaimID,
+        <<"status">> :=  #{<<"status">> := <<"ClaimAccepted">>},
+        <<"changeset">> := [
+            #{
+                <<"modificationType">> := <<"ShopCreation">>,
+                <<"shop">> := #{
+                    <<"shopID">> := ShopID
+                }
+            } | _
         ]
-    }}, _Context} = default_get_claim_by_id(ClaimID, Config),
+    } = default_get_claim_by_id(ClaimID, Config),
 
     {save_config, ShopID}.
 
@@ -594,16 +623,15 @@ default_get_party(Config) ->
     {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
     decode_body(Body).
 
-default_get_claim_by_id(ClaimID, _Config) ->
-    UserInfo = #payproc_UserInfo{
-        id = ?MERCHANT_ID
-    },
-    cp_proto:call_service_safe(
-        party_management,
-        'GetClaim',
-        [UserInfo, ?MERCHANT_ID, ClaimID],
-        create_context()
-    ).
+default_get_claim_by_id(ClaimID, Config) ->
+    Path = "/v1/processing/claims/" ++ genlib:to_list(ClaimID),
+    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    decode_body(Body).
+
+default_get_claim_by_status(Status, Config) ->
+    Path = "/v1/processing/claims/?" ++ qs([{<<"claimStatus">>, genlib:to_binary(Status)}]),
+    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    decode_body(Body).
 
 default_suspend_my_party(Config) ->
     Path = "/v1/processing/me/suspend",
@@ -670,6 +698,14 @@ default_get_categories(Config) ->
 default_get_category_by_ref(CategoryRef, Config) ->
     Path = "/v1/processing/categories/" ++ genlib:to_list(CategoryRef),
     {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    decode_body(Body).
+
+default_revoke_claim(ClaimID, Config) ->
+    Path = "/v1/processing/claims/" ++ genlib:to_list(ClaimID) ++ "/revoke",
+    Req = #{
+        <<"reason">> => <<"me want dat">>
+    },
+    {ok, 200, _RespHeaders, Body} = default_call(post, Path, Req, Config),
     decode_body(Body).
 
 %% @FIXME thats dirty
@@ -742,25 +778,30 @@ create_context() ->
     woody_client:new_context(genlib:unique(), capi_woody_event_handler).
 
 create_and_activate_shop(Config) ->
-    [Category | _] = default_get_categories(Config),
     #{
-        <<"name">> := _Name,
         <<"categoryRef">> := CategoryRef
-    } = Category,
+    } = get_any_category(Config),
     #{
         <<"claimID">> := ClaimID
     } = default_create_shop(CategoryRef, Config),
     {ok, _} = default_approve_claim(ClaimID),
-    {{ok, #payproc_Claim{
-        id = ClaimID,
-        status = {accepted, _},
-        changeset = [
-            {shop_creation, #domain_Shop{
-                id = ShopID
-            }} | _
+    #{
+        <<"id">> := ClaimID,
+        <<"status">> := #{<<"status">> := <<"ClaimAccepted">>},
+        <<"changeset">> := [
+            #{
+                <<"modificationType">> := <<"ShopCreation">>,
+                <<"shop">> := #{
+                    <<"shopID">> := ShopID
+                }
+            } | _
         ]
-    }}, _Context} = default_get_claim_by_id(ClaimID, Config),
+    } = default_get_claim_by_id(ClaimID, Config),
     #{
         <<"claimID">> := _
     } = default_activate_shop(ShopID, Config),
     ShopID.
+
+get_any_category(Config) ->
+    [Category | _] = default_get_categories(Config),
+    Category.

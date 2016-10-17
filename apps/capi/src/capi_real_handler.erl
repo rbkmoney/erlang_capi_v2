@@ -39,9 +39,9 @@ process_request(OperationID = 'CreateInvoice', Req, Context) ->
     InvoiceParams = maps:get('CreateInvoiceArgs', Req),
     RequestID = maps:get('X-Request-ID', Req),
     InvoiceContext = jsx:encode(genlib_map:get(<<"context">>, InvoiceParams)),
-    MerchantID = get_merchant_id(Context),
+    PartyID = get_party_id(Context),
     Params =  #'payproc_InvoiceParams'{
-        party_id = MerchantID,
+        party_id = PartyID,
         description = genlib_map:get(<<"description">>, InvoiceParams),
         product  = genlib_map:get(<<"product">>, InvoiceParams),
         amount   = genlib_map:get(<<"amount">>, InvoiceParams),
@@ -205,11 +205,15 @@ process_request(OperationID = 'GetInvoiceByID', Req, Context) ->
             process_request_error(OperationID, Error)
     end;
 
-process_request(OperationID = 'FullfillInvoice', Req, Context) ->
+process_request(OperationID = 'FulfillInvoice', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     RequestID = maps:get('X-Request-ID', Req),
-    Reason = maps:get(reason, Req),
+
+    Params = maps:get('Reason', Req),
+    Reason = maps:get(<<"reason">>, Params),
+
     UserInfo = get_user_info(Context),
+
     {Result, _NewContext} = service_call(
         invoicing,
         'Fulfill',
@@ -218,7 +222,7 @@ process_request(OperationID = 'FullfillInvoice', Req, Context) ->
     ),
     case Result of
         {ok, _} ->
-            {200, [], <<>>};
+            {200, [], #{}};
         Error ->
             process_request_error(OperationID, Error)
     end;
@@ -226,7 +230,9 @@ process_request(OperationID = 'FullfillInvoice', Req, Context) ->
 process_request(OperationID = 'RescindInvoice', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     RequestID = maps:get('X-Request-ID', Req),
-    Reason = maps:get(reason, Req),
+
+    Params = maps:get('Reason', Req),
+    Reason = maps:get(<<"reason">>, Params),
 
     UserInfo = get_user_info(Context),
     {Result, _NewContext} = service_call(
@@ -237,7 +243,7 @@ process_request(OperationID = 'RescindInvoice', Req, Context) ->
     ),
     case Result of
         {ok, _} ->
-            {200, [], <<>>};
+            {200, [], #{}};
         Error ->
             process_request_error(OperationID, Error)
     end;
@@ -270,11 +276,11 @@ process_request(OperationID = 'GetPaymentByID', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
-    MerchantID = get_merchant_id(Context),
+    PartyID = get_party_id(Context),
     {Result, _NewContext} = service_call(
         invoicing,
         'GetPayment',
-        [UserInfo, MerchantID, PaymentID],
+        [UserInfo, PartyID, PaymentID],
         create_context(RequestID)
     ),
     case Result of
@@ -294,7 +300,7 @@ process_request(OperationID = 'GetInvoices', Req, Context) ->
         [Status] -> Status
     end,  %%@TODO deal with many statuses
     Query = #{
-        <<"merchant_id">> => get_merchant_id(Context),
+        <<"merchant_id">> => get_party_id(Context),
         <<"shop_id">> => genlib_map:get('shopID', Req),
         <<"invoice_id">> =>  genlib_map:get('invoiceID', Req),
         <<"from_time">> => genlib_map:get('fromTime', Req),
@@ -399,7 +405,7 @@ process_request(OperationID = 'GetPaymentInstrumentStats', Req, Context) ->
 process_request(OperationID = 'CreateShop', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
-    PartyID = get_merchant_id(Context),
+    PartyID = get_party_id(Context),
     Params = maps:get('CreateShopArgs', Req),
     ShopParams = #payproc_ShopParams{
         category = encode_category_ref(genlib_map:get(<<"categoryRef">>, Params)),
@@ -432,7 +438,7 @@ process_request(OperationID = 'ActivateShop', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
 
-    PartyID = get_merchant_id(Context),
+    PartyID = get_party_id(Context),
     ShopID = maps:get(shopID, Req),
 
     {Result, _} = prepare_party(
@@ -460,7 +466,7 @@ process_request(OperationID = 'SuspendShop', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
 
-    PartyID = get_merchant_id(Context),
+    PartyID = get_party_id(Context),
     ShopID = maps:get(shopID, Req),
 
     {Result, _} = prepare_party(
@@ -487,7 +493,7 @@ process_request(OperationID = 'SuspendShop', Req, Context) ->
 process_request(OperationID = 'UpdateShop', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
-    PartyID = get_merchant_id(Context),
+    PartyID = get_party_id(Context),
     ShopID = maps:get(shopID, Req),
     Params = maps:get('UpdateShopArgs', Req),
     ShopUpdate = #payproc_ShopUpdate{
@@ -517,11 +523,10 @@ process_request(OperationID = 'UpdateShop', Req, Context) ->
     end;
 
 process_request(OperationID = 'GetClaimByStatus', Req, Context) ->
-    <<"pending">> = maps:get(claimStatus, Req), %% @TODO think about other claim statuses here
+    pending = maps:get(claimStatus, Req), %% @TODO think about other claim statuses here
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
-    PartyID = get_merchant_id(Context),
-    ClaimID = maps:get(claimID, Req),
+    PartyID = get_party_id(Context),
 
     {Result, _} = prepare_party(
         Context,
@@ -530,7 +535,7 @@ process_request(OperationID = 'GetClaimByStatus', Req, Context) ->
             service_call(
                 party_management,
                 'GetPendingClaim',
-                [UserInfo, PartyID, ClaimID],
+                [UserInfo, PartyID],
                 RequestContext
             )
         end
@@ -546,7 +551,7 @@ process_request(OperationID = 'GetClaimByStatus', Req, Context) ->
 process_request(OperationID = 'GetClaimByID', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
-    PartyID = get_merchant_id(Context),
+    PartyID = get_party_id(Context),
     ClaimID = maps:get(claimID, Req),
     {Result, _} = prepare_party(
         Context,
@@ -571,9 +576,10 @@ process_request(OperationID = 'GetClaimByID', Req, Context) ->
 process_request(OperationID = 'RevokeClaimByID', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
-    PartyID = get_merchant_id(Context),
+    PartyID = get_party_id(Context),
     ClaimID = maps:get(claimID, Req),
-    Reason = maps:get(reason, Req),
+    Params = maps:get('Reason', Req),
+    Reason = maps:get(<<"reason">>, Params),
 
     {Result, _} = prepare_party(
         Context,
@@ -589,7 +595,7 @@ process_request(OperationID = 'RevokeClaimByID', Req, Context) ->
     ),
     case Result of
         ok ->
-            {200, [], <<>>};
+            {200, [], #{}};
         Error ->
             process_request_error(OperationID, Error)
     end;
@@ -597,7 +603,7 @@ process_request(OperationID = 'RevokeClaimByID', Req, Context) ->
 process_request(OperationID = 'SuspendMyParty', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
-    PartyID = get_merchant_id(Context),
+    PartyID = get_party_id(Context),
     {Result, _} = prepare_party(
         Context,
         create_context(RequestID),
@@ -621,7 +627,7 @@ process_request(OperationID = 'SuspendMyParty', Req, Context) ->
 process_request(OperationID = 'ActivateMyParty', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
-    PartyID = get_merchant_id(Context),
+    PartyID = get_party_id(Context),
     {Result, _} = prepare_party(
         Context,
         create_context(RequestID),
@@ -645,7 +651,7 @@ process_request(OperationID = 'ActivateMyParty', Req, Context) ->
 process_request(OperationID = 'GetMyParty', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
-    PartyID = get_merchant_id(Context),
+    PartyID = get_party_id(Context),
     {Result, _} = prepare_party(
         Context,
         create_context(RequestID),
@@ -671,7 +677,7 @@ process_request(OperationID = 'GetMyParty', Req, Context) ->
 process_request(_OperationID = 'GetCategories', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
     _ = get_user_info(Context),
-    _ = get_merchant_id(Context),
+    _ = get_party_id(Context),
     {{ok, Categories}, _Context} = capi_domain:get_categories(create_context(RequestID)),
     Resp = [decode_category(C) || C <- Categories],
     {200, [], Resp};
@@ -679,7 +685,7 @@ process_request(_OperationID = 'GetCategories', Req, Context) ->
 process_request(_OperationID = 'GetCategoryByRef', Req, Context0) ->
     RequestID = maps:get('X-Request-ID', Req),
     _ = get_user_info(Context0),
-    _ = get_merchant_id(Context0),
+    _ = get_party_id(Context0),
     Ref = maps:get('categoryRef', Req),
     case capi_domain:get_category_by_ref(genlib:to_int(Ref), create_context(RequestID)) of
         {{ok, Category}, _Context} ->
@@ -692,7 +698,7 @@ process_request(_OperationID = 'GetCategoryByRef', Req, Context0) ->
 process_request(OperationID = 'GetShopAccounts', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
-    PartyID = get_merchant_id(Context),
+    PartyID = get_party_id(Context),
     ShopID = maps:get('shopID', Req),
     {Result, _} = prepare_party(
         Context,
@@ -717,7 +723,7 @@ process_request(OperationID = 'GetShopAccounts', Req, Context) ->
 process_request(OperationID = 'GetAccountByID', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
-    PartyID = get_merchant_id(Context),
+    PartyID = get_party_id(Context),
     AccountID = maps:get('accountID', Req),
     {Result, _} = prepare_party(
         Context,
@@ -780,10 +786,10 @@ parse_exp_date(ExpDate) when is_binary(ExpDate) ->
 
 get_user_info(Context) ->
     #payproc_UserInfo{
-        id = get_merchant_id(Context)
+        id = get_party_id(Context)
     }.
 
-get_merchant_id(#{
+get_party_id(#{
     auth_context := AuthContext
 }) ->
     maps:get(<<"sub">>, AuthContext).
@@ -1145,13 +1151,26 @@ decode_claim(#payproc_Claim{
     }.
 
 decode_claim_status({'pending', _}) ->
-    <<"pending">>;
+    #{
+        <<"status">> => <<"ClaimPending">>
+    };
 decode_claim_status({'accepted', _}) ->
-    <<"accepted">>;
-decode_claim_status({'denied', _}) ->
-    <<"denied">>;
+    #{
+        <<"status">> =><<"ClaimAccepted">>
+    };
+
+decode_claim_status({'denied', #payproc_ClaimDenied{
+    reason = Reason
+}}) ->
+    #{
+        <<"status">> => <<"ClaimDenied">>,
+        <<"reason">> => Reason
+    };
+
 decode_claim_status({'revoked', _}) ->
-    <<"revoked">>.
+    #{
+        <<"status">> =><<"ClaimRevoked">>
+    }.
 
 decode_party_changeset(PartyChangeset) ->
     [decode_party_modification(PartyModification) || PartyModification <- PartyChangeset].
@@ -1202,6 +1221,17 @@ decode_shop_modification({
             <<"contractor">> => decode_contractor(Contractor),
             <<"categoryRef">> => decode_category_ref(Category)
         })
+    };
+
+decode_shop_modification({
+    accounts_created,
+    #payproc_ShopAccountSetCreated{
+        accounts = AccountSet
+    }
+}) ->
+    #{
+        <<"modificationType">> => <<"ShopAccountCreated">>,
+        <<"account">> => decode_account_set(AccountSet)
     }.
 
 decode_category(#domain_CategoryObject{
@@ -1310,7 +1340,7 @@ create_stat_dsl(StatType, Req, Context) ->
     end,
 
     Query = #{
-        <<"merchant_id">> => get_merchant_id(Context),
+        <<"merchant_id">> => get_party_id(Context),
         <<"shop_id">> => genlib_map:get('shopID', Req),
         <<"from_time">> => FromTime,
         <<"to_time">> => ToTime,
@@ -1366,6 +1396,9 @@ process_request_error(_, {exception, #'InvalidRequest'{}}) ->
 process_request_error(_, {exception, #payproc_UserInvoiceNotFound{}} ) ->
     {404, [], general_error(<<"Invoice not found">>)};
 
+process_request_error(_, {exception, #payproc_ClaimNotFound{}} ) ->
+    {404, [], general_error(<<"Claim not found">>)};
+
 process_request_error(_,  {exception, #payproc_InvalidInvoiceStatus{}} ) ->
     {400, [], logic_error(invalid_invoice_status, <<"Invalid invoice status">>)};
 
@@ -1412,7 +1445,7 @@ prepare_party(Context, RequestContext0, ServiceCall) ->
     end.
 
 create_party(Context, RequestContext) ->
-    PartyID = get_merchant_id(Context),
+    PartyID = get_party_id(Context),
     UserInfo = get_user_info(Context),
     {Result, NewRequestContext} = service_call(
         party_management,
