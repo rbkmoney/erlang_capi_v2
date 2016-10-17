@@ -25,5 +25,7 @@ get_service_modname(cds_storage) ->
     {cp_cds_thrift, 'Storage'};
 get_service_modname(merchant_stat) ->
     {cp_merch_stat_thrift, 'MerchantStatistics'};
+get_service_modname(repository) ->
+    {cp_domain_config_thrift, 'Repository'};
 get_service_modname(party_management) ->
     {cp_payment_processing_thrift, 'PartyManagement'}.

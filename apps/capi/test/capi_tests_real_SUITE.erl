@@ -1,8 +1,12 @@
 -module(capi_tests_real_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
+-include_lib("cp_proto/include/cp_payment_processing_thrift.hrl").
+-include_lib("cp_proto/include/cp_domain_config_thrift.hrl").
+
 
 -export([all/0]).
+-export([groups/0]).
 -export([init_per_suite/1]).
 -export([end_per_suite/1]).
 
@@ -24,7 +28,22 @@
     get_payment_geo_stats_ok_test/1,
     get_payment_rate_stats_ok_test/1,
     %%%%
-    get_my_party_ok_test/1
+    get_my_party_ok_test/1,
+    suspend_my_party_ok_test/1,
+    activate_my_party_ok_test/1,
+    get_claim_by_id_ok_test/1,
+    revoke_claim_ok_test/1,
+    get_pending_claim_ok_test/1,
+    get_categories_ok_test/1,
+    get_category_by_ref_ok_test/1,
+    create_shop_ok_test/1,
+    update_shop_ok_test/1,
+    suspend_shop_ok_test/1,
+    activate_shop_ok_test/1,
+    %%%%
+    get_shop_accounts_ok_test/1,
+    get_shop_account_by_id_ok_test/1
+
 ]).
 
 -define(CAPI_HOST, "0.0.0.0").
@@ -32,31 +51,81 @@
 -define(CAPI_SERVICE_TYPE, real).
 -define(CAPI_CDS_STORAGE_URL, "http://cds:8022/v1/storage").
 -define(CAPI_INVOICING_URL, "http://hellgate:8022/v1/processing/invoicing").
--define(CAPI_MERCHANT_STAT_URL, "http://magista:8081/stat").
+-define(CAPI_MERCHANT_STAT_URL, "http://magista:8082/stat").
 -define(CAPI_PARTY_MANAGEMENT_URL, "http://hellgate:8022/v1/processing/partymgmt").
+-define(CAPI_REPOSITORY_URL, "http://dominant:8022/v1/domain/repository").
 
+-define(MERCHANT_ID, <<"hg_tests_SUITE">>).
 
 -type config() :: [{atom(), any()}].
 
 -spec all() -> [
-    TestCase :: atom()
+    {group, GroupName :: atom()}
 ].
 
 all() ->
     [
-        authorization_error_no_header_test,
-        authorization_error_expired_test,
-        create_invoice_badard_test,
-        create_invoice_ok_test,
-        create_payment_tool_token_ok_test,
-        get_invoices_stats_ok_test,
-        get_payment_conversion_stats_ok_test,
-        get_payment_revenue_stats_ok_test,
-        get_payment_geo_stats_ok_test,
-        get_payment_rate_stats_ok_test,
-        get_my_party_ok_test
+        {group, authorization},
+        {group, card_payment},
+        {group, statistics},
+        {group, party_management},
+        {group, claims_management},
+        {group, shops_management},
+        {group, accounts_management}
     ].
 
+-spec groups() -> [
+    Group :: {
+        Name :: atom(),
+        [parallel | sequence],
+        [TestCase :: atom()]
+    }
+].
+
+groups() ->
+    [
+        {authorization, [parallel], [
+            authorization_error_no_header_test,
+            authorization_error_expired_test
+        ]},
+        {card_payment, [sequence], [
+            create_invoice_badard_test,
+            create_invoice_ok_test,
+            create_payment_tool_token_ok_test
+        ]},
+        {statistics, [parallel], [
+            get_invoices_stats_ok_test,
+            get_payment_conversion_stats_ok_test,
+            get_payment_revenue_stats_ok_test,
+            get_payment_geo_stats_ok_test,
+            get_payment_rate_stats_ok_test
+        ]},
+        {party_management, [sequence], [
+            get_my_party_ok_test,
+            suspend_my_party_ok_test,
+            activate_my_party_ok_test
+        ]},
+        {claims_management, [sequence], [
+            get_claim_by_id_ok_test,
+            get_pending_claim_ok_test,
+            revoke_claim_ok_test
+        ]},
+        {shops_management, [sequence], [
+            get_categories_ok_test,
+            get_category_by_ref_ok_test,
+            create_shop_ok_test,
+            activate_shop_ok_test,
+            update_shop_ok_test,
+            suspend_shop_ok_test
+        ]},
+        {accounts_management, [sequence], [
+            get_categories_ok_test,
+            get_category_by_ref_ok_test,
+            create_shop_ok_test,
+            get_shop_accounts_ok_test,
+            get_shop_account_by_id_ok_test
+        ]}
+    ].
 %%
 %% starting/stopping
 %%
@@ -72,7 +141,8 @@ init_per_suite(Config) ->
                 cds_storage => ?CAPI_CDS_STORAGE_URL,
                 invoicing => ?CAPI_INVOICING_URL,
                 merchant_stat => ?CAPI_MERCHANT_STAT_URL,
-                party_management => ?CAPI_PARTY_MANAGEMENT_URL
+                party_management => ?CAPI_PARTY_MANAGEMENT_URL,
+                repository => ?CAPI_REPOSITORY_URL
             }}
         ]) ++
         capi_ct_helper:start_app(capi, [
@@ -81,6 +151,8 @@ init_per_suite(Config) ->
             {service_type, ?CAPI_SERVICE_TYPE},
             {api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")}
         ]),
+    {{ok, _}, _Context} = populate_categories(),
+
     [{apps, lists:reverse(Apps)} | Config].
 
 -spec end_per_suite(config()) -> _.
@@ -234,9 +306,193 @@ get_my_party_ok_test(Config) ->
     #{
         <<"isBlocked">> := false,
         <<"isSuspended">> := false,
-        <<"partyID">> := <<"hg_tests_SUITE">>,
-        <<"shops">> := []
+        <<"partyID">> := ?MERCHANT_ID,
+        <<"shops">> := _
     } = default_get_party(Config).
+
+-spec suspend_my_party_ok_test(config()) -> _.
+
+suspend_my_party_ok_test(Config) ->
+    #{} = default_suspend_my_party(Config),
+    #{
+        <<"isSuspended">> := true
+    } = default_get_party(Config),
+    Config.
+
+-spec activate_my_party_ok_test(config()) -> _.
+
+activate_my_party_ok_test(Config) ->
+    #{
+        <<"claimID">> := _ClaimID
+    } = default_activate_my_party(Config),
+    #{
+        <<"isSuspended">> := false
+    } = default_get_party(Config).
+
+-spec get_claim_by_id_ok_test(config()) -> _.
+
+get_claim_by_id_ok_test(Config) ->
+    #{
+        <<"categoryRef">> := CategoryRef
+    } = get_any_category(Config),
+    #{
+        <<"claimID">> := ClaimID
+    } = default_create_shop(CategoryRef, Config),
+    #{
+        <<"id">> := ClaimID
+    } = default_get_claim_by_id(ClaimID, Config),
+    {save_config, ClaimID}.
+
+-spec get_pending_claim_ok_test(config()) -> _.
+
+get_pending_claim_ok_test(Config) ->
+    {get_claim_by_id_ok_test,
+        ClaimID
+    } = ?config(saved_config, Config),
+    #{
+        <<"id">> := ClaimID,
+        <<"status">> := #{<<"status">> := <<"ClaimPending">>}
+    } = default_get_claim_by_status(pending, Config),
+    {save_config, ClaimID}.
+
+-spec revoke_claim_ok_test(config()) -> _.
+
+revoke_claim_ok_test(Config) ->
+    {get_pending_claim_ok_test,
+        ClaimID
+    } = ?config(saved_config, Config),
+    #{} = default_revoke_claim(ClaimID, Config),
+    #{
+        <<"id">> := ClaimID,
+        <<"status">> := #{<<"status">> := <<"ClaimRevoked">>}
+    } = default_get_claim_by_id(ClaimID, Config),
+    Config.
+
+-spec get_categories_ok_test(config()) -> _.
+
+get_categories_ok_test(Config) ->
+    [Category | _] = default_get_categories(Config),
+    #{
+        <<"name">> := _Name,
+        <<"categoryRef">> := CategoryRef
+    } = Category,
+    {save_config, CategoryRef}.
+
+-spec get_category_by_ref_ok_test(config()) -> _.
+
+get_category_by_ref_ok_test(Config) ->
+    {get_categories_ok_test,
+        CategoryRef
+    } = ?config(saved_config, Config),
+    _ = default_get_category_by_ref(CategoryRef, Config),
+    {save_config, CategoryRef}.
+
+-spec create_shop_ok_test(config()) -> _.
+
+create_shop_ok_test(Config) ->
+    {get_category_by_ref_ok_test,
+        CategoryRef
+    } = ?config(saved_config, Config),
+    #{
+        <<"claimID">> := ClaimID
+    } = default_create_shop(CategoryRef, Config),
+    {ok, _} = default_approve_claim(ClaimID),
+    #{
+        <<"id">> := ClaimID,
+        <<"status">> :=  #{<<"status">> := <<"ClaimAccepted">>},
+        <<"changeset">> := [
+            #{
+                <<"modificationType">> := <<"ShopCreation">>,
+                <<"shop">> := #{
+                    <<"shopID">> := ShopID
+                }
+            } | _
+        ]
+    } = default_get_claim_by_id(ClaimID, Config),
+
+    {save_config, ShopID}.
+
+-spec update_shop_ok_test(config()) -> _.
+
+update_shop_ok_test(Config) ->
+    {activate_shop_ok_test,
+        ShopID
+    } = ?config(saved_config, Config),
+    {ok, #{
+        <<"shopDetails">> := ShopDetails
+    }} = default_get_shop_by_id(ShopID, Config),
+    NewShopDetails = ShopDetails#{
+        <<"location">> => genlib:unique()
+    },
+    Req = #{
+        <<"shopDetails">> => NewShopDetails
+    },
+    #{
+        <<"claimID">> := ClaimID
+    } = update_shop(Req, ShopID, Config),
+    default_approve_claim(ClaimID),
+    {ok, #{
+        <<"shopDetails">> := NewShopDetails
+    }} = default_get_shop_by_id(ShopID, Config),
+    {save_config, ShopID}.
+
+-spec suspend_shop_ok_test(config()) -> _.
+
+suspend_shop_ok_test(Config) ->
+    {update_shop_ok_test,
+        ShopID
+    } = ?config(saved_config, Config),
+    #{
+        <<"claimID">> := _
+    } = default_suspend_shop(ShopID, Config),
+    {ok, #{
+        <<"isSuspended">> := true
+    }} = default_get_shop_by_id(ShopID, Config),
+    {save_config, ShopID}.
+
+
+-spec activate_shop_ok_test(config()) -> _.
+
+activate_shop_ok_test(Config) ->
+    {create_shop_ok_test,
+        ShopID
+    } = ?config(saved_config, Config),
+    #{
+        <<"claimID">> := _
+    } = default_activate_shop(ShopID, Config),
+    {ok, #{
+        <<"isSuspended">> := false
+    }} = default_get_shop_by_id(ShopID, Config),
+    {save_config, ShopID}.
+
+-spec get_shop_accounts_ok_test(config()) -> _.
+
+get_shop_accounts_ok_test(Config) ->
+    {create_shop_ok_test,
+        ShopID
+    } = ?config(saved_config, Config),
+    [ShopAccountSet | _] = default_get_shop_accounts(ShopID, Config),
+    #{
+        <<"generalID">> := _,
+        <<"guaranteeID">> := _
+    } = ShopAccountSet,
+    {save_config, {ShopID, ShopAccountSet}}.
+
+-spec get_shop_account_by_id_ok_test(config()) -> _.
+
+get_shop_account_by_id_ok_test(Config) ->
+    {get_shop_accounts_ok_test,
+        {ShopID, ShopAccountSet}
+    } = ?config(saved_config, Config),
+    #{
+        <<"guaranteeID">> := GuaranteeID
+    }  = ShopAccountSet,
+    #{
+        <<"id">> := _,
+        <<"ownAmount">> := _,
+        <<"availableAmount">> := _,
+        <<"currency">> := _
+    } = default_get_shop_account_by_id(GuaranteeID, ShopID, Config).
 
 %% helpers
 
@@ -272,18 +528,28 @@ default_auth_token(Config) ->
                     <<"profiles:create">>,
                     <<"profiles:delete">>,
                     <<"invoices:get">>,
+                    <<"invoices:fulfill">>,
+                    <<"invoices:rescind">>,
                     <<"invoices.events:get">>,
                     <<"payments:get">>,
-                    <<"profiles:get">>,
-                    <<"profiles:get">>,
-                    <<"profiles:update">>,
                     <<"invoices_stats:get">>,
                     <<"payments_conversion_stats:get">>,
                     <<"payments_revenue_stats:get">>,
                     <<"payments_geo_stats:get">>,
                     <<"payments_rate_stats:get">>,
+                    <<"payments_instrument_stats:get">>,
                     <<"party:get">>,
-                    <<"party:create">>
+                    <<"party:create">>,
+                    <<"shops:activate">>,
+                    <<"shop:create">>,
+                    <<"shops:suspend">>,
+                    <<"shops:update">>,
+                    <<"party:suspend">>,
+                    <<"party:activate">>,
+                    <<"claims:get">>,
+                    <<"claims:revoke">>,
+                    <<"categories:get">>,
+                    <<"accounts:get">>
                 ]
         }
     },
@@ -291,7 +557,7 @@ default_auth_token(Config) ->
 
 auth_token(ResourseAccess, Exp, Config) ->
     Message = #{
-        <<"sub">> => <<"hg_tests_SUITE">>,
+        <<"sub">> => ?MERCHANT_ID,
         <<"resource_access">> => ResourseAccess,
         <<"exp">> => Exp
     },
@@ -309,8 +575,9 @@ json_content_type_header() ->
 default_create_invoice(Config) ->
     {{Y, M, D}, Time} = calendar:local_time(),
     {ok, DueDate} = rfc3339:format({{Y + 1, M, D}, Time}),
+    ShopID = create_and_activate_shop(Config),
     Req = #{
-        <<"shopID">> => <<"test_shop_id">>,
+        <<"shopID">> => ShopID,
         <<"amount">> => 100000,
         <<"currency">> => <<"RUB">>,
         <<"context">> => #{
@@ -326,15 +593,14 @@ default_create_invoice(Config) ->
 default_tokenize_card(Config) ->
     Req = #{
         <<"paymentTool">> => #{
-            <<"paymentToolType">> => <<"cardData">>,
+            <<"paymentToolType">> => <<"CardData">>,
             <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
             <<"cardNumber">> => 4111111111111111,
             <<"expDate">> => <<"08/27">>,
             <<"cvv">> => <<"232">>
         },
         <<"clientInfo">> => #{
-            <<"fingerprint">> => <<"test fingerprint">>,
-            <<"ipAddress">> => <<"127.0.0.1">>
+            <<"fingerprint">> => <<"test fingerprint">>
         }
     },
     {ok, 201, _RespHeaders, Body} = default_call(post, "/v1/processing/payment_tools", Req, Config),
@@ -343,7 +609,10 @@ default_tokenize_card(Config) ->
 default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
     Req =  #{
         <<"paymentSession">> => PaymentSession,
-        <<"paymentToolToken">> => PaymentToolToken
+        <<"paymentToolToken">> => PaymentToolToken,
+        <<"contactInfo">> => #{
+            <<"email">> => <<"bla@bla.ru">>
+        }
     },
     Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments",
     {ok, 201, _RespHeaders, Body} = default_call(post, Path, Req, Config),
@@ -351,6 +620,146 @@ default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
 
 default_get_party(Config) ->
     Path = "/v1/processing/me",
+    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    decode_body(Body).
+
+default_get_claim_by_id(ClaimID, Config) ->
+    Path = "/v1/processing/claims/" ++ genlib:to_list(ClaimID),
+    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    decode_body(Body).
+
+default_get_claim_by_status(Status, Config) ->
+    Path = "/v1/processing/claims/?" ++ qs([{<<"claimStatus">>, genlib:to_binary(Status)}]),
+    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    decode_body(Body).
+
+default_suspend_my_party(Config) ->
+    Path = "/v1/processing/me/suspend",
+    {ok, 202, _RespHeaders, Body} = default_call(put, Path, #{}, Config),
+    decode_body(Body).
+
+default_activate_my_party(Config) ->
+    Path = "/v1/processing/me/activate",
+    {ok, 202, _RespHeaders, Body} = default_call(put, Path, #{}, Config),
+    decode_body(Body).
+
+default_suspend_shop(ShopID, Config) ->
+    Path = "/v1/processing/shops/" ++ genlib:to_list(ShopID) ++ "/suspend",
+    {ok, 202, _RespHeaders, Body} = default_call(put, Path, #{}, Config),
+    decode_body(Body).
+
+default_activate_shop(ShopID, Config) ->
+    Path = "/v1/processing/shops/" ++ genlib:to_list(ShopID) ++ "/activate",
+    {ok, 202, _RespHeaders, Body} = default_call(put, Path, #{}, Config),
+    decode_body(Body).
+
+default_get_shop_by_id(ShopID, Config) ->
+    #{
+        <<"shops">> := Shops
+    } = default_get_party(Config),
+    Result = lists:filter(
+        fun
+            (#{<<"shopID">> := ID}) ->
+                case ID of
+                    ShopID -> true;
+                    _ -> false
+                end;
+            (_) -> false
+        end,
+        Shops
+    ),
+    case Result of
+        [Shop] -> {ok, Shop};
+        _ -> {error, {wrong_result, Result}}
+    end.
+
+default_create_shop(CategoryRef, Config) ->
+    Path = "/v1/processing/shops",
+    Req = #{
+        <<"categoryRef">> => CategoryRef,
+        <<"shopDetails">> => #{
+            <<"name">> => <<"OOOBlackMaster">>,
+            <<"description">> => <<"Goods for education">>
+        }
+    },
+    {ok, 202, _RespHeaders, Body} = default_call(post, Path, Req, Config),
+    decode_body(Body).
+
+update_shop(Req, ShopID, Config) ->
+    Path = "/v1/processing/shops/" ++ genlib:to_list(ShopID),
+    {ok, 202, _RespHeaders, Body} = default_call(post, Path, Req, Config),
+    decode_body(Body).
+
+default_get_categories(Config) ->
+    Path = "/v1/processing/categories",
+    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    decode_body(Body).
+
+default_get_category_by_ref(CategoryRef, Config) ->
+    Path = "/v1/processing/categories/" ++ genlib:to_list(CategoryRef),
+    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    decode_body(Body).
+
+default_revoke_claim(ClaimID, Config) ->
+    Path = "/v1/processing/claims/" ++ genlib:to_list(ClaimID) ++ "/revoke",
+    Req = #{
+        <<"reason">> => <<"me want dat">>
+    },
+    {ok, 200, _RespHeaders, Body} = default_call(post, Path, Req, Config),
+    decode_body(Body).
+
+%% @FIXME thats dirty
+default_approve_claim(ClaimID) ->
+    UserInfo = #payproc_UserInfo{
+        id = ?MERCHANT_ID
+    },
+    cp_proto:call_service_safe(
+        party_management,
+        'AcceptClaim',
+        [UserInfo, ?MERCHANT_ID, ClaimID],
+        create_context()
+    ).
+
+populate_categories() ->
+     {{ok, #'Snapshot'{version = Version}}, Context0} = cp_proto:call_service_safe(
+        repository,
+        'Checkout',
+        [{head, #'Head'{}}],
+        create_context()
+    ),
+    Ops = [
+        {'insert', #'InsertOp'{
+            object = {category, #domain_CategoryObject{
+                    ref = #domain_CategoryRef{
+                        id = rand:uniform(10000)
+                    },
+                    data = #domain_Category{
+                        name = genlib:unique()
+                    }
+                }}
+        }} || _I <- lists:seq(1, 10)
+    ],
+    Commit = #'Commit'{
+        ops = Ops
+    },
+
+    cp_proto:call_service_safe(
+        repository,
+        'Commit',
+        [Version, Commit],
+        Context0
+    ).
+
+default_get_shop_accounts(ShopID, Config) ->
+    Path = "/v1/processing/shops/" ++ genlib:to_list(ShopID) ++  "/accounts",
+    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    decode_body(Body).
+
+default_get_shop_account_by_id(AccountID, ShopID, Config) ->
+    Path = "/v1/processing/shops/"
+        ++ genlib:to_list(ShopID)
+        ++ "/accounts/"
+        ++ genlib:to_list(AccountID),
     {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
     decode_body(Body).
 
@@ -364,3 +773,35 @@ decode_body(Body) ->
 -spec qs([{binary(), binary() | true}]) -> list().
 qs(QsVals) ->
     genlib:to_list(cow_qs:qs(QsVals)).
+
+create_context() ->
+    woody_client:new_context(genlib:unique(), capi_woody_event_handler).
+
+create_and_activate_shop(Config) ->
+    #{
+        <<"categoryRef">> := CategoryRef
+    } = get_any_category(Config),
+    #{
+        <<"claimID">> := ClaimID
+    } = default_create_shop(CategoryRef, Config),
+    {ok, _} = default_approve_claim(ClaimID),
+    #{
+        <<"id">> := ClaimID,
+        <<"status">> := #{<<"status">> := <<"ClaimAccepted">>},
+        <<"changeset">> := [
+            #{
+                <<"modificationType">> := <<"ShopCreation">>,
+                <<"shop">> := #{
+                    <<"shopID">> := ShopID
+                }
+            } | _
+        ]
+    } = default_get_claim_by_id(ClaimID, Config),
+    #{
+        <<"claimID">> := _
+    } = default_activate_shop(ShopID, Config),
+    ShopID.
+
+get_any_category(Config) ->
+    [Category | _] = default_get_categories(Config),
+    Category.

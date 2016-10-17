@@ -31,7 +31,11 @@ start_link() ->
 
 authorize_api_key(OperationID, ApiKey) -> capi_auth:auth_api_key(OperationID, ApiKey).
 
--spec handle_request(OperationID :: swagger_api:operation_id(), Req :: #{}, Context :: #{}) ->
+-spec handle_request(
+    OperationID :: swagger_api:operation_id(),
+    Req :: #{},
+    Context :: swagger_api:request_context()
+) ->
     {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
 
 handle_request(OperationID = 'CreateInvoice', Req, _Context) ->
