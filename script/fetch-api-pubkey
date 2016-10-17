@@ -5,15 +5,47 @@ set -e
 KK_HOST=${KK_HOST:-keycloak}
 KK_PORT=${KK_PORT:-8080}
 KK_REALM=${KK_REALM:-external}
+MAX_FETCH_ATTEMPTS=${MAX_FETCH_ATTEMPTS:-5}
 
-REALM_DATA=$(curl -s -m3 "http://${KK_HOST}:${KK_PORT}/auth/realms/${KK_REALM}")
+ATTEMPT=0
+RETRY_TIMEOUT=1
+EXIT_CODE="0"
+REALM_DATA=""
 
-TARGET=${TARGET:-var/secret}
+while (( $ATTEMPT < $MAX_FETCH_ATTEMPTS ))
+  do
+    echo "Fetching keycloak public key..."
 
-echo "-----BEGIN PUBLIC KEY-----" >> ${TARGET}
-echo "${REALM_DATA}" | \
-    grep -Po '"public_key":.*?[^\\]",' | \
-    sed -e 's/public_key//' -e 's/[":,]//g' | \
-    fold -w80 \
-    >> ${TARGET}
-echo "-----END PUBLIC KEY-----" >> ${TARGET}
+    set +e
+    REALM_DATA=$(curl -s -m3 "http://${KK_HOST}:${KK_PORT}/auth/realms/${KK_REALM}")
+    EXIT_CODE=$?
+    set -e
+    if [ "$EXIT_CODE" -eq "0" ]
+    then
+      break
+    fi
+
+    echo "Failure! Retrying in $RETRY_TIMEOUT.." 1>&2
+
+    sleep $RETRY_TIMEOUT
+    ATTEMPT=$(( ATTEMPT + 1 ))
+  done
+
+if [ "$EXIT_CODE" -eq "0" ]
+then
+    echo "Keycloak public key fetched"
+
+    TARGET=${TARGET:-var/secret}
+
+    echo "-----BEGIN PUBLIC KEY-----" >> ${TARGET}
+    echo "${REALM_DATA}" | \
+        grep -Po '"public_key":.*?[^\\]",' | \
+        sed -e 's/public_key//' -e 's/[":,]//g' | \
+        fold -w80 \
+        >> ${TARGET}
+    echo "-----END PUBLIC KEY-----" >> ${TARGET}
+else
+    echo "Keycloak fetching failed"
+    exit $EXIT_CODE
+fi
+
