@@ -151,7 +151,7 @@ init_per_suite(Config) ->
             {service_type, ?CAPI_SERVICE_TYPE},
             {api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")}
         ]),
-    {{ok, _}, _Context} = populate_categories(),
+    populate_snapshot(),
 
     [{apps, lists:reverse(Apps)} | Config].
 
@@ -720,7 +720,9 @@ default_approve_claim(ClaimID) ->
         create_context()
     ).
 
-populate_categories() ->
+populate_snapshot() ->
+    CategoryRefID = rand:uniform(10000),
+    CurrencySymbolicCode = <<"RUB">>,
      {{ok, #'Snapshot'{version = Version}}, Context0} = cp_proto:call_service_safe(
         repository,
         'Checkout',
@@ -729,15 +731,77 @@ populate_categories() ->
     ),
     Ops = [
         {'insert', #'InsertOp'{
-            object = {category, #domain_CategoryObject{
+            object = {
+                party_prototype,
+                #domain_PartyPrototypeObject{
+                    ref = #domain_PartyPrototypeRef{
+                        id = 42
+                    },
+                    data = #domain_PartyPrototype{
+                        shop = #domain_ShopPrototype{
+                            category = #domain_CategoryRef{
+                                id = CategoryRefID
+                            },
+                            details = #domain_ShopDetails{
+                                name = <<"DefaultShopName">>
+                            },
+                            currency = #domain_CurrencyRef{
+                                symbolic_code = CurrencySymbolicCode
+                            }
+                        },
+                        default_services = #domain_ShopServices{}
+                    }
+                }
+            }
+        }},
+        {'insert', #'InsertOp'{
+            object = {
+                category,
+                #domain_CategoryObject{
                     ref = #domain_CategoryRef{
-                        id = rand:uniform(10000)
+                        id = CategoryRefID
                     },
                     data = #domain_Category{
                         name = genlib:unique()
                     }
-                }}
-        }} || _I <- lists:seq(1, 10)
+                }
+            }
+        }},
+        {'insert', #'InsertOp'{
+            object = {
+                currency,
+                #domain_CurrencyObject{
+                    ref = #domain_CurrencyRef{symbolic_code = <<"RUB">>},
+                    data = #domain_Currency{
+                        name = <<"Russian rubles">>,
+                        numeric_code = 643,
+                        symbolic_code = CurrencySymbolicCode,
+                        exponent = 2
+                    }
+                }
+            }
+        }},
+        {'insert', #'InsertOp'{
+            object = {
+                globals,
+                #domain_GlobalsObject{
+                    ref = #domain_GlobalsRef{},
+                    data = #domain_Globals{
+                        party_prototype = #domain_PartyPrototypeRef{
+                            id = 42
+                        },
+                        providers = {
+                            predicates,
+                            ordsets:new()
+                        },
+                        system_accounts = {
+                            predicates,
+                            ordsets:new()
+                        }
+                    }
+                }
+            }
+        }}
     ],
     Commit = #'Commit'{
         ops = Ops
@@ -748,7 +812,9 @@ populate_categories() ->
         'Commit',
         [Version, Commit],
         Context0
-    ).
+    ),
+
+    timer:sleep(8000).
 
 default_get_shop_accounts(ShopID, Config) ->
     Path = "/v1/processing/shops/" ++ genlib:to_list(ShopID) ++  "/accounts",
