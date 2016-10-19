@@ -141,7 +141,11 @@ get_payment_by_id_ok_test(Config) ->
 %% helpers
 
 default_call(Method, Path, Body, Config) ->
-    call(Method, Path, Body, [x_request_id_header(), default_auth_header(Config), json_content_type_header()]).
+    call(Method, Path, Body, [
+        x_request_id_header(),
+        default_auth_header(Config) |
+            content_negotiation_headers(Method)
+    ]).
 
 call(Method, Path, Body, Headers) ->
     Url = get_url(Path),
@@ -201,8 +205,16 @@ auth_token(ResourseAccess, Exp, Config) ->
 default_token_expiration() ->
     genlib_time:unow() + 60.
 
-json_content_type_header() ->
-    {<<"Content-Type">>, <<"application/json; charset=utf-8">>}.
+content_negotiation_headers(Method) when Method == get; Method == head; Method == delete ->
+    json_accept_headers();
+content_negotiation_headers(Method) when Method == post; Method == put; Method == patch ->
+    json_accept_headers() ++ json_content_type_headers().
+
+json_accept_headers() ->
+    [{<<"Accept">>, <<"application/json">>}].
+
+json_content_type_headers() ->
+    [{<<"Content-Type">>, <<"application/json; charset=UTF-8">>}].
 
 default_create_invoice(Config) ->
     {{Y, M, D}, Time} = calendar:local_time(),
