@@ -415,7 +415,8 @@ process_request(OperationID = 'CreateShop', Req, Context) ->
     ShopParams = #payproc_ShopParams{
         category = encode_category_ref(genlib_map:get(<<"categoryRef">>, Params)),
         details = encode_shop_details(genlib_map:get(<<"shopDetails">>, Params)),
-        contractor = encode_contractor(genlib_map:get(<<"contractor">>, Params))
+        % contractor = encode_contractor(genlib_map:get(<<"contractor">>, Params))
+        contractor = encode_contractor(undefined)
     },
 
     {Result, _} = prepare_party(
