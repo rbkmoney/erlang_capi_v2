@@ -82,6 +82,7 @@ process_request(OperationID = 'CreatePayment', Req, Context) ->
     PaymentParams = maps:get('CreatePaymentArgs', Req),
     RequestID = maps:get('X-Request-ID', Req),
     Token = genlib_map:get(<<"paymentToolToken">>, PaymentParams),
+    ContactInfo = genlib_map:get(<<"contactInfo">>, PaymentParams),
     PaymentTool = decode_bank_card(Token),
     #{
         ip_address := IP
@@ -96,6 +97,10 @@ process_request(OperationID = 'CreatePayment', Req, Context) ->
             client_info = #domain_ClientInfo{
                 fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
                 ip_address = PreparedIP
+            },
+            contact_info = #domain_ContactInfo{
+                phone_number = genlib_map:get(<<"phoneNumber">>, ContactInfo),
+                email = genlib_map:get(<<"email">>, ContactInfo)
             }
         }
     },
@@ -972,9 +977,8 @@ decode_invoice(#domain_Invoice{
     'context' = RawContext,
     'shop_id' = ShopID
 }) ->
-   %%% Context = jsx:decode(RawContext, [return_maps]), %%@TODO deal with non json contexts
     Context = #{
-        <<"context">> => RawContext
+        <<"context">> => decode_context(RawContext)
     },
     genlib_map:compact(#{
         <<"id">> => InvoiceID,
@@ -987,6 +991,12 @@ decode_invoice(#domain_Invoice{
         <<"product">> => Product,
         <<"description">> => Description
     }).
+
+decode_context(#'Content'{
+    type = <<"application/json">>,
+    data = InvoiceContext
+}) ->
+    jsx:decode(InvoiceContext,  [return_maps]).
 
 decode_party(#domain_Party{
     id = PartyID,

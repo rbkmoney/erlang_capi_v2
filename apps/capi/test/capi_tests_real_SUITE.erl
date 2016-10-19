@@ -10,6 +10,8 @@
 -export([init_per_suite/1]).
 -export([end_per_suite/1]).
 
+-export([init/1]).
+
 %% test cases
 -export([
     authorization_error_no_header_test/1,
@@ -57,6 +59,16 @@
 
 -define(MERCHANT_ID, <<"hg_tests_SUITE">>).
 
+
+-behaviour(supervisor).
+
+-spec init([]) ->
+    {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
+
+init([]) ->
+    {ok, {#{strategy => one_for_all, intensity => 1, period => 1}, []}}.
+
+
 -type config() :: [{atom(), any()}].
 
 -spec all() -> [
@@ -91,7 +103,9 @@ groups() ->
         {card_payment, [sequence], [
             create_invoice_badard_test,
             create_invoice_ok_test,
-            create_payment_tool_token_ok_test
+            create_payment_tool_token_ok_test,
+            create_payment_ok_test,
+            get_invoice_events_ok_test
         ]},
         {statistics, [parallel], [
             get_invoices_stats_ok_test,
@@ -151,13 +165,18 @@ init_per_suite(Config) ->
             {service_type, ?CAPI_SERVICE_TYPE},
             {api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")}
         ]),
-    {{ok, _}, _Context} = populate_categories(),
+    {ok, SupPid} = supervisor:start_link(?MODULE, []),
+    NewConfig = [{apps, lists:reverse(Apps)}, {test_sup, SupPid} | Config],
+    ProxyUrl = start_service_handler(capi_dummy_provider, NewConfig),
+    populate_snapshot(ProxyUrl),
 
-    [{apps, lists:reverse(Apps)} | Config].
+    NewConfig.
 
 -spec end_per_suite(config()) -> _.
 
 end_per_suite(C) ->
+    _ = unlink(?config(test_sup, C)),
+    exit(?config(test_sup, C), shutdown),
     [application:stop(App) || App <- proplists:get_value(apps, C)].
 
 %% tests
@@ -181,22 +200,30 @@ create_invoice_badard_test(Config) ->
 -spec create_invoice_ok_test(config()) -> _.
 
 create_invoice_ok_test(Config) ->
-    #{<<"id">> := _InvoiceID} = default_create_invoice(Config).
+    #{<<"id">> := InvoiceID} = default_create_invoice(Config),
+    {save_config, InvoiceID}.
 
 -spec create_payment_ok_test(config()) -> _.
 
 create_payment_ok_test(Config) ->
-    #{<<"id">> := InvoiceID} = default_create_invoice(Config),
-    #{
+    {create_payment_tool_token_ok_test, #{
         <<"session">> := PaymentSession,
-        <<"token">> := PaymentToolToken
-    } = default_tokenize_card(Config),
+        <<"token">> := PaymentToolToken,
+        <<"invoiceID">> := InvoiceID
+    }} = ?config(saved_config, Config),
     #{<<"id">> := _PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config).
 
 -spec create_payment_tool_token_ok_test(config()) -> _.
 
 create_payment_tool_token_ok_test(Config) ->
-    #{<<"token">> := _Token, <<"session">> := _Session} = default_tokenize_card(Config).
+    {create_invoice_ok_test,
+        InvoiceID
+    } = ?config(saved_config, Config),
+    #{
+        <<"token">> := _Token,
+        <<"session">> := _Session
+    } = Info = default_tokenize_card(Config),
+    {save_config, Info#{<<"invoiceID">> => InvoiceID}}.
 
 -spec get_invoice_by_id_ok_test(config()) -> _.
 
@@ -720,8 +747,10 @@ default_approve_claim(ClaimID) ->
         create_context()
     ).
 
-populate_categories() ->
-     {{ok, #'Snapshot'{version = Version}}, Context0} = cp_proto:call_service_safe(
+populate_snapshot(ProxyUrl) ->
+    CategoryRefID = rand:uniform(10000),
+    CurrencySymbolicCode = <<"RUB">>,
+    {{ok, #'Snapshot'{version = Version}}, Context0} = cp_proto:call_service_safe(
         repository,
         'Checkout',
         [{head, #'Head'{}}],
@@ -729,15 +758,91 @@ populate_categories() ->
     ),
     Ops = [
         {'insert', #'InsertOp'{
-            object = {category, #domain_CategoryObject{
+            object = {
+                party_prototype,
+                #domain_PartyPrototypeObject{
+                    ref = #domain_PartyPrototypeRef{
+                        id = 42
+                    },
+                    data = #domain_PartyPrototype{
+                        shop = #domain_ShopPrototype{
+                            category = #domain_CategoryRef{
+                                id = CategoryRefID
+                            },
+                            details = #domain_ShopDetails{
+                                name = <<"DefaultShopName">>
+                            },
+                            currency = #domain_CurrencyRef{
+                                symbolic_code = CurrencySymbolicCode
+                            }
+                        },
+                        default_services = #domain_ShopServices{}
+                    }
+                }
+            }
+        }},
+        {'insert', #'InsertOp'{
+            object = {
+                category,
+                #domain_CategoryObject{
                     ref = #domain_CategoryRef{
-                        id = rand:uniform(10000)
+                        id = CategoryRefID
                     },
                     data = #domain_Category{
                         name = genlib:unique()
                     }
-                }}
-        }} || _I <- lists:seq(1, 10)
+                }
+            }
+        }},
+        {'insert', #'InsertOp'{
+            object = {
+                currency,
+                #domain_CurrencyObject{
+                    ref = #domain_CurrencyRef{symbolic_code = <<"RUB">>},
+                    data = #domain_Currency{
+                        name = <<"Russian rubles">>,
+                        numeric_code = 643,
+                        symbolic_code = CurrencySymbolicCode,
+                        exponent = 2
+                    }
+                }
+            }
+        }},
+        {'insert', #'InsertOp'{
+            object = {
+                globals,
+                #domain_GlobalsObject{
+                    ref = #domain_GlobalsRef{},
+                    data = #domain_Globals{
+                        party_prototype = #domain_PartyPrototypeRef{
+                            id = 42
+                        },
+                        providers = {
+                            predicates,
+                            ordsets:new()
+                        },
+                        system_accounts = {
+                            predicates,
+                            ordsets:new()
+                        }
+                    }
+                }
+            }
+        }},
+        {'insert', #'InsertOp'{
+            object = {
+                proxy,
+                #'domain_ProxyObject'{
+                    ref = #'domain_ProxyRef'{
+                        id = 1
+                    },
+                    data = #'domain_ProxyDefinition'{
+                        url = ProxyUrl,
+                        options = #{}
+                    }
+                }
+            }
+        }}
     ],
     Commit = #'Commit'{
         ops = Ops
@@ -748,7 +853,9 @@ populate_categories() ->
         'Commit',
         [Version, Commit],
         Context0
-    ).
+    ),
+
+    timer:sleep(8000).
 
 default_get_shop_accounts(ShopID, Config) ->
     Path = "/v1/processing/shops/" ++ genlib:to_list(ShopID) ++  "/accounts",
@@ -805,3 +912,14 @@ create_and_activate_shop(Config) ->
 get_any_category(Config) ->
     [Category | _] = default_get_categories(Config),
     Category.
+
+start_service_handler(Module, C) ->
+    IP = "127.0.0.1",
+    Port = get_random_port(),
+    Opts = #{},
+    ChildSpec = capi_test_proxy:get_child_spec(Module, IP, Port, Opts),
+    {ok, _} = supervisor:start_child(?config(test_sup, C), ChildSpec),
+    capi_test_proxy:get_url(Module, IP, Port).
+
+get_random_port() ->
+    rand:uniform(32768) + 32767.
