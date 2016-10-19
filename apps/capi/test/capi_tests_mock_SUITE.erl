@@ -202,7 +202,7 @@ default_token_expiration() ->
     genlib_time:unow() + 60.
 
 json_content_type_header() ->
-    {<<"Content-Type">>, <<"application/json">>}.
+    {<<"Content-Type">>, <<"application/json; charset=utf-8">>}.
 
 default_create_invoice(Config) ->
     {{Y, M, D}, Time} = calendar:local_time(),
