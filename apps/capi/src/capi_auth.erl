@@ -114,7 +114,7 @@ get_actions() ->
         'GetPaymentRevenueStats' => [<<"payments_revenue_stats:get">>],
         'GetPaymentGeoStats' => [<<"payments_geo_stats:get">>],
         'GetPaymentRateStats' => [<<"payments_rate_stats:get">>],
-        'GetPaymentInstrumentStats' => [<<"payments_instrument_stats:get">>],
+        'GetPaymentMethodStats' => [<<"payments_instrument_stats:get">>],
         'GetMyParty' => [<<"party:get">>, <<"party:create">>],
         'ActivateShop' => [<<"shops:activate">>, <<"party:create">>],
         'CreateShop' => [<<"shop:create">>, <<"party:create">>],
