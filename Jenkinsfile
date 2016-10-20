@@ -29,7 +29,7 @@ build('capi', 'docker-host', finalHook) {
       sh 'make wc_xref'
     }
     runStage('dialyze') {
-      // sh 'make wc_dialyze'
+      sh 'make wc_dialyze'
     }
     runStage('test') {
       sh "make wdeps_test"
