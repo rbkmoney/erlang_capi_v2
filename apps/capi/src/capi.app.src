@@ -1,6 +1,6 @@
 {application, capi , [
     {description, "A service that does something"},
-    {vsn, "1"},
+    {vsn, "0.1.0"},
     {registered, []},
     {mod, { capi , []}},
     {applications, [

@@ -392,11 +392,11 @@ process_request(OperationID = 'GetPaymentRateStats', Req, Context) ->
             process_request_error(OperationID, Error)
     end;
 
-process_request(OperationID = 'GetPaymentInstrumentStats', Req, Context) ->
+process_request(OperationID = 'GetPaymentMethodStats', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
-    case maps:get(paymentInstrument, Req) of
-        <<"card">> ->
-            StatType = payments_card_stat,
+    case maps:get(paymentMethod, Req) of
+        bank_card ->
+            StatType = payments_pmt_cards_stat,
             Result = call_merchant_stat(StatType, Req, Context, RequestID),
             case Result of
                 {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
@@ -938,7 +938,7 @@ decode_payment_event(_, {
     invoice_payment_status_changed,
     #'payproc_InvoicePaymentStatusChanged'{payment_id = PaymentID, status = {Status, _}}
 }) ->
-    {<<"paymentStatusChanged">>, #{
+    {<<"EventPaymentStatusChanged">>, #{
         <<"paymentID">> => PaymentID,
         <<"status">> => genlib:to_binary(Status)
     }}.
@@ -1131,8 +1131,9 @@ decode_stat_response(customers_rate_stat, Response) ->
         <<"uniqueCount">> => genlib:to_int(maps:get(<<"unic_count">>, Response))
     };
 
-decode_stat_response(payments_card_stat, Response) ->
+decode_stat_response(payments_pmt_cards_stat, Response) ->
     #{
+        <<"statType">> => <<"PaymentMethodBankCardStat">>, %% @TODO deal with nested responses decoding
         <<"offset">> => genlib:to_int(maps:get(<<"offset">>, Response)),
         <<"totalCount">> =>  genlib:to_int(maps:get(<<"total_count">>, Response)),
         <<"paymentSystem">> =>  maps:get(<<"payment_system">>, Response),
@@ -1295,7 +1296,7 @@ decode_shop_account_state(#payproc_ShopAccountState{
 
 decode_user_interaction({redirect, BrowserRequest}) ->
     #{
-        <<"interactionType">> => <<"redirect">>,
+        <<"interactionType">> => <<"Redirect">>,
         <<"request">> => decode_browser_request(BrowserRequest)
     }.
 
@@ -1303,7 +1304,7 @@ decode_browser_request({get_request, #'BrowserGetRequest'{
     uri = UriTemplate
 }}) ->
     #{
-        <<"requestType">> => <<"browserGetRequest">>,
+        <<"requestType">> => <<"BrowserGetRequest">>,
         <<"uriTemplate">> => UriTemplate
     };
 
@@ -1312,7 +1313,7 @@ decode_browser_request({post_request, #'BrowserPostRequest'{
     form = UserInteractionForm
 }}) ->
     #{
-        <<"requestType">> => <<"browserPostRequest">>,
+        <<"requestType">> => <<"BrowserPostRequest">>,
         <<"uriTemplate">> => UriTemplate,
         <<"form">> => decode_user_interaction_form(UserInteractionForm)
     }.
@@ -1473,4 +1474,3 @@ create_party(Context, RequestContext) ->
             Error
     end,
     {R, NewRequestContext}.
-

@@ -21,37 +21,31 @@ services:
       - SERVICE_NAME=capi
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:746b2c8f6d5b51397c19c89a557de34287139ec0
+    image: dr.rbkmoney.com/rbkmoney/hellgate:235513c47205ed190d3276fdb2c7948893b57cbd
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
       - machinegun
       - shumway
-    environment:
-      - SERVICE_NAME=hellgate
 
   cds:
-    image: dr.rbkmoney.com/rbkmoney/cds:dbbf05f7bcdb39a85ca12d290aeecea1bada89d1
+    image: dr.rbkmoney.com/rbkmoney/cds:fe3751a508600af87e67cc5add133d178a403fd6
     restart: always
     command: /opt/cds/bin/cds foreground
-    environment:
-      - SERVICE_NAME=cds
 
   machinegun:
     image: dr.rbkmoney.com/rbkmoney/machinegun:a48f9e93dd5a709d5f14db0c9785d43039282e86
     restart: always
+    command: /opt/machinegun/bin/machinegun foreground
     volumes:
       - ./test/machinegun/sys.config:/opt/machinegun/releases/0.1.0/sys.config
-    environment:
-      - SERVICE_NAME=machinegun
 
   magista:
-    image: dr.rbkmoney.com/rbkmoney/magista:b18a1b11388238775d9bc330b9b89bc425ca735d
+    image: dr.rbkmoney.com/rbkmoney/magista:bf7c71a9e8d7c25c901894d5fe705dc0f2efbdaa
     restart: always
     command: |
-      java
       -Xmx512m
-      -jar /opt/magista/magista-1.0.4.jar
+      -jar /opt/magista/magista.jar
       --db.jdbc.url=jdbc:postgresql://magista-db:5432/magista
       --db.username=postgres
       --db.password=postgres
@@ -71,7 +65,7 @@ services:
       - SERVICE_NAME=magista-db
 
   bustermaze:
-    image: dr.rbkmoney.com/rbkmoney/bustermaze:dd60a565671e34ff743218e6cb52f07e5ce632ea
+    image: dr.rbkmoney.com/rbkmoney/bustermaze:c50c584f3f2fcc6edb226712b2d241e237121ead
     restart: always
     command: |
       -Xmx512m
@@ -80,6 +74,10 @@ services:
       --spring.datasource.username=postgres
       --spring.datasource.password=postgres
       --hg.pooling.url=http://hellgate:8022/v1/processing/eventsink
+      --flyway.url=jdbc:postgresql://bustermaze-db:5432/bustermaze
+      --flyway.user=postgres
+      --flyway.password=postgres
+      --flyway.schemas=bm
     depends_on:
       - hellgate
       - bustermaze-db
@@ -122,8 +120,6 @@ services:
     command: /opt/dominant/bin/dominant foreground
     depends_on:
       - machinegun
-    environment:
-      - SERVICE_NAME=dominant
 
   starter:
     image: ${BUILD_IMAGE}

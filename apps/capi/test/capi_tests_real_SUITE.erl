@@ -9,6 +9,8 @@
 -export([groups/0]).
 -export([init_per_suite/1]).
 -export([end_per_suite/1]).
+-export([init_per_group/2]).
+-export([end_per_group/2]).
 
 -export([init/1]).
 
@@ -29,6 +31,7 @@
     get_payment_revenue_stats_ok_test/1,
     get_payment_geo_stats_ok_test/1,
     get_payment_rate_stats_ok_test/1,
+    get_payment_method_stats_ok_test/1,
     %%%%
     get_my_party_ok_test/1,
     suspend_my_party_ok_test/1,
@@ -53,7 +56,7 @@
 -define(CAPI_SERVICE_TYPE, real).
 -define(CAPI_CDS_STORAGE_URL, "http://cds:8022/v1/storage").
 -define(CAPI_INVOICING_URL, "http://hellgate:8022/v1/processing/invoicing").
--define(CAPI_MERCHANT_STAT_URL, "http://magista:8082/stat").
+-define(CAPI_MERCHANT_STAT_URL, "http://magista:8022/stat").
 -define(CAPI_PARTY_MANAGEMENT_URL, "http://hellgate:8022/v1/processing/partymgmt").
 -define(CAPI_REPOSITORY_URL, "http://dominant:8022/v1/domain/repository").
 
@@ -112,7 +115,8 @@ groups() ->
             get_payment_conversion_stats_ok_test,
             get_payment_revenue_stats_ok_test,
             get_payment_geo_stats_ok_test,
-            get_payment_rate_stats_ok_test
+            get_payment_rate_stats_ok_test,
+            get_payment_method_stats_ok_test
         ]},
         {party_management, [sequence], [
             get_my_party_ok_test,
@@ -177,7 +181,22 @@ init_per_suite(Config) ->
 end_per_suite(C) ->
     _ = unlink(?config(test_sup, C)),
     exit(?config(test_sup, C), shutdown),
+    ok = cleanup(),
     [application:stop(App) || App <- proplists:get_value(apps, C)].
+
+-spec init_per_group(Name :: atom(), config()) -> config().
+
+init_per_group(statistics, Config) ->
+    ShopID = create_and_activate_shop(Config),
+    [{shop_id, ShopID} | Config];
+
+init_per_group(_, Config) ->
+    Config.
+
+-spec end_per_group(Name :: atom(), config()) -> config().
+
+end_per_group(_, Config) ->
+    Config.
 
 %% tests
 -spec authorization_error_no_header_test(config()) -> _.
@@ -262,18 +281,22 @@ get_payment_by_id_ok_test(Config) ->
 -spec get_invoices_stats_ok_test(config()) -> _.
 
 get_invoices_stats_ok_test(Config) ->
+    ShopID = ?config(shop_id, Config),
+
     Qs = qs([
         {<<"limit">>, <<"2">>},
         {<<"offset">>, <<"0">>},
         {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
         {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
     ]),
-    Path = "/v1/analytics/shops/THRIFT-SHOP/invoices?" ++ Qs,
+    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/invoices?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 -spec get_payment_conversion_stats_ok_test(config()) -> _.
 
 get_payment_conversion_stats_ok_test(Config) ->
+    ShopID = ?config(shop_id, Config),
+
     Qs = qs([
         {<<"splitUnit">>, <<"minute">>},
         {<<"splitSize">>, <<"1">>},
@@ -282,12 +305,14 @@ get_payment_conversion_stats_ok_test(Config) ->
         {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
         {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
     ]),
-    Path = "/v1/analytics/shops/THRIFT-SHOP/payments/stats/conversion?" ++ Qs,
+    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/payments/stats/conversion?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 -spec get_payment_revenue_stats_ok_test(config()) -> _.
 
 get_payment_revenue_stats_ok_test(Config) ->
+    ShopID = ?config(shop_id, Config),
+
     Qs = qs([
         {<<"splitUnit">>, <<"minute">>},
         {<<"splitSize">>, <<"1">>},
@@ -296,12 +321,14 @@ get_payment_revenue_stats_ok_test(Config) ->
         {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
         {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
     ]),
-    Path = "/v1/analytics/shops/THRIFT-SHOP/payments/stats/revenue?" ++ Qs,
+    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/payments/stats/revenue?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 -spec get_payment_geo_stats_ok_test(config()) -> _.
 
 get_payment_geo_stats_ok_test(Config) ->
+    ShopID = ?config(shop_id, Config),
+
     Qs = qs([
         {<<"splitUnit">>, <<"minute">>},
         {<<"splitSize">>, <<"1">>},
@@ -310,12 +337,14 @@ get_payment_geo_stats_ok_test(Config) ->
         {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
         {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
     ]),
-    Path = "/v1/analytics/shops/THRIFT-SHOP/payments/stats/geo?" ++ Qs,
+    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/payments/stats/geo?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 -spec get_payment_rate_stats_ok_test(config()) -> _.
 
 get_payment_rate_stats_ok_test(Config) ->
+    ShopID = ?config(shop_id, Config),
+
     Qs = qs([
         {<<"splitUnit">>, <<"minute">>},
         {<<"splitSize">>, <<"1">>},
@@ -324,7 +353,25 @@ get_payment_rate_stats_ok_test(Config) ->
         {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
         {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
     ]),
-    Path = "/v1/analytics/shops/THRIFT-SHOP/customers/stats/rate?" ++ Qs,
+    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/customers/stats/rate?" ++ Qs,
+    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+
+
+-spec get_payment_method_stats_ok_test(config()) -> _.
+
+get_payment_method_stats_ok_test(Config) ->
+    ShopID = ?config(shop_id, Config),
+
+    Qs = qs([
+        {<<"paymentMethod">>, <<"bank_card">>},
+        {<<"splitUnit">>, <<"minute">>},
+        {<<"splitSize">>, <<"1">>},
+        {<<"limit">>, <<"2">>},
+        {<<"offset">>, <<"0">>},
+        {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
+        {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
+    ]),
+    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/customers/stats/payment_method?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 -spec get_my_party_ok_test(config()) -> _.
@@ -762,9 +809,32 @@ default_approve_claim(ClaimID) ->
         create_context()
     ).
 
+-define(cur(ID), #domain_CurrencyRef{symbolic_code = ID}).
+-define(pmt(C, T), #domain_PaymentMethodRef{id = {C, T}}).
+-define(cat(ID), #domain_CategoryRef{id = ID}).
+-define(prx(ID), #domain_ProxyRef{id = ID}).
+-define(prv(ID), #domain_ProviderRef{id = ID}).
+-define(trm(ID), #domain_TerminalRef{id = ID}).
+-define(pst(ID), #domain_PaymentsServiceTermsRef{id = ID}).
+
+-define(trmacc(Cur, Rec, Com),
+    #domain_TerminalAccountSet{currency = ?cur(Cur), receipt = Rec, compensation = Com}).
+
+-define(cfpost(S, A1, D, A2, V),
+    #domain_CashFlowPosting{
+        source      = #domain_CashFlowAccount{party = S, designation = genlib:to_binary(A1)},
+        destination = #domain_CashFlowAccount{party = D, designation = genlib:to_binary(A2)},
+        volume      = V
+    }
+).
+
+-define(fixed(A),
+    {fixed, #domain_CashVolumeFixed{amount = A}}).
+-define(share(P, Q, C),
+    {share, #domain_CashVolumeShare{parts = #'Rational'{p = P, q = Q}, 'of' = C}}).
+
+
 populate_snapshot(ProxyUrl) ->
-    CategoryRefID = rand:uniform(10000),
-    CurrencySymbolicCode = <<"RUB">>,
     {{ok, #'Snapshot'{version = Version}}, Context0} = cp_proto:call_service_safe(
         repository,
         'Checkout',
@@ -773,91 +843,9 @@ populate_snapshot(ProxyUrl) ->
     ),
     Ops = [
         {'insert', #'InsertOp'{
-            object = {
-                party_prototype,
-                #domain_PartyPrototypeObject{
-                    ref = #domain_PartyPrototypeRef{
-                        id = 42
-                    },
-                    data = #domain_PartyPrototype{
-                        shop = #domain_ShopPrototype{
-                            category = #domain_CategoryRef{
-                                id = CategoryRefID
-                            },
-                            details = #domain_ShopDetails{
-                                name = <<"DefaultShopName">>
-                            },
-                            currency = #domain_CurrencyRef{
-                                symbolic_code = CurrencySymbolicCode
-                            }
-                        },
-                        default_services = #domain_ShopServices{}
-                    }
-                }
-            }
-        }},
-        {'insert', #'InsertOp'{
-            object = {
-                category,
-                #domain_CategoryObject{
-                    ref = #domain_CategoryRef{
-                        id = CategoryRefID
-                    },
-                    data = #domain_Category{
-                        name = genlib:unique()
-                    }
-                }
-            }
-        }},
-        {'insert', #'InsertOp'{
-            object = {
-                currency,
-                #domain_CurrencyObject{
-                    ref = #domain_CurrencyRef{symbolic_code = <<"RUB">>},
-                    data = #domain_Currency{
-                        name = <<"Russian rubles">>,
-                        numeric_code = 643,
-                        symbolic_code = CurrencySymbolicCode,
-                        exponent = 2
-                    }
-                }
-            }
-        }},
-        {'insert', #'InsertOp'{
-            object = {
-                globals,
-                #domain_GlobalsObject{
-                    ref = #domain_GlobalsRef{},
-                    data = #domain_Globals{
-                        party_prototype = #domain_PartyPrototypeRef{
-                            id = 42
-                        },
-                        providers = {
-                            predicates,
-                            ordsets:new()
-                        },
-                        system_accounts = {
-                            predicates,
-                            ordsets:new()
-                        }
-                    }
-                }
-            }
-        }},
-        {'insert', #'InsertOp'{
-            object = {
-                proxy,
-                #'domain_ProxyObject'{
-                    ref = #'domain_ProxyRef'{
-                        id = 1
-                    },
-                    data = #'domain_ProxyDefinition'{
-                        url = ProxyUrl,
-                        options = #{}
-                    }
-                }
-            }
+            object = O
         }}
+        || O <- get_domain_fixture(ProxyUrl)
     ],
     Commit = #'Commit'{
         ops = Ops
@@ -871,6 +859,116 @@ populate_snapshot(ProxyUrl) ->
     ),
 
     timer:sleep(8000).
+
+get_domain_fixture(ProxyUrl) ->
+    [
+        {globals, #domain_GlobalsObject{
+            ref = #domain_GlobalsRef{},
+            data = #domain_Globals{
+                party_prototype = #domain_PartyPrototypeRef{id = 42},
+                providers = {value, [?prv(1)]},
+                system_accounts = {predicates, []}
+            }
+        }},
+        {party_prototype, #domain_PartyPrototypeObject{
+            ref = #domain_PartyPrototypeRef{id = 42},
+            data = #domain_PartyPrototype{
+                shop = #domain_ShopPrototype{
+                    category = ?cat(1),
+                    currency = ?cur(<<"RUB">>),
+                    details  = #domain_ShopDetails{
+                        name = <<"SUPER DEFAULT SHOP">>
+                    }
+                },
+                default_services = #domain_ShopServices{
+                    payments = #domain_PaymentsService{
+                        domain_revision = 0,
+                        terms = ?pst(1)
+                    }
+                }
+            }
+        }},
+        {payments_service_terms, #domain_PaymentsServiceTermsObject{
+            ref = ?pst(1),
+            data = #domain_PaymentsServiceTerms{
+                payment_methods = {value, ordsets:from_list([
+                    ?pmt(bank_card, visa),
+                    ?pmt(bank_card, mastercard)
+                ])},
+                limits = {predicates, [
+                    #domain_AmountLimitPredicate{
+                        if_ = {condition, {currency_is, ?cur(<<"RUB">>)}},
+                        then_ = {value, #domain_AmountLimit{
+                            min = {inclusive, 1000},
+                            max = {exclusive, 4200000}
+                        }}
+                    }
+                ]},
+                fees = {predicates, [
+                    #domain_CashFlowPredicate{
+                        if_ = {condition, {currency_is, ?cur(<<"RUB">>)}},
+                        then_ = {value, [
+                            ?cfpost(merchant, general, system, compensation, ?share(45, 1000, payment_amount))
+                        ]}
+                    }
+                ]}
+            }
+        }},
+        {currency, #domain_CurrencyObject{
+            ref = ?cur(<<"RUB">>),
+            data = #domain_Currency{
+                name = <<"Russian rubles">>,
+                numeric_code = 643,
+                symbolic_code = <<"RUB">>,
+                exponent = 2
+            }
+        }},
+        {category, #domain_CategoryObject{
+            ref = ?cat(1),
+            data = #domain_Category{
+                name = <<"Categories">>,
+                description = <<"Goods sold by category providers">>
+            }
+        }},
+        {provider, #domain_ProviderObject{
+            ref = ?prv(1),
+            data = #domain_Provider{
+                name = <<"Brovider">>,
+                description = <<"A provider but bro">>,
+                terminal = {value, [?trm(1)]},
+                proxy = #domain_Proxy{
+                    ref = ?prx(1),
+                    additional = #{
+                        <<"override">> => <<"brovider">>
+                    }
+                }
+            }
+        }},
+        {terminal, #domain_TerminalObject{
+            ref = ?trm(1),
+            data = #domain_Terminal{
+                name = <<"Brominal 1">>,
+                description = <<"Brominal 1">>,
+                payment_method = #domain_PaymentMethodRef{id = {bank_card, visa}},
+                category = ?cat(1),
+                cash_flow = [
+                    ?cfpost(provider, receipt, merchant, general, ?share(1, 1, payment_amount)),
+                    ?cfpost(system, compensation, provider, compensation, ?share(18, 1000, payment_amount))
+                ],
+                accounts = ?trmacc(<<"RUB">>, 10001, 10002),
+                options = #{
+                    <<"override">> => <<"Brominal 1">>
+                }
+            }
+        }},
+        {proxy, #domain_ProxyObject{
+            ref = ?prx(1),
+            data = #domain_ProxyDefinition{
+                url     = ProxyUrl,
+                options = #{}
+            }
+        }}
+    ].
 
 default_get_shop_accounts(ShopID, Config) ->
     Path = "/v1/processing/shops/" ++ genlib:to_list(ShopID) ++  "/accounts",
@@ -938,3 +1036,26 @@ start_service_handler(Module, C) ->
 
 get_random_port() ->
     rand:uniform(32768) + 32767.
+
+cleanup() ->
+    {{ok, #'Snapshot'{domain = Domain, version = Version}}, Context0} = cp_proto:call_service_safe(
+        repository,
+        'Checkout',
+        [{head, #'Head'{}}],
+        create_context()
+    ),
+    Commit = #'Commit'{
+        ops = [
+            {remove, #'RemoveOp'{
+                object = Object
+            }} ||
+                Object <- maps:values(Domain)
+        ]
+    },
+    {{ok, _Version}, _} = cp_proto:call_service_safe(
+        repository,
+        'Commit',
+        [Version, Commit],
+        Context0
+    ),
+    ok.
