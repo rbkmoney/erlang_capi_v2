@@ -9,6 +9,8 @@
 -export([groups/0]).
 -export([init_per_suite/1]).
 -export([end_per_suite/1]).
+-export([init_per_group/2]).
+-export([end_per_group/2]).
 
 -export([init/1]).
 
@@ -179,8 +181,22 @@ init_per_suite(Config) ->
 end_per_suite(C) ->
     _ = unlink(?config(test_sup, C)),
     exit(?config(test_sup, C), shutdown),
-    cleanup(),
+    ok = cleanup(),
     [application:stop(App) || App <- proplists:get_value(apps, C)].
+
+-spec init_per_group(Name :: atom(), config()) -> config().
+
+init_per_group(statistics, Config) ->
+    ShopID = create_and_activate_shop(Config),
+    [{shop_id, ShopID} | Config];
+
+init_per_group(_, Config) ->
+    Config.
+
+-spec end_per_group(Name :: atom(), config()) -> config().
+
+end_per_group(_, Config) ->
+    Config.
 
 %% tests
 -spec authorization_error_no_header_test(config()) -> _.
@@ -265,18 +281,22 @@ get_payment_by_id_ok_test(Config) ->
 -spec get_invoices_stats_ok_test(config()) -> _.
 
 get_invoices_stats_ok_test(Config) ->
+    ShopID = ?config(shop_id, Config),
+
     Qs = qs([
         {<<"limit">>, <<"2">>},
         {<<"offset">>, <<"0">>},
         {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
         {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
     ]),
-    Path = "/v1/analytics/shops/THRIFT-SHOP/invoices?" ++ Qs,
+    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/invoices?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 -spec get_payment_conversion_stats_ok_test(config()) -> _.
 
 get_payment_conversion_stats_ok_test(Config) ->
+    ShopID = ?config(shop_id, Config),
+
     Qs = qs([
         {<<"splitUnit">>, <<"minute">>},
         {<<"splitSize">>, <<"1">>},
@@ -285,12 +305,14 @@ get_payment_conversion_stats_ok_test(Config) ->
         {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
         {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
     ]),
-    Path = "/v1/analytics/shops/THRIFT-SHOP/payments/stats/conversion?" ++ Qs,
+    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/payments/stats/conversion?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 -spec get_payment_revenue_stats_ok_test(config()) -> _.
 
 get_payment_revenue_stats_ok_test(Config) ->
+    ShopID = ?config(shop_id, Config),
+
     Qs = qs([
         {<<"splitUnit">>, <<"minute">>},
         {<<"splitSize">>, <<"1">>},
@@ -299,12 +321,14 @@ get_payment_revenue_stats_ok_test(Config) ->
         {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
         {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
     ]),
-    Path = "/v1/analytics/shops/THRIFT-SHOP/payments/stats/revenue?" ++ Qs,
+    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/payments/stats/revenue?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 -spec get_payment_geo_stats_ok_test(config()) -> _.
 
 get_payment_geo_stats_ok_test(Config) ->
+    ShopID = ?config(shop_id, Config),
+
     Qs = qs([
         {<<"splitUnit">>, <<"minute">>},
         {<<"splitSize">>, <<"1">>},
@@ -313,12 +337,14 @@ get_payment_geo_stats_ok_test(Config) ->
         {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
         {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
     ]),
-    Path = "/v1/analytics/shops/THRIFT-SHOP/payments/stats/geo?" ++ Qs,
+    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/payments/stats/geo?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 -spec get_payment_rate_stats_ok_test(config()) -> _.
 
 get_payment_rate_stats_ok_test(Config) ->
+    ShopID = ?config(shop_id, Config),
+
     Qs = qs([
         {<<"splitUnit">>, <<"minute">>},
         {<<"splitSize">>, <<"1">>},
@@ -327,13 +353,15 @@ get_payment_rate_stats_ok_test(Config) ->
         {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
         {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
     ]),
-    Path = "/v1/analytics/shops/THRIFT-SHOP/customers/stats/rate?" ++ Qs,
+    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/customers/stats/rate?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 
 -spec get_payment_method_stats_ok_test(config()) -> _.
 
 get_payment_method_stats_ok_test(Config) ->
+    ShopID = ?config(shop_id, Config),
+
     Qs = qs([
         {<<"paymentMethod">>, <<"bank_card">>},
         {<<"splitUnit">>, <<"minute">>},
@@ -343,7 +371,7 @@ get_payment_method_stats_ok_test(Config) ->
         {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
         {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
     ]),
-    Path = "/v1/analytics/shops/THRIFT-SHOP/customers/stats/payment_method?" ++ Qs,
+    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/customers/stats/payment_method?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 -spec get_my_party_ok_test(config()) -> _.
@@ -874,13 +902,6 @@ get_domain_fixture(ProxyUrl) ->
                             min = {inclusive, 1000},
                             max = {exclusive, 4200000}
                         }}
-                    },
-                    #domain_AmountLimitPredicate{
-                        if_ = {condition, {currency_is, ?cur(<<"USD">>)}},
-                        then_ = {value, #domain_AmountLimit{
-                            min = {inclusive, 200},
-                            max = {exclusive, 313370}
-                        }}
                     }
                 ]},
                 fees = {predicates, [
@@ -888,12 +909,6 @@ get_domain_fixture(ProxyUrl) ->
                         if_ = {condition, {currency_is, ?cur(<<"RUB">>)}},
                         then_ = {value, [
                             ?cfpost(merchant, general, system, compensation, ?share(45, 1000, payment_amount))
-                        ]}
-                    },
-                    #domain_CashFlowPredicate{
-                        if_ = {condition, {currency_is, ?cur(<<"USD">>)}},
-                        then_ = {value, [
-                            ?cfpost(merchant, general, system, compensation, ?share(65, 1000, payment_amount))
                         ]}
                     }
                 ]}
@@ -905,15 +920,6 @@ get_domain_fixture(ProxyUrl) ->
                 name = <<"Russian rubles">>,
                 numeric_code = 643,
                 symbolic_code = <<"RUB">>,
-                exponent = 2
-            }
-        }},
-        {currency, #domain_CurrencyObject{
-            ref = ?cur(<<"USD">>),
-            data = #domain_Currency{
-                name = <<"US Dollars">>,
-                numeric_code = 840,
-                symbolic_code = <<"USD">>,
                 exponent = 2
             }
         }},
@@ -1032,7 +1038,7 @@ get_random_port() ->
     rand:uniform(32768) + 32767.
 
 cleanup() ->
-    {{ok, #'Snapshot'{domain = Domain, version = Version}}, _Context} = cp_proto:call_service_safe(
+    {{ok, #'Snapshot'{domain = Domain, version = Version}}, Context0} = cp_proto:call_service_safe(
         repository,
         'Checkout',
         [{head, #'Head'{}}],
@@ -1046,9 +1052,10 @@ cleanup() ->
                 Object <- maps:values(Domain)
         ]
     },
-    cp_proto:call_service_safe(
+    {{ok, _Version}, _} = cp_proto:call_service_safe(
         repository,
         'Commit',
         [Version, Commit],
-        create_context()
-    ).
+        Context0
+    ),
+    ok.

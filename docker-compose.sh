@@ -27,23 +27,18 @@ services:
     depends_on:
       - machinegun
       - shumway
-    environment:
-      - SERVICE_NAME=hellgate
 
   cds:
     image: dr.rbkmoney.com/rbkmoney/cds:fe3751a508600af87e67cc5add133d178a403fd6
     restart: always
     command: /opt/cds/bin/cds foreground
-    environment:
-      - SERVICE_NAME=cds
 
   machinegun:
     image: dr.rbkmoney.com/rbkmoney/machinegun:a48f9e93dd5a709d5f14db0c9785d43039282e86
     restart: always
+    command: /opt/machinegun/bin/machinegun foreground
     volumes:
       - ./test/machinegun/sys.config:/opt/machinegun/releases/0.1.0/sys.config
-    environment:
-      - SERVICE_NAME=machinegun
 
   magista:
     image: dr.rbkmoney.com/rbkmoney/magista:bf7c71a9e8d7c25c901894d5fe705dc0f2efbdaa
@@ -125,8 +120,6 @@ services:
     command: /opt/dominant/bin/dominant foreground
     depends_on:
       - machinegun
-    environment:
-      - SERVICE_NAME=dominant
 
   starter:
     image: ${BUILD_IMAGE}
