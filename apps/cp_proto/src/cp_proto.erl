@@ -27,5 +27,7 @@ get_service_modname(merchant_stat) ->
     {cp_merch_stat_thrift, 'MerchantStatistics'};
 get_service_modname(repository) ->
     {cp_domain_config_thrift, 'Repository'};
+get_service_modname(accounter) ->
+    {cp_accounter_thrift, 'Accounter'};
 get_service_modname(party_management) ->
     {cp_payment_processing_thrift, 'PartyManagement'}.

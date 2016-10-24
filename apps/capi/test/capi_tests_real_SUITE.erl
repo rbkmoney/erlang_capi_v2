@@ -3,6 +3,7 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("cp_proto/include/cp_payment_processing_thrift.hrl").
 -include_lib("cp_proto/include/cp_domain_config_thrift.hrl").
+-include_lib("cp_proto/include/cp_accounter_thrift.hrl").
 
 
 -export([all/0]).
@@ -59,6 +60,7 @@
 -define(CAPI_MERCHANT_STAT_URL, "http://magista:8022/stat").
 -define(CAPI_PARTY_MANAGEMENT_URL, "http://hellgate:8022/v1/processing/partymgmt").
 -define(CAPI_REPOSITORY_URL, "http://dominant:8022/v1/domain/repository").
+-define(CAPI_ACCOUNTER_URL, "http://shumway:8022/accounter").
 
 -define(MERCHANT_ID, <<"hg_tests_SUITE">>).
 
@@ -160,7 +162,8 @@ init_per_suite(Config) ->
                 invoicing => ?CAPI_INVOICING_URL,
                 merchant_stat => ?CAPI_MERCHANT_STAT_URL,
                 party_management => ?CAPI_PARTY_MANAGEMENT_URL,
-                repository => ?CAPI_REPOSITORY_URL
+                repository => ?CAPI_REPOSITORY_URL,
+                accounter => ?CAPI_ACCOUNTER_URL
             }}
         ]) ++
         capi_ct_helper:start_app(capi, [
@@ -769,6 +772,10 @@ default_create_shop(CategoryRef, Config) ->
         <<"shopDetails">> => #{
             <<"name">> => <<"OOOBlackMaster">>,
             <<"description">> => <<"Goods for education">>
+        },
+        <<"contractor">> => #{
+            <<"registeredName">> => <<"DefaultRegisteredName">>,
+            <<"legalEntity">> => <<"DefaultLegalEntity">>
         }
     },
     {ok, 202, _RespHeaders, Body} = default_call(post, Path, Req, Config),
@@ -816,6 +823,7 @@ default_approve_claim(ClaimID) ->
 -define(prv(ID), #domain_ProviderRef{id = ID}).
 -define(trm(ID), #domain_TerminalRef{id = ID}).
 -define(pst(ID), #domain_PaymentsServiceTermsRef{id = ID}).
+-define(sas(ID), #domain_SystemAccountSetRef{id = ID}).
 
 -define(trmacc(Cur, Rec, Com),
     #domain_TerminalAccountSet{currency = ?cur(Cur), receipt = Rec, compensation = Com}).
@@ -851,23 +859,44 @@ populate_snapshot(ProxyUrl) ->
         ops = Ops
     },
 
-    cp_proto:call_service_safe(
+    {{ok, _Version}, _} = cp_proto:call_service_safe(
         repository,
         'Commit',
         [Version, Commit],
         Context0
     ),
-
     timer:sleep(8000).
 
 get_domain_fixture(ProxyUrl) ->
+    Context = create_context(),
+    {Accounts, _Context} = lists:foldl(
+        fun ({N, CurrencyCode}, {M, C0}) ->
+            {AccountID, C1} = create_account(CurrencyCode, C0),
+            {M#{N => AccountID}, C1}
+        end,
+        {#{}, Context},
+        [
+            {system_compensation     , <<"RUB">>},
+            {terminal_1_receipt      , <<"RUB">>},
+            {terminal_1_compensation , <<"RUB">>}
+        ]
+    ),
     [
         {globals, #domain_GlobalsObject{
             ref = #domain_GlobalsRef{},
             data = #domain_Globals{
                 party_prototype = #domain_PartyPrototypeRef{id = 42},
                 providers = {value, [?prv(1)]},
-                system_accounts = {predicates, []}
+                system_accounts = {value, [?sas(1)]}
+            }
+        }},
+        {system_account_set, #domain_SystemAccountSetObject{
+            ref = ?sas(1),
+            data = #domain_SystemAccountSet{
+                name = <<"Primaries">>,
+                description = <<"Primaries">>,
+                currency = ?cur(<<"RUB">>),
+                compensation = maps:get(system_compensation, Accounts)
             }
         }},
         {party_prototype, #domain_PartyPrototypeObject{
@@ -955,7 +984,11 @@ get_domain_fixture(ProxyUrl) ->
                     ?cfpost(provider, receipt, merchant, general, ?share(1, 1, payment_amount)),
                     ?cfpost(system, compensation, provider, compensation, ?share(18, 1000, payment_amount))
                 ],
-                accounts = ?trmacc(<<"RUB">>, 10001, 10002),
+                accounts = ?trmacc(
+                    <<"RUB">>,
+                    maps:get(terminal_1_receipt, Accounts),
+                    maps:get(terminal_1_compensation, Accounts)
+                ),
                 options = #{
                     <<"override">> => <<"Brominal 1">>
                 }
@@ -1059,3 +1092,16 @@ cleanup() ->
         Context0
     ),
     ok.
+
+
+create_account(CurrencyCode, Context) ->
+    AccountPrototype = #accounter_AccountPrototype{
+        currency_sym_code = CurrencyCode
+    },
+    {{ok, AccountID}, Context} = cp_proto:call_service_safe(
+        accounter,
+        'CreateAccount',
+        [AccountPrototype],
+        Context
+    ),
+    {AccountID, Context}.

@@ -415,8 +415,7 @@ process_request(OperationID = 'CreateShop', Req, Context) ->
     ShopParams = #payproc_ShopParams{
         category = encode_category_ref(genlib_map:get(<<"categoryRef">>, Params)),
         details = encode_shop_details(genlib_map:get(<<"shopDetails">>, Params)),
-        % contractor = encode_contractor(genlib_map:get(<<"contractor">>, Params))
-        contractor = encode_contractor(undefined)
+        contractor = encode_contractor(genlib_map:get(<<"contractor">>, Params))
     },
 
     {Result, _} = prepare_party(
@@ -823,7 +822,7 @@ encode_shop_details(Details = #{
 }) ->
     #domain_ShopDetails{
         name = Name,
-        description = genlib_map:get(<<"details">>, Details),
+        description = genlib_map:get(<<"description">>, Details),
         location = genlib_map:get(<<"location">>, Details)
     }.
 
@@ -844,7 +843,7 @@ encode_contractor(#{
 }) ->
     #domain_Contractor{
         registered_name = RegisteredName,
-        legal_entity = undefined
+        legal_entity = #domain_LegalEntity{}
     }.
 
 decode_bank_card(Encoded) ->
