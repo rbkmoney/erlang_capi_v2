@@ -192,7 +192,7 @@ process_request(OperationID = 'GetInvoiceByID', Req, Context) ->
         }}} ->
          %%%   InvoiceContext = jsx:decode(RawInvoiceContext, [return_maps]), @TODO deal with non json contexts
             InvoiceContext = #{
-                <<"context">> => RawInvoiceContext
+                <<"context">> => decode_context(RawInvoiceContext)
             },
             Resp = #{
                 <<"id">> => InvoiceID,
@@ -226,7 +226,7 @@ process_request(OperationID = 'FulfillInvoice', Req, Context) ->
         create_context(RequestID)
     ),
     case Result of
-        {ok, _} ->
+        ok ->
             {200, [], #{}};
         Error ->
             process_request_error(OperationID, Error)
@@ -247,7 +247,7 @@ process_request(OperationID = 'RescindInvoice', Req, Context) ->
         create_context(RequestID)
     ),
     case Result of
-        {ok, _} ->
+        ok ->
             {200, [], #{}};
         Error ->
             process_request_error(OperationID, Error)
@@ -281,11 +281,10 @@ process_request(OperationID = 'GetPaymentByID', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
     {Result, _NewContext} = service_call(
         invoicing,
         'GetPayment',
-        [UserInfo, PartyID, PaymentID],
+        [UserInfo, InvoiceID, PaymentID],
         create_context(RequestID)
     ),
     case Result of
