@@ -84,10 +84,7 @@ process_request(OperationID = 'CreatePayment', Req, Context) ->
     Token = genlib_map:get(<<"paymentToolToken">>, PaymentParams),
     ContactInfo = genlib_map:get(<<"contactInfo">>, PaymentParams),
     PaymentTool = decode_bank_card(Token),
-    #{
-        ip_address := IP
-    } = get_peer_info(Context),
-    PreparedIP = genlib:to_binary(inet:ntoa(IP)),
+
     EncodedSession = genlib_map:get(<<"paymentSession">>, PaymentParams),
     {ClientInfo, PaymentSession} = unwrap_session(EncodedSession),
     Params =  #payproc_InvoicePaymentParams{
@@ -96,7 +93,7 @@ process_request(OperationID = 'CreatePayment', Req, Context) ->
             session = PaymentSession,
             client_info = #domain_ClientInfo{
                 fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
-                ip_address = PreparedIP
+                ip_address = maps:get(<<"ip_address">>, ClientInfo)
             },
             contact_info = #domain_ContactInfo{
                 phone_number = genlib_map:get(<<"phoneNumber">>, ContactInfo),
@@ -120,10 +117,10 @@ process_request(OperationID = 'CreatePayment', Req, Context) ->
             process_request_error(OperationID, Error)
     end;
 
-process_request(OperationID = 'CreatePaymentToolToken', Req, _Context) ->
+process_request(OperationID = 'CreatePaymentToolToken', Req, Context) ->
     Params = maps:get('CreatePaymentToolTokenArgs', Req),
     RequestID = maps:get('X-Request-ID', Req),
-    ClientInfo = maps:get(<<"clientInfo">>, Params),
+    ClientInfo0 = maps:get(<<"clientInfo">>, Params),
     PaymentTool = maps:get(<<"paymentTool">>, Params),
     case PaymentTool of
         #{<<"paymentToolType">> := <<"CardData">>} ->
@@ -150,6 +147,12 @@ process_request(OperationID = 'CreatePaymentToolToken', Req, _Context) ->
                     bank_card = BankCard
                 }} ->
                     Token = encode_bank_card(BankCard),
+                    #{
+                        ip_address := IP
+                    } = get_peer_info(Context),
+                    PreparedIP = genlib:to_binary(inet:ntoa(IP)),
+                    ClientInfo = ClientInfo0#{<<"ip_address">> => PreparedIP},
+
                     Session = wrap_session(ClientInfo, PaymentSession),
                     Resp = #{
                         <<"token">> => Token,
@@ -192,7 +195,7 @@ process_request(OperationID = 'GetInvoiceByID', Req, Context) ->
         }}} ->
          %%%   InvoiceContext = jsx:decode(RawInvoiceContext, [return_maps]), @TODO deal with non json contexts
             InvoiceContext = #{
-                <<"context">> => RawInvoiceContext
+                <<"context">> => decode_context(RawInvoiceContext)
             },
             Resp = #{
                 <<"id">> => InvoiceID,
@@ -226,7 +229,7 @@ process_request(OperationID = 'FulfillInvoice', Req, Context) ->
         create_context(RequestID)
     ),
     case Result of
-        {ok, _} ->
+        ok ->
             {200, [], #{}};
         Error ->
             process_request_error(OperationID, Error)
@@ -247,7 +250,7 @@ process_request(OperationID = 'RescindInvoice', Req, Context) ->
         create_context(RequestID)
     ),
     case Result of
-        {ok, _} ->
+        ok ->
             {200, [], #{}};
         Error ->
             process_request_error(OperationID, Error)
@@ -281,11 +284,10 @@ process_request(OperationID = 'GetPaymentByID', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
     {Result, _NewContext} = service_call(
         invoicing,
         'GetPayment',
-        [UserInfo, PartyID, PaymentID],
+        [UserInfo, InvoiceID, PaymentID],
         create_context(RequestID)
     ),
     case Result of
@@ -415,8 +417,7 @@ process_request(OperationID = 'CreateShop', Req, Context) ->
     ShopParams = #payproc_ShopParams{
         category = encode_category_ref(genlib_map:get(<<"categoryRef">>, Params)),
         details = encode_shop_details(genlib_map:get(<<"shopDetails">>, Params)),
-        % contractor = encode_contractor(genlib_map:get(<<"contractor">>, Params))
-        contractor = encode_contractor(undefined)
+        contractor = encode_contractor(genlib_map:get(<<"contractor">>, Params))
     },
 
     {Result, _} = prepare_party(
@@ -823,7 +824,7 @@ encode_shop_details(Details = #{
 }) ->
     #domain_ShopDetails{
         name = Name,
-        description = genlib_map:get(<<"details">>, Details),
+        description = genlib_map:get(<<"description">>, Details),
         location = genlib_map:get(<<"location">>, Details)
     }.
 
@@ -844,7 +845,7 @@ encode_contractor(#{
 }) ->
     #domain_Contractor{
         registered_name = RegisteredName,
-        legal_entity = undefined
+        legal_entity = #domain_LegalEntity{}
     }.
 
 decode_bank_card(Encoded) ->

@@ -27,7 +27,7 @@ CALL_ANYWHERE := all submodules rebar-update compile xref lint dialyze test star
 
 CALL_W_CONTAINER := $(CALL_ANYWHERE)
 
-.PHONY: $(CALL_W_CONTAINER) all
+.PHONY: $(CALL_W_CONTAINER) all cover
 
 all: compile
 
@@ -65,6 +65,7 @@ release: distclean $(SWAGGER_APP_TARGET)
 	$(REBAR) as prod release
 
 clean:
+	$(REBAR) cover -r
 	$(REBAR) clean
 
 distclean:
@@ -86,3 +87,6 @@ $(SWAGGER_APP_TARGET): $(SWAGGER_SCHEME)
 
 swagger_regenerate:
 	$(call swagger_regenerate)
+
+cover:
+	$(REBAR) cover

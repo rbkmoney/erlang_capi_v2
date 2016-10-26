@@ -3,6 +3,7 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("cp_proto/include/cp_payment_processing_thrift.hrl").
 -include_lib("cp_proto/include/cp_domain_config_thrift.hrl").
+-include_lib("cp_proto/include/cp_accounter_thrift.hrl").
 
 
 -export([all/0]).
@@ -24,6 +25,8 @@
     create_payment_tool_token_ok_test/1,
     get_invoice_by_id_ok_test/1,
     get_invoice_events_ok_test/1,
+    rescind_invoice_ok_test/1,
+    fulfill_invoice_ok_test/1,
     get_payment_by_id_ok_test/1,
     %%%%
     get_invoices_stats_ok_test/1,
@@ -59,6 +62,8 @@
 -define(CAPI_MERCHANT_STAT_URL, "http://magista:8022/stat").
 -define(CAPI_PARTY_MANAGEMENT_URL, "http://hellgate:8022/v1/processing/partymgmt").
 -define(CAPI_REPOSITORY_URL, "http://dominant:8022/v1/domain/repository").
+-define(CAPI_ACCOUNTER_URL, "http://shumway:8022/accounter").
+-define(CAPI_HOST_NAME, "capi").
 
 -define(MERCHANT_ID, <<"hg_tests_SUITE">>).
 
@@ -81,6 +86,7 @@ init([]) ->
 all() ->
     [
         {group, authorization},
+        {group, invoice_management},
         {group, card_payment},
         {group, statistics},
         {group, party_management},
@@ -103,11 +109,18 @@ groups() ->
             authorization_error_no_header_test,
             authorization_error_expired_test
         ]},
-        {card_payment, [sequence], [
+        {invoice_management, [sequence], [
             create_invoice_badard_test,
+            create_invoice_ok_test,
+            get_invoice_by_id_ok_test,
+            rescind_invoice_ok_test
+        ]},
+        {card_payment, [sequence], [
             create_invoice_ok_test,
             create_payment_tool_token_ok_test,
             create_payment_ok_test,
+            get_payment_by_id_ok_test,
+            fulfill_invoice_ok_test,
             get_invoice_events_ok_test
         ]},
         {statistics, [parallel], [
@@ -160,7 +173,8 @@ init_per_suite(Config) ->
                 invoicing => ?CAPI_INVOICING_URL,
                 merchant_stat => ?CAPI_MERCHANT_STAT_URL,
                 party_management => ?CAPI_PARTY_MANAGEMENT_URL,
-                repository => ?CAPI_REPOSITORY_URL
+                repository => ?CAPI_REPOSITORY_URL,
+                accounter => ?CAPI_ACCOUNTER_URL
             }}
         ]) ++
         capi_ct_helper:start_app(capi, [
@@ -170,6 +184,7 @@ init_per_suite(Config) ->
             {api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")}
         ]),
     {ok, SupPid} = supervisor:start_link(?MODULE, []),
+    _ = unlink(SupPid),
     NewConfig = [{apps, lists:reverse(Apps)}, {test_sup, SupPid} | Config],
     ProxyUrl = start_service_handler(capi_dummy_provider, NewConfig),
     populate_snapshot(ProxyUrl),
@@ -179,7 +194,6 @@ init_per_suite(Config) ->
 -spec end_per_suite(config()) -> _.
 
 end_per_suite(C) ->
-    _ = unlink(?config(test_sup, C)),
     exit(?config(test_sup, C), shutdown),
     ok = cleanup(),
     [application:stop(App) || App <- proplists:get_value(apps, C)].
@@ -222,6 +236,24 @@ create_invoice_ok_test(Config) ->
     #{<<"id">> := InvoiceID} = default_create_invoice(Config),
     {save_config, InvoiceID}.
 
+-spec fulfill_invoice_ok_test(config()) -> _.
+
+fulfill_invoice_ok_test(Config) ->
+    {get_payment_by_id_ok_test,
+        #{invoice_id := InvoiceID} = Info
+    } = ?config(saved_config, Config),
+    #{} = default_fulfill_invoice(InvoiceID, Config),
+    {save_config, Info}.
+
+-spec rescind_invoice_ok_test(config()) -> _.
+
+rescind_invoice_ok_test(Config) ->
+    {get_invoice_by_id_ok_test,
+        InvoiceID
+    } = ?config(saved_config, Config),
+    #{} = default_rescind_invoice(InvoiceID, Config).
+
+
 -spec create_payment_ok_test(config()) -> _.
 
 create_payment_ok_test(Config) ->
@@ -230,7 +262,14 @@ create_payment_ok_test(Config) ->
         <<"token">> := PaymentToolToken,
         <<"invoiceID">> := InvoiceID
     }} = ?config(saved_config, Config),
-    #{<<"id">> := _PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config).
+    #{<<"id">> := PaymentID} = default_create_payment(
+        InvoiceID,
+        PaymentSession,
+        PaymentToolToken,
+        Config
+    ),
+    {save_config, #{payment_id => PaymentID, invoice_id => InvoiceID}}.
+
 
 -spec create_payment_tool_token_ok_test(config()) -> _.
 
@@ -247,36 +286,31 @@ create_payment_tool_token_ok_test(Config) ->
 -spec get_invoice_by_id_ok_test(config()) -> _.
 
 get_invoice_by_id_ok_test(Config) ->
-    #{<<"id">> := InvoiceID} = default_create_invoice(Config),
+    {create_invoice_ok_test,
+        InvoiceID
+    } = ?config(saved_config, Config),
     Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID),
-    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config),
+    {save_config, InvoiceID}.
 
 -spec get_invoice_events_ok_test(config()) -> _.
 
 get_invoice_events_ok_test(Config) ->
-    #{<<"id">> := InvoiceID} = default_create_invoice(Config),
-    #{
-        <<"session">> := PaymentSession,
-        <<"token">> := PaymentToolToken
-    } = default_tokenize_card(Config),
-    #{<<"id">> := _PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config),
-
-    timer:sleep(1000),
+    {fulfill_invoice_ok_test,
+        #{invoice_id := InvoiceID}
+    } = ?config(saved_config, Config),
     Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/events/?limit=100",
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
 
 -spec get_payment_by_id_ok_test(config()) -> _.
 
 get_payment_by_id_ok_test(Config) ->
-    #{<<"id">> := InvoiceID} = default_create_invoice(Config),
-    #{
-        <<"session">> := PaymentSession,
-        <<"token">> := PaymentToolToken
-    } = default_tokenize_card(Config),
-    #{<<"id">> := PaymentID} = default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config),
-
+    {create_payment_ok_test,
+        #{payment_id := PaymentID, invoice_id := InvoiceID} = Info
+    } = ?config(saved_config, Config),
     Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments/" ++  genlib:to_list(PaymentID),
-    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config),
+    {save_config, Info}.
 
 -spec get_invoices_stats_ok_test(config()) -> _.
 
@@ -769,6 +803,10 @@ default_create_shop(CategoryRef, Config) ->
         <<"shopDetails">> => #{
             <<"name">> => <<"OOOBlackMaster">>,
             <<"description">> => <<"Goods for education">>
+        },
+        <<"contractor">> => #{
+            <<"registeredName">> => <<"DefaultRegisteredName">>,
+            <<"legalEntity">> => <<"DefaultLegalEntity">>
         }
     },
     {ok, 202, _RespHeaders, Body} = default_call(post, Path, Req, Config),
@@ -797,6 +835,24 @@ default_revoke_claim(ClaimID, Config) ->
     {ok, 200, _RespHeaders, Body} = default_call(post, Path, Req, Config),
     decode_body(Body).
 
+
+default_fulfill_invoice(InvoiceID, Config) ->
+    Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/fulfill",
+    Req = #{
+        <<"reason">> => <<"me want dat">>
+    },
+    {ok, 200, _RespHeaders, Body} = default_call(post, Path, Req, Config),
+    decode_body(Body).
+
+
+default_rescind_invoice(InvoiceID, Config) ->
+    Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/rescind",
+    Req = #{
+        <<"reason">> => <<"me want dat">>
+    },
+    {ok, 200, _RespHeaders, Body} = default_call(post, Path, Req, Config),
+    decode_body(Body).
+
 %% @FIXME thats dirty
 default_approve_claim(ClaimID) ->
     UserInfo = #payproc_UserInfo{
@@ -816,6 +872,7 @@ default_approve_claim(ClaimID) ->
 -define(prv(ID), #domain_ProviderRef{id = ID}).
 -define(trm(ID), #domain_TerminalRef{id = ID}).
 -define(pst(ID), #domain_PaymentsServiceTermsRef{id = ID}).
+-define(sas(ID), #domain_SystemAccountSetRef{id = ID}).
 
 -define(trmacc(Cur, Rec, Com),
     #domain_TerminalAccountSet{currency = ?cur(Cur), receipt = Rec, compensation = Com}).
@@ -851,23 +908,44 @@ populate_snapshot(ProxyUrl) ->
         ops = Ops
     },
 
-    cp_proto:call_service_safe(
+    {{ok, _Version}, _} = cp_proto:call_service_safe(
         repository,
         'Commit',
         [Version, Commit],
         Context0
     ),
-
     timer:sleep(8000).
 
 get_domain_fixture(ProxyUrl) ->
+    Context = create_context(),
+    {Accounts, _Context} = lists:foldl(
+        fun ({N, CurrencyCode}, {M, C0}) ->
+            {AccountID, C1} = create_account(CurrencyCode, C0),
+            {M#{N => AccountID}, C1}
+        end,
+        {#{}, Context},
+        [
+            {system_compensation     , <<"RUB">>},
+            {terminal_1_receipt      , <<"RUB">>},
+            {terminal_1_compensation , <<"RUB">>}
+        ]
+    ),
     [
         {globals, #domain_GlobalsObject{
             ref = #domain_GlobalsRef{},
             data = #domain_Globals{
                 party_prototype = #domain_PartyPrototypeRef{id = 42},
                 providers = {value, [?prv(1)]},
-                system_accounts = {predicates, []}
+                system_accounts = {value, [?sas(1)]}
+            }
+        }},
+        {system_account_set, #domain_SystemAccountSetObject{
+            ref = ?sas(1),
+            data = #domain_SystemAccountSet{
+                name = <<"Primaries">>,
+                description = <<"Primaries">>,
+                currency = ?cur(<<"RUB">>),
+                compensation = maps:get(system_compensation, Accounts)
             }
         }},
         {party_prototype, #domain_PartyPrototypeObject{
@@ -955,7 +1033,11 @@ get_domain_fixture(ProxyUrl) ->
                     ?cfpost(provider, receipt, merchant, general, ?share(1, 1, payment_amount)),
                     ?cfpost(system, compensation, provider, compensation, ?share(18, 1000, payment_amount))
                 ],
-                accounts = ?trmacc(<<"RUB">>, 10001, 10002),
+                accounts = ?trmacc(
+                    <<"RUB">>,
+                    maps:get(terminal_1_receipt, Accounts),
+                    maps:get(terminal_1_compensation, Accounts)
+                ),
                 options = #{
                     <<"override">> => <<"Brominal 1">>
                 }
@@ -1027,12 +1109,11 @@ get_any_category(Config) ->
     Category.
 
 start_service_handler(Module, C) ->
-    IP = "127.0.0.1",
     Port = get_random_port(),
     Opts = #{},
-    ChildSpec = capi_test_proxy:get_child_spec(Module, IP, Port, Opts),
+    ChildSpec = capi_test_proxy:get_child_spec(Module, "0.0.0.0", Port, Opts),
     {ok, _} = supervisor:start_child(?config(test_sup, C), ChildSpec),
-    capi_test_proxy:get_url(Module, IP, Port).
+    capi_test_proxy:get_url(Module, ?CAPI_HOST_NAME, Port).
 
 get_random_port() ->
     rand:uniform(32768) + 32767.
@@ -1059,3 +1140,16 @@ cleanup() ->
         Context0
     ),
     ok.
+
+
+create_account(CurrencyCode, Context0) ->
+    AccountPrototype = #accounter_AccountPrototype{
+        currency_sym_code = CurrencyCode
+    },
+    {{ok, AccountID}, Context} = cp_proto:call_service_safe(
+        accounter,
+        'CreateAccount',
+        [AccountPrototype],
+        Context0
+    ),
+    {AccountID, Context}.

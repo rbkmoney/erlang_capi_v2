@@ -21,7 +21,7 @@ services:
       - SERVICE_NAME=capi
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:235513c47205ed190d3276fdb2c7948893b57cbd
+    image: dr.rbkmoney.com/rbkmoney/hellgate:ef9864b17f88d98a2b851a7cc090c3cfc4c19d4b
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -29,7 +29,7 @@ services:
       - shumway
 
   cds:
-    image: dr.rbkmoney.com/rbkmoney/cds:fe3751a508600af87e67cc5add133d178a403fd6
+    image: dr.rbkmoney.com/rbkmoney/cds:538659226317356bc42529299037fe6cfa651694
     restart: always
     command: /opt/cds/bin/cds foreground
 
@@ -115,7 +115,7 @@ services:
       - SERVICE_NAME=shumway-db
 
   dominant:
-    image: dr.rbkmoney.com/rbkmoney/dominant:f3c72168d9dfeb4da241d4eb5d6a29787c81faef
+    image: dr.rbkmoney.com/rbkmoney/dominant:9e6db27120f970707b77aa492fb218eb1bd40055
     restart: always
     command: /opt/dominant/bin/dominant foreground
     depends_on:

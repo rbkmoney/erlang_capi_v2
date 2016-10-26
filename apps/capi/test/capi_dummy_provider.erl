@@ -9,13 +9,11 @@
 
 %%
 
--define(COWBOY_PORT, 9988).
-
 -spec get_service_spec() ->
     {Path :: string(), Service :: {module(), atom()}}.
 
 get_service_spec() ->
-    {"/test/proxy/provider/dummy", {capi_proxy_provider_thrift, 'ProviderProxy'}}.
+    {"/test/proxy/provider/dummy", {cp_proxy_provider_thrift, 'ProviderProxy'}}.
 
 %%
 
@@ -26,8 +24,8 @@ get_service_spec() ->
 
 handle_function(
     'ProcessPayment',
-    {#'Context'{
-        session = #'Session'{target = Target, state = State},
+    {#prxprv_Context{
+        session = #prxprv_Session{target = Target, state = State},
         payment = PaymentInfo,
         options = _
     }},
@@ -38,8 +36,8 @@ handle_function(
 
 handle_function(
     'HandlePaymentCallback',
-    {_Payload, #'Context'{
-        session = #'Session'{target = _Target, state = _State},
+    {_Payload, #prxprv_Context{
+        session = #prxprv_Session{target = _Target, state = _State},
         payment = PaymentInfo,
         options = _
     }},
@@ -48,18 +46,20 @@ handle_function(
 ) ->
     {{ok, respond(<<"sure">>, finish(PaymentInfo))}, Context}.
 
+process_payment({captured, #domain_InvoicePaymentCaptured{}}, _, PaymentInfo, _, Context) ->
+    {{ok, finish(PaymentInfo)}, Context};
 
 process_payment({processed, #domain_InvoicePaymentProcessed{}}, _, PaymentInfo, _, Context) ->
     {{ok, finish(PaymentInfo)}, Context}.
 
-finish(#'PaymentInfo'{payment = Payment}) ->
-    #'ProxyResult'{
+finish(#prxprv_PaymentInfo{payment = Payment}) ->
+    #prxprv_ProxyResult{
         intent = {finish, #'FinishIntent'{status = {ok, #'Ok'{}}}},
-        trx    = #domain_TransactionInfo{id = Payment#domain_InvoicePayment.id}
+        trx    = #domain_TransactionInfo{id = Payment#prxprv_InvoicePayment.id}
     }.
 
 respond(Response, Result) ->
-    #'CallbackResult'{
+    #prxprv_CallbackResult{
         response = Response,
         result = Result
     }.
