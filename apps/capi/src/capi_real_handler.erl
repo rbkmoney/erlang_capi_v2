@@ -84,10 +84,7 @@ process_request(OperationID = 'CreatePayment', Req, Context) ->
     Token = genlib_map:get(<<"paymentToolToken">>, PaymentParams),
     ContactInfo = genlib_map:get(<<"contactInfo">>, PaymentParams),
     PaymentTool = decode_bank_card(Token),
-    #{
-        ip_address := IP
-    } = get_peer_info(Context),
-    PreparedIP = genlib:to_binary(inet:ntoa(IP)),
+
     EncodedSession = genlib_map:get(<<"paymentSession">>, PaymentParams),
     {ClientInfo, PaymentSession} = unwrap_session(EncodedSession),
     Params =  #payproc_InvoicePaymentParams{
@@ -96,7 +93,7 @@ process_request(OperationID = 'CreatePayment', Req, Context) ->
             session = PaymentSession,
             client_info = #domain_ClientInfo{
                 fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
-                ip_address = PreparedIP
+                ip_address = maps:get(<<"ip_address">>, ClientInfo)
             },
             contact_info = #domain_ContactInfo{
                 phone_number = genlib_map:get(<<"phoneNumber">>, ContactInfo),
@@ -120,10 +117,10 @@ process_request(OperationID = 'CreatePayment', Req, Context) ->
             process_request_error(OperationID, Error)
     end;
 
-process_request(OperationID = 'CreatePaymentToolToken', Req, _Context) ->
+process_request(OperationID = 'CreatePaymentToolToken', Req, Context) ->
     Params = maps:get('CreatePaymentToolTokenArgs', Req),
     RequestID = maps:get('X-Request-ID', Req),
-    ClientInfo = maps:get(<<"clientInfo">>, Params),
+    ClientInfo0 = maps:get(<<"clientInfo">>, Params),
     PaymentTool = maps:get(<<"paymentTool">>, Params),
     case PaymentTool of
         #{<<"paymentToolType">> := <<"CardData">>} ->
@@ -150,6 +147,12 @@ process_request(OperationID = 'CreatePaymentToolToken', Req, _Context) ->
                     bank_card = BankCard
                 }} ->
                     Token = encode_bank_card(BankCard),
+                    #{
+                        ip_address := IP
+                    } = get_peer_info(Context),
+                    PreparedIP = genlib:to_binary(inet:ntoa(IP)),
+                    ClientInfo = ClientInfo0#{<<"ip_address">> => PreparedIP},
+
                     Session = wrap_session(ClientInfo, PaymentSession),
                     Resp = #{
                         <<"token">> => Token,
