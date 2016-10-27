@@ -504,7 +504,7 @@ process_request(OperationID = 'UpdateShop', Req, Context) ->
     ShopID = maps:get(shopID, Req),
     Params = maps:get('UpdateShopArgs', Req),
     ShopUpdate = #payproc_ShopUpdate{
-        category = genlib_map:get(<<"categoryRef">>, Params), %% @TODO check category ref later
+        category = encode_category_ref(genlib_map:get(<<"categoryRef">>, Params)),
         details = encode_shop_details(genlib_map:get(<<"shopDetails">>, Params)),
         contractor = encode_contractor(genlib_map:get(<<"contractor">>, Params))
     },
