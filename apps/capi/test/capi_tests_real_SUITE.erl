@@ -321,7 +321,8 @@ get_invoices_stats_ok_test(Config) ->
         {<<"limit">>, <<"2">>},
         {<<"offset">>, <<"0">>},
         {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
-        {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
+        {<<"toTime">>, <<"2020-08-11T19:42:35Z">>},
+        {<<"status">>, <<"unpaid">>}
     ]),
     Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/invoices?" ++ Qs,
     {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
