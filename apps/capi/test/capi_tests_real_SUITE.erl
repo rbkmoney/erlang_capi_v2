@@ -534,7 +534,8 @@ update_shop_ok_test(Config) ->
         <<"location">> => genlib:unique()
     },
     Req = #{
-        <<"shopDetails">> => NewShopDetails
+        <<"shopDetails">> => NewShopDetails,
+        <<"categoryRef">> => 1
     },
     #{
         <<"claimID">> := ClaimID
