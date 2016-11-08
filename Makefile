@@ -5,6 +5,7 @@ SUBTARGETS = $(patsubst %,%/.git,$(SUBMODULES))
 SWAGGER_CODEGEN ?= $(call which, swagger-codegen)
 SWAGGER_SCHEME = schemes/swag/swagger.yaml
 SWAGGER_APP_PATH = apps/swagger
+
 SWAGGER_APP_TARGET = $(SWAGGER_APP_PATH)/rebar.config
 
 UTILS_PATH := build_utils
@@ -80,6 +81,7 @@ test: submodules
 define swagger_regenerate
 	rm -rf $(SWAGGER_APP_PATH)
 	$(SWAGGER_CODEGEN) generate -i $(SWAGGER_SCHEME) -l erlang-server -o $(SWAGGER_APP_PATH)
+
 endef
 
 $(SWAGGER_APP_TARGET): $(SWAGGER_SCHEME)

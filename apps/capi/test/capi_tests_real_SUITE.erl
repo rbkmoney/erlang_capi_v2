@@ -228,7 +228,14 @@ authorization_error_expired_test(Config) ->
 -spec create_invoice_badard_test(config()) -> _.
 
 create_invoice_badard_test(Config) ->
-    {ok, 400, _RespHeaders, _Body} = default_call(post, "/v1/processing/invoices", #{}, Config).
+    Headers = headers(post, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{},
+        body => #{},
+        qs_val => #{}
+    },
+    {error, _} = swagger_invoices_api:create_invoice(?CAPI_HOST, ?CAPI_PORT, Params).
 
 -spec create_invoice_ok_test(config()) -> _.
 
@@ -289,8 +296,16 @@ get_invoice_by_id_ok_test(Config) ->
     {create_invoice_ok_test,
         InvoiceID
     } = ?config(saved_config, Config),
-    Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID),
-    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config),
+    Headers = headers(get, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{
+            <<"invoiceID">> => InvoiceID
+        },
+        body => #{},
+        qs_val => #{}
+    },
+    {ok, 200, _RespHeaders, _Body} = swagger_invoices_api:get_invoice_by_id(?CAPI_HOST, ?CAPI_PORT, Params),
     {save_config, InvoiceID}.
 
 -spec get_invoice_events_ok_test(config()) -> _.
@@ -299,8 +314,19 @@ get_invoice_events_ok_test(Config) ->
     {fulfill_invoice_ok_test,
         #{invoice_id := InvoiceID}
     } = ?config(saved_config, Config),
-    Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/events/?limit=100",
-    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+    Headers = headers(get, Config),
+    Qs = #{
+        <<"limit">> => <<"100">>
+    },
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{
+            <<"invoiceID">> => InvoiceID
+        },
+        body => #{},
+        qs_val => Qs
+    },
+    {ok, 200, _RespHeaders, _Body} = swagger_invoices_api:get_invoice_events(?CAPI_HOST, ?CAPI_PORT, Params).
 
 -spec get_payment_by_id_ok_test(config()) -> _.
 
@@ -308,106 +334,157 @@ get_payment_by_id_ok_test(Config) ->
     {create_payment_ok_test,
         #{payment_id := PaymentID, invoice_id := InvoiceID} = Info
     } = ?config(saved_config, Config),
-    Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments/" ++  genlib:to_list(PaymentID),
-    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config),
+    Headers = headers(get, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{
+            <<"invoiceID">> => InvoiceID,
+            <<"paymentID">> => PaymentID
+        },
+        body => #{},
+        qs_val => #{}
+    },
+    {ok, 200, _RespHeaders, _Body} = swagger_payments_api:get_payment_by_id(?CAPI_HOST, ?CAPI_PORT, Params),
     {save_config, Info}.
 
 -spec get_invoices_stats_ok_test(config()) -> _.
 
 get_invoices_stats_ok_test(Config) ->
     ShopID = ?config(shop_id, Config),
-
-    Qs = qs([
-        {<<"limit">>, <<"2">>},
-        {<<"offset">>, <<"0">>},
-        {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
-        {<<"toTime">>, <<"2020-08-11T19:42:35Z">>},
-        {<<"status">>, <<"unpaid">>}
-    ]),
-    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/invoices?" ++ Qs,
-    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+    Headers = headers(get, Config),
+    Qs = #{
+        <<"limit">> => <<"2">>,
+        <<"offset">> => <<"0">>,
+        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
+        <<"toTime">> => <<"2020-08-11T19:42:35Z">>,
+        <<"status">> => <<"unpaid">>
+    },
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{
+            <<"shopID">> => ShopID
+        },
+        body => #{},
+        qs_val => Qs
+    },
+    {ok, 200, _RespHeaders, _Body} = swagger_analytics_api:get_invoices(?CAPI_HOST, ?CAPI_PORT, Params).
 
 -spec get_payment_conversion_stats_ok_test(config()) -> _.
 
 get_payment_conversion_stats_ok_test(Config) ->
     ShopID = ?config(shop_id, Config),
-
-    Qs = qs([
-        {<<"splitUnit">>, <<"minute">>},
-        {<<"splitSize">>, <<"1">>},
-        {<<"limit">>, <<"2">>},
-        {<<"offset">>, <<"0">>},
-        {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
-        {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
-    ]),
-    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/payments/stats/conversion?" ++ Qs,
-    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+    Headers = headers(get, Config),
+    Qs = #{
+        <<"splitUnit">> => <<"minute">>,
+        <<"splitSize">> => <<"1">>,
+        <<"limit">> => <<"2">>,
+        <<"offset">> => <<"0">>,
+        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
+        <<"toTime">> => <<"2020-08-11T19:42:35Z">>
+    },
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{
+            <<"shopID">> => ShopID
+        },
+        body => #{},
+        qs_val => Qs
+    },
+    {ok, 200, _RespHeaders, _Body} = swagger_analytics_api:get_payment_conversion_stats(?CAPI_HOST, ?CAPI_PORT, Params).
 
 -spec get_payment_revenue_stats_ok_test(config()) -> _.
 
 get_payment_revenue_stats_ok_test(Config) ->
     ShopID = ?config(shop_id, Config),
-
-    Qs = qs([
-        {<<"splitUnit">>, <<"minute">>},
-        {<<"splitSize">>, <<"1">>},
-        {<<"limit">>, <<"2">>},
-        {<<"offset">>, <<"0">>},
-        {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
-        {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
-    ]),
-    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/payments/stats/revenue?" ++ Qs,
-    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+    Headers = headers(get, Config),
+    Qs = #{
+        <<"splitUnit">> => <<"minute">>,
+        <<"splitSize">> => <<"1">>,
+        <<"limit">> => <<"2">>,
+        <<"offset">> => <<"0">>,
+        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
+        <<"toTime">> => <<"2020-08-11T19:42:35Z">>
+    },
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{
+            <<"shopID">> => ShopID
+        },
+        body => #{},
+        qs_val => Qs
+    },
+    {ok, 200, _RespHeaders, _Body} = swagger_analytics_api:get_payment_revenue_stats(?CAPI_HOST, ?CAPI_PORT, Params).
 
 -spec get_payment_geo_stats_ok_test(config()) -> _.
 
 get_payment_geo_stats_ok_test(Config) ->
     ShopID = ?config(shop_id, Config),
-
-    Qs = qs([
-        {<<"splitUnit">>, <<"minute">>},
-        {<<"splitSize">>, <<"1">>},
-        {<<"limit">>, <<"2">>},
-        {<<"offset">>, <<"0">>},
-        {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
-        {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
-    ]),
-    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/payments/stats/geo?" ++ Qs,
-    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+    Headers = headers(get, Config),
+    Qs = #{
+        <<"splitUnit">> => <<"minute">>,
+        <<"splitSize">> => <<"1">>,
+        <<"limit">> => <<"2">>,
+        <<"offset">> => <<"0">>,
+        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
+        <<"toTime">> => <<"2020-08-11T19:42:35Z">>
+    },
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{
+            <<"shopID">> => ShopID
+        },
+        body => #{},
+        qs_val => Qs
+    },
+    {ok, 200, _RespHeaders, _Body} = swagger_analytics_api:get_payment_geo_stats(?CAPI_HOST, ?CAPI_PORT, Params).
 
 -spec get_payment_rate_stats_ok_test(config()) -> _.
 
 get_payment_rate_stats_ok_test(Config) ->
     ShopID = ?config(shop_id, Config),
-
-    Qs = qs([
-        {<<"splitUnit">>, <<"minute">>},
-        {<<"splitSize">>, <<"1">>},
-        {<<"limit">>, <<"2">>},
-        {<<"offset">>, <<"0">>},
-        {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
-        {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
-    ]),
-    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/customers/stats/rate?" ++ Qs,
-    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+    Headers = headers(get, Config),
+    Qs = #{
+        <<"splitUnit">> => <<"minute">>,
+        <<"splitSize">> => <<"1">>,
+        <<"limit">> => <<"2">>,
+        <<"offset">> => <<"0">>,
+        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
+        <<"toTime">> => <<"2020-08-11T19:42:35Z">>
+    },
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{
+            <<"shopID">> => ShopID
+        },
+        body => #{},
+        qs_val => Qs
+    },
+    {ok, 200, _RespHeaders, _Body} = swagger_analytics_api:get_payment_rate_stats(?CAPI_HOST, ?CAPI_PORT, Params).
 
 
 -spec get_payment_method_stats_ok_test(config()) -> _.
 
 get_payment_method_stats_ok_test(Config) ->
     ShopID = ?config(shop_id, Config),
-
-    Qs = qs([
-        {<<"paymentMethod">>, <<"bank_card">>},
-        {<<"splitUnit">>, <<"minute">>},
-        {<<"splitSize">>, <<"1">>},
-        {<<"limit">>, <<"2">>},
-        {<<"offset">>, <<"0">>},
-        {<<"fromTime">>, <<"2015-08-11T19:42:35Z">>},
-        {<<"toTime">>, <<"2020-08-11T19:42:35Z">>}
-    ]),
-    Path = "/v1/analytics/shops/" ++ genlib:to_list(ShopID) ++ "/customers/stats/payment_method?" ++ Qs,
-    {ok, 200, _RespHeaders, _Body} = default_call(get, Path, #{}, Config).
+    Headers = headers(get, Config),
+    Qs = #{
+        <<"paymentMethod">> => <<"bank_card">>,
+        <<"splitUnit">> => <<"minute">>,
+        <<"splitSize">> => <<"1">>,
+        <<"limit">> => <<"2">>,
+        <<"offset">> => <<"0">>,
+        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
+        <<"toTime">> => <<"2020-08-11T19:42:35Z">>
+    },
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{
+            <<"shopID">> => ShopID
+        },
+        body => #{},
+        qs_val => Qs
+    },
+    {ok, 200, _RespHeaders, _Body} = swagger_analytics_api:get_payment_method_stats(?CAPI_HOST, ?CAPI_PORT, Params).
 
 -spec get_my_party_ok_test(config()) -> _.
 
@@ -606,12 +683,12 @@ get_shop_account_by_id_ok_test(Config) ->
 
 %% helpers
 
-default_call(Method, Path, Body, Config) ->
-    call(Method, Path, Body, [
+headers(Method, Config) ->
+  [
         x_request_id_header(),
         default_auth_header(Config) |
             content_negotiation_headers(Method)
-    ]).
+  ].
 
 call(Method, Path, Body, Headers) ->
     Url = get_url(Path),
@@ -712,7 +789,14 @@ default_create_invoice(Config) ->
         <<"product">> => <<"test_product">>,
         <<"description">> => <<"test_invoice_description">>
     },
-    {ok, 201, _RespHeaders, Body} = default_call(post, "/v1/processing/invoices", Req, Config),
+    Headers = headers(post, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{},
+        body => Req,
+        qs_val => #{}
+    },
+    {ok, 201, _RespHeaders, Body} = swagger_invoices_api:create_invoice(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 default_tokenize_card(Config) ->
@@ -728,7 +812,14 @@ default_tokenize_card(Config) ->
             <<"fingerprint">> => <<"test fingerprint">>
         }
     },
-    {ok, 201, _RespHeaders, Body} = default_call(post, "/v1/processing/payment_tools", Req, Config),
+    Headers = headers(post, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{},
+        body => Req,
+        qs_val => #{}
+    },
+    {ok, 201, _RespHeaders, Body} = swagger_tokens_api:create_payment_tool_token(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
@@ -739,43 +830,101 @@ default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
             <<"email">> => <<"bla@bla.ru">>
         }
     },
-    Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/payments",
-    {ok, 201, _RespHeaders, Body} = default_call(post, Path, Req, Config),
+    Headers = headers(post, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{
+            <<"invoiceID">> => InvoiceID
+        },
+        body => Req,
+        qs_val => #{}
+    },
+    {ok, 201, _RespHeaders, Body} = swagger_payments_api:create_payment(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 default_get_party(Config) ->
-    Path = "/v1/processing/me",
-    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    Headers = headers(get, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{},
+        body => #{},
+        qs_val => #{}
+    },
+    {ok, 200, _RespHeaders, Body} = swagger_parties_api:get_my_party(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 default_get_claim_by_id(ClaimID, Config) ->
-    Path = "/v1/processing/claims/" ++ genlib:to_list(ClaimID),
-    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    Headers = headers(get, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{
+            <<"claimID">> => ClaimID
+        },
+        body => #{},
+        qs_val => #{}
+    },
+    {ok, 200, _RespHeaders, Body} = swagger_claims_api:get_claim_by_id(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 default_get_claim_by_status(Status, Config) ->
-    Path = "/v1/processing/claims/?" ++ qs([{<<"claimStatus">>, genlib:to_binary(Status)}]),
-    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    Headers = headers(get, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{},
+        body => #{},
+        qs_val => #{
+            <<"claimStatus">> => genlib:to_binary(Status)
+        }
+    },
+    {ok, 200, _RespHeaders, Body} = swagger_claims_api:get_claim_by_status(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 default_suspend_my_party(Config) ->
-    Path = "/v1/processing/me/suspend",
-    {ok, 202, _RespHeaders, Body} = default_call(put, Path, #{}, Config),
+    Headers = headers(put, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{},
+        body => #{},
+        qs_val => #{}
+    },
+    {ok, 202, _RespHeaders, Body} = swagger_parties_api:suspend_my_party(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 default_activate_my_party(Config) ->
-    Path = "/v1/processing/me/activate",
-    {ok, 202, _RespHeaders, Body} = default_call(put, Path, #{}, Config),
+    Headers = headers(put, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{},
+        body => #{},
+        qs_val => #{}
+    },
+    {ok, 202, _RespHeaders, Body} = swagger_parties_api:activate_my_party(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 default_suspend_shop(ShopID, Config) ->
-    Path = "/v1/processing/shops/" ++ genlib:to_list(ShopID) ++ "/suspend",
-    {ok, 202, _RespHeaders, Body} = default_call(put, Path, #{}, Config),
+    Headers = headers(put, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{
+            <<"shopID">> => ShopID
+        },
+        body => #{},
+        qs_val => #{}
+    },
+    {ok, 202, _RespHeaders, Body} = swagger_shops_api:suspend_shop(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 default_activate_shop(ShopID, Config) ->
-    Path = "/v1/processing/shops/" ++ genlib:to_list(ShopID) ++ "/activate",
-    {ok, 202, _RespHeaders, Body} = default_call(put, Path, #{}, Config),
+    Headers = headers(put, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{
+            <<"shopID">> => ShopID
+        },
+        body => #{},
+        qs_val => #{}
+    },
+    {ok, 202, _RespHeaders, Body} = swagger_shops_api:activate_shop(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 default_get_shop_by_id(ShopID, Config) ->
@@ -799,7 +948,7 @@ default_get_shop_by_id(ShopID, Config) ->
     end.
 
 default_create_shop(CategoryRef, Config) ->
-    Path = "/v1/processing/shops",
+    Headers = headers(post, Config),
     Req = #{
         <<"categoryRef">> => CategoryRef,
         <<"shopDetails">> => #{
@@ -811,48 +960,97 @@ default_create_shop(CategoryRef, Config) ->
             <<"legalEntity">> => <<"DefaultLegalEntity">>
         }
     },
-    {ok, 202, _RespHeaders, Body} = default_call(post, Path, Req, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        body => Req,
+        binding => #{},
+        qs_val => #{}
+    },
+    {ok, 202, _RespHeaders, Body} = swagger_shops_api:create_shop(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 update_shop(Req, ShopID, Config) ->
-    Path = "/v1/processing/shops/" ++ genlib:to_list(ShopID),
-    {ok, 202, _RespHeaders, Body} = default_call(post, Path, Req, Config),
+    Headers = headers(post, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{
+            <<"shopID">> => ShopID
+        },
+        body => Req,
+        qs_val => #{}
+    },
+    {ok, 202, _RespHeaders, Body} = swagger_shops_api:update_shop(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 default_get_categories(Config) ->
-    Path = "/v1/processing/categories",
-    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    Headers = headers(get, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        body => #{},
+        binding => #{},
+        qs_val => #{}
+    },
+    {ok, 200, _RespHeaders, Body} = swagger_categories_api:get_categories(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 default_get_category_by_ref(CategoryRef, Config) ->
-    Path = "/v1/processing/categories/" ++ genlib:to_list(CategoryRef),
-    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    Headers = headers(get, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        body => #{},
+        binding => #{
+            <<"categoryRef">> => genlib:to_list(CategoryRef)
+        },
+        qs_val => #{}
+    },
+    {ok, 200, _RespHeaders, Body} = swagger_categories_api:get_category_by_ref(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 default_revoke_claim(ClaimID, Config) ->
-    Path = "/v1/processing/claims/" ++ genlib:to_list(ClaimID) ++ "/revoke",
-    Req = #{
-        <<"reason">> => <<"me want dat">>
+    Headers = headers(post, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        body => #{
+            <<"reason">> => <<"me want dat">>
+        },
+        binding => #{
+            <<"claimID">> => ClaimID
+        },
+        qs_val => #{}
     },
-    {ok, 200, _RespHeaders, Body} = default_call(post, Path, Req, Config),
+    {ok, 200, _RespHeaders, Body} = swagger_claims_api:revoke_claim_by_id(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 
 default_fulfill_invoice(InvoiceID, Config) ->
-    Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/fulfill",
-    Req = #{
-        <<"reason">> => <<"me want dat">>
+    Headers = headers(post, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{
+            <<"invoiceID">> => InvoiceID
+        },
+        body => #{
+            <<"reason">> => <<"me want dat">>
+        },
+        qs_val => #{}
     },
-    {ok, 200, _RespHeaders, Body} = default_call(post, Path, Req, Config),
+    {ok, 200, _RespHeaders, Body} = swagger_invoices_api:fulfill_invoice(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 
 default_rescind_invoice(InvoiceID, Config) ->
-    Path = "/v1/processing/invoices/" ++ genlib:to_list(InvoiceID) ++ "/rescind",
-    Req = #{
-        <<"reason">> => <<"me want dat">>
+    Headers = headers(post, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        binding => #{
+            <<"invoiceID">> => InvoiceID
+        },
+        body => #{
+            <<"reason">> => <<"me want dat">>
+        },
+        qs_val => #{}
     },
-    {ok, 200, _RespHeaders, Body} = default_call(post, Path, Req, Config),
+    {ok, 200, _RespHeaders, Body} = swagger_invoices_api:rescind_invoice(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 %% @FIXME thats dirty
@@ -1055,16 +1253,30 @@ get_domain_fixture(ProxyUrl) ->
     ].
 
 default_get_shop_accounts(ShopID, Config) ->
-    Path = "/v1/processing/shops/" ++ genlib:to_list(ShopID) ++  "/accounts",
-    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    Headers = headers(get, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        body => #{},
+        binding => #{
+            <<"shopID">> => ShopID
+        },
+        qs_val => #{}
+    },
+    {ok, 200, _RespHeaders, Body} = swagger_shops_api:get_shop_accounts(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 default_get_shop_account_by_id(AccountID, ShopID, Config) ->
-    Path = "/v1/processing/shops/"
-        ++ genlib:to_list(ShopID)
-        ++ "/accounts/"
-        ++ genlib:to_list(AccountID),
-    {ok, 200, _RespHeaders, Body} = default_call(get, Path, #{}, Config),
+    Headers = headers(get, Config),
+    Params = #{
+        header => maps:from_list(Headers),
+        body => #{},
+        binding => #{
+            <<"shopID">> => ShopID,
+            <<"accountID">> => AccountID
+        },
+        qs_val => #{}
+    },
+    {ok, 200, _RespHeaders, Body} = swagger_shops_api:get_account_by_id(?CAPI_HOST, ?CAPI_PORT, Params),
     decode_body(Body).
 
 get_body(ClientRef) ->
@@ -1073,10 +1285,6 @@ get_body(ClientRef) ->
 
 decode_body(Body) ->
     jsx:decode(Body, [return_maps]).
-
--spec qs([{binary(), binary() | true}]) -> list().
-qs(QsVals) ->
-    genlib:to_list(cow_qs:qs(QsVals)).
 
 create_context() ->
     woody_client:new_context(genlib:unique(), capi_woody_event_handler).
