@@ -81,7 +81,7 @@ test: submodules
 define swagger_regenerate
 	rm -rf $(SWAGGER_APP_PATH)
 	$(SWAGGER_CODEGEN) generate -i $(SWAGGER_SCHEME) -l erlang-server -o $(SWAGGER_APP_PATH)
-
+	$(SWAGGER_CODEGEN) generate -i $(SWAGGER_SCHEME) -l erlang-client -o $(SWAGGER_APP_PATH)
 endef
 
 $(SWAGGER_APP_TARGET): $(SWAGGER_SCHEME)

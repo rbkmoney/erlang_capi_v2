@@ -163,6 +163,7 @@ groups() ->
 -spec init_per_suite(config()) -> config().
 
 init_per_suite(Config) ->
+    timer:sleep(5000),
     Apps =
         capi_ct_helper:start_app(lager) ++
         capi_ct_helper:start_app(cowlib) ++
