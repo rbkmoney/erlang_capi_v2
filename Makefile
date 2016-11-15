@@ -5,6 +5,7 @@ SUBTARGETS = $(patsubst %,%/.git,$(SUBMODULES))
 SWAGGER_CODEGEN ?= $(call which, swagger-codegen)
 SWAGGER_SCHEME = schemes/swag/swagger.yaml
 SWAGGER_APP_PATH = apps/swagger
+
 SWAGGER_APP_TARGET = $(SWAGGER_APP_PATH)/rebar.config
 
 UTILS_PATH := build_utils
@@ -21,7 +22,7 @@ SERVICE_IMAGE_PUSH_TAG ?= $(SERVICE_IMAGE_TAG)
 BASE_IMAGE_NAME := service_erlang
 BASE_IMAGE_TAG := 4000337c0ca19978467f62ca6505a03c2569de40
 
-BUILD_IMAGE_TAG := 1ce67fddfd830a7267d8de8ff5ab469a6855f320
+BUILD_IMAGE_TAG := 09886ad7b9a299f35b98e744640ef22af773e6ff
 
 CALL_ANYWHERE := all submodules rebar-update compile xref lint dialyze test start devrel release clean distclean
 
@@ -80,6 +81,7 @@ test: submodules
 define swagger_regenerate
 	rm -rf $(SWAGGER_APP_PATH)
 	$(SWAGGER_CODEGEN) generate -i $(SWAGGER_SCHEME) -l erlang-server -o $(SWAGGER_APP_PATH)
+	$(SWAGGER_CODEGEN) generate -i $(SWAGGER_SCHEME) -l erlang-client -o $(SWAGGER_APP_PATH)
 endef
 
 $(SWAGGER_APP_TARGET): $(SWAGGER_SCHEME)
