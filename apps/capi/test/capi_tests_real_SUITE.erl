@@ -236,7 +236,7 @@ authorization_error_expired_test(Config) ->
 -spec create_invoice_badard_test(config()) -> _.
 
 create_invoice_badard_test(Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     Req = #{},
     {error, _} = api_client_invoices:create_invoice(Context, Req).
 
@@ -299,7 +299,7 @@ get_invoice_by_id_ok_test(Config) ->
     {create_invoice_ok_test,
         InvoiceID
     } = ?config(saved_config, Config),
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     {ok, _Body} = api_client_invoices:get_invoice_by_id(Context, InvoiceID),
     {save_config, InvoiceID}.
 
@@ -309,7 +309,7 @@ get_invoice_events_ok_test(Config) ->
     {fulfill_invoice_ok_test,
         #{invoice_id := InvoiceID}
     } = ?config(saved_config, Config),
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     Limit = 100,
     {ok, _Body} = api_client_invoices:get_invoice_events(Context, InvoiceID, Limit).
 
@@ -319,100 +319,100 @@ get_payment_by_id_ok_test(Config) ->
     {create_payment_ok_test,
         #{payment_id := PaymentID, invoice_id := InvoiceID} = Info
     } = ?config(saved_config, Config),
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     {ok, _Body} = api_client_payments:get_payment_by_id(Context, InvoiceID, PaymentID),
     {save_config, Info}.
 
 -spec get_invoices_stats_ok_test(config()) -> _.
 
 get_invoices_stats_ok_test(Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     ShopID = ?config(shop_id, Config),
-    Qs = #{
-        <<"limit">> => <<"2">>,
-        <<"offset">> => <<"0">>,
-        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
-        <<"toTime">> => <<"2020-08-11T19:42:35Z">>,
-        <<"status">> => <<"unpaid">>
-    },
-    {ok, _Body} = api_client_analytics:get_invoices(Context, ShopID, Qs).
+    Query = [
+        {limit, 2},
+        {offset, 2},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {status, unpaid}
+    ],
+    {ok, _Body} = api_client_analytics:get_invoices(Context, ShopID, Query).
 
 -spec get_payment_conversion_stats_ok_test(config()) -> _.
 
 get_payment_conversion_stats_ok_test(Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     ShopID = ?config(shop_id, Config),
-    Qs = #{
-        <<"splitUnit">> => <<"minute">>,
-        <<"splitSize">> => <<"1">>,
-        <<"limit">> => <<"2">>,
-        <<"offset">> => <<"0">>,
-        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
-        <<"toTime">> => <<"2020-08-11T19:42:35Z">>
-    },
-    {ok, _Body} = api_client_analytics:get_payment_conversion_stats(Context, ShopID, Qs).
+    Query = [
+        {limit, 2},
+        {offset, 2},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {split_unit, minute},
+        {split_size, 1}
+    ],
+    {ok, _Body} = api_client_analytics:get_payment_conversion_stats(Context, ShopID, Query).
 
 -spec get_payment_revenue_stats_ok_test(config()) -> _.
 
 get_payment_revenue_stats_ok_test(Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     ShopID = ?config(shop_id, Config),
-    Qs = #{
-        <<"splitUnit">> => <<"minute">>,
-        <<"splitSize">> => <<"1">>,
-        <<"limit">> => <<"2">>,
-        <<"offset">> => <<"0">>,
-        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
-        <<"toTime">> => <<"2020-08-11T19:42:35Z">>
-    },
-    {ok, _Body} = api_client_analytics:get_payment_revenue_stats(Context, ShopID, Qs).
+    Query = [
+        {limit, 2},
+        {offset, 2},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {split_unit, minute},
+        {split_size, 1}
+    ],
+    {ok, _Body} = api_client_analytics:get_payment_revenue_stats(Context, ShopID, Query).
 
 -spec get_payment_geo_stats_ok_test(config()) -> _.
 
 get_payment_geo_stats_ok_test(Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     ShopID = ?config(shop_id, Config),
-    Qs = #{
-        <<"splitUnit">> => <<"minute">>,
-        <<"splitSize">> => <<"1">>,
-        <<"limit">> => <<"2">>,
-        <<"offset">> => <<"0">>,
-        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
-        <<"toTime">> => <<"2020-08-11T19:42:35Z">>
-    },
-    {ok, _Body} = api_client_analytics:get_payment_geo_stats(Context, ShopID, Qs).
+    Query = [
+        {limit, 2},
+        {offset, 0},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {split_unit, minute},
+        {split_size, 1}
+    ],
+    {ok, _Body} = api_client_analytics:get_payment_geo_stats(Context, ShopID, Query).
 
 -spec get_payment_rate_stats_ok_test(config()) -> _.
 
 get_payment_rate_stats_ok_test(Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     ShopID = ?config(shop_id, Config),
-    Qs = #{
-        <<"splitUnit">> => <<"minute">>,
-        <<"splitSize">> => <<"1">>,
-        <<"limit">> => <<"2">>,
-        <<"offset">> => <<"0">>,
-        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
-        <<"toTime">> => <<"2020-08-11T19:42:35Z">>
-    },
-    {ok, _Body} = api_client_analytics:get_payment_rate_stats(Context, ShopID, Qs).
+    Query = [
+        {limit, 2},
+        {offset, 0},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {split_unit, minute},
+        {split_size, 1}
+    ],
+    {ok, _Body} = api_client_analytics:get_payment_rate_stats(Context, ShopID, Query).
 
 
 -spec get_payment_method_stats_ok_test(config()) -> _.
 
 get_payment_method_stats_ok_test(Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     ShopID = ?config(shop_id, Config),
-    Qs = #{
-        <<"paymentMethod">> => <<"bank_card">>,
-        <<"splitUnit">> => <<"minute">>,
-        <<"splitSize">> => <<"1">>,
-        <<"limit">> => <<"2">>,
-        <<"offset">> => <<"0">>,
-        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
-        <<"toTime">> => <<"2020-08-11T19:42:35Z">>
-    },
-    {ok, _Body} = api_client_analytics:get_payment_method_stats(Context, ShopID, Qs).
+    Query = [
+        {limit, 2},
+        {offset, 0},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {split_unit, minute},
+        {split_size, 1},
+        {payment_method, bank_card}
+    ],
+    {ok, _Body} = api_client_analytics:get_payment_method_stats(Context, ShopID, Query).
 
 -spec get_my_party_ok_test(config()) -> _.
 
@@ -648,12 +648,12 @@ default_create_invoice(Config) ->
         <<"product">> => <<"test_product">>,
         <<"description">> => <<"test_invoice_description">>
     },
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     {ok, Body} = api_client_invoices:create_invoice(Context, Req),
-    decode_body(Body).
+    Body.
 
 default_tokenize_card(Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     Req = #{
         <<"paymentTool">> => #{
             <<"paymentToolType">> => <<"CardData">>,
@@ -667,10 +667,10 @@ default_tokenize_card(Config) ->
         }
     },
     {ok, Body} = api_client_tokens:create_payment_tool_token(Context, Req),
-    decode_body(Body).
+    Body.
 
 default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     Req = #{
         <<"paymentSession">> => PaymentSession,
         <<"paymentToolToken">> => PaymentToolToken,
@@ -679,42 +679,42 @@ default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
         }
     },
     {ok, Body} = api_client_payments:create_payment(Context, Req, InvoiceID),
-    decode_body(Body).
+    Body.
 
 default_get_party(Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     {ok, Body} = api_client_parties:get_my_party(Context),
-    decode_body(Body).
+    Body.
 
 default_get_claim_by_id(ClaimID, Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     {ok, Body} = api_client_claims:get_claim_by_id(Context, ClaimID),
-    decode_body(Body).
+    Body.
 
 default_get_claim_by_status(Status, Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     {ok, Body} = api_client_claims:get_claim_by_status(Context, Status),
-    decode_body(Body).
+    Body.
 
 default_suspend_my_party(Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     {ok, Body} = api_client_parties:suspend_my_party(Context),
-    decode_body(Body).
+    Body.
 
 default_activate_my_party(Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     {ok, Body} = api_client_parties:activate_my_party(Context),
-    decode_body(Body).
+    Body.
 
 default_suspend_shop(ShopID, Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     {ok, Body} = api_client_shops:suspend_shop(Context, ShopID),
-    decode_body(Body).
+    Body.
 
 default_activate_shop(ShopID, Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     {ok, Body} = api_client_shops:activate_shop(Context, ShopID),
-    decode_body(Body).
+    Body.
 
 default_get_shop_by_id(ShopID, Config) ->
     #{
@@ -737,7 +737,7 @@ default_get_shop_by_id(ShopID, Config) ->
     end.
 
 default_create_shop(CategoryRef, Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     Req = #{
         <<"categoryRef">> => CategoryRef,
         <<"shopDetails">> => #{
@@ -750,40 +750,40 @@ default_create_shop(CategoryRef, Config) ->
         }
     },
     {ok, Body} = api_client_shops:create_shop(Context, Req),
-    decode_body(Body).
+    Body.
 
 update_shop(Req, ShopID, Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     {ok, Body} = api_client_shops:update_shop(Context, Req, ShopID),
-    decode_body(Body).
+    Body.
 
 default_get_categories(Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     {ok, Body} = api_client_categories:get_categories(Context),
-    decode_body(Body).
+    Body.
 
 default_get_category_by_ref(CategoryRef, Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     {ok, Body} = api_client_categories:get_category_by_ref(Context, CategoryRef),
-    decode_body(Body).
+    Body.
 
 default_revoke_claim(ClaimID, Config) ->
-    Context = proplists:get_value(context, Config),
-    Reason = <<"me want dat">>,
+    Context = ?config(context, Config),
+    Reason = "me want dat",
     {ok, Body} = api_client_claims:revoke_claim_by_id(Context, Reason, ClaimID),
-    decode_body(Body).
+    Body.
 
 default_fulfill_invoice(InvoiceID, Config) ->
-    Context = proplists:get_value(context, Config),
-    Reason = <<"me want dat">>,
+    Context = ?config(context, Config),
+    Reason = "me want dat",
     {ok, Body} = api_client_invoices:fulfill_invoice(Context, InvoiceID, Reason),
-    decode_body(Body).
+    Body.
 
 default_rescind_invoice(InvoiceID, Config) ->
-    Context = proplists:get_value(context, Config),
-    Reason = <<"me want dat">>,
+    Context = ?config(context, Config),
+    Reason = "me want dat",
     {ok, Body} = api_client_invoices:rescind_invoice(Context, InvoiceID, Reason),
-    decode_body(Body).
+    Body.
 
 %% @FIXME thats dirty
 default_approve_claim(ClaimID) ->
@@ -985,21 +985,18 @@ get_domain_fixture(ProxyUrl) ->
     ].
 
 default_get_shop_accounts(ShopID, Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     {ok, Body} = api_client_shops:get_shop_accounts(Context, ShopID),
-    decode_body(Body).
+    Body.
 
 default_get_shop_account_by_id(AccountID, ShopID, Config) ->
-    Context = proplists:get_value(context, Config),
+    Context = ?config(context, Config),
     {ok, Body} = api_client_shops:get_account_by_id(Context, ShopID, AccountID),
-    decode_body(Body).
+    Body.
 
 get_body(ClientRef) ->
     {ok, Body} = hackney:body(ClientRef),
     Body.
-
-decode_body(Body) ->
-    jsx:decode(Body, [return_maps]).
 
 create_context() ->
     woody_client:new_context(genlib:unique(), capi_woody_event_handler).
