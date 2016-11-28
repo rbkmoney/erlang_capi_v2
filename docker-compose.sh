@@ -17,6 +17,7 @@ services:
       - magista
       - starter
       - dominant
+      - kk
     environment:
       - SERVICE_NAME=capi
 
