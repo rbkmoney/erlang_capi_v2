@@ -20,9 +20,9 @@ SERVICE_IMAGE_PUSH_TAG ?= $(SERVICE_IMAGE_TAG)
 
 # Base image for the service
 BASE_IMAGE_NAME := service_erlang
-BASE_IMAGE_TAG := 3610f8eeb453a0e891aa271b48b7ec533b764fdc
+BASE_IMAGE_TAG := 4000337c0ca19978467f62ca6505a03c2569de40
 
-BUILD_IMAGE_TAG := fbc0c2d55c069ad5b0b2a115cc9c185a69250449
+BUILD_IMAGE_TAG := 0e651133d0956102c8db5f794754754f0391b74b
 
 CALL_ANYWHERE := all submodules rebar-update compile xref lint dialyze test start devrel release clean distclean
 
@@ -81,7 +81,6 @@ test: submodules
 define swagger_regenerate
 	rm -rf $(SWAGGER_APP_PATH)
 	$(SWAGGER_CODEGEN) generate -i $(SWAGGER_SCHEME) -l erlang-server -o $(SWAGGER_APP_PATH)
-	$(SWAGGER_CODEGEN) generate -i $(SWAGGER_SCHEME) -l erlang-client -o $(SWAGGER_APP_PATH)
 endef
 
 $(SWAGGER_APP_TARGET): $(SWAGGER_SCHEME)

@@ -168,7 +168,6 @@ groups() ->
 -spec init_per_suite(config()) -> config().
 
 init_per_suite(Config) ->
-    timer:sleep(20000),
     Apps =
         capi_ct_helper:start_app(lager) ++
         capi_ct_helper:start_app(cowlib) ++
@@ -191,8 +190,18 @@ init_per_suite(Config) ->
         ]),
     {ok, SupPid} = supervisor:start_link(?MODULE, []),
     _ = unlink(SupPid),
-    Token = api_client_lib:login(?KEYCLOAK_HOST, ?KEYCLOAK_PORT, ?KEYCLOAK_USER, ?KEYCLOAK_PASSWORD),
-    Context = api_client_lib:get_context(?CAPI_HOST, ?CAPI_PORT, Token),
+    Params = #{
+        host => ?KEYCLOAK_HOST,
+        port => ?KEYCLOAK_PORT,
+        user => ?KEYCLOAK_USER,
+        password => ?KEYCLOAK_PASSWORD,
+        retries => 10,
+        timeout => 5000
+    },
+    {ok, Token} = api_client_lib:login(Params),
+    Retries = 10,
+    Timeout = 5000,
+    Context = api_client_lib:get_context(?CAPI_HOST, ?CAPI_PORT, Token, Retries, Timeout),
     NewConfig = [{apps, lists:reverse(Apps)}, {context, Context}, {test_sup, SupPid} | Config],
     ProxyUrl = start_service_handler(capi_dummy_provider, NewConfig),
     populate_snapshot(ProxyUrl),
