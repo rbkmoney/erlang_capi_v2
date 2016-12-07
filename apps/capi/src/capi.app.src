@@ -15,7 +15,8 @@
         jose,
         cowboy_cors,
         rfc3339,
-        base64url
+        base64url,
+        api_client
     ]},
     {env, []},
     {modules, []},

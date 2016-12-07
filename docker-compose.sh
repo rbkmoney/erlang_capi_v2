@@ -17,6 +17,7 @@ services:
       - magista
       - starter
       - dominant
+      - kk
     environment:
       - SERVICE_NAME=capi
 
@@ -132,6 +133,28 @@ services:
       /code/script/cds_test_init
     depends_on:
       - cds
+  
+  kk:
+    image: dr.rbkmoney.com/rbkmoney/keycloak:1a4a81d7e3ac1bff2d41f7bed57b6619dbd92a11
+    container_name: keycloak
+    ports:
+      - "31245:8080"
+    environment:
+        SERVICE_NAME: keycloak
+        POSTGRES_PASSWORD: keycloak
+        POSTGRES_USER: keycloak
+        POSTGRES_DATABASE: keycloak
+        POSTGRES_PORT_5432_TCP_ADDR: kk_db
+    depends_on:
+      - kk_db
+
+  kk_db:
+    image: dr.rbkmoney.com/rbkmoney/postgres:9.6
+    container_name: keycloak_postgres
+    environment:
+        POSTGRES_PASSWORD: keycloak
+        POSTGRES_USER: keycloak
+        POSTGRES_DATABASE: keycloak
 
 networks:
   default:

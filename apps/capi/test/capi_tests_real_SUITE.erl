@@ -54,6 +54,11 @@
 
 ]).
 
+-define(KEYCLOAK_HOST, "kk").
+-define(KEYCLOAK_PORT, 8080).
+-define(KEYCLOAK_USER, "demo_merchant").
+-define(KEYCLOAK_PASSWORD, "test").
+
 -define(CAPI_HOST, "0.0.0.0").
 -define(CAPI_PORT, 8080).
 -define(CAPI_SERVICE_TYPE, real).
@@ -65,7 +70,7 @@
 -define(CAPI_ACCOUNTER_URL, "http://shumway:8022/accounter").
 -define(CAPI_HOST_NAME, "capi").
 
--define(MERCHANT_ID, <<"hg_tests_SUITE">>).
+-define(MERCHANT_ID, <<"281220eb-a4ef-4d03-b666-bdec4b26c5f7">>).
 
 
 -behaviour(supervisor).
@@ -163,7 +168,6 @@ groups() ->
 -spec init_per_suite(config()) -> config().
 
 init_per_suite(Config) ->
-    timer:sleep(5000),
     Apps =
         capi_ct_helper:start_app(lager) ++
         capi_ct_helper:start_app(cowlib) ++
@@ -186,7 +190,19 @@ init_per_suite(Config) ->
         ]),
     {ok, SupPid} = supervisor:start_link(?MODULE, []),
     _ = unlink(SupPid),
-    NewConfig = [{apps, lists:reverse(Apps)}, {test_sup, SupPid} | Config],
+    Params = #{
+        host => ?KEYCLOAK_HOST,
+        port => ?KEYCLOAK_PORT,
+        user => ?KEYCLOAK_USER,
+        password => ?KEYCLOAK_PASSWORD,
+        retries => 10,
+        timeout => 5000
+    },
+    {ok, Token} = api_client_lib:login(Params),
+    Retries = 10,
+    Timeout = 5000,
+    Context = api_client_lib:get_context(?CAPI_HOST, ?CAPI_PORT, Token, Retries, Timeout),
+    NewConfig = [{apps, lists:reverse(Apps)}, {context, Context}, {test_sup, SupPid} | Config],
     ProxyUrl = start_service_handler(capi_dummy_provider, NewConfig),
     populate_snapshot(ProxyUrl),
 
@@ -229,14 +245,9 @@ authorization_error_expired_test(Config) ->
 -spec create_invoice_badard_test(config()) -> _.
 
 create_invoice_badard_test(Config) ->
-    Headers = headers(post, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{},
-        body => #{},
-        qs_val => #{}
-    },
-    {error, _} = swagger_invoices_api:create_invoice(?CAPI_HOST, ?CAPI_PORT, Params).
+    Context = ?config(context, Config),
+    Req = #{},
+    {error, _} = api_client_invoices:create_invoice(Context, Req).
 
 -spec create_invoice_ok_test(config()) -> _.
 
@@ -297,16 +308,8 @@ get_invoice_by_id_ok_test(Config) ->
     {create_invoice_ok_test,
         InvoiceID
     } = ?config(saved_config, Config),
-    Headers = headers(get, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{
-            <<"invoiceID">> => InvoiceID
-        },
-        body => #{},
-        qs_val => #{}
-    },
-    {ok, 200, _RespHeaders, _Body} = swagger_invoices_api:get_invoice_by_id(?CAPI_HOST, ?CAPI_PORT, Params),
+    Context = ?config(context, Config),
+    {ok, _Body} = api_client_invoices:get_invoice_by_id(Context, InvoiceID),
     {save_config, InvoiceID}.
 
 -spec get_invoice_events_ok_test(config()) -> _.
@@ -315,19 +318,9 @@ get_invoice_events_ok_test(Config) ->
     {fulfill_invoice_ok_test,
         #{invoice_id := InvoiceID}
     } = ?config(saved_config, Config),
-    Headers = headers(get, Config),
-    Qs = #{
-        <<"limit">> => <<"100">>
-    },
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{
-            <<"invoiceID">> => InvoiceID
-        },
-        body => #{},
-        qs_val => Qs
-    },
-    {ok, 200, _RespHeaders, _Body} = swagger_invoices_api:get_invoice_events(?CAPI_HOST, ?CAPI_PORT, Params).
+    Context = ?config(context, Config),
+    Limit = 100,
+    {ok, _Body} = api_client_invoices:get_invoice_events(Context, InvoiceID, Limit).
 
 -spec get_payment_by_id_ok_test(config()) -> _.
 
@@ -335,157 +328,100 @@ get_payment_by_id_ok_test(Config) ->
     {create_payment_ok_test,
         #{payment_id := PaymentID, invoice_id := InvoiceID} = Info
     } = ?config(saved_config, Config),
-    Headers = headers(get, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{
-            <<"invoiceID">> => InvoiceID,
-            <<"paymentID">> => PaymentID
-        },
-        body => #{},
-        qs_val => #{}
-    },
-    {ok, 200, _RespHeaders, _Body} = swagger_payments_api:get_payment_by_id(?CAPI_HOST, ?CAPI_PORT, Params),
+    Context = ?config(context, Config),
+    {ok, _Body} = api_client_payments:get_payment_by_id(Context, InvoiceID, PaymentID),
     {save_config, Info}.
 
 -spec get_invoices_stats_ok_test(config()) -> _.
 
 get_invoices_stats_ok_test(Config) ->
+    Context = ?config(context, Config),
     ShopID = ?config(shop_id, Config),
-    Headers = headers(get, Config),
-    Qs = #{
-        <<"limit">> => <<"2">>,
-        <<"offset">> => <<"0">>,
-        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
-        <<"toTime">> => <<"2020-08-11T19:42:35Z">>,
-        <<"status">> => <<"unpaid">>
-    },
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{
-            <<"shopID">> => ShopID
-        },
-        body => #{},
-        qs_val => Qs
-    },
-    {ok, 200, _RespHeaders, _Body} = swagger_analytics_api:get_invoices(?CAPI_HOST, ?CAPI_PORT, Params).
+    Query = [
+        {limit, 2},
+        {offset, 2},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {status, unpaid}
+    ],
+    {ok, _Body} = api_client_analytics:get_invoices(Context, ShopID, Query).
 
 -spec get_payment_conversion_stats_ok_test(config()) -> _.
 
 get_payment_conversion_stats_ok_test(Config) ->
+    Context = ?config(context, Config),
     ShopID = ?config(shop_id, Config),
-    Headers = headers(get, Config),
-    Qs = #{
-        <<"splitUnit">> => <<"minute">>,
-        <<"splitSize">> => <<"1">>,
-        <<"limit">> => <<"2">>,
-        <<"offset">> => <<"0">>,
-        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
-        <<"toTime">> => <<"2020-08-11T19:42:35Z">>
-    },
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{
-            <<"shopID">> => ShopID
-        },
-        body => #{},
-        qs_val => Qs
-    },
-    {ok, 200, _RespHeaders, _Body} = swagger_analytics_api:get_payment_conversion_stats(?CAPI_HOST, ?CAPI_PORT, Params).
+    Query = [
+        {limit, 2},
+        {offset, 2},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {split_unit, minute},
+        {split_size, 1}
+    ],
+    {ok, _Body} = api_client_analytics:get_payment_conversion_stats(Context, ShopID, Query).
 
 -spec get_payment_revenue_stats_ok_test(config()) -> _.
 
 get_payment_revenue_stats_ok_test(Config) ->
+    Context = ?config(context, Config),
     ShopID = ?config(shop_id, Config),
-    Headers = headers(get, Config),
-    Qs = #{
-        <<"splitUnit">> => <<"minute">>,
-        <<"splitSize">> => <<"1">>,
-        <<"limit">> => <<"2">>,
-        <<"offset">> => <<"0">>,
-        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
-        <<"toTime">> => <<"2020-08-11T19:42:35Z">>
-    },
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{
-            <<"shopID">> => ShopID
-        },
-        body => #{},
-        qs_val => Qs
-    },
-    {ok, 200, _RespHeaders, _Body} = swagger_analytics_api:get_payment_revenue_stats(?CAPI_HOST, ?CAPI_PORT, Params).
+    Query = [
+        {limit, 2},
+        {offset, 2},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {split_unit, minute},
+        {split_size, 1}
+    ],
+    {ok, _Body} = api_client_analytics:get_payment_revenue_stats(Context, ShopID, Query).
 
 -spec get_payment_geo_stats_ok_test(config()) -> _.
 
 get_payment_geo_stats_ok_test(Config) ->
+    Context = ?config(context, Config),
     ShopID = ?config(shop_id, Config),
-    Headers = headers(get, Config),
-    Qs = #{
-        <<"splitUnit">> => <<"minute">>,
-        <<"splitSize">> => <<"1">>,
-        <<"limit">> => <<"2">>,
-        <<"offset">> => <<"0">>,
-        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
-        <<"toTime">> => <<"2020-08-11T19:42:35Z">>
-    },
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{
-            <<"shopID">> => ShopID
-        },
-        body => #{},
-        qs_val => Qs
-    },
-    {ok, 200, _RespHeaders, _Body} = swagger_analytics_api:get_payment_geo_stats(?CAPI_HOST, ?CAPI_PORT, Params).
+    Query = [
+        {limit, 2},
+        {offset, 0},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {split_unit, minute},
+        {split_size, 1}
+    ],
+    {ok, _Body} = api_client_analytics:get_payment_geo_stats(Context, ShopID, Query).
 
 -spec get_payment_rate_stats_ok_test(config()) -> _.
 
 get_payment_rate_stats_ok_test(Config) ->
+    Context = ?config(context, Config),
     ShopID = ?config(shop_id, Config),
-    Headers = headers(get, Config),
-    Qs = #{
-        <<"splitUnit">> => <<"minute">>,
-        <<"splitSize">> => <<"1">>,
-        <<"limit">> => <<"2">>,
-        <<"offset">> => <<"0">>,
-        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
-        <<"toTime">> => <<"2020-08-11T19:42:35Z">>
-    },
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{
-            <<"shopID">> => ShopID
-        },
-        body => #{},
-        qs_val => Qs
-    },
-    {ok, 200, _RespHeaders, _Body} = swagger_analytics_api:get_payment_rate_stats(?CAPI_HOST, ?CAPI_PORT, Params).
+    Query = [
+        {limit, 2},
+        {offset, 0},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {split_unit, minute},
+        {split_size, 1}
+    ],
+    {ok, _Body} = api_client_analytics:get_payment_rate_stats(Context, ShopID, Query).
 
 
 -spec get_payment_method_stats_ok_test(config()) -> _.
 
 get_payment_method_stats_ok_test(Config) ->
+    Context = ?config(context, Config),
     ShopID = ?config(shop_id, Config),
-    Headers = headers(get, Config),
-    Qs = #{
-        <<"paymentMethod">> => <<"bank_card">>,
-        <<"splitUnit">> => <<"minute">>,
-        <<"splitSize">> => <<"1">>,
-        <<"limit">> => <<"2">>,
-        <<"offset">> => <<"0">>,
-        <<"fromTime">> => <<"2015-08-11T19:42:35Z">>,
-        <<"toTime">> => <<"2020-08-11T19:42:35Z">>
-    },
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{
-            <<"shopID">> => ShopID
-        },
-        body => #{},
-        qs_val => Qs
-    },
-    {ok, 200, _RespHeaders, _Body} = swagger_analytics_api:get_payment_method_stats(?CAPI_HOST, ?CAPI_PORT, Params).
+    Query = [
+        {limit, 2},
+        {offset, 0},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {split_unit, minute},
+        {split_size, 1},
+        {payment_method, bank_card}
+    ],
+    {ok, _Body} = api_client_analytics:get_payment_method_stats(Context, ShopID, Query).
 
 -spec get_my_party_ok_test(config()) -> _.
 
@@ -683,14 +619,6 @@ get_shop_account_by_id_ok_test(Config) ->
     } = default_get_shop_account_by_id(GuaranteeID, ShopID, Config).
 
 %% helpers
-
-headers(Method, Config) ->
-  [
-        x_request_id_header(),
-        default_auth_header(Config) |
-            content_negotiation_headers(Method)
-  ].
-
 call(Method, Path, Body, Headers) ->
     Url = get_url(Path),
     PreparedBody = jsx:encode(Body),
@@ -700,52 +628,8 @@ call(Method, Path, Body, Headers) ->
 get_url(Path) ->
     ?CAPI_HOST ++ ":" ++ integer_to_list(?CAPI_PORT)  ++ Path.
 
-x_request_id_header() ->
-    {<<"X-Request-ID">>, integer_to_binary(rand:uniform(100000))}.
-
-default_auth_header(Config) ->
-   auth_header(default_auth_token(Config)).
-
 auth_header(Token) ->
     {<<"Authorization">>, <<"Bearer ", Token/binary>>} .
-
-default_auth_token(Config) ->
-    ResourceAccess = #{
-        <<"common-api">> => #{
-            <<"roles">> =>
-                [
-                    <<"invoices:create">>,
-                    <<"payments:create">>,
-                    <<"payment_tool_tokens:create">>,
-                    <<"profiles:create">>,
-                    <<"profiles:delete">>,
-                    <<"invoices:get">>,
-                    <<"invoices:fulfill">>,
-                    <<"invoices:rescind">>,
-                    <<"invoices.events:get">>,
-                    <<"payments:get">>,
-                    <<"invoices_stats:get">>,
-                    <<"payments_conversion_stats:get">>,
-                    <<"payments_revenue_stats:get">>,
-                    <<"payments_geo_stats:get">>,
-                    <<"payments_rate_stats:get">>,
-                    <<"payments_instrument_stats:get">>,
-                    <<"party:get">>,
-                    <<"party:create">>,
-                    <<"shops:activate">>,
-                    <<"shop:create">>,
-                    <<"shops:suspend">>,
-                    <<"shops:update">>,
-                    <<"party:suspend">>,
-                    <<"party:activate">>,
-                    <<"claims:get">>,
-                    <<"claims:revoke">>,
-                    <<"categories:get">>,
-                    <<"accounts:get">>
-                ]
-        }
-    },
-    auth_token(ResourceAccess, default_token_expiration(), Config).
 
 auth_token(ResourseAccess, Exp, Config) ->
     Message = #{
@@ -757,23 +641,6 @@ auth_token(ResourseAccess, Exp, Config) ->
     Signed = jose_jwk:sign(jsx:encode(Message), #{ <<"alg">> => <<"RS256">> }, RSAPrivateJWK),
     {_Alg, Payload} = jose_jws:compact(Signed),
     Payload.
-
-default_token_expiration() ->
-    genlib_time:unow() + 60.
-
-content_negotiation_headers(Method) when Method == get; Method == head; Method == delete ->
-    json_accept_headers();
-content_negotiation_headers(Method) when Method == post; Method == put; Method == patch ->
-    json_accept_headers() ++ json_content_type_headers().
-
-json_accept_headers() ->
-    [
-        {<<"Accept">>, <<"application/json">>},
-        {<<"Accept-Charset">>, <<"UTF-8">>}
-    ].
-
-json_content_type_headers() ->
-    [{<<"Content-Type">>, <<"application/json; charset=UTF-8">>}].
 
 default_create_invoice(Config) ->
     {{Y, M, D}, Time} = calendar:local_time(),
@@ -790,17 +657,12 @@ default_create_invoice(Config) ->
         <<"product">> => <<"test_product">>,
         <<"description">> => <<"test_invoice_description">>
     },
-    Headers = headers(post, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{},
-        body => Req,
-        qs_val => #{}
-    },
-    {ok, 201, _RespHeaders, Body} = swagger_invoices_api:create_invoice(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
+    Context = ?config(context, Config),
+    {ok, Body} = api_client_invoices:create_invoice(Context, Req),
+    Body.
 
 default_tokenize_card(Config) ->
+    Context = ?config(context, Config),
     Req = #{
         <<"paymentTool">> => #{
             <<"paymentToolType">> => <<"CardData">>,
@@ -813,120 +675,55 @@ default_tokenize_card(Config) ->
             <<"fingerprint">> => <<"test fingerprint">>
         }
     },
-    Headers = headers(post, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{},
-        body => Req,
-        qs_val => #{}
-    },
-    {ok, 201, _RespHeaders, Body} = swagger_tokens_api:create_payment_tool_token(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
+    {ok, Body} = api_client_tokens:create_payment_tool_token(Context, Req),
+    Body.
 
 default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
-    Req =  #{
+    Context = ?config(context, Config),
+    Req = #{
         <<"paymentSession">> => PaymentSession,
         <<"paymentToolToken">> => PaymentToolToken,
         <<"contactInfo">> => #{
             <<"email">> => <<"bla@bla.ru">>
         }
     },
-    Headers = headers(post, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{
-            <<"invoiceID">> => InvoiceID
-        },
-        body => Req,
-        qs_val => #{}
-    },
-    {ok, 201, _RespHeaders, Body} = swagger_payments_api:create_payment(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
+    {ok, Body} = api_client_payments:create_payment(Context, Req, InvoiceID),
+    Body.
 
 default_get_party(Config) ->
-    Headers = headers(get, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{},
-        body => #{},
-        qs_val => #{}
-    },
-    {ok, 200, _RespHeaders, Body} = swagger_parties_api:get_my_party(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
+    Context = ?config(context, Config),
+    {ok, Body} = api_client_parties:get_my_party(Context),
+    Body.
 
 default_get_claim_by_id(ClaimID, Config) ->
-    Headers = headers(get, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{
-            <<"claimID">> => ClaimID
-        },
-        body => #{},
-        qs_val => #{}
-    },
-    {ok, 200, _RespHeaders, Body} = swagger_claims_api:get_claim_by_id(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
+    Context = ?config(context, Config),
+    {ok, Body} = api_client_claims:get_claim_by_id(Context, ClaimID),
+    Body.
 
 default_get_claim_by_status(Status, Config) ->
-    Headers = headers(get, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{},
-        body => #{},
-        qs_val => #{
-            <<"claimStatus">> => genlib:to_binary(Status)
-        }
-    },
-    {ok, 200, _RespHeaders, Body} = swagger_claims_api:get_claim_by_status(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
+    Context = ?config(context, Config),
+    {ok, Body} = api_client_claims:get_claim_by_status(Context, Status),
+    Body.
 
 default_suspend_my_party(Config) ->
-    Headers = headers(put, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{},
-        body => #{},
-        qs_val => #{}
-    },
-    {ok, 202, _RespHeaders, Body} = swagger_parties_api:suspend_my_party(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
+    Context = ?config(context, Config),
+    {ok, Body} = api_client_parties:suspend_my_party(Context),
+    Body.
 
 default_activate_my_party(Config) ->
-    Headers = headers(put, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{},
-        body => #{},
-        qs_val => #{}
-    },
-    {ok, 202, _RespHeaders, Body} = swagger_parties_api:activate_my_party(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
+    Context = ?config(context, Config),
+    {ok, Body} = api_client_parties:activate_my_party(Context),
+    Body.
 
 default_suspend_shop(ShopID, Config) ->
-    Headers = headers(put, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{
-            <<"shopID">> => ShopID
-        },
-        body => #{},
-        qs_val => #{}
-    },
-    {ok, 202, _RespHeaders, Body} = swagger_shops_api:suspend_shop(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
+    Context = ?config(context, Config),
+    {ok, Body} = api_client_shops:suspend_shop(Context, ShopID),
+    Body.
 
 default_activate_shop(ShopID, Config) ->
-    Headers = headers(put, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{
-            <<"shopID">> => ShopID
-        },
-        body => #{},
-        qs_val => #{}
-    },
-    {ok, 202, _RespHeaders, Body} = swagger_shops_api:activate_shop(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
+    Context = ?config(context, Config),
+    {ok, Body} = api_client_shops:activate_shop(Context, ShopID),
+    Body.
 
 default_get_shop_by_id(ShopID, Config) ->
     #{
@@ -949,7 +746,7 @@ default_get_shop_by_id(ShopID, Config) ->
     end.
 
 default_create_shop(CategoryRef, Config) ->
-    Headers = headers(post, Config),
+    Context = ?config(context, Config),
     Req = #{
         <<"categoryRef">> => CategoryRef,
         <<"shopDetails">> => #{
@@ -961,98 +758,41 @@ default_create_shop(CategoryRef, Config) ->
             <<"legalEntity">> => <<"DefaultLegalEntity">>
         }
     },
-    Params = #{
-        header => maps:from_list(Headers),
-        body => Req,
-        binding => #{},
-        qs_val => #{}
-    },
-    {ok, 202, _RespHeaders, Body} = swagger_shops_api:create_shop(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
+    {ok, Body} = api_client_shops:create_shop(Context, Req),
+    Body.
 
 update_shop(Req, ShopID, Config) ->
-    Headers = headers(post, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{
-            <<"shopID">> => ShopID
-        },
-        body => Req,
-        qs_val => #{}
-    },
-    {ok, 202, _RespHeaders, Body} = swagger_shops_api:update_shop(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
+    Context = ?config(context, Config),
+    {ok, Body} = api_client_shops:update_shop(Context, Req, ShopID),
+    Body.
 
 default_get_categories(Config) ->
-    Headers = headers(get, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        body => #{},
-        binding => #{},
-        qs_val => #{}
-    },
-    {ok, 200, _RespHeaders, Body} = swagger_categories_api:get_categories(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
+    Context = ?config(context, Config),
+    {ok, Body} = api_client_categories:get_categories(Context),
+    Body.
 
 default_get_category_by_ref(CategoryRef, Config) ->
-    Headers = headers(get, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        body => #{},
-        binding => #{
-            <<"categoryRef">> => genlib:to_list(CategoryRef)
-        },
-        qs_val => #{}
-    },
-    {ok, 200, _RespHeaders, Body} = swagger_categories_api:get_category_by_ref(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
+    Context = ?config(context, Config),
+    {ok, Body} = api_client_categories:get_category_by_ref(Context, CategoryRef),
+    Body.
 
 default_revoke_claim(ClaimID, Config) ->
-    Headers = headers(post, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        body => #{
-            <<"reason">> => <<"me want dat">>
-        },
-        binding => #{
-            <<"claimID">> => ClaimID
-        },
-        qs_val => #{}
-    },
-    {ok, 200, _RespHeaders, Body} = swagger_claims_api:revoke_claim_by_id(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
-
+    Context = ?config(context, Config),
+    Reason = "me want dat",
+    {ok, Body} = api_client_claims:revoke_claim_by_id(Context, Reason, ClaimID),
+    Body.
 
 default_fulfill_invoice(InvoiceID, Config) ->
-    Headers = headers(post, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{
-            <<"invoiceID">> => InvoiceID
-        },
-        body => #{
-            <<"reason">> => <<"me want dat">>
-        },
-        qs_val => #{}
-    },
-    {ok, 200, _RespHeaders, Body} = swagger_invoices_api:fulfill_invoice(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
-
+    Context = ?config(context, Config),
+    Reason = "me want dat",
+    {ok, Body} = api_client_invoices:fulfill_invoice(Context, InvoiceID, Reason),
+    Body.
 
 default_rescind_invoice(InvoiceID, Config) ->
-    Headers = headers(post, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        binding => #{
-            <<"invoiceID">> => InvoiceID
-        },
-        body => #{
-            <<"reason">> => <<"me want dat">>
-        },
-        qs_val => #{}
-    },
-    {ok, 200, _RespHeaders, Body} = swagger_invoices_api:rescind_invoice(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
+    Context = ?config(context, Config),
+    Reason = "me want dat",
+    {ok, Body} = api_client_invoices:rescind_invoice(Context, InvoiceID, Reason),
+    Body.
 
 %% @FIXME thats dirty
 default_approve_claim(ClaimID) ->
@@ -1254,38 +994,18 @@ get_domain_fixture(ProxyUrl) ->
     ].
 
 default_get_shop_accounts(ShopID, Config) ->
-    Headers = headers(get, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        body => #{},
-        binding => #{
-            <<"shopID">> => ShopID
-        },
-        qs_val => #{}
-    },
-    {ok, 200, _RespHeaders, Body} = swagger_shops_api:get_shop_accounts(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
+    Context = ?config(context, Config),
+    {ok, Body} = api_client_shops:get_shop_accounts(Context, ShopID),
+    Body.
 
 default_get_shop_account_by_id(AccountID, ShopID, Config) ->
-    Headers = headers(get, Config),
-    Params = #{
-        header => maps:from_list(Headers),
-        body => #{},
-        binding => #{
-            <<"shopID">> => ShopID,
-            <<"accountID">> => AccountID
-        },
-        qs_val => #{}
-    },
-    {ok, 200, _RespHeaders, Body} = swagger_shops_api:get_account_by_id(?CAPI_HOST, ?CAPI_PORT, Params),
-    decode_body(Body).
+    Context = ?config(context, Config),
+    {ok, Body} = api_client_shops:get_account_by_id(Context, ShopID, AccountID),
+    Body.
 
 get_body(ClientRef) ->
     {ok, Body} = hackney:body(ClientRef),
     Body.
-
-decode_body(Body) ->
-    jsx:decode(Body, [return_maps]).
 
 create_context() ->
     woody_client:new_context(genlib:unique(), capi_woody_event_handler).
