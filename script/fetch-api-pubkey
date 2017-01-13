@@ -8,18 +8,35 @@ KK_REALM=${KK_REALM:-external}
 TARGET=${TARGET:-var/secret}
 
 CURL_OPTS=${CURL_OPTS:-}
-REALM_DATA=$(curl -s -m5 --fail ${CURL_OPTS} "http://${KK_HOST}:${KK_PORT}/auth/realms/${KK_REALM}")
-EXIT_CODE=$?
+MAX_RETRY_TIMEOUT=${MAX_RETRY_TIMEOUT:-10}
 
-[ "${EXIT_CODE}" -ne "0" ] && {
-    echo "$0: [ ERROR ] Keycloak realm data fetching failed"
-    exit ${EXIT_CODE}
-}
+TIMEOUT=0
 
-[ -z "${REALM_DATA}" ] && {
-    echo "$0: [ ERROR ] Keycloak realm data is empty"
-    exit -1
-}
+while true; do
+    REALM_FAIL=false
+
+    echo "$0: [ INFO ] Attempting to fetch Keycloak key..."
+
+    REALM_DATA=$(curl -s -m5 --fail ${CURL_OPTS} "http://${KK_HOST}:${KK_PORT}/auth/realms/${KK_REALM}")
+    EXIT_CODE=$?
+    if [ "${EXIT_CODE}" -ne "0" ]; then
+        REALM_FAIL=true
+        echo "$0: [ ERROR ] Keycloak realm data fetching failed with exit code: ${EXIT_CODE}"
+    fi
+    if [ -z "${REALM_DATA}" ]; then
+        REALM_FAIL=true
+        echo "$0: [ ERROR ] Keycloak realm data is empty"
+    fi
+    if [ "$REALM_FAIL" == false ]; then
+        break
+    else
+        TIMEOUT=$((TIMEOUT + 1))
+        TIMEOUT=$([ $TIMEOUT -le $MAX_RETRY_TIMEOUT ] && echo "$TIMEOUT" || echo "$MAX_RETRY_TIMEOUT")
+    fi
+
+    echo "$0: [ ERROR ] Keycloak request timeout: ${TIMEOUT}"
+    sleep $TIMEOUT
+done
 
 echo "$0: [ INFO  ] Keycloak realm data fetched successfully"
 echo "$0: [ DEBUG ] ${REALM_DATA}"
