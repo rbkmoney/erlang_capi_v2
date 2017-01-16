@@ -15,6 +15,7 @@
 -spec start_link() -> {ok, pid()} | {error, {already_started, pid()}}.
 
 start_link() ->
+    validate_auth_key(),
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 %%
@@ -59,3 +60,12 @@ get_cowboy_extra_opts() ->
             cowboy_handler
        ]}
     ].
+
+validate_auth_key() ->
+    PemFilePath = genlib_app:env(capi, api_secret_path),
+    case filelib:is_regular(PemFilePath) of
+        true -> ok;
+        false ->
+            _ = lager:error("Missing auth key, stopping the app..."),
+            exit(no_auth_key)
+    end.
