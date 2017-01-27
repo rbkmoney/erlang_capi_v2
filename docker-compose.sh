@@ -22,7 +22,7 @@ services:
       - SERVICE_NAME=capi
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:ef9864b17f88d98a2b851a7cc090c3cfc4c19d4b
+    image: dr.rbkmoney.com/rbkmoney/hellgate:e4c62bee3747272c38dfd6405f8f08b96e62651c
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -35,7 +35,7 @@ services:
     command: /opt/cds/bin/cds foreground
 
   machinegun:
-    image: dr.rbkmoney.com/rbkmoney/machinegun:a48f9e93dd5a709d5f14db0c9785d43039282e86
+    image: dr.rbkmoney.com/rbkmoney/machinegun:bde2440a87e8311b6e2db90e915f8efdaa520ba1
     restart: always
     command: /opt/machinegun/bin/machinegun foreground
     volumes:
@@ -116,7 +116,7 @@ services:
       - SERVICE_NAME=shumway-db
 
   dominant:
-    image: dr.rbkmoney.com/rbkmoney/dominant:9e6db27120f970707b77aa492fb218eb1bd40055
+    image: dr.rbkmoney.com/rbkmoney/dominant:b79f1e6acf5fd07ac60a51f9551faca48115770f
     restart: always
     command: /opt/dominant/bin/dominant foreground
     depends_on:
@@ -133,7 +133,7 @@ services:
       /code/script/cds_test_init
     depends_on:
       - cds
-  
+
   kk:
     image: dr.rbkmoney.com/rbkmoney/keycloak:1a4a81d7e3ac1bff2d41f7bed57b6619dbd92a11
     container_name: keycloak

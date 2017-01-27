@@ -123,10 +123,13 @@ get_actions() ->
         'SuspendMyParty' => [<<"party:suspend">>, <<"party:create">>],
         'ActivateMyParty' => [<<"party:activate">>, <<"party:create">>],
         'GetClaimByID' => [<<"claims:get">>, <<"party:create">>],
-        'GetClaimByStatus' => [<<"claims:get">>, <<"party:create">>],
+        'GetClaimsByStatus' => [<<"claims:get">>, <<"party:create">>],
         'RevokeClaimByID' => [<<"claims:revoke">>, <<"party:create">>],
         'GetCategories' => [<<"categories:get">>],
         'GetCategoryByRef' => [<<"categories:get">>],
         'GetShopAccounts' => [<<"accounts:get">>],
-        'GetAccountByID' => [<<"accounts:get">>]
+        'GetAccountByID' => [<<"accounts:get">>],
+        'GetShopByID' => [<<"shops:get">>],
+        'GetShops' => [<<"shops:get">>],
+        'GetLocationsNames' => [<<"geo.location.names:get">>]
     }.

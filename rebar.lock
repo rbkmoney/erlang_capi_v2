@@ -1,6 +1,6 @@
 [{<<"api_client">>,
   {git,"git@github.com:rbkmoney/api_client.git",
-       {ref,"69a21444f621388b3132a12257bf94862dc20485"}},
+       {ref,"d6be556c7e34bc7f7fa55e13d391815cc6543062"}},
   0},
  {<<"base64url">>,
   {git,"https://github.com/dvv/base64url.git",

@@ -50,7 +50,9 @@
     activate_shop_ok_test/1,
     %%%%
     get_shop_accounts_ok_test/1,
-    get_shop_account_by_id_ok_test/1
+    get_shop_account_by_id_ok_test/1,
+    %%%%
+    get_locations_names_ok_test/1
 
 ]).
 
@@ -97,7 +99,8 @@ all() ->
         {group, party_management},
         {group, claims_management},
         {group, shops_management},
-        {group, accounts_management}
+        {group, accounts_management},
+        {group, geo_ip}
     ].
 
 -spec groups() -> [
@@ -160,6 +163,9 @@ groups() ->
             create_shop_ok_test,
             get_shop_accounts_ok_test,
             get_shop_account_by_id_ok_test
+        ]},
+        {geo_ip, [parallel], [
+            get_locations_names_ok_test
         ]}
     ].
 %%
@@ -618,6 +624,14 @@ get_shop_account_by_id_ok_test(Config) ->
         <<"currency">> := _
     } = default_get_shop_account_by_id(GuaranteeID, ShopID, Config).
 
+-spec get_locations_names_ok_test(config()) -> _.
+get_locations_names_ok_test(Config) ->
+    {TestGeoID, TestName} = {524901, <<"Москва">>},
+    [#{
+        <<"geoID">> := TestGeoID,
+        <<"name">> := TestName
+    }] = get_locations_names([TestGeoID], <<"RU">>, Config).
+
 %% helpers
 call(Method, Path, Body, Headers) ->
     Url = get_url(Path),
@@ -793,6 +807,19 @@ default_rescind_invoice(InvoiceID, Config) ->
     Reason = "me want dat",
     {ok, Body} = api_client_invoices:rescind_invoice(Context, InvoiceID, Reason),
     Body.
+
+get_locations_names(GeoIDs, Lang, Config) ->
+    Context = ?config(context, Config),
+    Params = #{
+        qs_val => #{
+            <<"geoID">> => GeoIDs,
+            <<"language">> => Lang
+        }
+    },
+    {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
+    Response = swagger_geo_api:g(Host, Port, PreparedParams),
+    {ok, R} = api_client_lib:handle_response(Response),
+    R.
 
 %% @FIXME thats dirty
 default_approve_claim(ClaimID) ->
