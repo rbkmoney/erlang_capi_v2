@@ -68,7 +68,7 @@ process_request(OperationID = 'CreateInvoice', Req, Context) ->
     ),
     case Result of
         {ok, InvoiceID} ->
-            {Invoice, _} = get_invoice_by_id(NewContext, UserInfo, InvoiceID),
+            {{ok, #'payproc_InvoiceState'{invoice = Invoice}}, _} = get_invoice_by_id(NewContext, UserInfo, InvoiceID),
             {201, [], decode_invoice(Invoice)};
         Error ->
             process_request_error(OperationID, Error)
@@ -106,7 +106,7 @@ process_request(OperationID = 'CreatePayment', Req, Context) ->
     ),
     case Result of
         {ok, PaymentID} ->
-            {Payment, _} = get_payment_by_id(NewContext, UserInfo, InvoiceID, PaymentID),
+            {{ok, Payment}, _} = get_payment_by_id(NewContext, UserInfo, InvoiceID, PaymentID),
             Resp = decode_payment(InvoiceID, Payment),
             {201, [], Resp};
         Error ->
@@ -348,8 +348,15 @@ process_request(OperationID = 'GetPaymentRateStats', Req, Context) ->
     Result = call_merchant_stat(StatType, Req, Context, RequestID),
 
     case Result of
-        {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
-            Resp = [decode_stat_response(StatType, S) || S <- Stats],
+        {ok, #merchstat_StatResponse{data = {records, S}}} ->
+            Resp = case S of
+                [] ->
+                    #{
+                        <<"uniqueCount">> => 0
+                    };
+                [StatResponse] ->
+                    decode_stat_response(StatType, StatResponse)
+            end,
             {200, [], Resp};
         Error ->
             process_request_error(OperationID, Error)
@@ -358,7 +365,7 @@ process_request(OperationID = 'GetPaymentRateStats', Req, Context) ->
 process_request(OperationID = 'GetPaymentMethodStats', Req, Context) ->
     RequestID = maps:get('X-Request-ID', Req),
     case maps:get(paymentMethod, Req) of
-        bank_card ->
+        bankCard ->
             StatType = payments_pmt_cards_stat,
             Result = call_merchant_stat(StatType, Req, Context, RequestID),
             case Result of
@@ -375,7 +382,7 @@ process_request(OperationID = 'GetLocationsNames', Req, _Context) ->
     Language = maps:get('language', Req),
     GeoIDs = ordsets:from_list(maps:get('geoID', Req)),
 
-    Result = service_call(
+    {Result, _} = service_call(
         geo_ip_service,
         'GetLocationName',
         [GeoIDs, Language],
@@ -609,18 +616,8 @@ process_request(OperationID = 'GetContractByID', Req, Context) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     ContractID = maps:get('contractID', Req),
-    {Result, _} = prepare_party(
-        Context,
-        create_context(RequestID),
-        fun(RequestContext) ->
-            service_call(
-                party_management,
-                'GetContract',
-                [UserInfo, PartyID, ContractID],
-                RequestContext
-            )
-        end
-    ),
+
+    {Result, _} = get_contract_by_id(Context, create_context(RequestID), UserInfo, PartyID, ContractID),
     case Result of
         {ok, Contract} ->
             Resp = decode_contract(Contract),
@@ -634,18 +631,8 @@ process_request(OperationID = 'GetPayoutTools', Req, Context) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     ContractID = maps:get('contractID', Req),
-    {Result, _} = prepare_party(
-        Context,
-        create_context(RequestID),
-        fun(RequestContext) ->
-            service_call(
-                party_management,
-                'GetContract',
-                [UserInfo, PartyID, ContractID],
-                RequestContext
-            )
-        end
-    ),
+
+    {Result, _} = get_contract_by_id(Context, create_context(RequestID), UserInfo, PartyID, ContractID),
     case Result of
         {ok, #domain_Contract{payout_tools = PayoutTools}} ->
             Resp = [decode_payout_tool(P) || P <- PayoutTools],
@@ -778,6 +765,7 @@ process_request(OperationID = 'SuspendMyParty', Req, Context) ->
     case Result of
         {ok, R} ->
             {202, [], decode_claim_result(R)};
+
         Error ->
             process_request_error(OperationID, Error)
     end;
@@ -830,7 +818,7 @@ process_request(_OperationID = 'GetCategoryByRef', Req, Context0) ->
     RequestID = maps:get('X-Request-ID', Req),
     _ = get_user_info(Context0),
     _ = get_party_id(Context0),
-    Ref = maps:get('categoryRef', Req),
+    Ref = maps:get(categoryID, Req),
     case capi_domain:get_category_by_ref(genlib:to_int(Ref), create_context(RequestID)) of
         {{ok, Category}, _Context} ->
             Resp = decode_category(Category),
@@ -905,13 +893,23 @@ parse_exp_date(ExpDate) when is_binary(ExpDate) ->
 
 get_user_info(Context) ->
     #payproc_UserInfo{
-        id = get_party_id(Context)
+        id = get_party_id(Context),
+        type = {external_user, #payproc_ExternalUser{}} %%@FIXME do I have to guess?
     }.
 
 get_party_id(#{
     auth_context := AuthContext
 }) ->
     maps:get(<<"sub">>, AuthContext).
+
+get_party_params(#{
+    auth_context := AuthContext
+}) ->
+    #payproc_PartyParams{
+        contact_info = #domain_PartyContactInfo{
+            email = maps:get(<<"email">>, AuthContext)
+        }
+    }.
 
 get_peer_info(#{peer := Peer}) -> Peer.
 
@@ -951,6 +949,9 @@ encode_shop_details(Details = #{
         description = genlib_map:get(<<"description">>, Details),
         location = encode_shop_location(genlib_map:get(<<"location">>, Details))
     }.
+
+encode_shop_location(undefined) ->
+    undefined;
 
 encode_shop_location(#{
     <<"locationType">> := <<"ShopLocationUrl">>,
@@ -1005,7 +1006,7 @@ encode_contractor(#{
 encode_legal_entity(#{
     <<"entityType">> := <<"RussianLegalEntity">>
 } = Entity) ->
-    #domain_RussianLegalEntity{
+    {russian_legal_entity , #domain_RussianLegalEntity{
         registered_name = maps:get(<<"registeredName">>, Entity),
         registered_number = maps:get(<<"registeredNumber">>, Entity),
         inn = maps:get(<<"inn">>, Entity),
@@ -1014,7 +1015,7 @@ encode_legal_entity(#{
         representative_position = maps:get(<<"representativePosition">>, Entity),
         representative_full_name = maps:get(<<"representativeFullName">>, Entity),
         representative_document = maps:get(<<"representativeDocument">>, Entity)
-    }.
+    }}.
 
 decode_bank_card(Encoded) ->
     #{
@@ -1113,10 +1114,10 @@ decode_payment_event(_, {
     }}.
 
 decode_payment(InvoiceID, #domain_InvoicePayment{
-    'id' = PaymentID,
-    'created_at' = CreatedAt,
-    'status' = {Status, _},
-    'payer' = #domain_Payer{
+    id = PaymentID,
+    created_at = CreatedAt,
+    status = Status,
+    payer = #domain_Payer{
         payment_tool = {
             bank_card,
             BankCard
@@ -1151,11 +1152,13 @@ decode_payment_status({Status, StatusInfo}) ->
                 code = Code,
                 description = Description
             }
-        } -> #{
-            <<"code">> => Code,
-            <<"description">> => Description
-        };
-        _ -> undefined
+        } ->
+            #{
+                <<"code">> => Code,
+                <<"description">> => Description
+            };
+        _ ->
+            undefined
     end,
     #{
         <<"status">> => genlib:to_binary(Status),
@@ -1216,7 +1219,7 @@ decode_party(#domain_Party{
     suspension = Suspension
 }) ->
     #{
-        <<"partyID">> => PartyID,
+        <<"id">> => PartyID,
         <<"isBlocked">> => is_blocked(Blocking),
         <<"isSuspended">> => is_suspended(Suspension)
     }.
@@ -1334,6 +1337,9 @@ decode_shop_details(#domain_ShopDetails{
       <<"location">> => decode_shop_location(Location)
     }).
 
+decode_shop_location(undefined) ->
+    undefined;
+
 decode_shop_location({url, Location}) ->
     #{
         <<"locationType">> => <<"ShopLocationUrl">>,
@@ -1366,6 +1372,7 @@ decode_legal_entity({
     }
 }) ->
     #{
+        <<"entityType">> => <<"RussianLegalEntity">>,
         <<"registeredName">> => RegisteredName,
         <<"registeredNumber">> => RegisteredNumber,
         <<"inn">> => Inn,
@@ -1495,7 +1502,7 @@ decode_party_modification({contract_creation, Contract}) ->
 
 decode_party_modification({
     contract_modification,
-    #payproc_ShopModificationUnit{
+    #payproc_ContractModificationUnit{
         id = ContractID,
         modification = Modification
     }
@@ -1611,8 +1618,8 @@ decode_shop_account(#domain_ShopAccount{
     guarantee = GuaranteeID
 }) ->
     #{
-        <<"guaranteeID">> => GuaranteeID,
-        <<"settlementID">> => SettlementID,
+        <<"guaranteeID">> => genlib:to_binary(GuaranteeID),
+        <<"settlementID">> => genlib:to_binary(SettlementID),
         <<"currency">> => decode_currency(Currency)
     }.
 
@@ -1675,10 +1682,15 @@ decode_location_name(GeoID, Name) ->
 decode_currency(#domain_Currency{
     symbolic_code = SymbolicCode
 }) ->
+    SymbolicCode;
+
+decode_currency(#domain_CurrencyRef{
+    symbolic_code = SymbolicCode
+}) ->
     SymbolicCode.
 
 encode_currency(SymbolicCode) ->
-    #domain_Currency{
+    #domain_CurrencyRef{
         symbolic_code = SymbolicCode
     }.
 
@@ -1810,10 +1822,11 @@ prepare_party(Context, RequestContext0, ServiceCall) ->
 create_party(Context, RequestContext) ->
     PartyID = get_party_id(Context),
     UserInfo = get_user_info(Context),
+    PartyParams = get_party_params(Context),
     {Result, NewRequestContext} = service_call(
         party_management,
         'Create',
-        [UserInfo, PartyID],
+        [UserInfo, PartyID, PartyParams],
         RequestContext
     ),
     R = case Result of
@@ -1851,6 +1864,20 @@ get_my_party(Context, RequestContext, UserInfo, PartyID) ->
                 party_management,
                 'Get',
                 [UserInfo, PartyID],
+                RContext
+            )
+        end
+    ).
+
+get_contract_by_id(Context, RequestContext, UserInfo, PartyID, ContractID) ->
+    prepare_party(
+        Context,
+        RequestContext,
+        fun(RContext) ->
+            service_call(
+                party_management,
+                'GetContract',
+                [UserInfo, PartyID, ContractID],
                 RContext
             )
         end

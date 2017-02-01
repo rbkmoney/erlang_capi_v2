@@ -18,11 +18,11 @@ services:
       - starter
       - dominant
       - kk
-    environment:
-      - SERVICE_NAME=capi
+      - columbus
+      - columbus-postgres
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:e4c62bee3747272c38dfd6405f8f08b96e62651c
+    image: dr.rbkmoney.com/rbkmoney/hellgate:669fdab027265ae3aeb30bf48c9069419a36f92d
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -35,27 +35,27 @@ services:
     command: /opt/cds/bin/cds foreground
 
   machinegun:
-    image: dr.rbkmoney.com/rbkmoney/machinegun:bde2440a87e8311b6e2db90e915f8efdaa520ba1
+    image: dr.rbkmoney.com/rbkmoney/machinegun:cfba8560591fbc33ab5883d133849e81e237a6e1
     restart: always
     command: /opt/machinegun/bin/machinegun foreground
     volumes:
       - ./test/machinegun/sys.config:/opt/machinegun/releases/0.1.0/sys.config
 
   magista:
-    image: dr.rbkmoney.com/rbkmoney/magista:bf7c71a9e8d7c25c901894d5fe705dc0f2efbdaa
+    image: dr.rbkmoney.com/rbkmoney/magista:2e0c7fb4d21ebc277e608a75a8c384505cfc711a
     restart: always
-    command: |
-      -Xmx512m
-      -jar /opt/magista/magista.jar
-      --db.jdbc.url=jdbc:postgresql://magista-db:5432/magista
-      --db.username=postgres
-      --db.password=postgres
-      --bm.pooling.url=http://bustermaze:8022/repo
+    entrypoint:
+      - java
+      - -Xmx512m
+      - -jar
+      - /opt/magista/magista.jar
+      - --spring.datasource.url=jdbc:postgresql://magista-db:5432/magista
+      - --spring.datasource.username=postgres
+      - --spring.datasource.password=postgres
+      - --bm.pooling.url=http://bustermaze:8022/repo
     depends_on:
       - magista-db
       - bustermaze
-    environment:
-      - SERVICE_NAME=magista
 
   magista-db:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
@@ -63,27 +63,29 @@ services:
       - POSTGRES_DB=magista
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - SERVICE_NAME=magista-db
+    entrypoint:
+     - /docker-entrypoint.sh
+     - postgres
 
   bustermaze:
-    image: dr.rbkmoney.com/rbkmoney/bustermaze:c50c584f3f2fcc6edb226712b2d241e237121ead
+    image: dr.rbkmoney.com/rbkmoney/bustermaze:57c4cf3f9950b6ee46f67ffca286ebe8267bedde
     restart: always
-    command: |
-      -Xmx512m
-      -jar /opt/bustermaze/bustermaze.jar
-      --spring.datasource.url=jdbc:postgresql://bustermaze-db:5432/bustermaze
-      --spring.datasource.username=postgres
-      --spring.datasource.password=postgres
-      --hg.pooling.url=http://hellgate:8022/v1/processing/eventsink
-      --flyway.url=jdbc:postgresql://bustermaze-db:5432/bustermaze
-      --flyway.user=postgres
-      --flyway.password=postgres
-      --flyway.schemas=bm
+    entrypoint:
+      - java
+      - -Xmx512m
+      - -jar
+      - /opt/bustermaze/bustermaze.jar
+      - --spring.datasource.url=jdbc:postgresql://bustermaze-db:5432/bustermaze
+      - --spring.datasource.username=postgres
+      - --spring.datasource.password=postgres
+      - --hg.pooling.url=http://hellgate:8022/v1/processing/eventsink
+      - --flyway.url=jdbc:postgresql://bustermaze-db:5432/bustermaze
+      - --flyway.user=postgres
+      - --flyway.password=postgres
+      - --flyway.schemas=bm
     depends_on:
       - hellgate
       - bustermaze-db
-    environment:
-      - SERVICE_NAME=bustermaze
 
   bustermaze-db:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
@@ -91,21 +93,23 @@ services:
       - POSTGRES_DB=bustermaze
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - SERVICE_NAME=bustermaze-db
+    entrypoint:
+     - /docker-entrypoint.sh
+     - postgres
 
   shumway:
-    image: dr.rbkmoney.com/rbkmoney/shumway:cd00af9d70b28a7851295fca39bdeded5a3606b0
+    image: dr.rbkmoney.com/rbkmoney/shumway:94e25fd3a3e7af4c73925fb051d999d7f38c271d
     restart: always
-    command: |
-      -Xmx512m
-      -jar /opt/shumway/shumway.jar
-      --spring.datasource.url=jdbc:postgresql://shumway-db:5432/shumway
-      --spring.datasource.username=postgres
-      --spring.datasource.password=postgres
+    entrypoint:
+      - java
+      - -Xmx512m
+      - -jar
+      - /opt/shumway/shumway.jar
+      - --spring.datasource.url=jdbc:postgresql://shumway-db:5432/shumway
+      - --spring.datasource.username=postgres
+      - --spring.datasource.password=postgres
     depends_on:
       - shumway-db
-    environment:
-      - SERVICE_NAME=shumway
 
   shumway-db:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
@@ -113,10 +117,12 @@ services:
       - POSTGRES_DB=shumway
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - SERVICE_NAME=shumway-db
+    entrypoint:
+     - /docker-entrypoint.sh
+     - postgres
 
   dominant:
-    image: dr.rbkmoney.com/rbkmoney/dominant:b79f1e6acf5fd07ac60a51f9551faca48115770f
+    image: dr.rbkmoney.com/rbkmoney/dominant:42e8d0668a661d5c612c508c94272c895b5cc4b7
     restart: always
     command: /opt/dominant/bin/dominant foreground
     depends_on:
@@ -133,6 +139,31 @@ services:
       /code/script/cds_test_init
     depends_on:
       - cds
+
+  columbus:
+    image:  dr.rbkmoney.com/rbkmoney/columbus:0144f469ca830eaf8353876e8cf2be9bc5cd0b84
+    ports:
+     - '28022:8022'
+    links:
+     - columbus-postgres
+    entrypoint:
+       - java
+       - -jar
+       - /opt/columbus/columbus.jar
+       - --spring.datasource.url=jdbc:postgresql://columbus-postgres:5432/columbus
+       - --geo.db.file.path=file:/maxmind.mmdb
+       - --logging.level.ROOT=warn
+       - --logging.level.com.rbkmoney=warn
+
+  columbus-postgres:
+    image: dr.rbkmoney.com/rbkmoney/postgres-geodata:8b8df081f3f23c10079e9a41b13ce7ca2f39cd3c
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: columbus
+    entrypoint:
+     - /docker-entrypoint.sh
+     - postgres
 
   kk:
     image: dr.rbkmoney.com/rbkmoney/keycloak:1a4a81d7e3ac1bff2d41f7bed57b6619dbd92a11
@@ -154,7 +185,10 @@ services:
     environment:
         POSTGRES_PASSWORD: keycloak
         POSTGRES_USER: keycloak
-        POSTGRES_DATABASE: keycloak
+        POSTGRES_DB: keycloak
+    entrypoint:
+     - /docker-entrypoint.sh
+     - postgres
 
 networks:
   default:

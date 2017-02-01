@@ -65,7 +65,7 @@
 ]).
 
 -define(KEYCLOAK_HOST, "kk").
--define(KEYCLOAK_PORT, 8090).
+-define(KEYCLOAK_PORT, 8080).
 -define(KEYCLOAK_USER, "demo_merchant").
 -define(KEYCLOAK_PASSWORD, "test").
 
@@ -373,7 +373,7 @@ get_invoices_stats_ok_test(Config) ->
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
         {status, unpaid}
     ],
-    {ok, _, _} = api_client_analytics:get_invoices(Context, ShopID, Query).
+    {ok, _Body} = api_client_analytics:get_invoices(Context, ShopID, Query).
 
 -spec get_payment_conversion_stats_ok_test(config()) -> _.
 
@@ -448,7 +448,7 @@ get_payment_method_stats_ok_test(Config) ->
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
         {split_unit, minute},
         {split_size, 1},
-        {paymentMethod, <<"bankCard">>}
+        {paymentMethod, bankCard}
     ],
     {ok, _Body} = api_client_analytics:get_payment_method_stats(Context, ShopID, Query).
 
@@ -458,13 +458,14 @@ get_my_party_ok_test(Config) ->
     #{
         <<"isBlocked">> := false,
         <<"isSuspended">> := false,
-        <<"id">> := ?MERCHANT_ID
+        <<"id">> := ?MERCHANT_ID,
+        <<"shops">> := _
     } = default_get_party(Config).
 
 -spec suspend_my_party_ok_test(config()) -> _.
 
 suspend_my_party_ok_test(Config) ->
-    _ = default_suspend_my_party(Config),
+    #{} = default_suspend_my_party(Config),
     #{
         <<"isSuspended">> := true
     } = default_get_party(Config),
@@ -473,7 +474,9 @@ suspend_my_party_ok_test(Config) ->
 -spec activate_my_party_ok_test(config()) -> _.
 
 activate_my_party_ok_test(Config) ->
-    _ = default_activate_my_party(Config),
+    #{
+        <<"claimID">> := _ClaimID
+    } = default_activate_my_party(Config),
     #{
         <<"isSuspended">> := false
     } = default_get_party(Config).
@@ -481,33 +484,10 @@ activate_my_party_ok_test(Config) ->
 -spec create_contract_ok_test(config()) -> _.
 
 create_contract_ok_test(Config) ->
-    #{
-        <<"claimID">> := ClaimID
-    }  = default_create_contract(Config),
-    default_approve_claim(ClaimID),
-    #{
-        <<"id">> := ClaimID,
-        <<"changeset">> := ChangeSet
-    } = default_get_claim_by_id(ClaimID, Config),
-    #{
-        <<"id">> := ContractID
-    } = lists:foldl(
-        fun
-            (
-                #{
-                    <<"partyModificationType">> := <<"ContractCreation">>,
-                    <<"contract">> := Contract
-                }, _Acc
-            ) ->
-                Contract;
-            (_, Acc) ->
-                Acc
-
-        end,
-        undefined,
-        ChangeSet
-    ),
-    {save_config, ContractID}.
+     #{
+         <<"id">> := ContractID
+     } = default_create_contract(Config),
+     {save_config, ContractID}.
 
 -spec get_contract_by_id_ok_test(config()) -> _.
 
@@ -523,11 +503,11 @@ get_contract_by_id_ok_test(Config) ->
 -spec create_payout_tool_ok_test(config()) -> _.
 
 create_payout_tool_ok_test(Config) ->
-    {get_contract_by_id_ok_test,
+    {create_contract_ok_test,
         ContractID
     } = ?config(saved_config, Config),
     #{
-        <<"claimID">> := _
+        <<"id">> := _
     } = default_create_payout_tool(ContractID, Config),
     {save_config, ContractID}.
 
@@ -538,20 +518,19 @@ get_payout_tools_ok_test(Config) ->
         ContractID
     } = ?config(saved_config, Config),
     [#{
-        <<"id">> := _PayoutToolID
+        <<"id">> := PayoutToolID
     }] = get_payout_tools(ContractID, Config),
-    {save_config, ContractID}.
+    {save_config, PayoutToolID}.
 
 -spec get_contracts_ok_test(config()) -> _.
 
 get_contracts_ok_test(Config) ->
-    {get_payout_tools_ok_test,
+    {create_contract_ok_test,
         ContractID
     } = ?config(saved_config, Config),
-    lists:member(
-        ContractID,
-        [C || #{ <<"id">> := C} <- get_contracts(Config)]
-    ) =:= true.
+    [#{
+        <<"id">> := ContractID
+    }] = get_contracts(Config).
 
 -spec get_claim_by_id_ok_test(config()) -> _.
 
@@ -638,19 +617,22 @@ get_shop_by_id_ok_test(Config) ->
     {create_shop_ok_test,
         ShopID
     } = ?config(saved_config, Config),
-    #{
+    {ok, #{
         <<"id">> := ShopID
-    } = default_get_shop_by_id(ShopID, Config),
+    }} = default_get_shop_by_id(ShopID, Config),
     {save_config, ShopID}.
 
 -spec get_shops_ok_test(config()) -> _.
 
 get_shops_ok_test(Config) ->
+    {get_shop_by_id_ok_test,
+        ShopID
+    } = ?config(saved_config, Config),
     [
         #{
             <<"id">> := ShopID
         }
-    | _] = get_shops(Config),
+    ] = get_shops(Config),
     {save_config, ShopID}.
 
 
@@ -660,24 +642,23 @@ update_shop_ok_test(Config) ->
     {activate_shop_ok_test,
         ShopID
     } = ?config(saved_config, Config),
-    #{
+    {ok, #{
         <<"details">> := ShopDetails
-    } = default_get_shop_by_id(ShopID, Config),
+    }} = default_get_shop_by_id(ShopID, Config),
     NewShopDetails = ShopDetails#{
-        <<"location">> => #{
-            <<"locationType">> => <<"ShopLocationUrl">>,
-            <<"url">> => <<"kill.me">>
-        }
+        <<"location">> => genlib:unique()
     },
     Req = #{
         <<"details">> => NewShopDetails,
         <<"categoryID">> => 1
     },
-    ClaimID = update_shop(Req, ShopID, Config),
-    default_approve_claim(ClaimID),
     #{
+        <<"claimID">> := ClaimID
+    } = update_shop(Req, ShopID, Config),
+    default_approve_claim(ClaimID),
+    {ok, #{
         <<"details">> := NewShopDetails
-    } = default_get_shop_by_id(ShopID, Config),
+    }} = default_get_shop_by_id(ShopID, Config),
     {save_config, ShopID}.
 
 -spec suspend_shop_ok_test(config()) -> _.
@@ -686,10 +667,12 @@ suspend_shop_ok_test(Config) ->
     {update_shop_ok_test,
         ShopID
     } = ?config(saved_config, Config),
-    _ = default_suspend_shop(ShopID, Config),
     #{
+        <<"claimID">> := _
+    } = default_suspend_shop(ShopID, Config),
+    {ok, #{
         <<"isSuspended">> := true
-    } = default_get_shop_by_id(ShopID, Config),
+    }} = default_get_shop_by_id(ShopID, Config),
     {save_config, ShopID}.
 
 
@@ -699,11 +682,12 @@ activate_shop_ok_test(Config) ->
     {get_shops_ok_test,
         ShopID
     } = ?config(saved_config, Config),
-
-    _ = default_activate_shop(ShopID, Config),
     #{
+        <<"claimID">> := _
+    } = default_activate_shop(ShopID, Config),
+    {ok, #{
         <<"isSuspended">> := false
-    } = default_get_shop_by_id(ShopID, Config),
+    }} = default_get_shop_by_id(ShopID, Config),
     {save_config, ShopID}.
 
 -spec get_account_by_id_ok_test(config()) -> _.
@@ -712,27 +696,25 @@ get_account_by_id_ok_test(Config) ->
     {create_shop_ok_test,
         ShopID
     } = ?config(saved_config, Config),
-    #{
+    {ok, #{
         <<"account">> := #{
             <<"guaranteeID">> := GuaranteeID
         }
-    } = default_get_shop_by_id(ShopID, Config),
+    }} = default_get_shop_by_id(ShopID, Config),
     #{
         <<"id">> := _,
         <<"ownAmount">> := _,
         <<"availableAmount">> := _,
         <<"currency">> := _
-
-    %% @FIXME changin Account ID to string is not ok
     } = default_get_shop_account_by_id(GuaranteeID, ShopID, Config).
 
 -spec get_locations_names_ok_test(config()) -> _.
 get_locations_names_ok_test(Config) ->
-    {TestGeoID, TestName} = {53654, <<"Могадишо"/utf8>>},
+    {TestGeoID, TestName} = {524901, <<"Москва">>},
     [#{
         <<"geoID">> := TestGeoID,
         <<"name">> := TestName
-    }] = get_locations_names([TestGeoID], <<"ru">>, Config).
+    }] = get_locations_names([TestGeoID], <<"RU">>, Config).
 
 %% helpers
 call(Method, Path, Body, Headers) ->
@@ -931,20 +913,28 @@ default_suspend_shop(ShopID, Config) ->
 
 default_activate_shop(ShopID, Config) ->
     Context = ?config(context, Config),
-    api_client_shops:activate_shop(Context, ShopID).
+    {ok, Body} = api_client_shops:activate_shop(Context, ShopID),
+    Body.
 
 default_get_shop_by_id(ShopID, Config) ->
-    Context = ?config(context, Config),
-    Params = #{
-        binding => #{
-            <<"shopID">> => ShopID
-        }
-    },
-    {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    io:format(user, "FUCK ~p~n", [PreparedParams]),
-    Response = swagger_shops_api:get_shop_by_id(Host, Port, PreparedParams),
-    {ok, R} = api_client_lib:handle_response(Response),
-    R.
+    #{
+        <<"shops">> := Shops
+    } = default_get_party(Config),
+    Result = lists:filter(
+        fun
+            (#{<<"id">> := ID}) ->
+                case ID of
+                    ShopID -> true;
+                    _ -> false
+                end;
+            (_) -> false
+        end,
+        Shops
+    ),
+    case Result of
+        [Shop] -> {ok, Shop};
+        _ -> {error, {wrong_result, Result}}
+    end.
 
 default_create_shop(CategoryID, Config) ->
     #{
@@ -977,8 +967,8 @@ default_create_shop(CategoryID, ContractID, PayoutToolID, Config) ->
 
 update_shop(Req, ShopID, Config) ->
     Context = ?config(context, Config),
-    {ok, ClaimID} = api_client_shops:update_shop(Context, Req,  ShopID),
-    ClaimID.
+    {ok, Body} = api_client_shops:update_shop(Context, Req,  ShopID),
+    Body.
 
 default_get_categories(Config) ->
     Context = ?config(context, Config),
@@ -1486,15 +1476,8 @@ get_domain_fixture(Proxies) ->
 
 default_get_shop_account_by_id(AccountID, ShopID, Config) ->
     Context = ?config(context, Config),
-    Params = #{
-        binding => #{
-            <<"accountID">> => AccountID,
-            <<"shopID">> => ShopID
-        }
-    },
-    {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response =  swagger_accounts_api:get_account_by_id(Host, Port, PreparedParams),
-    handle_response(Response).
+    {ok, Body} = api_client_shops:get_account_by_id(Context, ShopID, AccountID),
+    Body.
 
 get_body(ClientRef) ->
     {ok, Body} = hackney:body(ClientRef),
@@ -1521,7 +1504,7 @@ create_and_activate_shop(Config) ->
             } | _
         ]
     } = default_get_claim_by_id(ClaimID, Config),
-    _ = default_activate_shop(ShopID, Config),
+    default_activate_shop(ShopID, Config),
     ShopID.
 
 get_any_category(Config) ->

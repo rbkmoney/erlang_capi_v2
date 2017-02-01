@@ -54,8 +54,8 @@ process_payment({processed, #domain_InvoicePaymentProcessed{}}, _, PaymentInfo, 
 
 finish(#prxprv_PaymentInfo{payment = Payment}) ->
     #prxprv_ProxyResult{
-        intent = {finish, #'FinishIntent'{status = {ok, #'Ok'{}}}},
-        trx    = #domain_TransactionInfo{id = Payment#prxprv_InvoicePayment.id}
+        intent = {finish, #'FinishIntent'{status = {success, #'Success'{}}}},
+        trx    = #domain_TransactionInfo{id = Payment#prxprv_InvoicePayment.id, extra = #{}}
     }.
 
 respond(Response, Result) ->

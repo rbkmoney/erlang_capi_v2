@@ -127,9 +127,13 @@ get_actions() ->
         'RevokeClaimByID' => [<<"claims:revoke">>, <<"party:create">>],
         'GetCategories' => [<<"categories:get">>],
         'GetCategoryByRef' => [<<"categories:get">>],
-        'GetShopAccounts' => [<<"accounts:get">>],
-        'GetAccountByID' => [<<"accounts:get">>],
-        'GetShopByID' => [<<"shops:get">>],
-        'GetShops' => [<<"shops:get">>],
-        'GetLocationsNames' => [<<"geo.location.names:get">>]
+        'GetAccountByID' => [<<"party:get">>, <<"party:create">>],
+        'GetShopByID' => [<<"party:get">>, <<"party:create">>],
+        'GetShops' => [<<"party:get">>, <<"party:create">>],
+        'GetPayoutTools' => [<<"party:get">>, <<"party:create">>],
+        'CreatePayoutTool' => [<<"party:get">>, <<"party:create">>],
+        'GetContracts' => [<<"party:get">>, <<"party:create">>],
+        'CreateContract' => [<<"party:get">>, <<"party:create">>],
+        'GetContractByID' => [<<"party:get">>, <<"party:create">>],
+        'GetLocationsNames' => [<<"party:get">>, <<"party:create">>]
     }.

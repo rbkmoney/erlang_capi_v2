@@ -4,26 +4,26 @@
 
 -callback get_service_spec() -> {Path :: string(), Service :: {module(), atom()}}.
 
--export([get_child_spec/3]).
 -export([get_child_spec/4]).
+-export([get_child_spec/5]).
 -export([get_url/3]).
 
 %%
 
--spec get_child_spec(module(), ip(), inet:port_number()) ->
+-spec get_child_spec(Name :: atom(), module(), ip(), inet:port_number()) ->
     supervisor:child_spec().
 
-get_child_spec(Module, Host, Port) ->
-    get_child_spec(Module, Host, Port, []).
+get_child_spec(Name, Module, Host, Port) ->
+    get_child_spec(Name, Module, Host, Port, #{}).
 
--spec get_child_spec(module(), ip(), inet:port_number(), #{}) ->
+-spec get_child_spec(Name :: atom(), module(), ip(), inet:port_number(), #{}) ->
     supervisor:child_spec().
 
-get_child_spec(Module, IPStr, Port, Args) ->
+get_child_spec(Name, Module, IPStr, Port, Args) ->
     {ok, IP} = inet:parse_address(IPStr),
     {Path, Service} = Module:get_service_spec(),
     woody_server:child_spec(
-        ?MODULE,
+        {Module, Name},
         #{
             ip => IP,
             port => Port,
