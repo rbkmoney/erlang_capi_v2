@@ -71,7 +71,8 @@
 -define(KEYCLOAK_USER, "demo_merchant").
 -define(KEYCLOAK_PASSWORD, "test").
 
--define(CAPI_HOST, "0.0.0.0").
+-define(CAPI_IP, "::").
+-define(CAPI_HOST, "localhost").
 -define(CAPI_PORT, 8080).
 -define(CAPI_SERVICE_TYPE, real).
 -define(CAPI_CDS_STORAGE_URL, "http://cds:8022/v1/storage").
@@ -219,7 +220,7 @@ init_per_suite(Config) ->
             }}
         ]) ++
         capi_ct_helper:start_app(capi, [
-            {host, ?CAPI_HOST},
+            {ip, ?CAPI_IP},
             {port, ?CAPI_PORT},
             {service_type, ?CAPI_SERVICE_TYPE},
             {api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")}
