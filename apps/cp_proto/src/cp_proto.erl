@@ -1,17 +1,18 @@
 -module(cp_proto).
 
--export([call_service_safe/4]).
+-export([call_service/5]).
 
 %%
 
 -type service_name() :: atom().
 
--spec call_service_safe(service_name(), woody_t:func(), [term()], woody_client:context()) ->
-    woody_client:result_ok() | woody_client:result_error().
+-spec call_service(service_name(), woody:func(), [term()], woody_context:ctx(), woody:ev_handler()) ->
+    woody:result().
 
-call_service_safe(ServiceName, Function, Args, Context) ->
+call_service(ServiceName, Function, Args, Context, EventHandler) ->
     {Url, Service} = get_service_spec(ServiceName),
-    woody_client:call_safe(Context, {Service, Function, Args}, #{url => Url}).
+    Request = {Service, Function, Args},
+    woody_client:call(Request, #{url => Url, event_handler => EventHandler}, Context).
 
 get_service_spec(ServiceName) ->
     {get_service_url(ServiceName), get_service_modname(ServiceName)}.

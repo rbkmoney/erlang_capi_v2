@@ -17,18 +17,18 @@ get_service_spec() ->
     {"/test/proxy/inspector/dummy", {cp_proxy_inspector_thrift, 'InspectorProxy'}}.
 
 
--spec handle_function(woody_t:func(), woody_server_thrift_handler:args(), woody_client:context(), #{}) ->
-    {{ok, term()}, woody_client:context()}.
+-spec handle_function(woody:func(), woody:args(), woody_context:ctx(), #{}) ->
+    {ok, term()}.
 
 handle_function(
     'InspectPayment',
-    {#proxy_inspector_Context{
+    [#proxy_inspector_Context{
         payment = _PaymentInfo,
         options = #{
             <<"risk_score">> := RiskScore
         }
-    }},
-    Context,
+    }],
+    _Context,
     _Options
 ) ->
-    {{ok, binary_to_atom(RiskScore, utf8)}, Context}.
+    {ok, binary_to_atom(RiskScore, utf8)}.

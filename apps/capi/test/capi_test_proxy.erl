@@ -27,9 +27,8 @@ get_child_spec(Name, Module, IPStr, Port, Args) ->
         #{
             ip => IP,
             port => Port,
-            net_opts => [],
             event_handler => capi_woody_event_handler,
-            handlers => [{Path, {Service, Module, Args}}]
+            handlers => [{Path, {Service, {Module, Args}}}]
         }
     ).
 

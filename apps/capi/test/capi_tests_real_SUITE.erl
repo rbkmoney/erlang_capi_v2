@@ -1092,11 +1092,10 @@ default_approve_claim(ClaimID) ->
         id = ?MERCHANT_ID,
         type = {internal_user, #payproc_InternalUser{}}
     },
-    cp_proto:call_service_safe(
+    call_service(
         party_management,
         'AcceptClaim',
-        [UserInfo, ?MERCHANT_ID, ClaimID],
-        create_context()
+        [UserInfo, ?MERCHANT_ID, ClaimID]
     ).
 
 
@@ -1131,11 +1130,12 @@ default_approve_claim(ClaimID) ->
     #domain_Cash{amount = Amount, currency = Currency}).
 
 populate_snapshot(Proxies) ->
-    {{ok, #'Snapshot'{version = Version}}, Context0} = cp_proto:call_service_safe(
+    ReqCtx = create_context(),
+    {ok, #'Snapshot'{version = Version}} = call_service(
         repository,
         'Checkout',
         [{head, #'Head'{}}],
-        create_context()
+        ReqCtx
     ),
     Ops = [
         {'insert', #'InsertOp'{
@@ -1148,22 +1148,21 @@ populate_snapshot(Proxies) ->
         ops = Ops
     },
 
-    {{ok, _Version}, _} = cp_proto:call_service_safe(
+    {ok, _Version} = call_service(
         repository,
         'Commit',
         [Version, Commit],
-        Context0
+        ReqCtx
     ),
     timer:sleep(5000).
 
 get_domain_fixture(Proxies) ->
     Context = create_context(),
-    {Accounts, _Context} = lists:foldl(
-        fun ({N, CurrencyCode}, {M, C0}) ->
-            {AccountID, C1} = create_account(CurrencyCode, C0),
-            {M#{N => AccountID}, C1}
+    Accounts = lists:foldl(
+        fun ({N, CurrencyCode}, M) ->
+            M#{N => create_account(CurrencyCode, Context)}
         end,
-        {#{}, Context},
+        #{},
         [
             {system_settlement       , <<"RUB">>},
             {external_income         , <<"RUB">>},
@@ -1568,7 +1567,13 @@ get_body(ClientRef) ->
     Body.
 
 create_context() ->
-    woody_client:new_context(genlib:unique(), capi_woody_event_handler).
+    woody_context:new().
+
+call_service(Service, Function, Args) ->
+    call_service(Service, Function, Args, create_context()).
+
+call_service(Service, Function, Args, ReqCtx) ->
+    cp_proto:call_service(Service, Function, Args, ReqCtx, capi_woody_event_handler).
 
 create_and_activate_shop(Config) ->
     #{
@@ -1609,11 +1614,12 @@ get_random_port() ->
     rand:uniform(32768) + 32767.
 
 cleanup() ->
-    {{ok, #'Snapshot'{domain = Domain, version = Version}}, Context0} = cp_proto:call_service_safe(
+    ReqCtx = create_context(),
+    {ok, #'Snapshot'{domain = Domain, version = Version}} = call_service(
         repository,
         'Checkout',
         [{head, #'Head'{}}],
-        create_context()
+        ReqCtx
     ),
     Commit = #'Commit'{
         ops = [
@@ -1623,26 +1629,26 @@ cleanup() ->
                 Object <- maps:values(Domain)
         ]
     },
-    {{ok, _Version}, _} = cp_proto:call_service_safe(
+    {ok, _Version} = call_service(
         repository,
         'Commit',
         [Version, Commit],
-        Context0
+        ReqCtx
     ),
     ok.
 
 
-create_account(CurrencyCode, Context0) ->
+create_account(CurrencyCode, Context) ->
     AccountPrototype = #accounter_AccountPrototype{
         currency_sym_code = CurrencyCode
     },
-    {{ok, AccountID}, Context} = cp_proto:call_service_safe(
+    {ok, AccountID} = call_service(
         accounter,
         'CreateAccount',
         [AccountPrototype],
-        Context0
+        Context
     ),
-    {AccountID, Context}.
+    AccountID.
 
 start_handler(Module, ProxyID, ProxyOpts, Config) ->
     ProxyUrl = start_service_handler(Module, Config),

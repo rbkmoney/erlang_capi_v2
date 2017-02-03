@@ -6,15 +6,15 @@
 -export([get_categories/1]).
 -export([get/2]).
 
--type context() :: woody_client:context().
+-type context() :: woody_context:ctx().
 -type ref() :: cp_domain_thrift:'Reference'().
 -type data() :: _.
 
 -type category() :: #domain_CategoryObject{}.
 
--spec get_categories(context()) -> {{ok, [category()]}, context()}.
-get_categories(Context0) ->
-    {{ok, Snapshot}, Context} = get_shapshot(Context0),
+-spec get_categories(context()) -> {ok, [category()]}.
+get_categories(Context) ->
+    {ok, Snapshot} = get_shapshot(Context),
     #'Snapshot'{
         domain = Domain
     } = Snapshot,
@@ -29,20 +29,20 @@ get_categories(Context0) ->
         [],
         Domain
     ),
-    {{ok, Categories}, Context}.
+    {ok, Categories}.
 
--spec get(ref(), context()) -> {{ok, data()}, context()} | {{error, not_found}, context()}.
+-spec get(ref(), context()) -> {ok, data()} | {error, not_found}.
 
-get(Ref, Context0) ->
-    {{ok, Snapshot}, Context} = get_shapshot(Context0),
+get(Ref, Context) ->
+    {ok, Snapshot} = get_shapshot(Context),
     #'Snapshot'{
         domain = Domain
     } = Snapshot,
     case genlib_map:get(Ref, Domain) of
-        undefined ->
-            {{error, not_found}, Context};
         {_, C} ->
-            {{ok, C}, Context}
+            {ok, C};
+        undefined ->
+            {error, not_found}
     end.
 
 head() ->
@@ -52,13 +52,10 @@ get_shapshot(Context) ->
     get_shapshot(head(), Context).
 
 get_shapshot(Reference, Context) ->
-    service_call(
+    cp_proto:call_service(
         repository,
         'Checkout',
         [Reference],
-        Context
+        Context,
+        capi_woody_event_handler
     ).
-
-service_call(ServiceName, Function, Args, Context) ->
-    cp_proto:call_service_safe(ServiceName, Function, Args, Context).
-

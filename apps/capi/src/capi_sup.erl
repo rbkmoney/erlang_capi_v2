@@ -50,7 +50,8 @@ get_logic_handler_info() ->
             {capi_mock_handler, [Spec]};
         real ->
             {capi_real_handler, []};
-        undefined -> exit(undefined_service_type)
+        undefined ->
+            exit(undefined_service_type)
     end.
 
 get_cowboy_extra_opts() ->
@@ -66,7 +67,8 @@ get_cowboy_extra_opts() ->
 validate_auth_key() ->
     PemFilePath = genlib_app:env(capi, api_secret_path),
     case filelib:is_regular(PemFilePath) of
-        true -> ok;
+        true ->
+            ok;
         false ->
             _ = lager:error("Missing auth key, stopping the app..."),
             exit(no_auth_key)

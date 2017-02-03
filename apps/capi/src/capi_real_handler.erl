@@ -17,7 +17,8 @@
 -spec authorize_api_key(OperationID :: swagger_api:operation_id(), ApiKey :: binary()) ->
     Result :: false | {true, #{binary() => any()}}.
 
-authorize_api_key(OperationID, ApiKey) -> capi_auth:auth_api_key(OperationID, ApiKey).
+authorize_api_key(OperationID, ApiKey) ->
+    capi_auth:auth_api_key(OperationID, ApiKey).
 
 -spec handle_request(
     OperationID :: swagger_api:operation_id(),
@@ -29,17 +30,24 @@ authorize_api_key(OperationID, ApiKey) -> capi_auth:auth_api_key(OperationID, Ap
 handle_request(OperationID, Req, Context) ->
     capi_utils:logtag_process(operation_id, OperationID),
     _ = lager:info("Processing request ~p", [OperationID]),
-    process_request(OperationID, Req, Context).
+    ReqContext = create_context(Req),
+    try
+        process_request(OperationID, Req, Context, ReqContext)
+    catch
+        error:{woody_error, {Source, Class, Details}} ->
+            process_woody_error(OperationID, Source, Class, Details)
+    end.
 
 -spec process_request(
     OperationID :: swagger_api:operation_id(),
     Req :: #{},
-    Context :: swagger_api:request_context()) ->
+    Context :: swagger_api:request_context(),
+    ReqCtx :: woody_context:ctx()
+) ->
     {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
 
-process_request(OperationID = 'CreateInvoice', Req, Context) ->
+process_request(OperationID = 'CreateInvoice', Req, Context, ReqCtx) ->
     InvoiceParams = maps:get('CreateInvoiceArgs', Req),
-    RequestID = maps:get('X-Request-ID', Req),
     InvoiceContext = jsx:encode(genlib_map:get(<<"context">>, InvoiceParams)),
     PartyID = get_party_id(Context),
     Params =  #payproc_InvoiceParams{
@@ -54,31 +62,29 @@ process_request(OperationID = 'CreateInvoice', Req, Context) ->
         shop_id = genlib_map:get(<<"shopID">>, InvoiceParams)
     },
     UserInfo = get_user_info(Context),
-
-    {Result, NewContext} = prepare_party(
+    Result = prepare_party(
        Context,
-       create_context(RequestID),
-       fun(RequestContext) ->
+       ReqCtx,
+       fun () ->
            service_call(
                invoicing,
                'Create',
                [UserInfo, Params],
-               RequestContext
+               ReqCtx
            )
        end
     ),
     case Result of
         {ok, InvoiceID} ->
-            {{ok, #'payproc_InvoiceState'{invoice = Invoice}}, _} = get_invoice_by_id(NewContext, UserInfo, InvoiceID),
+            {ok, #'payproc_InvoiceState'{invoice = Invoice}} = get_invoice_by_id(ReqCtx, UserInfo, InvoiceID),
             {201, [], decode_invoice(Invoice)};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'CreatePayment', Req, Context) ->
+process_request(OperationID = 'CreatePayment', Req, Context, ReqCtx) ->
     InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('CreatePaymentArgs', Req),
-    RequestID = maps:get('X-Request-ID', Req),
     Token = genlib_map:get(<<"paymentToolToken">>, PaymentParams),
     ContactInfo = genlib_map:get(<<"contactInfo">>, PaymentParams),
     PaymentTool = decode_bank_card(Token),
@@ -100,23 +106,23 @@ process_request(OperationID = 'CreatePayment', Req, Context) ->
         }
     },
     UserInfo = get_user_info(Context),
-    {Result, NewContext} = service_call(invoicing,
+    Result = service_call(
+        invoicing,
         'StartPayment',
         [UserInfo, InvoiceID, Params],
-        create_context(RequestID)
+        ReqCtx
     ),
     case Result of
         {ok, PaymentID} ->
-            {{ok, Payment}, _} = get_payment_by_id(NewContext, UserInfo, InvoiceID, PaymentID),
+            {ok, Payment} = get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
             Resp = decode_payment(InvoiceID, Payment),
             {201, [], Resp};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'CreatePaymentToolToken', Req, Context) ->
+process_request(OperationID = 'CreatePaymentToolToken', Req, Context, ReqCtx) ->
     Params = maps:get('CreatePaymentToolTokenArgs', Req),
-    RequestID = maps:get('X-Request-ID', Req),
     ClientInfo0 = maps:get(<<"clientInfo">>, Params),
     PaymentTool = maps:get(<<"paymentTool">>, Params),
     case PaymentTool of
@@ -132,11 +138,11 @@ process_request(OperationID = 'CreatePaymentToolToken', Req, Context) ->
                 cardholder_name = genlib_map:get(<<"cardHolder">>, PaymentTool),
                 cvv = genlib_map:get(<<"cvv">>, PaymentTool)
             },
-            {Result, _NewContext} = service_call(
+            Result = service_call(
                 cds_storage,
                 'PutCardData',
                 [CardData],
-                create_context(RequestID)
+                ReqCtx
             ),
             case Result of
                 {ok, #'PutCardDataResult'{
@@ -156,117 +162,109 @@ process_request(OperationID = 'CreatePaymentToolToken', Req, Context) ->
                         <<"session">> => Session
                     },
                     {201, [], Resp};
-                Error ->
-                    process_request_error(OperationID, Error)
+                {exception, Exception} ->
+                    process_exception(OperationID, Exception)
             end;
         _ ->
-            {400, [], logic_error(wrong_payment_tool, <<"">>)}
+            {400, [], logic_error(
+                invalidPaymentTool,
+                <<"Specified payment tool is invalid or unsupported">>
+            )}
     end;
 
-process_request(OperationID = 'GetInvoiceByID', Req, Context) ->
+process_request(OperationID = 'GetInvoiceByID', Req, Context, ReqCtx) ->
     InvoiceID = maps:get(invoiceID, Req),
-    RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
-    {Result, _NewContext} = get_invoice_by_id(create_context(RequestID), UserInfo, InvoiceID),
+    Result = get_invoice_by_id(ReqCtx, UserInfo, InvoiceID),
     case Result of
         {ok, #'payproc_InvoiceState'{invoice = Invoice}} ->
-         %%%   InvoiceContext = jsx:decode(RawInvoiceContext, [return_maps]), @TODO deal with non json contexts
             Resp = decode_invoice(Invoice),
             {200, [], Resp};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'FulfillInvoice', Req, Context) ->
+process_request(OperationID = 'FulfillInvoice', Req, Context, ReqCtx) ->
     InvoiceID = maps:get(invoiceID, Req),
-    RequestID = maps:get('X-Request-ID', Req),
 
     Params = maps:get('Reason', Req),
     Reason = maps:get(<<"reason">>, Params),
 
     UserInfo = get_user_info(Context),
 
-    {Result, _NewContext} = service_call(
+    Result = service_call(
         invoicing,
         'Fulfill',
         [UserInfo, InvoiceID, Reason],
-        create_context(RequestID)
+        ReqCtx
     ),
     case Result of
-        ok ->
+        {ok, _} ->
             {204, [], <<>>}; %%LIAR!
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'RescindInvoice', Req, Context) ->
+process_request(OperationID = 'RescindInvoice', Req, Context, ReqCtx) ->
     InvoiceID = maps:get(invoiceID, Req),
-    RequestID = maps:get('X-Request-ID', Req),
 
     Params = maps:get('Reason', Req),
     Reason = maps:get(<<"reason">>, Params),
 
     UserInfo = get_user_info(Context),
-    {Result, _NewContext} = service_call(
+    Result = service_call(
         invoicing,
         'Rescind',
         [UserInfo, InvoiceID, Reason],
-        create_context(RequestID)
+        ReqCtx
     ),
     case Result of
-        ok ->
+        {ok, _} ->
             {200, [], #{}};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'GetInvoiceEvents', Req, Context) ->
+process_request(OperationID = 'GetInvoiceEvents', Req, Context, ReqCtx) ->
     InvoiceID = maps:get(invoiceID, Req),
-    _EventID = maps:get(eventID, Req),
-    RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
     EventRange = #'payproc_EventRange'{
         limit = maps:get(limit, Req),
         'after' = maps:get(eventID, Req)
     },
-    {Result, _NewContext} = service_call(
+    Result = service_call(
         invoicing,
         'GetEvents',
         [UserInfo, InvoiceID, EventRange],
-        create_context(RequestID)
+        ReqCtx
     ),
     case Result of
         {ok, Events} when is_list(Events) ->
             Resp = [decode_event(I) || I <- Events],
             {200, [], Resp};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'GetPaymentByID', Req, Context) ->
+process_request(OperationID = 'GetPaymentByID', Req, Context, ReqCtx) ->
     PaymentID = maps:get(paymentID, Req),
     InvoiceID = maps:get(invoiceID, Req),
-    RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
-    {Result, _NewContext} = get_payment_by_id(
-        create_context(RequestID),
-        UserInfo, InvoiceID, PaymentID
-    ),
+    Result = get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
     case Result of
         {ok, Payment} ->
             Resp = decode_payment(InvoiceID, Payment),
             {200, [], Resp};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'GetInvoices', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'GetInvoices', Req, Context, ReqCtx) ->
     Limit = genlib_map:get('limit', Req),
     Offset = genlib_map:get('offset', Req),
     InvoiceStatus = case genlib_map:get('status', Req) of
         undefined -> undefined;
-        [Status] -> Status
+        [Status | _] -> Status
     end,  %%@TODO deal with many statuses
     Query = #{
         <<"merchant_id">> => get_party_id(Context),
@@ -281,11 +279,11 @@ process_request(OperationID = 'GetInvoices', Req, Context) ->
         <<"from">> => Offset
     },
     Dsl = create_dsl(invoices, Query, QueryParams),
-    {Result, _NewContext} = service_call(
+    Result = service_call(
         merchant_stat,
         'GetInvoices',
         [encode_stat_request(Dsl)],
-        create_context(RequestID)
+        ReqCtx
     ),
     case Result of
         {ok, #merchstat_StatResponse{data = {'invoices', Invoices}, total_count = TotalCount}} ->
@@ -295,58 +293,50 @@ process_request(OperationID = 'GetInvoices', Req, Context) ->
                 <<"totalCount">> => TotalCount
             },
             {200, [], Resp};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'GetPaymentConversionStats', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
-
+process_request(OperationID = 'GetPaymentConversionStats', Req, Context, ReqCtx) ->
     StatType = payments_conversion_stat,
-    Result = call_merchant_stat(StatType, Req, Context, RequestID),
+    Result = call_merchant_stat(StatType, Req, Context, ReqCtx),
 
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
             Resp = [decode_stat_response(StatType, S) || S <- Stats],
             {200, [], Resp};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
 
-process_request(OperationID = 'GetPaymentRevenueStats', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
-
+process_request(OperationID = 'GetPaymentRevenueStats', Req, Context, ReqCtx) ->
     StatType = payments_turnover,
-    Result = call_merchant_stat(StatType, Req, Context, RequestID),
+    Result = call_merchant_stat(StatType, Req, Context, ReqCtx),
 
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
             Resp = [decode_stat_response(StatType, S) || S <- Stats],
             {200, [], Resp};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'GetPaymentGeoStats', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
-
+process_request(OperationID = 'GetPaymentGeoStats', Req, Context, ReqCtx) ->
     StatType = payments_geo_stat,
-    Result = call_merchant_stat(StatType, Req, Context, RequestID),
+    Result = call_merchant_stat(StatType, Req, Context, ReqCtx),
 
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
             Resp = [decode_stat_response(StatType, S) || S <- Stats],
             {200, [], Resp};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'GetPaymentRateStats', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
-
+process_request(OperationID = 'GetPaymentRateStats', Req, Context, ReqCtx) ->
     StatType = customers_rate_stat,
-    Result = call_merchant_stat(StatType, Req, Context, RequestID),
+    Result = call_merchant_stat(StatType, Req, Context, ReqCtx),
 
     case Result of
         {ok, #merchstat_StatResponse{data = {records, S}}} ->
@@ -359,35 +349,33 @@ process_request(OperationID = 'GetPaymentRateStats', Req, Context) ->
                     decode_stat_response(StatType, StatResponse)
             end,
             {200, [], Resp};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'GetPaymentMethodStats', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'GetPaymentMethodStats', Req, Context, ReqCtx) ->
     case maps:get(paymentMethod, Req) of
         bankCard ->
             StatType = payments_pmt_cards_stat,
-            Result = call_merchant_stat(StatType, Req, Context, RequestID),
+            Result = call_merchant_stat(StatType, Req, Context, ReqCtx),
             case Result of
                 {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
                     Resp = [decode_stat_response(StatType, S) || S <- Stats],
                     {200, [], Resp};
-                Error ->
-                    process_request_error(OperationID, Error)
+                {exception, Exception} ->
+                    process_exception(OperationID, Exception)
             end
     end;
 
-process_request(OperationID = 'GetLocationsNames', Req, _Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'GetLocationsNames', Req, _Context, ReqCtx) ->
     Language = maps:get('language', Req),
     GeoIDs = ordsets:from_list(maps:get('geoID', Req)),
 
-    {Result, _} = service_call(
+    Result = service_call(
         geo_ip_service,
         'GetLocationName',
         [GeoIDs, Language],
-        create_context(RequestID)
+        ReqCtx
     ),
 
     case Result of
@@ -398,20 +386,16 @@ process_request(OperationID = 'GetLocationsNames', Req, _Context) ->
                 LocationNames
             ),
             {202, [], PreparedLocationNames};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'CreateShop', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'CreateShop', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     Params = maps:get('CreateShopArgs', Req),
 
-    {Proxy, RequestContext} = populate_proxy_options(
-        genlib_map:get(<<"callbackUrl">>, Params),
-        create_context(RequestID)
-    ),
+    Proxy = populate_proxy_options(genlib_map:get(<<"callbackUrl">>, Params), ReqCtx),
 
     ShopParams = #payproc_ShopParams{
         category =  encode_category_ref(genlib_map:get(<<"categoryID">>, Params)),
@@ -421,15 +405,15 @@ process_request(OperationID = 'CreateShop', Req, Context) ->
         proxy = Proxy
     },
 
-    {Result, _} = prepare_party(
+    Result = prepare_party(
         Context,
-        RequestContext,
-        fun(RContext) ->
+        ReqCtx,
+        fun () ->
             service_call(
                 party_management,
                 'CreateShop',
                 [UserInfo, PartyID, ShopParams],
-                RContext
+                ReqCtx
             )
         end
     ),
@@ -437,26 +421,24 @@ process_request(OperationID = 'CreateShop', Req, Context) ->
     case Result of
         {ok, R} ->
             {202, [], decode_claim_result(R)};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'ActivateShop', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'ActivateShop', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
-
     PartyID = get_party_id(Context),
     ShopID = maps:get(shopID, Req),
 
-    {Result, _} = prepare_party(
+    Result = prepare_party(
         Context,
-        create_context(RequestID),
-        fun(RequestContext) ->
+        ReqCtx,
+        fun () ->
             service_call(
                 party_management,
                 'ActivateShop',
                 [UserInfo, PartyID, ShopID],
-                RequestContext
+                ReqCtx
             )
         end
     ),
@@ -464,26 +446,24 @@ process_request(OperationID = 'ActivateShop', Req, Context) ->
     case Result of
         {ok, R} ->
             {202, [], decode_claim_result(R)};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'SuspendShop', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'SuspendShop', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
-
     PartyID = get_party_id(Context),
     ShopID = maps:get(shopID, Req),
 
-    {Result, _} = prepare_party(
+    Result = prepare_party(
         Context,
-        create_context(RequestID),
-        fun(RequestContext) ->
+        ReqCtx,
+        fun () ->
             service_call(
                 party_management,
                 'SuspendShop',
                 [UserInfo, PartyID, ShopID],
-                RequestContext
+                ReqCtx
             )
         end
     ),
@@ -491,21 +471,17 @@ process_request(OperationID = 'SuspendShop', Req, Context) ->
     case Result of
         {ok, R} ->
             {202, [], decode_claim_result(R)};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'UpdateShop', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'UpdateShop', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     ShopID = maps:get(shopID, Req),
     Params = maps:get('UpdateShopArgs', Req),
 
-    {Proxy, RequestContext} = populate_proxy_options(
-        genlib_map:get(<<"callbackUrl">>, Params),
-        create_context(RequestID)
-    ),
+    Proxy = populate_proxy_options(genlib_map:get(<<"callbackUrl">>, Params), ReqCtx),
 
     ShopUpdate = #payproc_ShopUpdate{
         category = encode_category_ref(genlib_map:get(<<"categoryID">>, Params)),
@@ -514,15 +490,16 @@ process_request(OperationID = 'UpdateShop', Req, Context) ->
         payout_tool_id = genlib_map:get(<<"payoutToolID">>, Params),
         proxy = Proxy
     },
-    {Result, _} = prepare_party(
+
+    Result = prepare_party(
         Context,
-        RequestContext,
-        fun(RContext) ->
+        ReqCtx,
+        fun () ->
             service_call(
                 party_management,
                 'UpdateShop',
                 [UserInfo, PartyID, ShopID, ShopUpdate],
-                RContext
+                ReqCtx
             )
         end
     ),
@@ -530,37 +507,35 @@ process_request(OperationID = 'UpdateShop', Req, Context) ->
     case Result of
         {ok, R} ->
             {202, [], decode_claim_result(R)};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'GetShops', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'GetShops', _Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
-    {Result, _} = get_my_party(Context, create_context(RequestID), UserInfo, PartyID),
+    Result = get_my_party(Context, ReqCtx, UserInfo, PartyID),
     case Result of
         {ok, #domain_Party{shops = Shops}} ->
             Resp = decode_shops_map(Shops),
             {200, [], Resp};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'GetShopByID', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'GetShopByID', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     ShopID = maps:get(shopID, Req),
-    {Result, _} = prepare_party(
+    Result = prepare_party(
         Context,
-        create_context(RequestID),
-        fun(RequestContext) ->
+        ReqCtx,
+        fun () ->
             service_call(
                 party_management,
                 'GetShop',
                 [UserInfo, PartyID, ShopID],
-                RequestContext
+                ReqCtx
             )
         end
     ),
@@ -569,15 +544,14 @@ process_request(OperationID = 'GetShopByID', Req, Context) ->
         {ok, Shop} ->
             Resp = decode_shop(Shop),
             {202, [], Resp};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'GetContracts', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'GetContracts', _Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
-    {Result, _NewContext} = get_my_party(Context, create_context(RequestID), UserInfo, PartyID),
+    Result = get_my_party(Context, ReqCtx, UserInfo, PartyID),
 
     case Result of
         {ok, #domain_Party{
@@ -585,12 +559,11 @@ process_request(OperationID = 'GetContracts', Req, Context) ->
         }} ->
             Resp = decode_contracts_map(Contracts),
             {200, [], Resp};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'CreateContract', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'CreateContract', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     Params = maps:get('ContractParams', Req),
@@ -599,97 +572,93 @@ process_request(OperationID = 'CreateContract', Req, Context) ->
         contractor = encode_contractor(genlib_map:get(<<"contractor">>, Params)),
         payout_tool_params = encode_payout_tool_params(genlib_map:get(<<"payoutToolParams">>, Params))
     },
-    {Result, _} = prepare_party(
+    Result = prepare_party(
         Context,
-        create_context(RequestID),
-        fun(RequestContext) ->
+        ReqCtx,
+        fun () ->
             service_call(
                 party_management,
                 'CreateContract',
                 [UserInfo, PartyID, ContractParams],
-                RequestContext
+                ReqCtx
             )
         end
     ),
     case Result of
         {ok, R} ->
             {202, [], decode_claim_result(R)};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'GetContractByID', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'GetContractByID', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     ContractID = maps:get('contractID', Req),
 
-    {Result, _} = get_contract_by_id(Context, create_context(RequestID), UserInfo, PartyID, ContractID),
+    Result = get_contract_by_id(Context, ReqCtx, UserInfo, PartyID, ContractID),
     case Result of
         {ok, Contract} ->
             Resp = decode_contract(Contract),
             {202, [], Resp};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'GetPayoutTools', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'GetPayoutTools', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     ContractID = maps:get('contractID', Req),
 
-    {Result, _} = get_contract_by_id(Context, create_context(RequestID), UserInfo, PartyID, ContractID),
+    Result = get_contract_by_id(Context, ReqCtx, UserInfo, PartyID, ContractID),
     case Result of
         {ok, #domain_Contract{payout_tools = PayoutTools}} ->
             Resp = [decode_payout_tool(P) || P <- PayoutTools],
             {202, [], Resp};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'CreatePayoutTool', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'CreatePayoutTool', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     ContractID = maps:get('contractID', Req),
     Params = maps:get('PayoutToolParams', Req),
 
     PayoutToolParams = encode_payout_tool_params(Params),
-    {Result, _} = prepare_party(
+    Result = prepare_party(
         Context,
-        create_context(RequestID),
-        fun(RequestContext) ->
+        ReqCtx,
+        fun () ->
             service_call(
                 party_management,
                 'CreatePayoutTool',
                 [UserInfo, PartyID, ContractID, PayoutToolParams],
-                RequestContext
+                ReqCtx
             )
         end
     ),
     case Result of
         {ok, R} ->
             {202, [], decode_claim_result(R)};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'GetClaimsByStatus', Req, Context) ->
+process_request(OperationID = 'GetClaimsByStatus', Req, Context, ReqCtx) ->
     pending = maps:get(claimStatus, Req), %% @TODO think about other claim statuses here
-    RequestID = maps:get('X-Request-ID', Req),
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
 
-    {Result, _} = prepare_party(
+    Result = prepare_party(
         Context,
-        create_context(RequestID),
-        fun(RequestContext) ->
+        ReqCtx,
+        fun () ->
             service_call(
                 party_management,
                 'GetPendingClaim',
                 [UserInfo, PartyID],
-                RequestContext
+                ReqCtx
             )
         end
     ),
@@ -697,24 +666,23 @@ process_request(OperationID = 'GetClaimsByStatus', Req, Context) ->
         {ok, Claim} ->
             Resp = decode_claim(Claim),
             {200, [], [Resp]}; %% pretending to have more than one pending claim at the same time
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'GetClaimByID', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'GetClaimByID', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     ClaimID = maps:get(claimID, Req),
-    {Result, _} = prepare_party(
+    Result = prepare_party(
         Context,
-        create_context(RequestID),
-        fun(RequestContext) ->
+        ReqCtx,
+        fun () ->
             service_call(
                 party_management,
                 'GetClaim',
                 [UserInfo, PartyID, ClaimID],
-                RequestContext
+                ReqCtx
             )
         end
     ),
@@ -722,132 +690,124 @@ process_request(OperationID = 'GetClaimByID', Req, Context) ->
         {ok, Claim} ->
             Resp = decode_claim(Claim),
             {200, [], Resp};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'RevokeClaimByID', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'RevokeClaimByID', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     ClaimID = maps:get(claimID, Req),
     Params = maps:get('Reason', Req),
     Reason = maps:get(<<"reason">>, Params),
 
-    {Result, _} = prepare_party(
+    Result = prepare_party(
         Context,
-        create_context(RequestID),
-        fun(RequestContext) ->
+        ReqCtx,
+        fun () ->
             service_call(
                 party_management,
                 'RevokeClaim',
                 [UserInfo, PartyID, ClaimID, Reason],
-                RequestContext
+                ReqCtx
             )
         end
     ),
     case Result of
-        ok ->
+        {ok, _} ->
             {200, [], #{}};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'SuspendMyParty', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'SuspendMyParty', _Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
-    {Result, _} = prepare_party(
+    Result = prepare_party(
         Context,
-        create_context(RequestID),
-        fun(RequestContext) ->
+        ReqCtx,
+        fun () ->
             service_call(
                 party_management,
                 'Suspend',
                 [UserInfo, PartyID],
-                RequestContext
+                ReqCtx
             )
         end
     ),
     case Result of
         {ok, R} ->
             {202, [], decode_claim_result(R)};
-
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'ActivateMyParty', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'ActivateMyParty', _Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
-    {Result, _} = prepare_party(
+    Result = prepare_party(
         Context,
-        create_context(RequestID),
-        fun(RequestContext) ->
+        ReqCtx,
+        fun () ->
             service_call(
                 party_management,
                 'Activate',
                 [UserInfo, PartyID],
-                RequestContext
+                ReqCtx
             )
         end
     ),
     case Result of
         {ok, R} ->
             {202, [], decode_claim_result(R)};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'GetMyParty', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'GetMyParty', _Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
-    {Result, _} = get_my_party(Context, create_context(RequestID), UserInfo, PartyID),
+    Result = get_my_party(Context, ReqCtx, UserInfo, PartyID),
     case Result of
         {ok, Party} ->
             Resp = decode_party(Party),
             {200, [], Resp};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(_OperationID = 'GetCategories', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(_OperationID = 'GetCategories', _Req, Context, ReqCtx) ->
     _ = get_user_info(Context),
     _ = get_party_id(Context),
-    {{ok, Categories}, _Context} = capi_domain:get_categories(create_context(RequestID)),
+    {ok, Categories} = capi_domain:get_categories(ReqCtx),
     Resp = [decode_category(C) || C <- Categories],
     {200, [], Resp};
 
-process_request(_OperationID = 'GetCategoryByRef', Req, Context0) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(_OperationID = 'GetCategoryByRef', Req, Context0, ReqCtx) ->
     _ = get_user_info(Context0),
     _ = get_party_id(Context0),
     CategoryID = maps:get(categoryID, Req),
-    case get_category_by_id(genlib:to_int(CategoryID), create_context(RequestID)) of
-        {{ok, Category}, _Context} ->
+    case get_category_by_id(genlib:to_int(CategoryID), ReqCtx) of
+        {ok, Category} ->
             Resp = decode_category(Category),
             {200, [], Resp};
-        {{error, not_found}, _Context} ->
+        {error, not_found} ->
             {404, [], general_error(<<"Category not found">>)}
     end;
 
-process_request(OperationID = 'GetAccountByID', Req, Context) ->
-    RequestID = maps:get('X-Request-ID', Req),
+process_request(OperationID = 'GetAccountByID', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     AccountID = maps:get('accountID', Req),
-    {Result, _} = prepare_party(
+    Result = prepare_party(
         Context,
-        create_context(RequestID),
-        fun(RequestContext) ->
+        ReqCtx,
+        fun () ->
             service_call(
                 party_management,
                 'GetAccountState',
                 [UserInfo, PartyID, genlib:to_int(AccountID)],
-                RequestContext
+                ReqCtx
             )
         end
     ),
@@ -855,41 +815,27 @@ process_request(OperationID = 'GetAccountByID', Req, Context) ->
         {ok, S} ->
             Resp = decode_account_state(S),
             {200, [], Resp};
-        Error ->
-            process_request_error(OperationID, Error)
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
-process_request(_OperationID, _Req, _Context) ->
+process_request(_OperationID, _Req, _Context, _ReqCtx) ->
     {501, [], <<"Not implemented">>}.
 
 %%%
 
 service_call(ServiceName, Function, Args, Context) ->
-    {Result, Context} = cp_proto:call_service_safe(ServiceName, Function, Args, Context),
-    _ = log_service_call_result(Result),
-    {Result, Context}.
+    cp_proto:call_service(ServiceName, Function, Args, Context, capi_woody_event_handler).
 
-log_service_call_result(Result) ->
-    _ = lager:debug("Service call result ~p", [Result]),
-    log_service_call_result_(Result).
-
-log_service_call_result_({ok, _}) ->
-    lager:info("Service call result success");
-
-log_service_call_result_({exception, Exception}) ->
-    lager:error("Service call result exception ~p", [Exception]);
-
-log_service_call_result_(_) ->
-    ok.
-
-create_context(ID) ->
-    woody_client:new_context(genlib:to_binary(ID), capi_woody_event_handler).
+create_context(Req) ->
+    RequestID = maps:get('X-Request-ID', Req),
+    woody_context:new(genlib:to_binary(RequestID)).
 
 logic_error(Code, Message) ->
     #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)}.
 
 limit_exceeded_error(Limit) ->
-    logic_error(limit_exceeded, io_lib:format("Max limit: ~p", [Limit])).
+    logic_error(<<"limitExceeded">>, io_lib:format("Max limit: ~p", [Limit])).
 
 general_error(Message) ->
     #{<<"message">> => genlib:to_binary(Message)}.
@@ -1218,6 +1164,7 @@ decode_context(#'Content'{
     type = <<"application/json">>,
     data = InvoiceContext
 }) ->
+    % @TODO deal with non json contexts
     jsx:decode(InvoiceContext,  [return_maps]).
 
 decode_party(#domain_Party{
@@ -1753,15 +1700,14 @@ create_stat_dsl(StatType, Req, Context) ->
     },
     create_dsl(StatType, Query, #{}).
 
-call_merchant_stat(StatType, Req, Context, RequestID) ->
+call_merchant_stat(StatType, Req, Context, ReqCtx) ->
     Dsl = create_stat_dsl(StatType, Req, Context),
-    {Result, _NewContext} = service_call(
+    service_call(
         merchant_stat,
         'GetStatistics',
         [encode_stat_request(Dsl)],
-        create_context(RequestID)
-    ),
-    Result.
+        ReqCtx
+    ).
 
 get_split_interval(SplitSize, minute) ->
     SplitSize * 60;
@@ -1792,154 +1738,174 @@ parse_rfc3339_datetime(DateTime) ->
     {ok, {DateFrom, TimeFrom, _, _}} = rfc3339:parse(DateTime),
     {DateFrom, TimeFrom}.
 
-process_request_error(_, {exception, #payproc_InvalidUser{}}) ->
+process_exception(_, #payproc_InvalidUser{}) ->
     {400, [], logic_error(invalid_user, <<"Ivalid user">>)};
 
-process_request_error(_, {exception, #'InvalidRequest'{}}) ->
-    {400, [], logic_error(invalid_request, <<"Request can't be processed">>)};
+process_exception(_, #'InvalidRequest'{errors = Errors}) ->
+    {400, [], logic_error(invalid_request, format_request_errors(Errors))};
 
-process_request_error(_, {exception, #payproc_UserInvoiceNotFound{}} ) ->
+process_exception(_, #payproc_UserInvoiceNotFound{}) ->
     {404, [], general_error(<<"Invoice not found">>)};
 
-process_request_error(_, {exception, #payproc_ClaimNotFound{}} ) ->
+process_exception(_, #payproc_ClaimNotFound{}) ->
     {404, [], general_error(<<"Claim not found">>)};
 
-process_request_error(_,  {exception, #payproc_InvalidInvoiceStatus{}} ) ->
+process_exception(_,  #payproc_InvalidInvoiceStatus{}) ->
     {400, [], logic_error(invalid_invoice_status, <<"Invalid invoice status">>)};
 
-process_request_error(_, {exception, #payproc_InvoicePaymentPending{}}) ->
+process_exception(_, #payproc_InvoicePaymentPending{}) ->
     {400, [], logic_error(invalid_payment_status, <<"Invalid payment status">>)};
 
-process_request_error(_, {exception, #payproc_InvalidShopStatus{}}) ->
+process_exception(_, #payproc_InvalidShopStatus{}) ->
     {400, [], logic_error(invalid_shop_status, <<"Invalid shop status">>)};
 
-process_request_error(_, {exception, #payproc_PartyNotFound{}}) ->
+process_exception(_, #payproc_PartyNotFound{}) ->
     {404, [],  general_error(<<"Party not found">>)};
 
-process_request_error(_,  {exception, #'InvalidCardData'{}}) ->
+process_exception(_,  #'InvalidCardData'{}) ->
     {400, [], logic_error(invalid_request, <<"Card data is invalid">>)};
 
-process_request_error(_, {exception, #'KeyringLocked'{}}) ->
+process_exception(_, #'KeyringLocked'{}) ->
     {503, [], <<"">>};
 
-process_request_error(_, {exception, #payproc_EventNotFound{}}) ->
+process_exception(_, #payproc_EventNotFound{}) ->
     {404, [], general_error(<<"Event not found">>)};
 
-process_request_error(_, {exception, #payproc_ShopNotFound{}}) ->
+process_exception(_, #payproc_ShopNotFound{}) ->
     {404, [], general_error(<<"Shop not found">>)};
 
-process_request_error(_, {exception, #payproc_InvoicePaymentNotFound{}} ) ->
+process_exception(_, #payproc_InvoicePaymentNotFound{}) ->
     {404, [], general_error(<<"Payment not found">>)};
 
-process_request_error(_, {exception, #merchstat_DatasetTooBig{limit = Limit}}) ->
+process_exception(_, #merchstat_DatasetTooBig{limit = Limit}) ->
     {400, [], limit_exceeded_error(Limit)}.
 
+format_request_errors([]) ->
+    <<>>;
 
-prepare_party(Context, RequestContext0, ServiceCall) ->
-    {Result0, RequestContext1} = ServiceCall(RequestContext0),
+format_request_errors(Errors) ->
+    genlib_string:join(<<"\n">>, Errors).
+
+process_woody_error(_, external, resource_unavailable, _Details) ->
+    {503, [], <<
+        "Service is unavailable for a moment.\n"
+        "We are sorry."
+    >>};
+
+process_woody_error(_, external, result_unexpected, _Details) ->
+    {500, [], <<
+        "We've tripped over some bug in our code or something.\n"
+        "We are sorry, we're working on fixing it."
+    >>};
+
+process_woody_error(_, external, result_unknown, _Details) ->
+    {500, [], <<
+        "Outcome of the operation is unknown.\n"
+        "We've not managed to handle it in alotted time.\n"
+        "We are so sorry."
+    >>}.
+
+prepare_party(Context, ReqCtx, ServiceCall) ->
+    Result0 = ServiceCall(),
     case Result0 of
         {exception, #payproc_PartyNotFound{}} ->
             _ = lager:info("Attempting to create a missing party"),
-            {Result1, RequestContext2} = create_party(Context, RequestContext1),
+            Result1 = create_party(Context, ReqCtx),
             case Result1 of
-                ok -> ServiceCall(RequestContext2);
-                Error -> {Error, RequestContext2}
+                ok ->
+                    ServiceCall();
+                Error ->
+                    Error
             end;
         _ ->
-            {Result0, RequestContext1}
+            Result0
     end.
 
-create_party(Context, RequestContext) ->
+create_party(Context, ReqCtx) ->
     PartyID = get_party_id(Context),
     UserInfo = get_user_info(Context),
     PartyParams = get_party_params(Context),
-    {Result, NewRequestContext} = service_call(
+    Result = service_call(
         party_management,
         'Create',
         [UserInfo, PartyID, PartyParams],
-        RequestContext
+        ReqCtx
     ),
-    R = case Result of
-        ok ->
+    case Result of
+        {ok, _} ->
             ok;
         {exception, #payproc_PartyExists{}} ->
             ok;
         Error ->
             Error
-    end,
-    {R, NewRequestContext}.
+    end.
 
-get_invoice_by_id(Context, UserInfo, InvoiceID) ->
+get_invoice_by_id(ReqCtx, UserInfo, InvoiceID) ->
     service_call(
         invoicing,
         'Get',
         [UserInfo, InvoiceID],
-        Context
+        ReqCtx
     ).
 
-get_payment_by_id(Context, UserInfo, InvoiceID, PaymentID) ->
+get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID) ->
     service_call(
         invoicing,
         'GetPayment',
         [UserInfo, InvoiceID, PaymentID],
-        Context
+        ReqCtx
     ).
 
-get_my_party(Context, RequestContext, UserInfo, PartyID) ->
+get_my_party(Context, ReqCtx, UserInfo, PartyID) ->
     prepare_party(
         Context,
-        RequestContext,
-        fun(RContext) ->
+        ReqCtx,
+        fun () ->
             service_call(
                 party_management,
                 'Get',
                 [UserInfo, PartyID],
-                RContext
+                ReqCtx
             )
         end
     ).
 
-get_contract_by_id(Context, RequestContext, UserInfo, PartyID, ContractID) ->
+get_contract_by_id(Context, ReqCtx, UserInfo, PartyID, ContractID) ->
     prepare_party(
         Context,
-        RequestContext,
-        fun(RContext) ->
+        ReqCtx,
+        fun () ->
             service_call(
                 party_management,
                 'GetContract',
                 [UserInfo, PartyID, ContractID],
-                RContext
+                ReqCtx
             )
         end
     ).
 
-get_category_by_id(CategoryID, Context) ->
+get_category_by_id(CategoryID, ReqCtx) ->
     CategoryRef = {category, #domain_CategoryRef{id = CategoryID}},
-    capi_domain:get(CategoryRef, Context).
+    capi_domain:get(CategoryRef, ReqCtx).
 
-populate_proxy_options(undefined, RequestContext) ->
-    {undefined, RequestContext};
+populate_proxy_options(undefined, ReqCtx) ->
+    {undefined, ReqCtx};
 
-populate_proxy_options(CallbackUrl, RequestContext0) ->
-    {Proxy, RequestContext1} = get_merchant_proxy(RequestContext0),
-    {{ok, ProxyOptions}, RequestContext2} = create_options(
-        CallbackUrl, RequestContext1
-    ),
-    {Proxy#domain_Proxy{additional = ProxyOptions}, RequestContext2}.
+populate_proxy_options(CallbackUrl, ReqCtx) ->
+    Proxy = get_merchant_proxy(ReqCtx),
+    {ok, ProxyOptions} = create_options(CallbackUrl, ReqCtx),
+    Proxy#domain_Proxy{additional = ProxyOptions}.
 
-get_merchant_proxy(RequestContext) ->
-    {{ok, Globals}, RequestContext1} = capi_domain:get(
-        {globals, #domain_GlobalsRef{}},
-        RequestContext
-    ),
+get_merchant_proxy(ReqCtx) ->
+    {ok, Globals} = capi_domain:get({globals, #domain_GlobalsRef{}}, ReqCtx),
     #domain_GlobalsObject{
-        data =  #domain_Globals{
+        data = #domain_Globals{
             common_merchant_proxy = ProxyRef
         }
     } = Globals,
-    {#domain_Proxy{ref = ProxyRef}, RequestContext1}.
+    #domain_Proxy{ref = ProxyRef}.
 
-create_options(CallbackUrl, RequestContext) ->
+create_options(CallbackUrl, ReqCtx) ->
     Params = #proxy_merch_config_MerchantProxyParams{
         callback_url = CallbackUrl
     },
@@ -1947,13 +1913,13 @@ create_options(CallbackUrl, RequestContext) ->
         merchant_config,
         'CreateOptions',
         [Params],
-        RequestContext
+        ReqCtx
     ).
 
-render_options(ProxyOptions, RequestContext) ->
+render_options(ProxyOptions, ReqCtx) ->
     service_call(
         merchant_config,
         'RenderOptions',
         [ProxyOptions],
-        RequestContext
+        ReqCtx
     ).
