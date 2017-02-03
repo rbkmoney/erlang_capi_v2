@@ -4,11 +4,15 @@
 -include_lib("cp_proto/include/cp_domain_config_thrift.hrl").
 
 -export([get_categories/1]).
--export([get_category_by_ref/2]).
+-export([get/2]).
+
+-type context() :: woody_client:context().
+-type ref() :: dmsl_domain_thrift:'Reference'().
+-type data() :: _.
 
 -type category() :: #domain_CategoryObject{}.
 
--spec get_categories(woody_client:context()) -> {{ok, [category()]}, woody_client:context()}.
+-spec get_categories(context()) -> {{ok, [category()]}, context()}.
 get_categories(Context0) ->
     {{ok, Snapshot}, Context} = get_shapshot(Context0),
     #'Snapshot'{
@@ -27,22 +31,18 @@ get_categories(Context0) ->
     ),
     {{ok, Categories}, Context}.
 
--spec get_category_by_ref(Ref :: integer(), woody_client:context()) ->
-    {{ok, category()}, woody_client:context()} | {{error, not_found}, woody_client:context()}.
+-spec get(ref(), context()) -> {{ok, data()}, context()} | {{error, not_found}, context()}.
 
-get_category_by_ref(CategoryRef, Context0) ->
+get(Ref, Context0) ->
     {{ok, Snapshot}, Context} = get_shapshot(Context0),
     #'Snapshot'{
         domain = Domain
     } = Snapshot,
-    case genlib_map:get(
-        {category, #domain_CategoryRef{id = CategoryRef}},
-        Domain
-    ) of
-        {category, C = #domain_CategoryObject{}} ->
-            {{ok, C}, Context};
-        _ ->
-            {{error, not_found}, Context}
+    case genlib_map:get(Ref, Domain) of
+        undefined ->
+            {{error, not_found}, Context};
+        {_, C} ->
+            {{ok, C}, Context}
     end.
 
 head() ->

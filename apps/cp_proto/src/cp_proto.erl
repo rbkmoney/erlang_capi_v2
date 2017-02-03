@@ -31,7 +31,7 @@ get_service_modname(accounter) ->
     {cp_accounter_thrift, 'Accounter'};
 get_service_modname(geo_ip_service) ->
     {cp_geo_ip_thrift, 'GeoIpService'};
-get_service_modname(configure_merchant_proxy) ->
-    {cp_geo_ip_thrift, 'ConfigureMerchantProxy'};
+get_service_modname(merchant_config) ->
+    {cp_proxy_merch_config_thrift, 'ConfigureMerchantProxy'};
 get_service_modname(party_management) ->
     {cp_payment_processing_thrift, 'PartyManagement'}.

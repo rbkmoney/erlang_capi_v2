@@ -24,8 +24,10 @@ start_link() ->
 
 init([]) ->
     {LogicHandler, LogicHandlerSpec} = get_logic_handler_info(),
+    {ok, IP} = inet:parse_address(genlib_app:env(?MODULE, ip, "::")),
+
     SwaggerSpec = swagger_server:child_spec(swagger, #{
-        ip                => capi_utils:get_hostname_ip(genlib_app:env(capi, host, "0.0.0.0")),
+        ip                => IP,
         port              => genlib_app:env(capi, port, 8080),
         net_opts          => [],
         logic_handler     => LogicHandler,

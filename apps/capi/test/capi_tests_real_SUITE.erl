@@ -79,6 +79,7 @@
 -define(CAPI_REPOSITORY_URL, "http://dominant:8022/v1/domain/repository").
 -define(CAPI_ACCOUNTER_URL, "http://shumway:8022/accounter").
 -define(GEO_IP_URL, "http://columbus:8022/repo").
+-define(MERCHANT_CONFIG_URL, "http://pimp:8022/capi").
 -define(CAPI_HOST_NAME, "capi").
 
 -define(MERCHANT_ID, <<"281220eb-a4ef-4d03-b666-bdec4b26c5f7">>).
@@ -204,7 +205,8 @@ init_per_suite(Config) ->
                 party_management => ?CAPI_PARTY_MANAGEMENT_URL,
                 repository => ?CAPI_REPOSITORY_URL,
                 accounter => ?CAPI_ACCOUNTER_URL,
-                geo_ip_service => ?GEO_IP_URL
+                geo_ip_service => ?GEO_IP_URL,
+                merchant_config => ?MERCHANT_CONFIG_URL
             }}
         ]) ++
         capi_ct_helper:start_app(capi, [
@@ -639,7 +641,11 @@ get_shop_by_id_ok_test(Config) ->
         ShopID
     } = ?config(saved_config, Config),
     #{
-        <<"id">> := ShopID
+        <<"id">> := ShopID,
+        <<"callbackHandler">> := #{
+            <<"url">> := _,
+            <<"publicKey">> := _
+        }
     } = default_get_shop_by_id(ShopID, Config),
     {save_config, ShopID}.
 
@@ -742,6 +748,7 @@ call(Method, Path, Body, Headers) ->
     {ok, Code, RespHeaders, get_body(ClientRef)}.
 
 get_url(Path) ->
+
     ?CAPI_HOST ++ ":" ++ integer_to_list(?CAPI_PORT)  ++ Path.
 
 auth_header(Token) ->
@@ -941,7 +948,6 @@ default_get_shop_by_id(ShopID, Config) ->
         }
     },
     {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    io:format(user, "FUCK ~p~n", [PreparedParams]),
     Response = swagger_shops_api:get_shop_by_id(Host, Port, PreparedParams),
     {ok, R} = api_client_lib:handle_response(Response),
     R.
@@ -970,7 +976,8 @@ default_create_shop(CategoryID, ContractID, PayoutToolID, Config) ->
             <<"description">> => <<"Goods for education">>
         },
         <<"contractID">> => ContractID,
-        <<"payoutToolID">> => PayoutToolID
+        <<"payoutToolID">> => PayoutToolID,
+        <<"callbackUrl">> => <<"http://www.test.com">>
     },
     {ok, ClaimID} = api_client_shops:create_shop(Context, Req),
     ClaimID.
@@ -1115,16 +1122,16 @@ get_domain_fixture(Proxies) ->
             cash_limit = {decisions, [
                 #domain_CashLimitDecision{
                     if_ = {condition, {currency_is, ?cur(<<"RUB">>)}},
-                    then_ = {value, #domain_CashLimit{
-                        min = {inclusive, ?cash(1000, ?cur(<<"RUB">>))},
-                        max = {exclusive, ?cash(4200000, ?cur(<<"RUB">>))}
+                    then_ = {value, #domain_CashRange{
+                        upper = {inclusive, ?cash(1000, ?cur(<<"RUB">>))},
+                        lower = {exclusive, ?cash(4200000, ?cur(<<"RUB">>))}
                     }}
                 },
                 #domain_CashLimitDecision{
                     if_ = {condition, {currency_is, ?cur(<<"USD">>)}},
-                    then_ = {value, #domain_CashLimit{
-                        min = {inclusive, ?cash(200, ?cur(<<"USD">>))},
-                        max = {exclusive, ?cash(313370, ?cur(<<"USD">>))}
+                    then_ = {value, #domain_CashRange{
+                        upper = {inclusive, ?cash(200, ?cur(<<"USD">>))},
+                        lower = {exclusive, ?cash(313370, ?cur(<<"USD">>))}
                     }}
                 }
             ]},
@@ -1161,7 +1168,7 @@ get_domain_fixture(Proxies) ->
                 system_account_set = {value, ?sas(1)},
                 external_account_set = {value, ?eas(1)},
                 default_contract_template = ?tmpl(1),
-                inspector = ?insp(1),
+                inspector = {value, ?insp(1)},
                 common_merchant_proxy = ?prx(3)
             }
         }},

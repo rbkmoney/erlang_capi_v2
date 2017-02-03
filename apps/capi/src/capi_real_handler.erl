@@ -4,6 +4,7 @@
 -include_lib("cp_proto/include/cp_domain_thrift.hrl").
 -include_lib("cp_proto/include/cp_cds_thrift.hrl").
 -include_lib("cp_proto/include/cp_merch_stat_thrift.hrl").
+-include_lib("cp_proto/include/cp_proxy_merch_config_thrift.hrl").
 -include_lib("cp_proto/include/cp_user_interaction_thrift.hrl").
 -include_lib("cp_proto/include/cp_geo_ip_thrift.hrl").
 
@@ -406,33 +407,34 @@ process_request(OperationID = 'CreateShop', Req, Context) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     Params = maps:get('CreateShopArgs', Req),
+
+    {Proxy, RequestContext} = case genlib_map:get(<<"callbackUrl">>, Params) of
+        undefined ->
+            {undefined, create_context(RequestID)};
+        CallbackUrl ->
+            populate_proxy_options(CallbackUrl, create_context(RequestID))
+    end,
+
     ShopParams = #payproc_ShopParams{
         category =  encode_category_ref(genlib_map:get(<<"categoryID">>, Params)),
         details = encode_shop_details(genlib_map:get(<<"details">>, Params)),
         contract_id = genlib_map:get(<<"contractID">>, Params),
-        payout_tool_id = genlib_map:get(<<"payoutToolID">>, Params)
+        payout_tool_id = genlib_map:get(<<"payoutToolID">>, Params),
+        proxy = Proxy
     },
 
     {Result, _} = prepare_party(
         Context,
-        create_context(RequestID),
-        fun(RequestContext) ->
+        RequestContext,
+        fun(RContext) ->
             service_call(
                 party_management,
                 'CreateShop',
                 [UserInfo, PartyID, ShopParams],
-                RequestContext
+                RContext
             )
         end
     ),
-
-    CallbackUrl = genlib_map:get(<<"callbackUrl">>, Params),
-
-    case CallbackUrl of
-        undefined -> ok;
-        _ ->
-            ok %%@TODO Deal with merchant proxy callback
-    end,
 
     case Result of
         {ok, R} ->
@@ -501,21 +503,30 @@ process_request(OperationID = 'UpdateShop', Req, Context) ->
     PartyID = get_party_id(Context),
     ShopID = maps:get(shopID, Req),
     Params = maps:get('UpdateShopArgs', Req),
+
+    {Proxy, RequestContext} = case genlib_map:get(<<"callbackUrl">>, Params) of
+        undefined ->
+            {undefined, create_context(RequestID)};
+        CallbackUrl ->
+            populate_proxy_options(CallbackUrl, create_context(RequestID))
+    end,
+
     ShopUpdate = #payproc_ShopUpdate{
         category = encode_category_ref(genlib_map:get(<<"categoryID">>, Params)),
         details =  encode_shop_details(genlib_map:get(<<"details">>, Params)),
         contract_id = genlib_map:get(<<"contractID">>, Params),
-        payout_tool_id = genlib_map:get(<<"payoutToolID">>, Params)
+        payout_tool_id = genlib_map:get(<<"payoutToolID">>, Params),
+        proxy = Proxy
     },
     {Result, _} = prepare_party(
         Context,
-        create_context(RequestID),
-        fun(RequestContext) ->
+        RequestContext,
+        fun(RContext) ->
             service_call(
                 party_management,
                 'UpdateShop',
                 [UserInfo, PartyID, ShopID, ShopUpdate],
-                RequestContext
+                RContext
             )
         end
     ),
@@ -818,8 +829,8 @@ process_request(_OperationID = 'GetCategoryByRef', Req, Context0) ->
     RequestID = maps:get('X-Request-ID', Req),
     _ = get_user_info(Context0),
     _ = get_party_id(Context0),
-    Ref = maps:get(categoryID, Req),
-    case capi_domain:get_category_by_ref(genlib:to_int(Ref), create_context(RequestID)) of
+    CategoryID = maps:get(categoryID, Req),
+    case get_category_by_id(genlib:to_int(CategoryID), create_context(RequestID)) of
         {{ok, Category}, _Context} ->
             Resp = decode_category(Category),
             {200, [], Resp};
@@ -1310,8 +1321,18 @@ decode_shop(#domain_Shop{
     details  = ShopDetails,
     account = ShopAccount,
     contract_id = ContractID,
-    payout_tool_id = PayoutToolID
+    payout_tool_id = PayoutToolID,
+    proxy = Proxy
 }) ->
+    ProxyConfiguration = case Proxy of
+        #domain_Proxy{
+           additional = ProxyOptions
+        } ->
+            {P, _} = render_options(ProxyOptions, create_context(<<"test">>)), %%@FIXME deal with context
+            P;
+        _ ->
+            undefined
+    end,
     genlib_map:compact(#{
         <<"id">> => ShopID,
         <<"isBlocked">> => is_blocked(Blocking),
@@ -1320,8 +1341,21 @@ decode_shop(#domain_Shop{
         <<"details">> => decode_shop_details(ShopDetails),
         <<"contractID">> => ContractID,
         <<"payoutToolID">> => PayoutToolID,
-        <<"account">> => decode_shop_account(ShopAccount)
+        <<"account">> => decode_shop_account(ShopAccount),
+        <<"callbackHandler">> => decode_callback_handler(ProxyConfiguration)
     }).
+
+decode_callback_handler(undefined) ->
+    undefined;
+
+decode_callback_handler(#proxy_merch_config_MerchantProxyConfiguration{
+    callback_url  = CallbackUrl,
+    pub_key = PubKey
+}) ->
+    #{
+        <<"url">> => CallbackUrl,
+        <<"publicKey">> => PubKey
+    }.
 
 decode_shop_details(undefined) ->
     undefined;
@@ -1881,4 +1915,51 @@ get_contract_by_id(Context, RequestContext, UserInfo, PartyID, ContractID) ->
                 RContext
             )
         end
+    ).
+
+get_category_by_id(CategoryID, Context) ->
+    CategoryRef = {category, #domain_CategoryRef{id = CategoryID}},
+    capi_domain:get(CategoryRef, Context).
+
+populate_proxy_options(CallbackUrl, RequestContext) ->
+    {{ok, Globals}, RequestContext1} = capi_domain:get(
+        {globals, #domain_GlobalsRef{}},
+        RequestContext
+    ),
+    #domain_GlobalsObject{
+        data =  #domain_Globals{
+            common_merchant_proxy = ProxyRef
+        }
+    } = Globals,
+    Proxy = #domain_Proxy{
+        ref = ProxyRef
+    },
+    populate_proxy_options(CallbackUrl, Proxy, RequestContext1).
+
+populate_proxy_options(CallbackUrl, Proxy0, RequestContext0) ->
+    {{ok, ProxyOptions}, RequestContext1} = create_options(
+        CallbackUrl, RequestContext0
+    ),
+    Proxy = Proxy0#domain_Proxy{
+        additional = ProxyOptions
+    },
+    {Proxy, RequestContext1}.
+
+create_options(CallbackUrl, RequestContext) ->
+    Params = #proxy_merch_config_MerchantProxyParams{
+        callback_url = CallbackUrl
+    },
+    service_call(
+        merchant_config,
+        'CreateOptions',
+        [Params],
+        RequestContext
+    ).
+
+render_options(ProxyOptions, RequestContext) ->
+    service_call(
+        merchant_config,
+        'RenderOptions',
+        [ProxyOptions],
+        RequestContext
     ).

@@ -19,10 +19,10 @@ services:
       - dominant
       - kk
       - columbus
-      - columbus-postgres
+      - pimp
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:669fdab027265ae3aeb30bf48c9069419a36f92d
+    image: dr.rbkmoney.com/rbkmoney/hellgate:e6bb6d32073b90de72e20d3e6f415da8c3451648
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -122,7 +122,7 @@ services:
      - postgres
 
   dominant:
-    image: dr.rbkmoney.com/rbkmoney/dominant:42e8d0668a661d5c612c508c94272c895b5cc4b7
+    image: dr.rbkmoney.com/rbkmoney/dominant:4550428dadf2ffd0886bb158be0753ae01191f01
     restart: always
     command: /opt/dominant/bin/dominant foreground
     depends_on:
@@ -141,7 +141,7 @@ services:
       - cds
 
   columbus:
-    image:  dr.rbkmoney.com/rbkmoney/columbus:0144f469ca830eaf8353876e8cf2be9bc5cd0b84
+    image:  dr.rbkmoney.com/rbkmoney/columbus:9abcea7f6833c91524604595507800588f81ef31
     ports:
      - '28022:8022'
     links:
@@ -164,6 +164,14 @@ services:
     entrypoint:
      - /docker-entrypoint.sh
      - postgres
+
+  pimp:
+    image: dr.rbkmoney.com/rbkmoney/pimp:ba9807b0d6b38ec2d65078af171c52713b5257e2
+    entrypoint:
+      - java
+    command:
+      -Xmx512m
+      -jar /opt/pimp/pimp.jar
 
   kk:
     image: dr.rbkmoney.com/rbkmoney/keycloak:1a4a81d7e3ac1bff2d41f7bed57b6619dbd92a11
