@@ -7,7 +7,7 @@
 -export([get/2]).
 
 -type context() :: woody_client:context().
--type ref() :: dmsl_domain_thrift:'Reference'().
+-type ref() :: cp_domain_thrift:'Reference'().
 -type data() :: _.
 
 -type category() :: #domain_CategoryObject{}.

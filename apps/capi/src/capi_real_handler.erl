@@ -408,12 +408,10 @@ process_request(OperationID = 'CreateShop', Req, Context) ->
     PartyID = get_party_id(Context),
     Params = maps:get('CreateShopArgs', Req),
 
-    {Proxy, RequestContext} = case genlib_map:get(<<"callbackUrl">>, Params) of
-        undefined ->
-            {undefined, create_context(RequestID)};
-        CallbackUrl ->
-            populate_proxy_options(CallbackUrl, create_context(RequestID))
-    end,
+    {Proxy, RequestContext} = populate_proxy_options(
+        genlib_map:get(<<"callbackUrl">>, Params),
+        create_context(RequestID)
+    ),
 
     ShopParams = #payproc_ShopParams{
         category =  encode_category_ref(genlib_map:get(<<"categoryID">>, Params)),
@@ -504,12 +502,10 @@ process_request(OperationID = 'UpdateShop', Req, Context) ->
     ShopID = maps:get(shopID, Req),
     Params = maps:get('UpdateShopArgs', Req),
 
-    {Proxy, RequestContext} = case genlib_map:get(<<"callbackUrl">>, Params) of
-        undefined ->
-            {undefined, create_context(RequestID)};
-        CallbackUrl ->
-            populate_proxy_options(CallbackUrl, create_context(RequestID))
-    end,
+    {Proxy, RequestContext} = populate_proxy_options(
+        genlib_map:get(<<"callbackUrl">>, Params),
+        create_context(RequestID)
+    ),
 
     ShopUpdate = #payproc_ShopUpdate{
         category = encode_category_ref(genlib_map:get(<<"categoryID">>, Params)),
@@ -1328,7 +1324,7 @@ decode_shop(#domain_Shop{
         #domain_Proxy{
            additional = ProxyOptions
         } ->
-            {P, _} = render_options(ProxyOptions, create_context(<<"test">>)), %%@FIXME deal with context
+            {{ok, P}, _} = render_options(ProxyOptions, create_context(<<"test">>)), %%@FIXME deal with context
             P;
         _ ->
             undefined
@@ -1921,7 +1917,17 @@ get_category_by_id(CategoryID, Context) ->
     CategoryRef = {category, #domain_CategoryRef{id = CategoryID}},
     capi_domain:get(CategoryRef, Context).
 
-populate_proxy_options(CallbackUrl, RequestContext) ->
+populate_proxy_options(undefined, RequestContext) ->
+    {undefined, RequestContext};
+
+populate_proxy_options(CallbackUrl, RequestContext0) ->
+    {Proxy, RequestContext1} = get_merchant_proxy(RequestContext0),
+    {{ok, ProxyOptions}, RequestContext2} = create_options(
+        CallbackUrl, RequestContext1
+    ),
+    {Proxy#domain_Proxy{additional = ProxyOptions}, RequestContext2}.
+
+get_merchant_proxy(RequestContext) ->
     {{ok, Globals}, RequestContext1} = capi_domain:get(
         {globals, #domain_GlobalsRef{}},
         RequestContext
@@ -1931,19 +1937,7 @@ populate_proxy_options(CallbackUrl, RequestContext) ->
             common_merchant_proxy = ProxyRef
         }
     } = Globals,
-    Proxy = #domain_Proxy{
-        ref = ProxyRef
-    },
-    populate_proxy_options(CallbackUrl, Proxy, RequestContext1).
-
-populate_proxy_options(CallbackUrl, Proxy0, RequestContext0) ->
-    {{ok, ProxyOptions}, RequestContext1} = create_options(
-        CallbackUrl, RequestContext0
-    ),
-    Proxy = Proxy0#domain_Proxy{
-        additional = ProxyOptions
-    },
-    {Proxy, RequestContext1}.
+    {#domain_Proxy{ref = ProxyRef}, RequestContext1}.
 
 create_options(CallbackUrl, RequestContext) ->
     Params = #proxy_merch_config_MerchantProxyParams{

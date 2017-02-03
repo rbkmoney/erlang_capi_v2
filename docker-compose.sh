@@ -22,7 +22,7 @@ services:
       - pimp
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:e6bb6d32073b90de72e20d3e6f415da8c3451648
+    image: dr.rbkmoney.com/rbkmoney/hellgate:44825a9eec9b0fc5456b45d40ee67f14173f4a5f
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -178,6 +178,11 @@ services:
     container_name: keycloak
     ports:
       - "31245:8080"
+    healthcheck:
+      test: curl --silent --show-error --output /dev/null localhost:8090
+      interval: 10s
+      timeout: 1s
+      retries: 4
     environment:
         SERVICE_NAME: keycloak
         POSTGRES_PASSWORD: keycloak

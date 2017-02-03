@@ -60,8 +60,10 @@
     create_payout_tool_ok_test/1,
     get_payout_tools_ok_test/1,
     %%%%
-    get_locations_names_ok_test/1
-
+    get_locations_names_ok_test/1,
+    %%%%
+    set_merchant_callback_ok_test/1,
+    get_merchant_callback_ok_test/1
 ]).
 
 -define(KEYCLOAK_HOST, "kk").
@@ -111,6 +113,7 @@ all() ->
         {group, claims_management},
         {group, shops_management},
         {group, accounts_management},
+        {group, callback_management},
         {group, geo_ip}
     ].
 
@@ -141,6 +144,12 @@ groups() ->
             get_payment_by_id_ok_test,
             fulfill_invoice_ok_test,
             get_invoice_events_ok_test
+        ]},
+        {callback_management, [sequence], [
+            get_categories_ok_test,
+            get_category_by_id_ok_test,
+            set_merchant_callback_ok_test,
+            get_merchant_callback_ok_test
         ]},
         {statistics, [sequence], [
             get_invoices_stats_ok_test,
@@ -291,6 +300,17 @@ fulfill_invoice_ok_test(Config) ->
     {get_payment_by_id_ok_test,
         #{invoice_id := InvoiceID} = Info
     } = ?config(saved_config, Config),
+    Context = ?config(context, Config),
+
+    wait_event(
+        InvoiceID,
+        #{
+            <<"eventType">> => <<"EventInvoiceStatusChanged">>,
+            <<"status">> => <<"paid">>
+        },
+        3000,
+        Context
+    ),
     ok = default_fulfill_invoice(InvoiceID, Config),
     {save_config, Info}.
 
@@ -641,11 +661,7 @@ get_shop_by_id_ok_test(Config) ->
         ShopID
     } = ?config(saved_config, Config),
     #{
-        <<"id">> := ShopID,
-        <<"callbackHandler">> := #{
-            <<"url">> := _,
-            <<"publicKey">> := _
-        }
+        <<"id">> := ShopID
     } = default_get_shop_by_id(ShopID, Config),
     {save_config, ShopID}.
 
@@ -711,6 +727,46 @@ activate_shop_ok_test(Config) ->
         <<"isSuspended">> := false
     } = default_get_shop_by_id(ShopID, Config),
     {save_config, ShopID}.
+
+-spec set_merchant_callback_ok_test(config()) -> _.
+
+set_merchant_callback_ok_test(Config) ->
+    {get_category_by_id_ok_test,
+        CategoryID
+    } = ?config(saved_config, Config),
+    CallbackUrl = <<"http://www.test.com">>,
+    ClaimID = default_create_shop(CategoryID, CallbackUrl, Config),
+    {ok, _} = default_approve_claim(ClaimID),
+    #{
+        <<"id">> := ClaimID,
+        <<"status">> :=  #{<<"status">> := <<"ClaimAccepted">>},
+        <<"changeset">> := [
+            #{
+                <<"partyModificationType">> := <<"ShopCreation">>,
+                <<"shop">> := #{
+                    <<"id">> := ShopID
+                }
+            } | _
+        ]
+    } = default_get_claim_by_id(ClaimID, Config),
+
+    {save_config, #{shop_id => ShopID, callback_url => CallbackUrl}}.
+
+-spec get_merchant_callback_ok_test(config()) -> _.
+get_merchant_callback_ok_test(Config) ->
+    {set_merchant_callback_ok_test,
+        #{
+            shop_id := ShopID,
+            callback_url := CallbackUrl
+        }
+    } = ?config(saved_config, Config),
+    #{
+        <<"id">> := ShopID,
+        <<"callbackHandler">> := #{
+            <<"url">> := CallbackUrl,
+            <<"publicKey">> := _
+        }
+    } = default_get_shop_by_id(ShopID, Config).
 
 -spec get_account_by_id_ok_test(config()) -> _.
 
@@ -953,6 +1009,9 @@ default_get_shop_by_id(ShopID, Config) ->
     R.
 
 default_create_shop(CategoryID, Config) ->
+    default_create_shop(CategoryID, undefined, Config).
+
+default_create_shop(CategoryID, CallbackUrl, Config) ->
     #{
         <<"claimID">> := ClaimID0
     } = default_create_contract(Config),
@@ -964,12 +1023,12 @@ default_create_shop(CategoryID, Config) ->
     default_approve_claim(ClaimID1),
     [#{<<"id">> := PayoutToolID} | _] = get_payout_tools(ContractID, Config),
 
-    default_create_shop(CategoryID, ContractID, PayoutToolID, Config).
+    default_create_shop(CategoryID, ContractID, PayoutToolID, CallbackUrl, Config).
 
 
-default_create_shop(CategoryID, ContractID, PayoutToolID, Config) ->
+default_create_shop(CategoryID, ContractID, PayoutToolID, CallbackUrl, Config) ->
     Context = ?config(context, Config),
-    Req = #{
+    Req = genlib_map:compact(#{
         <<"categoryID">> => CategoryID,
         <<"details">> => #{
             <<"name">> => <<"OOOBlackMaster">>,
@@ -977,8 +1036,8 @@ default_create_shop(CategoryID, ContractID, PayoutToolID, Config) ->
         },
         <<"contractID">> => ContractID,
         <<"payoutToolID">> => PayoutToolID,
-        <<"callbackUrl">> => <<"http://www.test.com">>
-    },
+        <<"callbackUrl">> => CallbackUrl
+    }),
     {ok, ClaimID} = api_client_shops:create_shop(Context, Req),
     ClaimID.
 
@@ -1123,15 +1182,15 @@ get_domain_fixture(Proxies) ->
                 #domain_CashLimitDecision{
                     if_ = {condition, {currency_is, ?cur(<<"RUB">>)}},
                     then_ = {value, #domain_CashRange{
-                        upper = {inclusive, ?cash(1000, ?cur(<<"RUB">>))},
-                        lower = {exclusive, ?cash(4200000, ?cur(<<"RUB">>))}
+                        lower = {inclusive, ?cash(1000, ?cur(<<"RUB">>))},
+                        upper = {exclusive, ?cash(4200000, ?cur(<<"RUB">>))}
                     }}
                 },
                 #domain_CashLimitDecision{
                     if_ = {condition, {currency_is, ?cur(<<"USD">>)}},
                     then_ = {value, #domain_CashRange{
-                        upper = {inclusive, ?cash(200, ?cur(<<"USD">>))},
-                        lower = {exclusive, ?cash(313370, ?cur(<<"USD">>))}
+                        lower = {inclusive, ?cash(200, ?cur(<<"USD">>))},
+                        upper = {exclusive, ?cash(313370, ?cur(<<"USD">>))}
                     }}
                 }
             ]},
@@ -1605,3 +1664,32 @@ construct_proxy(ID, Url, Options) ->
 handle_response(Response) ->
     {ok, R} = api_client_lib:handle_response(Response),
     R.
+
+wait_event(InvoiceID, Pattern, TimeLeft, Context) when TimeLeft > 0 ->
+    Started = genlib_time:now(),
+    Limit = 1000,
+    {ok, Events} = api_client_invoices:get_invoice_events(Context, InvoiceID, Limit),
+    Filtered = lists:filter(
+        fun(E) ->
+            Intersection = maps:with(maps:keys(Pattern), E),
+            case Intersection of
+                Pattern ->
+                    true;
+                Unknown ->
+                    io:format(user, "FUCK ~p~n~n", [Unknown]),
+                    false
+            end
+        end,
+        Events
+    ),
+    case Filtered of
+        [] ->
+            timer:sleep(200),
+            Now = genlib_time:now(),
+            wait_event(InvoiceID, Pattern, TimeLeft - (Now - Started), Context);
+        _ ->
+            ok
+    end;
+
+wait_event(InvoiceID, Pattern, _, _Context) ->
+    error({event_limit_exceeded, {InvoiceID, Pattern}}).
