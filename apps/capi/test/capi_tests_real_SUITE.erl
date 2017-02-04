@@ -66,7 +66,7 @@
     get_merchant_callback_ok_test/1
 ]).
 
--define(KEYCLOAK_HOST, "kk").
+-define(KEYCLOAK_HOST, "keycloak").
 -define(KEYCLOAK_PORT, 8090).
 -define(KEYCLOAK_USER, "demo_merchant").
 -define(KEYCLOAK_PASSWORD, "test").
@@ -1682,8 +1682,7 @@ wait_event(InvoiceID, Pattern, TimeLeft, Context) when TimeLeft > 0 ->
             case Intersection of
                 Pattern ->
                     true;
-                Unknown ->
-                    io:format(user, "FUCK ~p~n~n", [Unknown]),
+                _Unknown ->
                     false
             end
         end,

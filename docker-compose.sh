@@ -1,6 +1,6 @@
 #!/bin/bash
 cat <<EOF
-version: '2'
+version: '2.1'
 services:
 
   ${SERVICE_NAME}:
@@ -12,27 +12,42 @@ services:
     working_dir: /$PWD
     command: /sbin/init
     depends_on:
-      - hellgate
-      - cds
-      - magista
-      - starter
-      - dominant
-      - kk
-      - columbus
-      - pimp
+      hellgate:
+        condition: service_started
+      cds:
+        condition: service_healthy
+      magista:
+        condition: service_started
+      starter:
+        condition: service_started
+      dominant:
+        condition: service_started
+      keycloak:
+        condition: service_healthy
+      columbus:
+        condition: service_started
+      pimp:
+        condition: service_started
 
   hellgate:
     image: dr.rbkmoney.com/rbkmoney/hellgate:44825a9eec9b0fc5456b45d40ee67f14173f4a5f
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
-      - machinegun
-      - shumway
+      machinegun:
+        condition: service_healthy
+      shumway:
+        condition: service_healthy
 
   cds:
     image: dr.rbkmoney.com/rbkmoney/cds:538659226317356bc42529299037fe6cfa651694
     restart: always
     command: /opt/cds/bin/cds foreground
+    healthcheck:
+      test: "curl http://localhost:8022/"
+      interval: 5s
+      timeout: 1s
+      retries: 12
 
   machinegun:
     image: dr.rbkmoney.com/rbkmoney/machinegun:cfba8560591fbc33ab5883d133849e81e237a6e1
@@ -40,6 +55,11 @@ services:
     command: /opt/machinegun/bin/machinegun foreground
     volumes:
       - ./test/machinegun/sys.config:/opt/machinegun/releases/0.1.0/sys.config
+    healthcheck:
+      test: "curl http://localhost:8022/"
+      interval: 5s
+      timeout: 1s
+      retries: 12
 
   magista:
     image: dr.rbkmoney.com/rbkmoney/magista:2e0c7fb4d21ebc277e608a75a8c384505cfc711a
@@ -108,6 +128,11 @@ services:
       - --spring.datasource.url=jdbc:postgresql://shumway-db:5432/shumway
       - --spring.datasource.username=postgres
       - --spring.datasource.password=postgres
+    healthcheck:
+      test: "curl http://localhost:8022/"
+      interval: 5s
+      timeout: 2s
+      retries: 30
     depends_on:
       - shumway-db
 
@@ -126,7 +151,8 @@ services:
     restart: always
     command: /opt/dominant/bin/dominant foreground
     depends_on:
-      - machinegun
+      machinegun:
+        condition: service_healthy
 
   starter:
     image: ${BUILD_IMAGE}
@@ -138,24 +164,23 @@ services:
     command:
       /code/script/cds_test_init
     depends_on:
-      - cds
+      cds:
+        condition: service_healthy
 
   columbus:
     image:  dr.rbkmoney.com/rbkmoney/columbus:9abcea7f6833c91524604595507800588f81ef31
-    ports:
-     - '28022:8022'
     links:
-     - columbus-postgres
+     - columbus-db
     entrypoint:
        - java
        - -jar
        - /opt/columbus/columbus.jar
-       - --spring.datasource.url=jdbc:postgresql://columbus-postgres:5432/columbus
+       - --spring.datasource.url=jdbc:postgresql://columbus-db:5432/columbus
        - --geo.db.file.path=file:/maxmind.mmdb
        - --logging.level.ROOT=warn
        - --logging.level.com.rbkmoney=warn
 
-  columbus-postgres:
+  columbus-db:
     image: dr.rbkmoney.com/rbkmoney/postgres-geodata:8b8df081f3f23c10079e9a41b13ce7ca2f39cd3c
     environment:
       POSTGRES_USER: postgres
@@ -173,28 +198,35 @@ services:
       -Xmx512m
       -jar /opt/pimp/pimp.jar
 
-  kk:
+  keycloak:
     image: dr.rbkmoney.com/rbkmoney/keycloak:1a4a81d7e3ac1bff2d41f7bed57b6619dbd92a11
-    container_name: keycloak
-    ports:
-      - "31245:8080"
     healthcheck:
       test: curl --silent --show-error --output /dev/null localhost:8090
       interval: 10s
       timeout: 1s
-      retries: 4
+      retries: 15
+    entrypoint: |
+      /opt/jboss/docker-entrypoint.sh
+      -b
+      0.0.0.0
+      --server-config
+      standalone-ha.xml
+      -Djboss.socket.binding.port-offset=10
+      -Dkeycloak.migration.action=import
+      -Dkeycloak.migration.provider=singleFile
+      -Dkeycloak.migration.file=/opt/jboss/keycloak/external-realm.json
+      -Dkeycloak.migration.strategy=IGNORE_EXISTING
     environment:
         SERVICE_NAME: keycloak
         POSTGRES_PASSWORD: keycloak
         POSTGRES_USER: keycloak
         POSTGRES_DATABASE: keycloak
-        POSTGRES_PORT_5432_TCP_ADDR: kk_db
+        POSTGRES_PORT_5432_TCP_ADDR: keycloak-db
     depends_on:
-      - kk_db
+      - keycloak-db
 
-  kk_db:
+  keycloak-db:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
-    container_name: keycloak_postgres
     environment:
         POSTGRES_PASSWORD: keycloak
         POSTGRES_USER: keycloak
