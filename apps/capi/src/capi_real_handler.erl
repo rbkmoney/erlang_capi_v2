@@ -385,7 +385,7 @@ process_request(OperationID = 'GetLocationsNames', Req, _Context, ReqCtx) ->
                 [],
                 LocationNames
             ),
-            {202, [], PreparedLocationNames};
+            {200, [], PreparedLocationNames};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -543,7 +543,7 @@ process_request(OperationID = 'GetShopByID', Req, Context, ReqCtx) ->
     case Result of
         {ok, Shop} ->
             Resp = decode_shop(Shop, ReqCtx),
-            {202, [], Resp};
+            {200, [], Resp};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -600,7 +600,7 @@ process_request(OperationID = 'GetContractByID', Req, Context, ReqCtx) ->
     case Result of
         {ok, Contract} ->
             Resp = decode_contract(Contract),
-            {202, [], Resp};
+            {200, [], Resp};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -614,7 +614,7 @@ process_request(OperationID = 'GetPayoutTools', Req, Context, ReqCtx) ->
     case Result of
         {ok, #domain_Contract{payout_tools = PayoutTools}} ->
             Resp = [decode_payout_tool(P) || P <- PayoutTools],
-            {202, [], Resp};
+            {200, [], Resp};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -1071,10 +1071,7 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
     created_at = CreatedAt,
     status = Status,
     payer = #domain_Payer{
-        payment_tool = {
-            bank_card,
-            BankCard
-        },
+        payment_tool = PaymentTool,
         session = PaymentSession,
         contact_info = ContactInfo
     }
@@ -1083,10 +1080,13 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
         <<"id">> =>  PaymentID,
         <<"invoiceID">> => InvoiceID,
         <<"createdAt">> => CreatedAt,
-        <<"paymentToolToken">> => encode_bank_card(BankCard),
+        <<"paymentToolToken">> => decode_payment_tool_token(PaymentTool),
         <<"contactInfo">> => decode_contact_info(ContactInfo),
         <<"paymentSession">> => PaymentSession
     }, decode_payment_status(Status))).
+
+decode_payment_tool_token({bank_card, BankCard}) ->
+    encode_bank_card(BankCard).
 
 %% @TODO deal with an empty map here
 decode_contact_info(#domain_ContactInfo{
