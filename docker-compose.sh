@@ -201,7 +201,7 @@ services:
   keycloak:
     image: dr.rbkmoney.com/rbkmoney/keycloak:1a4a81d7e3ac1bff2d41f7bed57b6619dbd92a11
     healthcheck:
-      test: curl --silent --show-error --output /dev/null localhost:8090
+      test: curl --silent --show-error --output /dev/null localhost:8090/auth/realms/external
       interval: 10s
       timeout: 1s
       retries: 15
