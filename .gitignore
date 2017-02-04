@@ -4,7 +4,8 @@ log
 *~
 erl_crash.dump
 .tags*
-*.sublime-workspace
+*.sublime-*
+
 .DS_Store
 
 # rebar

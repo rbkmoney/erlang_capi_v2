@@ -1,6 +1,6 @@
 #!/bin/bash
 cat <<EOF
-version: '2'
+version: '2.1'
 services:
 
   ${SERVICE_NAME}:
@@ -12,50 +12,70 @@ services:
     working_dir: /$PWD
     command: /sbin/init
     depends_on:
-      - hellgate
-      - cds
-      - magista
-      - starter
-      - dominant
-      - kk
-    environment:
-      - SERVICE_NAME=capi
+      hellgate:
+        condition: service_started
+      cds:
+        condition: service_healthy
+      magista:
+        condition: service_started
+      starter:
+        condition: service_started
+      dominant:
+        condition: service_started
+      keycloak:
+        condition: service_healthy
+      columbus:
+        condition: service_started
+      pimp:
+        condition: service_started
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:ef9864b17f88d98a2b851a7cc090c3cfc4c19d4b
+    image: dr.rbkmoney.com/rbkmoney/hellgate:44825a9eec9b0fc5456b45d40ee67f14173f4a5f
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
-      - machinegun
-      - shumway
+      machinegun:
+        condition: service_healthy
+      shumway:
+        condition: service_healthy
 
   cds:
     image: dr.rbkmoney.com/rbkmoney/cds:538659226317356bc42529299037fe6cfa651694
     restart: always
     command: /opt/cds/bin/cds foreground
+    healthcheck:
+      test: "curl http://localhost:8022/"
+      interval: 5s
+      timeout: 1s
+      retries: 12
 
   machinegun:
-    image: dr.rbkmoney.com/rbkmoney/machinegun:a48f9e93dd5a709d5f14db0c9785d43039282e86
+    image: dr.rbkmoney.com/rbkmoney/machinegun:cfba8560591fbc33ab5883d133849e81e237a6e1
     restart: always
     command: /opt/machinegun/bin/machinegun foreground
     volumes:
       - ./test/machinegun/sys.config:/opt/machinegun/releases/0.1.0/sys.config
+    healthcheck:
+      test: "curl http://localhost:8022/"
+      interval: 5s
+      timeout: 1s
+      retries: 12
 
   magista:
-    image: dr.rbkmoney.com/rbkmoney/magista:bf7c71a9e8d7c25c901894d5fe705dc0f2efbdaa
+    image: dr.rbkmoney.com/rbkmoney/magista:2e0c7fb4d21ebc277e608a75a8c384505cfc711a
     restart: always
-    command: |
-      -Xmx512m
-      -jar /opt/magista/magista.jar
-      --db.jdbc.url=jdbc:postgresql://magista-db:5432/magista
-      --db.username=postgres
-      --db.password=postgres
-      --bm.pooling.url=http://bustermaze:8022/repo
+    entrypoint:
+      - java
+      - -Xmx512m
+      - -jar
+      - /opt/magista/magista.jar
+      - --spring.datasource.url=jdbc:postgresql://magista-db:5432/magista
+      - --spring.datasource.username=postgres
+      - --spring.datasource.password=postgres
+      - --bm.pooling.url=http://bustermaze:8022/repo
     depends_on:
       - magista-db
       - bustermaze
-    environment:
-      - SERVICE_NAME=magista
 
   magista-db:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
@@ -63,27 +83,29 @@ services:
       - POSTGRES_DB=magista
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - SERVICE_NAME=magista-db
+    entrypoint:
+     - /docker-entrypoint.sh
+     - postgres
 
   bustermaze:
-    image: dr.rbkmoney.com/rbkmoney/bustermaze:c50c584f3f2fcc6edb226712b2d241e237121ead
+    image: dr.rbkmoney.com/rbkmoney/bustermaze:57c4cf3f9950b6ee46f67ffca286ebe8267bedde
     restart: always
-    command: |
-      -Xmx512m
-      -jar /opt/bustermaze/bustermaze.jar
-      --spring.datasource.url=jdbc:postgresql://bustermaze-db:5432/bustermaze
-      --spring.datasource.username=postgres
-      --spring.datasource.password=postgres
-      --hg.pooling.url=http://hellgate:8022/v1/processing/eventsink
-      --flyway.url=jdbc:postgresql://bustermaze-db:5432/bustermaze
-      --flyway.user=postgres
-      --flyway.password=postgres
-      --flyway.schemas=bm
+    entrypoint:
+      - java
+      - -Xmx512m
+      - -jar
+      - /opt/bustermaze/bustermaze.jar
+      - --spring.datasource.url=jdbc:postgresql://bustermaze-db:5432/bustermaze
+      - --spring.datasource.username=postgres
+      - --spring.datasource.password=postgres
+      - --hg.pooling.url=http://hellgate:8022/v1/processing/eventsink
+      - --flyway.url=jdbc:postgresql://bustermaze-db:5432/bustermaze
+      - --flyway.user=postgres
+      - --flyway.password=postgres
+      - --flyway.schemas=bm
     depends_on:
       - hellgate
       - bustermaze-db
-    environment:
-      - SERVICE_NAME=bustermaze
 
   bustermaze-db:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
@@ -91,21 +113,28 @@ services:
       - POSTGRES_DB=bustermaze
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - SERVICE_NAME=bustermaze-db
+    entrypoint:
+     - /docker-entrypoint.sh
+     - postgres
 
   shumway:
-    image: dr.rbkmoney.com/rbkmoney/shumway:cd00af9d70b28a7851295fca39bdeded5a3606b0
+    image: dr.rbkmoney.com/rbkmoney/shumway:94e25fd3a3e7af4c73925fb051d999d7f38c271d
     restart: always
-    command: |
-      -Xmx512m
-      -jar /opt/shumway/shumway.jar
-      --spring.datasource.url=jdbc:postgresql://shumway-db:5432/shumway
-      --spring.datasource.username=postgres
-      --spring.datasource.password=postgres
+    entrypoint:
+      - java
+      - -Xmx512m
+      - -jar
+      - /opt/shumway/shumway.jar
+      - --spring.datasource.url=jdbc:postgresql://shumway-db:5432/shumway
+      - --spring.datasource.username=postgres
+      - --spring.datasource.password=postgres
+    healthcheck:
+      test: "curl http://localhost:8022/"
+      interval: 5s
+      timeout: 2s
+      retries: 30
     depends_on:
       - shumway-db
-    environment:
-      - SERVICE_NAME=shumway
 
   shumway-db:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
@@ -113,14 +142,17 @@ services:
       - POSTGRES_DB=shumway
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - SERVICE_NAME=shumway-db
+    entrypoint:
+     - /docker-entrypoint.sh
+     - postgres
 
   dominant:
-    image: dr.rbkmoney.com/rbkmoney/dominant:9e6db27120f970707b77aa492fb218eb1bd40055
+    image: dr.rbkmoney.com/rbkmoney/dominant:4550428dadf2ffd0886bb158be0753ae01191f01
     restart: always
     command: /opt/dominant/bin/dominant foreground
     depends_on:
-      - machinegun
+      machinegun:
+        condition: service_healthy
 
   starter:
     image: ${BUILD_IMAGE}
@@ -132,29 +164,76 @@ services:
     command:
       /code/script/cds_test_init
     depends_on:
-      - cds
-  
-  kk:
+      cds:
+        condition: service_healthy
+
+  columbus:
+    image:  dr.rbkmoney.com/rbkmoney/columbus:9abcea7f6833c91524604595507800588f81ef31
+    links:
+     - columbus-db
+    entrypoint:
+       - java
+       - -jar
+       - /opt/columbus/columbus.jar
+       - --spring.datasource.url=jdbc:postgresql://columbus-db:5432/columbus
+       - --geo.db.file.path=file:/maxmind.mmdb
+       - --logging.level.ROOT=warn
+       - --logging.level.com.rbkmoney=warn
+
+  columbus-db:
+    image: dr.rbkmoney.com/rbkmoney/postgres-geodata:8b8df081f3f23c10079e9a41b13ce7ca2f39cd3c
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: columbus
+    entrypoint:
+     - /docker-entrypoint.sh
+     - postgres
+
+  pimp:
+    image: dr.rbkmoney.com/rbkmoney/pimp:ba9807b0d6b38ec2d65078af171c52713b5257e2
+    entrypoint:
+      - java
+    command:
+      -Xmx512m
+      -jar /opt/pimp/pimp.jar
+
+  keycloak:
     image: dr.rbkmoney.com/rbkmoney/keycloak:1a4a81d7e3ac1bff2d41f7bed57b6619dbd92a11
-    container_name: keycloak
-    ports:
-      - "31245:8080"
+    healthcheck:
+      test: curl --silent --show-error --output /dev/null localhost:8090/auth/realms/external
+      interval: 10s
+      timeout: 1s
+      retries: 15
+    entrypoint: |
+      /opt/jboss/docker-entrypoint.sh
+      -b
+      0.0.0.0
+      --server-config
+      standalone-ha.xml
+      -Djboss.socket.binding.port-offset=10
+      -Dkeycloak.migration.action=import
+      -Dkeycloak.migration.provider=singleFile
+      -Dkeycloak.migration.file=/opt/jboss/keycloak/external-realm.json
+      -Dkeycloak.migration.strategy=IGNORE_EXISTING
     environment:
         SERVICE_NAME: keycloak
         POSTGRES_PASSWORD: keycloak
         POSTGRES_USER: keycloak
         POSTGRES_DATABASE: keycloak
-        POSTGRES_PORT_5432_TCP_ADDR: kk_db
+        POSTGRES_PORT_5432_TCP_ADDR: keycloak-db
     depends_on:
-      - kk_db
+      - keycloak-db
 
-  kk_db:
+  keycloak-db:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
-    container_name: keycloak_postgres
     environment:
         POSTGRES_PASSWORD: keycloak
         POSTGRES_USER: keycloak
-        POSTGRES_DATABASE: keycloak
+        POSTGRES_DB: keycloak
+    entrypoint:
+     - /docker-entrypoint.sh
+     - postgres
 
 networks:
   default:

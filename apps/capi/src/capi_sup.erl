@@ -24,8 +24,10 @@ start_link() ->
 
 init([]) ->
     {LogicHandler, LogicHandlerSpec} = get_logic_handler_info(),
+    {ok, IP} = inet:parse_address(genlib_app:env(?MODULE, ip, "::")),
+
     SwaggerSpec = swagger_server:child_spec(swagger, #{
-        ip                => capi_utils:get_hostname_ip(genlib_app:env(capi, host, "0.0.0.0")),
+        ip                => IP,
         port              => genlib_app:env(capi, port, 8080),
         net_opts          => [],
         logic_handler     => LogicHandler,
@@ -48,7 +50,8 @@ get_logic_handler_info() ->
             {capi_mock_handler, [Spec]};
         real ->
             {capi_real_handler, []};
-        undefined -> exit(undefined_service_type)
+        undefined ->
+            exit(undefined_service_type)
     end.
 
 get_cowboy_extra_opts() ->
@@ -64,7 +67,8 @@ get_cowboy_extra_opts() ->
 validate_auth_key() ->
     PemFilePath = genlib_app:env(capi, api_secret_path),
     case filelib:is_regular(PemFilePath) of
-        true -> ok;
+        true ->
+            ok;
         false ->
             _ = lager:error("Missing auth key, stopping the app..."),
             exit(no_auth_key)
