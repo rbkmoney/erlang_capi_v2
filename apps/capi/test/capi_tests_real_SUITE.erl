@@ -38,8 +38,8 @@
     get_payment_method_stats_ok_test/1,
     %%%%
     get_my_party_ok_test/1,
-    suspend_my_party_ok_test/1,
-    activate_my_party_ok_test/1,
+    suspend_my_party_idempotent_ok_test/1,
+    activate_my_party_idempotent_ok_test/1,
     get_claim_by_id_ok_test/1,
     revoke_claim_ok_test/1,
     get_claims_by_status_ok_test/1,
@@ -50,7 +50,7 @@
     get_shops_ok_test/1,
     update_shop_ok_test/1,
     suspend_shop_ok_test/1,
-    activate_shop_ok_test/1,
+    activate_shop_idempotent_ok_test/1,
     %%%%
     get_account_by_id_ok_test/1,
     %%%%
@@ -162,8 +162,8 @@ groups() ->
         ]},
         {party_management, [sequence], [
             get_my_party_ok_test,
-            suspend_my_party_ok_test,
-            activate_my_party_ok_test
+            suspend_my_party_idempotent_ok_test,
+            activate_my_party_idempotent_ok_test
         ]},
         {contracts_management, [sequence], [
             create_contract_ok_test,
@@ -183,7 +183,7 @@ groups() ->
             create_shop_ok_test,
             get_shop_by_id_ok_test,
             get_shops_ok_test,
-            activate_shop_ok_test,
+            activate_shop_idempotent_ok_test,
             update_shop_ok_test,
             suspend_shop_ok_test
         ]},
@@ -396,7 +396,8 @@ get_invoices_stats_ok_test(Config) ->
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
         {status, unpaid}
     ],
-    {ok, _, _} = api_client_analytics:get_invoices(Context, ShopID, Query).
+
+    {ok, _, _} = api_client_searches:get_invoices(Context, ShopID, Query).
 
 -spec get_payment_conversion_stats_ok_test(config()) -> _.
 
@@ -479,24 +480,26 @@ get_payment_method_stats_ok_test(Config) ->
 
 get_my_party_ok_test(Config) ->
     #{
-        <<"isBlocked">> := false,
-        <<"isSuspended">> := false,
+        <<"isBlocked">> := _,
+        <<"isSuspended">> := _,
         <<"id">> := ?MERCHANT_ID
     } = default_get_party(Config).
 
--spec suspend_my_party_ok_test(config()) -> _.
+-spec suspend_my_party_idempotent_ok_test(config()) -> _.
 
-suspend_my_party_ok_test(Config) ->
-    _ = default_suspend_my_party(Config),
+suspend_my_party_idempotent_ok_test(Config) ->
+    ok = default_suspend_my_party(Config),
+    ok = default_suspend_my_party(Config),
     #{
         <<"isSuspended">> := true
     } = default_get_party(Config),
     Config.
 
--spec activate_my_party_ok_test(config()) -> _.
+-spec activate_my_party_idempotent_ok_test(config()) -> _.
 
-activate_my_party_ok_test(Config) ->
-    _ = default_activate_my_party(Config),
+activate_my_party_idempotent_ok_test(Config) ->
+    ok = default_activate_my_party(Config),
+    ok = default_activate_my_party(Config),
     #{
         <<"isSuspended">> := false
     } = default_get_party(Config).
@@ -680,7 +683,7 @@ get_shops_ok_test(Config) ->
 -spec update_shop_ok_test(config()) -> _.
 
 update_shop_ok_test(Config) ->
-    {activate_shop_ok_test,
+    {activate_shop_idempotent_ok_test,
         ShopID
     } = ?config(saved_config, Config),
     #{
@@ -709,21 +712,23 @@ suspend_shop_ok_test(Config) ->
     {update_shop_ok_test,
         ShopID
     } = ?config(saved_config, Config),
-    _ = default_suspend_shop(ShopID, Config),
+    ok = default_suspend_shop(ShopID, Config),
+    ok = default_suspend_shop(ShopID, Config),
     #{
         <<"isSuspended">> := true
     } = default_get_shop_by_id(ShopID, Config),
     {save_config, ShopID}.
 
 
--spec activate_shop_ok_test(config()) -> _.
+-spec activate_shop_idempotent_ok_test(config()) -> _.
 
-activate_shop_ok_test(Config) ->
+activate_shop_idempotent_ok_test(Config) ->
     {get_shops_ok_test,
         ShopID
     } = ?config(saved_config, Config),
 
-    _ = default_activate_shop(ShopID, Config),
+    ok = default_activate_shop(ShopID, Config),
+    ok = default_activate_shop(ShopID, Config),
     #{
         <<"isSuspended">> := false
     } = default_get_shop_by_id(ShopID, Config),
@@ -830,8 +835,8 @@ default_create_invoice(Config) ->
         <<"shopID">> => ShopID,
         <<"amount">> => 100000,
         <<"currency">> => <<"RUB">>,
-        <<"context">> => #{
-            <<"invoice_dummy_context">> => <<"test_value">>
+        <<"metadata">> => #{
+            <<"invoice_dummy_metadata">> => <<"test_value">>
         },
         <<"dueDate">> => DueDate,
         <<"product">> => <<"test_product">>,
@@ -980,22 +985,20 @@ default_get_claims_by_status(Status, Config) ->
 
 default_suspend_my_party(Config) ->
     Context = ?config(context, Config),
-    {ok, Body} = api_client_parties:suspend_my_party(Context),
-    Body.
+    Context = ?config(context, Config),
+    api_client_parties:suspend_my_party(Context).
 
 default_activate_my_party(Config) ->
     Context = ?config(context, Config),
-    {ok, Body} = api_client_parties:activate_my_party(Context),
-    Body.
+    api_client_parties:activate_my_party(Context).
 
 default_suspend_shop(ShopID, Config) ->
     Context = ?config(context, Config),
-    {ok, Body} = api_client_shops:suspend_shop(Context, ShopID),
-    Body.
+    api_client_shops:suspend_shop(Context, ShopID).
 
 default_activate_shop(ShopID, Config) ->
     Context = ?config(context, Config),
-    api_client_shops:activate_shop(Context, ShopID).
+    api_client_shops:activate_shop(Context,ShopID).
 
 default_get_shop_by_id(ShopID, Config) ->
     Context = ?config(context, Config),
@@ -1077,7 +1080,7 @@ get_locations_names(GeoIDs, Lang, Config) ->
     PreparedGeo = genlib_string:join($,,[genlib:to_binary(I) || I <- GeoIDs]),
     Params = #{
         qs_val => #{
-            <<"geoID">> => PreparedGeo,
+            <<"geoIDs">> => PreparedGeo,
             <<"language">> => Lang
         }
     },
@@ -1593,7 +1596,7 @@ create_and_activate_shop(Config) ->
             } | _
         ]
     } = default_get_claim_by_id(ClaimID, Config),
-    _ = default_activate_shop(ShopID, Config),
+    ok = default_activate_shop(ShopID, Config),
     ShopID.
 
 get_any_category(Config) ->

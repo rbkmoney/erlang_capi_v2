@@ -47,8 +47,8 @@ handle_request(OperationID, Req, Context) ->
     {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
 
 process_request(OperationID = 'CreateInvoice', Req, Context, ReqCtx) ->
-    InvoiceParams = maps:get('CreateInvoiceArgs', Req),
-    InvoiceContext = jsx:encode(genlib_map:get(<<"context">>, InvoiceParams)),
+    InvoiceParams = maps:get('InvoiceParams', Req),
+    InvoiceContext = jsx:encode(genlib_map:get(<<"metadata">>, InvoiceParams)),
     PartyID = get_party_id(Context),
     Params =  #payproc_InvoiceParams{
         party_id = PartyID,
@@ -84,7 +84,7 @@ process_request(OperationID = 'CreateInvoice', Req, Context, ReqCtx) ->
 
 process_request(OperationID = 'CreatePayment', Req, Context, ReqCtx) ->
     InvoiceID = maps:get('invoiceID', Req),
-    PaymentParams = maps:get('CreatePaymentArgs', Req),
+    PaymentParams = maps:get('PaymentParams', Req),
     Token = genlib_map:get(<<"paymentToolToken">>, PaymentParams),
     ContactInfo = genlib_map:get(<<"contactInfo">>, PaymentParams),
     PaymentTool = decode_bank_card(Token),
@@ -122,7 +122,7 @@ process_request(OperationID = 'CreatePayment', Req, Context, ReqCtx) ->
     end;
 
 process_request(OperationID = 'CreatePaymentToolToken', Req, Context, ReqCtx) ->
-    Params = maps:get('CreatePaymentToolTokenArgs', Req),
+    Params = maps:get('PaymentToolTokenParams', Req),
     ClientInfo0 = maps:get(<<"clientInfo">>, Params),
     PaymentTool = maps:get(<<"paymentTool">>, Params),
     case PaymentTool of
@@ -369,7 +369,7 @@ process_request(OperationID = 'GetPaymentMethodStats', Req, Context, ReqCtx) ->
 
 process_request(OperationID = 'GetLocationsNames', Req, _Context, ReqCtx) ->
     Language = maps:get('language', Req),
-    GeoIDs = ordsets:from_list(maps:get('geoID', Req)),
+    GeoIDs = ordsets:from_list(maps:get('geoIDs', Req)),
 
     Result = service_call(
         geo_ip_service,
@@ -393,7 +393,7 @@ process_request(OperationID = 'GetLocationsNames', Req, _Context, ReqCtx) ->
 process_request(OperationID = 'CreateShop', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
-    Params = maps:get('CreateShopArgs', Req),
+    Params = maps:get('ShopParams', Req),
 
     Proxy = populate_proxy_options(genlib_map:get(<<"callbackUrl">>, Params), ReqCtx),
 
@@ -444,8 +444,12 @@ process_request(OperationID = 'ActivateShop', Req, Context, ReqCtx) ->
     ),
 
     case Result of
-        {ok, R} ->
-            {202, [], decode_claim_result(R)};
+        {ok, _R} ->
+            {204, [], <<>>};
+        {exception, #payproc_InvalidShopStatus{
+            status = {suspension, {active, _}}
+        }} ->
+            {204, [], <<>>};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -469,8 +473,12 @@ process_request(OperationID = 'SuspendShop', Req, Context, ReqCtx) ->
     ),
 
     case Result of
-        {ok, R} ->
-            {202, [], decode_claim_result(R)};
+        {ok, _R} ->
+            {204, [], <<>>};
+        {exception, #payproc_InvalidShopStatus{
+            status = {suspension, {suspended, _}}
+        }} ->
+            {204, [], <<>>};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -479,7 +487,7 @@ process_request(OperationID = 'UpdateShop', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     ShopID = maps:get(shopID, Req),
-    Params = maps:get('UpdateShopArgs', Req),
+    Params = maps:get('UpdateShopParams', Req),
 
     Proxy = populate_proxy_options(genlib_map:get(<<"callbackUrl">>, Params), ReqCtx),
 
@@ -663,6 +671,8 @@ process_request(OperationID = 'GetClaimsByStatus', Req, Context, ReqCtx) ->
         end
     ),
     case Result of
+        {exception, #payproc_ClaimNotFound{}} ->
+            {200, [], []};
         {ok, Claim} ->
             Resp = decode_claim(Claim, ReqCtx),
             {200, [], [Resp]}; %% pretending to have more than one pending claim at the same time
@@ -736,8 +746,12 @@ process_request(OperationID = 'SuspendMyParty', _Req, Context, ReqCtx) ->
         end
     ),
     case Result of
-        {ok, R} ->
-            {202, [], decode_claim_result(R)};
+        {ok, _R} ->
+            {204, [], <<>>};
+        {exception, #payproc_InvalidPartyStatus{
+            status = {suspension, {suspended, _}}
+        }} ->
+            {204, [], <<>>};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -758,8 +772,12 @@ process_request(OperationID = 'ActivateMyParty', _Req, Context, ReqCtx) ->
         end
     ),
     case Result of
-        {ok, R} ->
-            {202, [], decode_claim_result(R)};
+        {ok, _R} ->
+            {204, [], <<>>};
+        {exception, #payproc_InvalidPartyStatus{
+            status = {suspension, {active, _}}
+        }} ->
+            {204, [], <<>>};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -847,7 +865,7 @@ parse_exp_date(ExpDate) when is_binary(ExpDate) ->
 get_user_info(Context) ->
     #payproc_UserInfo{
         id = get_party_id(Context),
-        type = {external_user, #payproc_ExternalUser{}} %%@FIXME do I have to guess?
+        type = {external_user, #payproc_ExternalUser{}}
     }.
 
 get_party_id(#{
@@ -1135,7 +1153,7 @@ decode_invoice(#domain_Invoice{
     shop_id = ShopID
 }) ->
     Context = #{
-        <<"context">> => decode_context(RawContext)
+        <<"metadata">> => decode_context(RawContext)
     },
     genlib_map:compact(maps:merge(#{
         <<"id">> => InvoiceID,
@@ -1144,7 +1162,7 @@ decode_invoice(#domain_Invoice{
         <<"dueDate">> => DueDate,
         <<"amount">> => Amount,
         <<"currency">> =>  decode_currency(Currency),
-        <<"context">> => Context,
+        <<"metadata">> => Context,
         <<"product">> => Product,
         <<"description">> => Description
     }, decode_invoice_status(InvoiceStatus))).
@@ -1731,10 +1749,10 @@ parse_rfc3339_datetime(DateTime) ->
     {DateFrom, TimeFrom}.
 
 process_exception(_, #payproc_InvalidUser{}) ->
-    {400, [], logic_error(invalid_user, <<"Ivalid user">>)};
+    {400, [], logic_error(invalidUser, <<"Ivalid user">>)};
 
 process_exception(_, #'InvalidRequest'{errors = Errors}) ->
-    {400, [], logic_error(invalid_request, format_request_errors(Errors))};
+    {400, [], logic_error(invalidRequest, format_request_errors(Errors))};
 
 process_exception(_, #payproc_UserInvoiceNotFound{}) ->
     {404, [], general_error(<<"Invoice not found">>)};
@@ -1742,20 +1760,29 @@ process_exception(_, #payproc_UserInvoiceNotFound{}) ->
 process_exception(_, #payproc_ClaimNotFound{}) ->
     {404, [], general_error(<<"Claim not found">>)};
 
+process_exception(_, #payproc_ContractNotFound{}) ->
+    {404, [], general_error(<<"Contract not found">>)};
+
 process_exception(_,  #payproc_InvalidInvoiceStatus{}) ->
-    {400, [], logic_error(invalid_invoice_status, <<"Invalid invoice status">>)};
+    {400, [], logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)};
+
+process_exception(_,  #payproc_InvalidPartyStatus{}) ->
+    {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)};
 
 process_exception(_, #payproc_InvoicePaymentPending{}) ->
-    {400, [], logic_error(invalid_payment_status, <<"Invalid payment status">>)};
+    {400, [], logic_error(invalidPaymentStatus, <<"Invalid payment status">>)};
 
 process_exception(_, #payproc_InvalidShopStatus{}) ->
-    {400, [], logic_error(invalid_shop_status, <<"Invalid shop status">>)};
+    {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)};
+
+process_exception(_, #payproc_InvalidContractStatus{}) ->
+    {400, [], logic_error(invalidContractStatus, <<"Invalid contract status">>)};
 
 process_exception(_, #payproc_PartyNotFound{}) ->
     {404, [],  general_error(<<"Party not found">>)};
 
 process_exception(_,  #'InvalidCardData'{}) ->
-    {400, [], logic_error(invalid_request, <<"Card data is invalid">>)};
+    {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)};
 
 process_exception(_, #'KeyringLocked'{}) ->
     {503, [], <<"">>};

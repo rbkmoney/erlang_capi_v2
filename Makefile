@@ -3,7 +3,8 @@ SUBMODULES = schemes/swag apps/cp_proto/damsel build_utils
 SUBTARGETS = $(patsubst %,%/.git,$(SUBMODULES))
 
 SWAGGER_CODEGEN ?= $(call which, swagger-codegen)
-SWAGGER_SCHEME = schemes/swag/swagger.yaml
+SWAGGER_SCHEME_PATH = schemes/swag
+SWAGGER_SCHEME = $(SWAGGER_SCHEME_PATH)/web_deploy/swagger.yaml
 SWAGGER_APP_PATH = apps/swagger
 
 SWAGGER_APP_TARGET = $(SWAGGER_APP_PATH)/rebar.config
@@ -20,7 +21,7 @@ SERVICE_IMAGE_PUSH_TAG ?= $(SERVICE_IMAGE_TAG)
 
 # Base image for the service
 BASE_IMAGE_NAME := service_erlang
-BASE_IMAGE_TAG := 4000337c0ca19978467f62ca6505a03c2569de40
+BASE_IMAGE_TAG := 13454a94990acb72f753623ec13599a9f6f4f852
 
 BUILD_IMAGE_TAG := 87363339f95c0756ff6a90737cbacf13bff1bb27
 
@@ -70,24 +71,26 @@ clean:
 	$(REBAR) clean
 
 distclean:
-	$(REBAR) clean -a
+	$(REBAR) clean
 	rm -rfv _build apps/swagger
 
 # CALL_W_CONTAINER
 test: submodules
 	$(REBAR) ct
 
-# Shitty generation. Will be replaced when a container with swagger-codegen appear
-define swagger_regenerate
+define swagger_generate
 	rm -rf $(SWAGGER_APP_PATH)
 	$(SWAGGER_CODEGEN) generate -i $(SWAGGER_SCHEME) -l erlang-server -o $(SWAGGER_APP_PATH)
 endef
 
 $(SWAGGER_APP_TARGET): $(SWAGGER_SCHEME)
-	$(call swagger_regenerate)
+	$(call swagger_generate)
 
-swagger_regenerate:
-	$(call swagger_regenerate)
+$(SWAGGER_SCHEME):
+	$(MAKE) -C $(SWAGGER_SCHEME_PATH)
+
+swagger_generate: $(SWAGGER_SCHEME)
+	$(call swagger_generate)
 
 cover:
 	$(REBAR) cover
