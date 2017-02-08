@@ -1392,7 +1392,7 @@ decode_stat_response(payments_conversion_stat, Response) ->
 decode_stat_response(payments_geo_stat, Response) ->
     #{
         <<"offset">> => genlib:to_int(maps:get(<<"offset">>, Response)),
-        <<"geoID">> => genlib:to_int(maps:get(<<"geoID">>, Response)),
+        <<"geoID">> => genlib:to_int(maps:get(<<"city_id">>, Response)),
         <<"currency">> => maps:get(<<"currency_symbolic_code">>, Response),
         <<"profit">> => genlib:to_int(maps:get(<<"amount_with_fee">>, Response)),
         <<"revenue">> => genlib:to_int(maps:get(<<"amount_without_fee">>, Response))
