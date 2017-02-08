@@ -100,6 +100,8 @@ init([]) ->
 
 -type config() :: [{atom(), any()}].
 
+-define(setconfig(K, V, C), lists:keystore(K, 1, C, {K, V})).
+
 -spec all() -> [
     {group, GroupName :: atom()}
 ].
@@ -223,12 +225,6 @@ init_per_suite(Config) ->
                 geo_ip_service => ?GEO_IP_URL,
                 merchant_config => ?MERCHANT_CONFIG_URL
             }}
-        ]) ++
-        capi_ct_helper:start_app(capi, [
-            {ip, ?CAPI_IP},
-            {port, ?CAPI_PORT},
-            {service_type, ?CAPI_SERVICE_TYPE},
-            {api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")}
         ]),
     {ok, SupPid} = supervisor:start_link(?MODULE, []),
     _ = unlink(SupPid),
@@ -262,17 +258,33 @@ end_per_suite(C) ->
 
 -spec init_per_group(Name :: atom(), config()) -> config().
 
-init_per_group(statistics, Config) ->
+init_per_group(Group = statistics, Config) ->
+    Apps = start_capi(Group, Config),
     ShopID = create_and_activate_shop(Config),
-    [{shop_id, ShopID} | Config];
+    [{capi_apps, Apps}, {shop_id, ShopID} | Config];
 
-init_per_group(_, Config) ->
-    Config.
+init_per_group(Group, Config) ->
+    Apps = start_capi(Group, Config),
+    [{capi_apps, Apps} | Config].
+
+start_capi(Group, Config) ->
+    capi_ct_helper:start_app(capi, [
+        {ip, ?CAPI_IP},
+        {port, ?CAPI_PORT},
+        {service_type, ?CAPI_SERVICE_TYPE},
+        {api_secret_path, filename:join(?config(data_dir, Config), get_pubkey_filepath(Group))}
+    ]).
+
+get_pubkey_filepath(authorization) ->
+    "keys/local/public.pem";
+get_pubkey_filepath(_) ->
+    "keys/keycloak/public.pem".
 
 -spec end_per_group(Name :: atom(), config()) -> config().
 
 end_per_group(_, Config) ->
-    Config.
+    _ = [application:stop(App) || App <- ?config(capi_apps, Config)],
+    lists:keydelete(capi_apps, 1, Config).
 
 %% tests
 -spec authorization_error_no_header_test(config()) -> _.
@@ -852,7 +864,7 @@ auth_token(ResourseAccess, Exp, Config) ->
         <<"resource_access">> => ResourseAccess,
         <<"exp">> => Exp
     },
-    RSAPrivateJWK = jose_jwk:from_pem_file(filename:join(?config(data_dir, Config), "private_api_key.pem")),
+    RSAPrivateJWK = jose_jwk:from_pem_file(filename:join(?config(data_dir, Config), "keys/local/private.pem")),
     Signed = jose_jwt:sign(jose_jwk:from(RSAPrivateJWK), #{<<"alg">> => <<"RS256">>}, Message),
     {_Alg, Payload} = jose_jws:compact(Signed),
     Payload.
