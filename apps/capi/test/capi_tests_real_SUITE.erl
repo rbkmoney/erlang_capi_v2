@@ -926,7 +926,7 @@ default_create_payout_tool(ContractID, Config) ->
         }
     },
     {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swagger_payout_tools_api:create_payout_tool(Host, Port, PreparedParams),
+    Response = swagger_payouts_api:create_payout_tool(Host, Port, PreparedParams),
     handle_response(Response).
 
 get_payout_tools(ContractID, Config) ->
@@ -937,7 +937,7 @@ get_payout_tools(ContractID, Config) ->
         }
     },
     {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swagger_payout_tools_api:get_payout_tools(Host, Port, PreparedParams),
+    Response = swagger_payouts_api:get_payout_tools(Host, Port, PreparedParams),
     handle_response(Response).
 
 default_tokenize_card(Config) ->
