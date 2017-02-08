@@ -10,21 +10,27 @@
 ) -> {true, Context :: context()} | false.
 
 auth_api_key(OperationID, ApiKey) ->
-    {ok, Type, Credentials} = parse_auth_token(ApiKey),
-    case  process_auth(Type, Credentials, OperationID) of
-        {ok, Context} ->
-            {true, Context};
-        {error, _Error} ->
+    case parse_auth_token(ApiKey) of
+        {ok, {Type, Credentials}} ->
+            case  process_auth(Type, Credentials, OperationID) of
+                {ok, Context} ->
+                    {true, Context};
+                {error, Error} ->
+                    _ = log_auth_error(OperationID, Error),
+                    false
+            end;
+        {error, Error} ->
+            _ = log_auth_error(OperationID, Error),
             false
     end.
 
 -spec parse_auth_token(ApiKey :: binary()) ->
-    {ok, bearer, Credentials :: binary()} | {error, Reason :: atom()}.
+    {ok, {bearer, Credentials :: binary()}} | {error, Reason :: atom()}.
 
 parse_auth_token(ApiKey) ->
     case ApiKey of
         <<"Bearer ", Credentials/binary>> ->
-            {ok, bearer, Credentials};
+            {ok, {bearer, Credentials}};
         _ ->
             {error, unsupported_auth_scheme}
     end.
@@ -146,3 +152,8 @@ check_expiration(Claims) ->
         I when is_integer(I) ->
             genlib_time:unow() =< I
     end.
+
+
+log_auth_error(OperationID, Error) ->
+    lager:info("Auth for operation ~p failed due to ~p", [OperationID, Error]).
+
