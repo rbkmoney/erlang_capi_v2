@@ -20,6 +20,7 @@
 -export([
     authorization_error_no_header_test/1,
     authorization_error_expired_test/1,
+    authorization_expired_ok_test/1,
     create_invoice_badard_test/1,
     create_invoice_ok_test/1,
     create_payment_ok_test/1,
@@ -130,7 +131,8 @@ groups() ->
     [
         {authorization, [parallel], [
             authorization_error_no_header_test,
-            authorization_error_expired_test
+            authorization_error_expired_test,
+            authorization_expired_ok_test
         ]},
         {invoice_management, [sequence], [
             create_invoice_badard_test,
@@ -203,6 +205,9 @@ groups() ->
 -spec init_per_suite(config()) -> config().
 
 init_per_suite(Config) ->
+    % _ = dbg:tracer(),
+    % _ = dbg:p(all, c),
+    % _ = dbg:tpl({'capi_auth', '_', '_'}, x),
     Apps =
         capi_ct_helper:start_app(lager) ++
         capi_ct_helper:start_app(cowlib) ++
@@ -278,9 +283,34 @@ authorization_error_no_header_test(_Config) ->
 -spec authorization_error_expired_test(config()) -> _.
 
 authorization_error_expired_test(Config) ->
-    Token = auth_token(#{}, genlib_time:unow() - 10, Config),
+    ResourceAccess = #{<<"common-api">> => #{<<"roles">> => [<<"payments:get">>]}},
+    Token = auth_token(ResourceAccess, genlib_time:unow() - 10, Config),
     AuthHeader = auth_header(Token),
     {ok, 401, _RespHeaders, _Body} = call(get, "/v1/processing/invoices/22?limit=22", #{}, [AuthHeader]).
+
+-spec authorization_expired_ok_test(config()) -> _.
+
+authorization_expired_ok_test(Config) ->
+    ResourceAccess = #{<<"common-api">> => #{<<"roles">> => [<<"payment_tool_tokens:create">>]}},
+    Token = auth_token(ResourceAccess, genlib_time:unow() - 10, Config),
+    Headers = [
+        auth_header(Token),
+        {<<"Content-Type">>, <<"application/json; charset=utf-8">>},
+        {<<"X-Request-ID">>, <<"BLARGH">>}
+    ],
+    Body = #{
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"CardData">>,
+            <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
+            <<"cardNumber">> => 4111111111111111,
+            <<"expDate">> => <<"08/27">>,
+            <<"cvv">> => <<"232">>
+        },
+        <<"clientInfo">> => #{
+            <<"fingerprint">> => <<"test fingerprint">>
+        }
+    },
+    {ok, 201, _RespHeaders, _Body} = call(post, "/v1/processing/payment_tools", Body, Headers).
 
 -spec create_invoice_badard_test(config()) -> _.
 
@@ -823,7 +853,7 @@ auth_token(ResourseAccess, Exp, Config) ->
         <<"exp">> => Exp
     },
     RSAPrivateJWK = jose_jwk:from_pem_file(filename:join(?config(data_dir, Config), "private_api_key.pem")),
-    Signed = jose_jwk:sign(jsx:encode(Message), #{ <<"alg">> => <<"RS256">> }, RSAPrivateJWK),
+    Signed = jose_jwt:sign(jose_jwk:from(RSAPrivateJWK), #{<<"alg">> => <<"RS256">>}, Message),
     {_Alg, Payload} = jose_jws:compact(Signed),
     Payload.
 

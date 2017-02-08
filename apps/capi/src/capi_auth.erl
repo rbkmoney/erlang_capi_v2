@@ -33,18 +33,18 @@ parse_auth_token(ApiKey) ->
     {ok, Context :: context()} | {error, Reason :: atom()}.
 
 process_auth(bearer, AuthToken, OperationID) ->
-    case verify_token(AuthToken) of
+    case verify_token(AuthToken, OperationID) of
         {ok, Claims} ->
             authorize(Claims, OperationID);
         Error ->
             Error
     end.
 
-verify_token(AuthToken) ->
+verify_token(AuthToken, OperationID) ->
     case verify_alg(AuthToken) of
         {ok, Payload} ->
             Claims = jsx:decode(Payload, [return_maps]), %% @FIXME deal with non json token
-            case is_valid_exp(Claims) of
+            case validate_claims(Claims, OperationID) of
                 true ->
                     {ok, Claims};
                 false ->
@@ -91,13 +91,9 @@ authorize(
 authorize(_Claims, _OperationID) ->
     {error, unauthorized}.
 
-is_valid_exp(Claims) ->
-    case genlib_map:get(<<"exp">>, Claims) of
-        undefined ->
-            false;
-        I when is_integer(I) ->
-            genlib_time:unow() =< I
-    end.
+validate_claims(Claims, OperationID) ->
+    Validator = get_validator(OperationID),
+    Validator(Claims).
 
 get_actions() ->
     #{
@@ -137,3 +133,16 @@ get_actions() ->
         'GetContractByID' => [<<"party:create">>],
         'GetLocationsNames' => [<<"party:create">>]
     }.
+
+get_validator('CreatePaymentToolToken') ->
+    fun (_Claims) -> true end;
+get_validator(_Any) ->
+    fun check_expiration/1.
+
+check_expiration(Claims) ->
+    case genlib_map:get(<<"exp">>, Claims) of
+        undefined ->
+            false;
+        I when is_integer(I) ->
+            genlib_time:unow() =< I
+    end.
