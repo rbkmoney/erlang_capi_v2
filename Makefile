@@ -3,7 +3,8 @@ SUBMODULES = schemes/swag apps/cp_proto/damsel build_utils
 SUBTARGETS = $(patsubst %,%/.git,$(SUBMODULES))
 
 SWAGGER_CODEGEN ?= $(call which, swagger-codegen)
-SWAGGER_SCHEME = schemes/swag/swagger.yaml
+SWAGGER_SCHEME_PATH = schemes/swag
+SWAGGER_SCHEME = $(SWAGGER_SCHEME_PATH)/web_deploy/swagger.yaml
 SWAGGER_APP_PATH = apps/swagger
 
 SWAGGER_APP_TARGET = $(SWAGGER_APP_PATH)/rebar.config
@@ -70,24 +71,26 @@ clean:
 	$(REBAR) clean
 
 distclean:
-	$(REBAR) clean -a
+	$(REBAR) clean
 	rm -rfv _build apps/swagger
 
 # CALL_W_CONTAINER
 test: submodules
 	$(REBAR) ct
 
-# Shitty generation. Will be replaced when a container with swagger-codegen appear
-define swagger_regenerate
+define swagger_generate
 	rm -rf $(SWAGGER_APP_PATH)
 	$(SWAGGER_CODEGEN) generate -i $(SWAGGER_SCHEME) -l erlang-server -o $(SWAGGER_APP_PATH)
 endef
 
 $(SWAGGER_APP_TARGET): $(SWAGGER_SCHEME)
-	$(call swagger_regenerate)
+	$(call swagger_generate)
 
-swagger_regenerate:
-	$(call swagger_regenerate)
+$(SWAGGER_SCHEME):
+	$(MAKE) -C $(SWAGGER_SCHEME_PATH)
+
+swagger_generate: $(SWAGGER_SCHEME)
+	$(call swagger_generate)
 
 cover:
 	$(REBAR) cover

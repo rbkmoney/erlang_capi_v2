@@ -20,6 +20,7 @@
 -export([
     authorization_error_no_header_test/1,
     authorization_error_expired_test/1,
+    authorization_expired_ok_test/1,
     create_invoice_badard_test/1,
     create_invoice_ok_test/1,
     create_payment_ok_test/1,
@@ -38,8 +39,8 @@
     get_payment_method_stats_ok_test/1,
     %%%%
     get_my_party_ok_test/1,
-    suspend_my_party_ok_test/1,
-    activate_my_party_ok_test/1,
+    suspend_my_party_idempotent_ok_test/1,
+    activate_my_party_idempotent_ok_test/1,
     get_claim_by_id_ok_test/1,
     revoke_claim_ok_test/1,
     get_claims_by_status_ok_test/1,
@@ -50,7 +51,7 @@
     get_shops_ok_test/1,
     update_shop_ok_test/1,
     suspend_shop_ok_test/1,
-    activate_shop_ok_test/1,
+    activate_shop_idempotent_ok_test/1,
     %%%%
     get_account_by_id_ok_test/1,
     %%%%
@@ -99,6 +100,8 @@ init([]) ->
 
 -type config() :: [{atom(), any()}].
 
+-define(setconfig(K, V, C), lists:keystore(K, 1, C, {K, V})).
+
 -spec all() -> [
     {group, GroupName :: atom()}
 ].
@@ -130,7 +133,8 @@ groups() ->
     [
         {authorization, [parallel], [
             authorization_error_no_header_test,
-            authorization_error_expired_test
+            authorization_error_expired_test,
+            authorization_expired_ok_test
         ]},
         {invoice_management, [sequence], [
             create_invoice_badard_test,
@@ -162,8 +166,8 @@ groups() ->
         ]},
         {party_management, [sequence], [
             get_my_party_ok_test,
-            suspend_my_party_ok_test,
-            activate_my_party_ok_test
+            suspend_my_party_idempotent_ok_test,
+            activate_my_party_idempotent_ok_test
         ]},
         {contracts_management, [sequence], [
             create_contract_ok_test,
@@ -183,7 +187,7 @@ groups() ->
             create_shop_ok_test,
             get_shop_by_id_ok_test,
             get_shops_ok_test,
-            activate_shop_ok_test,
+            activate_shop_idempotent_ok_test,
             update_shop_ok_test,
             suspend_shop_ok_test
         ]},
@@ -203,6 +207,9 @@ groups() ->
 -spec init_per_suite(config()) -> config().
 
 init_per_suite(Config) ->
+    % _ = dbg:tracer(),
+    % _ = dbg:p(all, c),
+    % _ = dbg:tpl({'capi_auth', '_', '_'}, x),
     Apps =
         capi_ct_helper:start_app(lager) ++
         capi_ct_helper:start_app(cowlib) ++
@@ -218,12 +225,6 @@ init_per_suite(Config) ->
                 geo_ip_service => ?GEO_IP_URL,
                 merchant_config => ?MERCHANT_CONFIG_URL
             }}
-        ]) ++
-        capi_ct_helper:start_app(capi, [
-            {ip, ?CAPI_IP},
-            {port, ?CAPI_PORT},
-            {service_type, ?CAPI_SERVICE_TYPE},
-            {api_secret_path, filename:join(?config(data_dir, Config), "public_api_key.pem")}
         ]),
     {ok, SupPid} = supervisor:start_link(?MODULE, []),
     _ = unlink(SupPid),
@@ -257,17 +258,33 @@ end_per_suite(C) ->
 
 -spec init_per_group(Name :: atom(), config()) -> config().
 
-init_per_group(statistics, Config) ->
+init_per_group(Group = statistics, Config) ->
+    Apps = start_capi(Group, Config),
     ShopID = create_and_activate_shop(Config),
-    [{shop_id, ShopID} | Config];
+    [{capi_apps, Apps}, {shop_id, ShopID} | Config];
 
-init_per_group(_, Config) ->
-    Config.
+init_per_group(Group, Config) ->
+    Apps = start_capi(Group, Config),
+    [{capi_apps, Apps} | Config].
+
+start_capi(Group, Config) ->
+    capi_ct_helper:start_app(capi, [
+        {ip, ?CAPI_IP},
+        {port, ?CAPI_PORT},
+        {service_type, ?CAPI_SERVICE_TYPE},
+        {api_secret_path, filename:join(?config(data_dir, Config), get_pubkey_filepath(Group))}
+    ]).
+
+get_pubkey_filepath(authorization) ->
+    "keys/local/public.pem";
+get_pubkey_filepath(_) ->
+    "keys/keycloak/public.pem".
 
 -spec end_per_group(Name :: atom(), config()) -> config().
 
 end_per_group(_, Config) ->
-    Config.
+    _ = [application:stop(App) || App <- ?config(capi_apps, Config)],
+    lists:keydelete(capi_apps, 1, Config).
 
 %% tests
 -spec authorization_error_no_header_test(config()) -> _.
@@ -278,9 +295,34 @@ authorization_error_no_header_test(_Config) ->
 -spec authorization_error_expired_test(config()) -> _.
 
 authorization_error_expired_test(Config) ->
-    Token = auth_token(#{}, genlib_time:unow() - 10, Config),
+    ResourceAccess = #{<<"common-api">> => #{<<"roles">> => [<<"payments:get">>]}},
+    Token = auth_token(ResourceAccess, genlib_time:unow() - 10, Config),
     AuthHeader = auth_header(Token),
     {ok, 401, _RespHeaders, _Body} = call(get, "/v1/processing/invoices/22?limit=22", #{}, [AuthHeader]).
+
+-spec authorization_expired_ok_test(config()) -> _.
+
+authorization_expired_ok_test(Config) ->
+    ResourceAccess = #{<<"common-api">> => #{<<"roles">> => [<<"payment_tool_tokens:create">>]}},
+    Token = auth_token(ResourceAccess, genlib_time:unow() - 10, Config),
+    Headers = [
+        auth_header(Token),
+        {<<"Content-Type">>, <<"application/json; charset=utf-8">>},
+        {<<"X-Request-ID">>, <<"BLARGH">>}
+    ],
+    Body = #{
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"CardData">>,
+            <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
+            <<"cardNumber">> => 4111111111111111,
+            <<"expDate">> => <<"08/27">>,
+            <<"cvv">> => <<"232">>
+        },
+        <<"clientInfo">> => #{
+            <<"fingerprint">> => <<"test fingerprint">>
+        }
+    },
+    {ok, 201, _RespHeaders, _Body} = call(post, "/v1/processing/payment_tools", Body, Headers).
 
 -spec create_invoice_badard_test(config()) -> _.
 
@@ -396,7 +438,8 @@ get_invoices_stats_ok_test(Config) ->
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
         {status, unpaid}
     ],
-    {ok, _, _} = api_client_analytics:get_invoices(Context, ShopID, Query).
+
+    {ok, _, _} = api_client_searches:get_invoices(Context, ShopID, Query).
 
 -spec get_payment_conversion_stats_ok_test(config()) -> _.
 
@@ -479,24 +522,26 @@ get_payment_method_stats_ok_test(Config) ->
 
 get_my_party_ok_test(Config) ->
     #{
-        <<"isBlocked">> := false,
-        <<"isSuspended">> := false,
+        <<"isBlocked">> := _,
+        <<"isSuspended">> := _,
         <<"id">> := ?MERCHANT_ID
     } = default_get_party(Config).
 
--spec suspend_my_party_ok_test(config()) -> _.
+-spec suspend_my_party_idempotent_ok_test(config()) -> _.
 
-suspend_my_party_ok_test(Config) ->
-    _ = default_suspend_my_party(Config),
+suspend_my_party_idempotent_ok_test(Config) ->
+    ok = default_suspend_my_party(Config),
+    ok = default_suspend_my_party(Config),
     #{
         <<"isSuspended">> := true
     } = default_get_party(Config),
     Config.
 
--spec activate_my_party_ok_test(config()) -> _.
+-spec activate_my_party_idempotent_ok_test(config()) -> _.
 
-activate_my_party_ok_test(Config) ->
-    _ = default_activate_my_party(Config),
+activate_my_party_idempotent_ok_test(Config) ->
+    ok = default_activate_my_party(Config),
+    ok = default_activate_my_party(Config),
     #{
         <<"isSuspended">> := false
     } = default_get_party(Config).
@@ -680,7 +725,7 @@ get_shops_ok_test(Config) ->
 -spec update_shop_ok_test(config()) -> _.
 
 update_shop_ok_test(Config) ->
-    {activate_shop_ok_test,
+    {activate_shop_idempotent_ok_test,
         ShopID
     } = ?config(saved_config, Config),
     #{
@@ -709,21 +754,23 @@ suspend_shop_ok_test(Config) ->
     {update_shop_ok_test,
         ShopID
     } = ?config(saved_config, Config),
-    _ = default_suspend_shop(ShopID, Config),
+    ok = default_suspend_shop(ShopID, Config),
+    ok = default_suspend_shop(ShopID, Config),
     #{
         <<"isSuspended">> := true
     } = default_get_shop_by_id(ShopID, Config),
     {save_config, ShopID}.
 
 
--spec activate_shop_ok_test(config()) -> _.
+-spec activate_shop_idempotent_ok_test(config()) -> _.
 
-activate_shop_ok_test(Config) ->
+activate_shop_idempotent_ok_test(Config) ->
     {get_shops_ok_test,
         ShopID
     } = ?config(saved_config, Config),
 
-    _ = default_activate_shop(ShopID, Config),
+    ok = default_activate_shop(ShopID, Config),
+    ok = default_activate_shop(ShopID, Config),
     #{
         <<"isSuspended">> := false
     } = default_get_shop_by_id(ShopID, Config),
@@ -817,8 +864,8 @@ auth_token(ResourseAccess, Exp, Config) ->
         <<"resource_access">> => ResourseAccess,
         <<"exp">> => Exp
     },
-    RSAPrivateJWK = jose_jwk:from_pem_file(filename:join(?config(data_dir, Config), "private_api_key.pem")),
-    Signed = jose_jwk:sign(jsx:encode(Message), #{ <<"alg">> => <<"RS256">> }, RSAPrivateJWK),
+    RSAPrivateJWK = jose_jwk:from_pem_file(filename:join(?config(data_dir, Config), "keys/local/private.pem")),
+    Signed = jose_jwt:sign(jose_jwk:from(RSAPrivateJWK), #{<<"alg">> => <<"RS256">>}, Message),
     {_Alg, Payload} = jose_jws:compact(Signed),
     Payload.
 
@@ -830,8 +877,8 @@ default_create_invoice(Config) ->
         <<"shopID">> => ShopID,
         <<"amount">> => 100000,
         <<"currency">> => <<"RUB">>,
-        <<"context">> => #{
-            <<"invoice_dummy_context">> => <<"test_value">>
+        <<"metadata">> => #{
+            <<"invoice_dummy_metadata">> => <<"test_value">>
         },
         <<"dueDate">> => DueDate,
         <<"product">> => <<"test_product">>,
@@ -921,7 +968,7 @@ default_create_payout_tool(ContractID, Config) ->
         }
     },
     {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swagger_payout_tools_api:create_payout_tool(Host, Port, PreparedParams),
+    Response = swagger_payouts_api:create_payout_tool(Host, Port, PreparedParams),
     handle_response(Response).
 
 get_payout_tools(ContractID, Config) ->
@@ -932,7 +979,7 @@ get_payout_tools(ContractID, Config) ->
         }
     },
     {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swagger_payout_tools_api:get_payout_tools(Host, Port, PreparedParams),
+    Response = swagger_payouts_api:get_payout_tools(Host, Port, PreparedParams),
     handle_response(Response).
 
 default_tokenize_card(Config) ->
@@ -980,22 +1027,20 @@ default_get_claims_by_status(Status, Config) ->
 
 default_suspend_my_party(Config) ->
     Context = ?config(context, Config),
-    {ok, Body} = api_client_parties:suspend_my_party(Context),
-    Body.
+    Context = ?config(context, Config),
+    api_client_parties:suspend_my_party(Context).
 
 default_activate_my_party(Config) ->
     Context = ?config(context, Config),
-    {ok, Body} = api_client_parties:activate_my_party(Context),
-    Body.
+    api_client_parties:activate_my_party(Context).
 
 default_suspend_shop(ShopID, Config) ->
     Context = ?config(context, Config),
-    {ok, Body} = api_client_shops:suspend_shop(Context, ShopID),
-    Body.
+    api_client_shops:suspend_shop(Context, ShopID).
 
 default_activate_shop(ShopID, Config) ->
     Context = ?config(context, Config),
-    api_client_shops:activate_shop(Context, ShopID).
+    api_client_shops:activate_shop(Context,ShopID).
 
 default_get_shop_by_id(ShopID, Config) ->
     Context = ?config(context, Config),
@@ -1077,7 +1122,7 @@ get_locations_names(GeoIDs, Lang, Config) ->
     PreparedGeo = genlib_string:join($,,[genlib:to_binary(I) || I <- GeoIDs]),
     Params = #{
         qs_val => #{
-            <<"geoID">> => PreparedGeo,
+            <<"geoIDs">> => PreparedGeo,
             <<"language">> => Lang
         }
     },
@@ -1593,7 +1638,7 @@ create_and_activate_shop(Config) ->
             } | _
         ]
     } = default_get_claim_by_id(ClaimID, Config),
-    _ = default_activate_shop(ShopID, Config),
+    ok = default_activate_shop(ShopID, Config),
     ShopID.
 
 get_any_category(Config) ->

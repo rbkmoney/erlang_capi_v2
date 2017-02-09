@@ -10,21 +10,27 @@
 ) -> {true, Context :: context()} | false.
 
 auth_api_key(OperationID, ApiKey) ->
-    {ok, Type, Credentials} = parse_auth_token(ApiKey),
-    case  process_auth(Type, Credentials, OperationID) of
-        {ok, Context} ->
-            {true, Context};
-        {error, _Error} ->
+    case parse_auth_token(ApiKey) of
+        {ok, {Type, Credentials}} ->
+            case  process_auth(Type, Credentials, OperationID) of
+                {ok, Context} ->
+                    {true, Context};
+                {error, Error} ->
+                    _ = log_auth_error(OperationID, Error),
+                    false
+            end;
+        {error, Error} ->
+            _ = log_auth_error(OperationID, Error),
             false
     end.
 
 -spec parse_auth_token(ApiKey :: binary()) ->
-    {ok, bearer, Credentials :: binary()} | {error, Reason :: atom()}.
+    {ok, {bearer, Credentials :: binary()}} | {error, Reason :: atom()}.
 
 parse_auth_token(ApiKey) ->
     case ApiKey of
         <<"Bearer ", Credentials/binary>> ->
-            {ok, bearer, Credentials};
+            {ok, {bearer, Credentials}};
         _ ->
             {error, unsupported_auth_scheme}
     end.
@@ -33,18 +39,18 @@ parse_auth_token(ApiKey) ->
     {ok, Context :: context()} | {error, Reason :: atom()}.
 
 process_auth(bearer, AuthToken, OperationID) ->
-    case verify_token(AuthToken) of
+    case verify_token(AuthToken, OperationID) of
         {ok, Claims} ->
             authorize(Claims, OperationID);
         Error ->
             Error
     end.
 
-verify_token(AuthToken) ->
+verify_token(AuthToken, OperationID) ->
     case verify_alg(AuthToken) of
         {ok, Payload} ->
             Claims = jsx:decode(Payload, [return_maps]), %% @FIXME deal with non json token
-            case is_valid_exp(Claims) of
+            case validate_claims(Claims, OperationID) of
                 true ->
                     {ok, Claims};
                 false ->
@@ -91,7 +97,55 @@ authorize(
 authorize(_Claims, _OperationID) ->
     {error, unauthorized}.
 
-is_valid_exp(Claims) ->
+validate_claims(Claims, OperationID) ->
+    Validator = get_validator(OperationID),
+    Validator(Claims).
+
+get_actions() ->
+    #{
+        'CreateInvoice' => [<<"payments:create">>],
+        'CreatePayment' => [<<"payments:create">>],
+        'CreatePaymentToolToken' => [<<"payment_tool_tokens:create">>],
+        'GetInvoiceByID' => [<<"payments:create">>],
+        'FulfillInvoice' => [<<"payments:create">>],
+        'RescindInvoice' => [<<"payments:create">>],
+        'GetInvoiceEvents' => [<<"payments:create">>],
+        'GetPaymentByID' => [<<"payments:create">>],
+        'GetInvoices' => [<<"payments:create">>],
+        'GetPaymentConversionStats' => [<<"party:create">>],
+        'GetPaymentRevenueStats' => [<<"party:create">>],
+        'GetPaymentGeoStats' => [<<"party:create">>],
+        'GetPaymentRateStats' => [<<"party:create">>],
+        'GetPaymentMethodStats' => [<<"party:create">>],
+        'GetMyParty' => [<<"party:create">>],
+        'ActivateShop' => [<<"party:create">>],
+        'CreateShop' => [<<"party:create">>],
+        'SuspendShop' => [<<"party:create">>],
+        'UpdateShop' => [<<"party:create">>],
+        'SuspendMyParty' => [<<"party:create">>],
+        'ActivateMyParty' => [<<"party:create">>],
+        'GetClaimByID' => [<<"party:create">>],
+        'GetClaimsByStatus' => [<<"party:create">>],
+        'RevokeClaimByID' => [<<"party:create">>],
+        'GetCategories' => [<<"categories:get">>],
+        'GetCategoryByRef' => [<<"categories:get">>],
+        'GetAccountByID' => [<<"party:create">>],
+        'GetShopByID' => [<<"party:create">>],
+        'GetShops' => [<<"party:create">>],
+        'GetPayoutTools' => [<<"party:create">>],
+        'CreatePayoutTool' => [<<"party:create">>],
+        'GetContracts' => [<<"party:create">>],
+        'CreateContract' => [<<"party:create">>],
+        'GetContractByID' => [<<"party:create">>],
+        'GetLocationsNames' => [<<"party:create">>]
+    }.
+
+get_validator('CreatePaymentToolToken') ->
+    fun (_Claims) -> true end;
+get_validator(_Any) ->
+    fun check_expiration/1.
+
+check_expiration(Claims) ->
     case genlib_map:get(<<"exp">>, Claims) of
         undefined ->
             false;
@@ -99,41 +153,7 @@ is_valid_exp(Claims) ->
             genlib_time:unow() =< I
     end.
 
-get_actions() ->
-    #{
-        'CreateInvoice' => [<<"invoices:create">>],
-        'CreatePayment' => [<<"payments:create">>],
-        'CreatePaymentToolToken' => [<<"payment_tool_tokens:create">>],
-        'GetInvoiceByID' => [<<"invoices:get">>],
-        'FulfillInvoice' => [<<"invoices:fulfill">>],
-        'RescindInvoice' => [<<"invoices:rescind">>],
-        'GetInvoiceEvents' => [<<"invoices.events:get">>],
-        'GetPaymentByID' => [<<"payments:get">>],
-        'GetInvoices' => [<<"invoices_stats:get">>],
-        'GetPaymentConversionStats' => [<<"payments_conversion_stats:get">>],
-        'GetPaymentRevenueStats' => [<<"payments_revenue_stats:get">>],
-        'GetPaymentGeoStats' => [<<"payments_geo_stats:get">>],
-        'GetPaymentRateStats' => [<<"payments_rate_stats:get">>],
-        'GetPaymentMethodStats' => [<<"payments_instrument_stats:get">>],
-        'GetMyParty' => [<<"party:get">>, <<"party:create">>],
-        'ActivateShop' => [<<"shops:activate">>, <<"party:create">>],
-        'CreateShop' => [<<"shop:create">>, <<"party:create">>],
-        'SuspendShop' => [<<"shops:suspend">>, <<"party:create">>],
-        'UpdateShop' => [<<"shops:update">>, <<"party:create">>],
-        'SuspendMyParty' => [<<"party:suspend">>, <<"party:create">>],
-        'ActivateMyParty' => [<<"party:activate">>, <<"party:create">>],
-        'GetClaimByID' => [<<"claims:get">>, <<"party:create">>],
-        'GetClaimsByStatus' => [<<"claims:get">>, <<"party:create">>],
-        'RevokeClaimByID' => [<<"claims:revoke">>, <<"party:create">>],
-        'GetCategories' => [<<"categories:get">>],
-        'GetCategoryByRef' => [<<"categories:get">>],
-        'GetAccountByID' => [<<"party:get">>, <<"party:create">>],
-        'GetShopByID' => [<<"party:get">>, <<"party:create">>],
-        'GetShops' => [<<"party:get">>, <<"party:create">>],
-        'GetPayoutTools' => [<<"party:get">>, <<"party:create">>],
-        'CreatePayoutTool' => [<<"party:get">>, <<"party:create">>],
-        'GetContracts' => [<<"party:get">>, <<"party:create">>],
-        'CreateContract' => [<<"party:get">>, <<"party:create">>],
-        'GetContractByID' => [<<"party:get">>, <<"party:create">>],
-        'GetLocationsNames' => [<<"party:get">>, <<"party:create">>]
-    }.
+
+log_auth_error(OperationID, Error) ->
+    lager:info("Auth for operation ~p failed due to ~p", [OperationID, Error]).
+
