@@ -47,20 +47,8 @@ handle_request(OperationID, Req, Context) ->
     {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
 
 process_request(OperationID = 'CreateInvoice', Req, Context, ReqCtx) ->
-    InvoiceParams = maps:get('InvoiceParams', Req),
-    InvoiceContext = jsx:encode(genlib_map:get(<<"metadata">>, InvoiceParams)),
     PartyID = get_party_id(Context),
-    Params =  #payproc_InvoiceParams{
-        party_id = PartyID,
-        details = encode_invoice_details(InvoiceParams),
-        cost = encode_cash(InvoiceParams),
-        due      = genlib_map:get(<<"dueDate">>, InvoiceParams),
-        context  = #'Content'{
-            type = <<"application/json">>,
-            data = InvoiceContext
-        },
-        shop_id = genlib_map:get(<<"shopID">>, InvoiceParams)
-    },
+    Params = encode_invoice_params(PartyID, maps:get('InvoiceParams', Req)),
     UserInfo = get_user_info(Context),
     Result = prepare_party(
        Context,
@@ -226,16 +214,11 @@ process_request(OperationID = 'RescindInvoice', Req, Context, ReqCtx) ->
     end;
 
 process_request(OperationID = 'GetInvoiceEvents', Req, Context, ReqCtx) ->
-    InvoiceID = maps:get(invoiceID, Req),
-    UserInfo = get_user_info(Context),
-    EventRange = #'payproc_EventRange'{
-        limit = maps:get(limit, Req),
-        'after' = maps:get(eventID, Req)
-    },
-    Result = service_call(
-        invoicing,
-        'GetEvents',
-        [UserInfo, InvoiceID, EventRange],
+    Result  = collect_events(
+        get_user_info(Context),
+        maps:get(invoiceID, Req),
+        maps:get(limit, Req),
+        genlib_map:get(eventID, Req),
         ReqCtx
     ),
     case Result of
@@ -884,6 +867,20 @@ get_party_params(#{
 
 get_peer_info(#{peer := Peer}) -> Peer.
 
+encode_invoice_params(PartyID, InvoiceParams) ->
+    InvoiceContext = jsx:encode(genlib_map:get(<<"metadata">>, InvoiceParams)),
+    #payproc_InvoiceParams{
+        party_id = PartyID,
+        details = encode_invoice_details(InvoiceParams),
+        cost = encode_cash(InvoiceParams),
+        due      = genlib_map:get(<<"dueDate">>, InvoiceParams),
+        context  = #'Content'{
+            type = <<"application/json">>,
+            data = InvoiceContext
+        },
+        shop_id = genlib_map:get(<<"shopID">>, InvoiceParams)
+    }.
+
 encode_invoice_details(Params) ->
     #domain_InvoiceDetails{
         product = genlib_map:get(<<"product">>, Params),
@@ -1015,11 +1012,11 @@ unwrap_session(Encoded) ->
     } = jsx:decode(base64url:decode(Encoded), [return_maps]),
     {ClientInfo, PaymentSession}.
 
-decode_event(#'payproc_Event'{
-    'id' = EventID,
-    'created_at' = CreatedAt,
-    'payload' =  {'invoice_event', InvoiceEvent},
-    'source' =  {'invoice', InvoiceID} %%@TODO deal with Party source
+decode_event(#payproc_Event{
+    id = EventID,
+    created_at = CreatedAt,
+    payload =  {invoice_event, InvoiceEvent},
+    source =  {invoice, InvoiceID} %%@TODO deal with Party source
 }) ->
     {EventType, EventBody} = decode_invoice_event(InvoiceID, InvoiceEvent),
     maps:merge(#{
@@ -1817,7 +1814,7 @@ process_woody_error(_, external, result_unexpected, _Details) ->
 process_woody_error(_, external, result_unknown, _Details) ->
     {500, [], <<
         "Outcome of the operation is unknown.\n"
-        "We've not managed to handle it in alotted time.\n"
+        "We've not managed to handle it in allotted time.\n"
         "We are so sorry."
     >>}.
 
@@ -1945,4 +1942,76 @@ render_options(ProxyOptions, ReqCtx) ->
         'RenderOptions',
         [ProxyOptions],
         ReqCtx
+    ).
+
+collect_events(UserInfo, InvoiceID, Limit, After, ReqCtx) ->
+    Context = #{
+        invoice_id => InvoiceID,
+        user_info => UserInfo,
+        request_context => ReqCtx
+    },
+    collect_events([], Limit, After, Context).
+
+collect_events(Collected, 0, _After, _Context) ->
+    {ok, Collected};
+
+collect_events(Collected, Left, After, Context) ->
+    Result = get_events(Left, After, Context),
+    case Result of
+        {ok, []} ->
+            {ok, Collected};
+        {ok, Events} ->
+            Filtered = filter_events(Events),
+            collect_events(
+                Collected ++ Filtered,
+                Left - length(Filtered),
+                get_last_event_id(Events),
+                Context
+            );
+        Error ->
+            Error
+    end.
+
+filter_events(Events) ->
+    lists:filter(fun is_event_public/1, Events).
+
+get_last_event_id(Events) ->
+    #payproc_Event{
+        id = ID
+    } = lists:last(Events),
+    ID.
+
+is_event_public(#payproc_Event{payload = {invoice_event, {Type, _}}}) when
+    Type =:= invoice_created;
+    Type =:= invoice_status_changed
+->
+    true;
+is_event_public(#payproc_Event{payload = {invoice_event, {invoice_payment_event, PaymentEvent}}}) ->
+    is_payment_event_public(PaymentEvent);
+is_event_public(_) ->
+    false.
+
+is_payment_event_public({Type, _}) when
+    Type =:= invoice_payment_started;
+    Type =:= invoice_payment_status_changed;
+    Type =:= invoice_payment_interaction_requested
+->
+    true;
+is_payment_event_public(_) ->
+    false.
+
+get_events(Limit, After, Context) ->
+    EventRange = #'payproc_EventRange'{
+        limit = Limit,
+        'after' = After
+    },
+    service_call(
+        invoicing,
+        'GetEvents',
+        [
+            maps:get(user_info, Context),
+            maps:get(invoice_id, Context),
+            EventRange
+        ],
+        maps:get(request_context, Context)
     ).

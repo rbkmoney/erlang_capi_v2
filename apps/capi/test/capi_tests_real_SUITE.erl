@@ -413,8 +413,43 @@ get_invoice_events_ok_test(Config) ->
         #{invoice_id := InvoiceID}
     } = ?config(saved_config, Config),
     Context = ?config(context, Config),
-    Limit = 100,
-    {ok, _Body} = api_client_invoices:get_invoice_events(Context, InvoiceID, Limit).
+    wait_event(
+        InvoiceID,
+        #{
+            <<"eventType">> => <<"EventInvoiceStatusChanged">>,
+            <<"status">> => <<"fulfilled">>
+        },
+        3000,
+        Context
+    ),
+    {ok, Events} = api_client_invoices:get_invoice_events(Context, InvoiceID, 10),
+    [
+        #{
+            <<"eventType">> := <<"EventInvoiceCreated">>,
+            <<"invoice">> := #{
+                <<"id">> := InvoiceID
+            }
+        },
+        #{
+            <<"eventType">> := <<"EventPaymentStarted">>
+        },
+        #{
+            <<"eventType">> := <<"EventPaymentStatusChanged">>,
+            <<"status">> := <<"processed">>
+        },
+        #{
+            <<"eventType">> := <<"EventPaymentStatusChanged">>,
+            <<"status">> := <<"captured">>
+        },
+        #{
+            <<"eventType">> := <<"EventInvoiceStatusChanged">>,
+            <<"status">> := <<"paid">>
+        },
+        #{
+            <<"eventType">> := <<"EventInvoiceStatusChanged">>,
+            <<"status">> := <<"fulfilled">>
+        }
+    ] = Events.
 
 -spec get_payment_by_id_ok_test(config()) -> _.
 
