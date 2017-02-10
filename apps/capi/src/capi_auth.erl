@@ -65,10 +65,19 @@ verify_token(AuthToken, OperationID) ->
 verify_alg(AuthToken) ->
     PemFilePath = genlib_app:env(capi, api_secret_path),
     RSAPublicJWK = #jose_jwk{} = jose_jwk:from_pem_file(PemFilePath),
-    case jose_jwk:verify(AuthToken, RSAPublicJWK) of
-        {true, Claims, _} ->
-            {ok, Claims};
-        _ ->
+    try
+        case jose_jwk:verify(AuthToken, RSAPublicJWK) of
+            {true, Claims, _} ->
+                {ok, Claims};
+            _ ->
+                {error, invalid_token}
+        end
+    catch
+        error:{badarg, _} ->
+            _ = lager:info(
+                "Unparsable auth token ~s",
+                [genlib_format:format_stacktrace(erlang:get_stacktrace(), [newlines])]
+            ),
             {error, invalid_token}
     end.
 
