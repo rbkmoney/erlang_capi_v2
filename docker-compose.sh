@@ -199,23 +199,12 @@ services:
       -jar /opt/pimp/pimp.jar
 
   keycloak:
-    image: dr.rbkmoney.com/rbkmoney/keycloak:1a4a81d7e3ac1bff2d41f7bed57b6619dbd92a11
+    image: dr.rbkmoney.com/rbkmoney/keycloak:bdff17d93d1c81930e2f7fb277ec4d38e66a5f67
     healthcheck:
-      test: curl --silent --show-error --output /dev/null localhost:8090/auth/realms/external
+      test: curl --silent --show-error --output /dev/null localhost:8080/auth/realms/external
       interval: 10s
       timeout: 1s
       retries: 15
-    entrypoint: |
-      /opt/jboss/docker-entrypoint.sh
-      -b
-      0.0.0.0
-      --server-config
-      standalone-ha.xml
-      -Djboss.socket.binding.port-offset=10
-      -Dkeycloak.migration.action=import
-      -Dkeycloak.migration.provider=singleFile
-      -Dkeycloak.migration.file=/opt/jboss/keycloak/external-realm.json
-      -Dkeycloak.migration.strategy=IGNORE_EXISTING
     environment:
         SERVICE_NAME: keycloak
         POSTGRES_PASSWORD: keycloak
