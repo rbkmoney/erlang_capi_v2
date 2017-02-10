@@ -68,7 +68,7 @@
 ]).
 
 -define(KEYCLOAK_HOST, "keycloak").
--define(KEYCLOAK_PORT, 8090).
+-define(KEYCLOAK_PORT, 8080).
 -define(KEYCLOAK_USER, "demo_merchant").
 -define(KEYCLOAK_PASSWORD, "test").
 
@@ -303,7 +303,7 @@ authorization_error_expired_test(Config) ->
 -spec authorization_expired_ok_test(config()) -> _.
 
 authorization_expired_ok_test(Config) ->
-    ResourceAccess = #{<<"common-api">> => #{<<"roles">> => [<<"payment_tool_tokens:create">>]}},
+    ResourceAccess = #{<<"common-api">> => #{<<"roles">> => [<<"payment_tool_tokens:write">>]}},
     Token = auth_token(ResourceAccess, genlib_time:unow() - 10, Config),
     Headers = [
         auth_header(Token),
