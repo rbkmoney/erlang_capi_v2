@@ -1,6 +1,22 @@
 -module(capi_auth).
 
+-export([init/0]).
 -export([auth_api_key/2]).
+
+-define(KEYNAME, api_auth_pubkey).
+
+-spec init() -> ok | no_return().
+
+init() ->
+    ok = capi_keystore:init(),
+    PubkeyPath = genlib_app:env(capi, api_auth_pubkey_path),
+    case capi_keystore:store(?KEYNAME, PubkeyPath) of
+        ok ->
+            ok;
+        {error, Reason} ->
+            _ = lager:error("Missing api auth pubkey, stopping the app: ~p", [Reason]),
+            exit({api_auth_pubkey_error, Reason})
+    end.
 
 -type context() :: #{binary() => any()}.
 
@@ -60,13 +76,10 @@ verify_token(AuthToken, OperationID) ->
             Error
     end.
 
--include_lib("jose/include/jose_jwk.hrl").
-
 verify_alg(AuthToken) ->
-    PemFilePath = genlib_app:env(capi, api_secret_path),
-    RSAPublicJWK = #jose_jwk{} = jose_jwk:from_pem_file(PemFilePath),
+    {ok, PublicJWK} = capi_keystore:get(?KEYNAME),
     try
-        case jose_jwk:verify(AuthToken, RSAPublicJWK) of
+        case jose_jwk:verify(AuthToken, PublicJWK) of
             {true, Claims, _} ->
                 {ok, Claims};
             _ ->

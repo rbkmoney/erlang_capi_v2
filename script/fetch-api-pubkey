@@ -5,7 +5,7 @@ set -o pipefail
 KK_HOST=${KK_HOST:-keycloak}
 KK_PORT=${KK_PORT:-8080}
 KK_REALM=${KK_REALM:-external}
-TARGET=${TARGET:-var/secret}
+TARGET=${TARGET:-var/pubkey.pem}
 
 CURL_OPTS=${CURL_OPTS:-}
 MAX_RETRY_TIMEOUT=${MAX_RETRY_TIMEOUT:-10}

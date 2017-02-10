@@ -272,7 +272,7 @@ start_capi(Group, Config) ->
         {ip, ?CAPI_IP},
         {port, ?CAPI_PORT},
         {service_type, ?CAPI_SERVICE_TYPE},
-        {api_secret_path, filename:join(?config(data_dir, Config), get_pubkey_filepath(Group))}
+        {api_auth_pubkey_path, filename:join(?config(data_dir, Config), get_pubkey_filepath(Group))}
     ]).
 
 get_pubkey_filepath(authorization) ->

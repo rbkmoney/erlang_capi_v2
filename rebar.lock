@@ -40,6 +40,7 @@
   0},
  {<<"metrics">>,{pkg,<<"metrics">>,<<"1.0.1">>},1},
  {<<"mimerl">>,{pkg,<<"mimerl">>,<<"1.0.2">>},1},
+ {<<"pooler">>,{pkg,<<"pooler">>,<<"1.5.0">>},0},
  {<<"ranch">>,{pkg,<<"ranch">>,<<"1.2.1">>},1},
  {<<"rfc3339">>,
   {git,"git://github.com/talentdeficit/rfc3339.git",
