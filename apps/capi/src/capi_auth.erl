@@ -1,34 +1,20 @@
 -module(capi_auth).
 
--export([init/0]).
--export([auth_api_key/2]).
+-export([authorize_api_key/2]).
+-export([authorize_operation/3]).
+-export([issue_invoice_access_token/2]).
 
--define(KEYNAME, api_auth_pubkey).
+-type context() :: capi_acl:t().
 
--spec init() -> ok | no_return().
-
-init() ->
-    ok = capi_keystore:init(),
-    PubkeyPath = genlib_app:env(capi, api_auth_pubkey_path),
-    case capi_keystore:store(?KEYNAME, PubkeyPath) of
-        ok ->
-            ok;
-        {error, Reason} ->
-            _ = lager:error("Missing api auth pubkey, stopping the app: ~p", [Reason]),
-            exit({api_auth_pubkey_error, Reason})
-    end.
-
--type context() :: #{binary() => any()}.
-
--spec auth_api_key(
+-spec authorize_api_key(
     OperationID :: swagger_api:operation_id(),
     ApiKey :: binary()
 ) -> {true, Context :: context()} | false.
 
-auth_api_key(OperationID, ApiKey) ->
-    case parse_auth_token(ApiKey) of
+authorize_api_key(OperationID, ApiKey) ->
+    case parse_api_key(ApiKey) of
         {ok, {Type, Credentials}} ->
-            case  process_auth(Type, Credentials, OperationID) of
+            case authorize_api_key(OperationID, Type, Credentials) of
                 {ok, Context} ->
                     {true, Context};
                 {error, Error} ->
@@ -40,10 +26,13 @@ auth_api_key(OperationID, ApiKey) ->
             false
     end.
 
--spec parse_auth_token(ApiKey :: binary()) ->
+log_auth_error(OperationID, Error) ->
+    lager:info("API Key authorization failed for ~p due to ~p", [OperationID, Error]).
+
+-spec parse_api_key(ApiKey :: binary()) ->
     {ok, {bearer, Credentials :: binary()}} | {error, Reason :: atom()}.
 
-parse_auth_token(ApiKey) ->
+parse_api_key(ApiKey) ->
     case ApiKey of
         <<"Bearer ", Credentials/binary>> ->
             {ok, {bearer, Credentials}};
@@ -51,131 +40,140 @@ parse_auth_token(ApiKey) ->
             {error, unsupported_auth_scheme}
     end.
 
--spec process_auth(Type :: atom(), AuthToken :: binary(), OperationID :: swagger_api:operation_id()) ->
+-spec authorize_api_key(
+    OperationID :: swagger_api:operation_id(),
+    Type :: atom(),
+    Credentials :: binary()
+) ->
     {ok, Context :: context()} | {error, Reason :: atom()}.
 
-process_auth(bearer, AuthToken, OperationID) ->
-    case verify_token(AuthToken, OperationID) of
-        {ok, Claims} ->
-            authorize(Claims, OperationID);
-        Error ->
-            Error
-    end.
+authorize_api_key(_OperationID, bearer, Token) ->
+    % NOTE
+    % We are knowingly delegating actual request authorization to the logic handler
+    % so we could gather more data to perform fine-grained access control.
+    capi_authorizer_jwt:verify(Token).
 
-verify_token(AuthToken, OperationID) ->
-    case verify_alg(AuthToken) of
-        {ok, Payload} ->
-            Claims = jsx:decode(Payload, [return_maps]), %% @FIXME deal with non json token
-            case validate_claims(Claims, OperationID) of
-                true ->
-                    {ok, Claims};
-                false ->
-                    {error, expired}
-            end;
-        Error ->
-            Error
-    end.
+%%
 
-verify_alg(AuthToken) ->
-    {ok, PublicJWK} = capi_keystore:get(?KEYNAME),
-    try
-        case jose_jwk:verify(AuthToken, PublicJWK) of
-            {true, Claims, _} ->
-                {ok, Claims};
-            _ ->
-                {error, invalid_token}
-        end
-    catch
-        error:{badarg, _} ->
-            _ = lager:info(
-                "Unparsable auth token ~s",
-                [genlib_format:format_stacktrace(erlang:get_stacktrace(), [newlines])]
-            ),
-            {error, invalid_token}
-    end.
+% TODO
+% We need shared type here, exported somewhere in swagger app
+-type request_data() :: #{atom() | binary() => term()}.
 
-authorize(
-    #{
-        <<"resource_access">> := #{
-            <<"common-api">> := #{
-                <<"roles">> := Roles
-            }
-        }
-    } = Claims,
-    OperationID
+-spec authorize_operation(
+    OperationID :: swagger_api:operation_id(),
+    Req :: request_data(),
+    Auth :: capi_authorizer_jwt:t()
 ) ->
-    case genlib_map:get(OperationID, get_actions()) of
-        undefined ->
-            {error, unauthorized};
-        RequiredRoles ->
-            case RequiredRoles -- Roles of
-                [] ->
-                    {ok, Claims};
-                _ ->
-                    {error, unauthorized}
-            end
-    end;
+    ok | {error, unauthorized}.
 
-authorize(_Claims, _OperationID) ->
-    {error, unauthorized}.
-
-validate_claims(Claims, OperationID) ->
-    Validator = get_validator(OperationID),
-    Validator(Claims).
-
-get_actions() ->
-    #{
-        'CreateInvoice' => [<<"payments:write">>],
-        'CreatePayment' => [<<"payments:write">>],
-        'CreatePaymentToolToken' => [<<"payment_tool_tokens:write">>],
-        'GetInvoiceByID' => [<<"payments:read">>],
-        'FulfillInvoice' => [<<"payments:write">>],
-        'RescindInvoice' => [<<"payments:write">>],
-        'GetInvoiceEvents' => [<<"payments:read">>],
-        'GetPaymentByID' => [<<"payments:read">>],
-        'GetInvoices' => [<<"payments:read">>],
-        'GetPaymentConversionStats' => [<<"party:read">>],
-        'GetPaymentRevenueStats' => [<<"party:read">>],
-        'GetPaymentGeoStats' => [<<"party:read">>],
-        'GetPaymentRateStats' => [<<"party:read">>],
-        'GetPaymentMethodStats' => [<<"party:read">>],
-        'GetMyParty' => [<<"party:read">>],
-        'ActivateShop' => [<<"party:write">>],
-        'CreateShop' => [<<"party:write">>],
-        'SuspendShop' => [<<"party:write">>],
-        'UpdateShop' => [<<"party:write">>],
-        'SuspendMyParty' => [<<"party:write">>],
-        'ActivateMyParty' => [<<"party:write">>],
-        'GetClaimByID' => [<<"party:read">>],
-        'GetClaimsByStatus' => [<<"party:read">>],
-        'RevokeClaimByID' => [<<"party:write">>],
-        'GetCategories' => [],
-        'GetCategoryByRef' => [],
-        'GetAccountByID' => [<<"party:read">>],
-        'GetShopByID' => [<<"party:read">>],
-        'GetShops' => [<<"party:read">>],
-        'GetPayoutTools' => [<<"party:read">>],
-        'CreatePayoutTool' => [<<"party:write">>],
-        'GetContracts' => [<<"party:read">>],
-        'CreateContract' => [<<"party:write">>],
-        'GetContractByID' => [<<"party:read">>],
-        'GetLocationsNames' => []
-    }.
-
-get_validator('CreatePaymentToolToken') ->
-    fun (_Claims) -> true end;
-get_validator(_Any) ->
-    fun check_expiration/1.
-
-check_expiration(Claims) ->
-    case genlib_map:get(<<"exp">>, Claims) of
-        undefined ->
-            false;
-        I when is_integer(I) ->
-            genlib_time:unow() =< I
+authorize_operation(OperationID, Req, {{_SubjectID, ACL}, _}) ->
+    Access = get_operation_access(OperationID, Req),
+    case lists:all(
+        fun ({Scope, Permission}) ->
+            lists:member(Permission, capi_acl:match(Scope, ACL))
+        end,
+        Access
+    ) of
+        true ->
+            ok;
+        false ->
+            {error, unauthorized}
     end.
 
+%%
 
-log_auth_error(OperationID, Error) ->
-    lager:info("Auth for operation ~p failed due to ~p", [OperationID, Error]).
+-define(DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME, 60 * 60). % 1 hour
 
+-spec issue_invoice_access_token(PartyID :: binary(), InvoiceID :: binary()) ->
+    {ok, capi_authorizer_jwt:token()} | {error, _}.
+
+issue_invoice_access_token(PartyID, InvoiceID) ->
+    ACL = capi_acl:from_list([
+        {[{invoices, InvoiceID}]           , read},
+        {[{invoices, InvoiceID}, payments] , read},
+        {[{invoices, InvoiceID}, payments] , write},
+        {[payment_tool_tokens]             , write}
+    ]),
+    capi_authorizer_jwt:issue(
+        capi,
+        {{PartyID, ACL}, #{}},
+        {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME}
+    ).
+
+%%
+
+-spec get_operation_access(swagger_api:operation_id(), request_data()) ->
+    [{capi_acl:scope(), capi_acl:permission()}].
+
+get_operation_access('CreateInvoice'             , _) ->
+    [{[invoices], write}];
+get_operation_access('GetInvoiceByID'            , #{'invoiceID' := ID}) ->
+    [{[{invoices, ID}], read}];
+get_operation_access('GetInvoiceEvents'          , #{'invoiceID' := ID}) ->
+    [{[{invoices, ID}], read}];
+get_operation_access('FulfillInvoice'            , #{'invoiceID' := ID}) ->
+    [{[{invoices, ID}], write}];
+get_operation_access('RescindInvoice'            , #{'invoiceID' := ID}) ->
+    [{[{invoices, ID}], write}];
+get_operation_access('CreateInvoiceAccessToken'  , #{'invoiceID' := ID}) ->
+    [{[{invoices, ID}], write}];
+get_operation_access('CreatePayment'             , #{'invoiceID' := ID}) ->
+    [{[{invoices, ID}, payments], write}];
+get_operation_access('GetPaymentByID'            , #{'invoiceID' := ID1, paymentID := ID2}) ->
+    [{[{invoices, ID1}, {payments, ID2}], read}];
+get_operation_access('GetInvoices'               , _) ->
+    [{[invoices], read}];
+get_operation_access('CreatePaymentToolToken'    , _) ->
+    [{[payment_tool_tokens] , write}];
+get_operation_access('GetPaymentConversionStats' , _) ->
+    [{[party], read}];
+get_operation_access('GetPaymentRevenueStats'    , _) ->
+    [{[party], read}];
+get_operation_access('GetPaymentGeoStats'        , _) ->
+    [{[party], read}];
+get_operation_access('GetPaymentRateStats'       , _) ->
+    [{[party], read}];
+get_operation_access('GetPaymentMethodStats'     , _) ->
+    [{[party], read}];
+get_operation_access('GetMyParty'                , _) ->
+    [{[party], read}];
+get_operation_access('ActivateShop'              , _) ->
+    [{[party], write}];
+get_operation_access('CreateShop'                , _) ->
+    [{[party], write}];
+get_operation_access('SuspendShop'               , _) ->
+    [{[party], write}];
+get_operation_access('UpdateShop'                , _) ->
+    [{[party], write}];
+get_operation_access('SuspendMyParty'            , _) ->
+    [{[party], write}];
+get_operation_access('ActivateMyParty'           , _) ->
+    [{[party], write}];
+get_operation_access('GetClaimByID'              , _) ->
+    [{[party], read}];
+get_operation_access('GetClaimsByStatus'         , _) ->
+    [{[party], read}];
+get_operation_access('RevokeClaimByID'           , _) ->
+    [{[party], write}];
+get_operation_access('GetAccountByID'            , _) ->
+    [{[party], read}];
+get_operation_access('GetShopByID'               , _) ->
+    [{[party], read}];
+get_operation_access('GetShops'                  , _) ->
+    [{[party], read}];
+get_operation_access('GetPayoutTools'            , _) ->
+    [{[party], read}];
+get_operation_access('CreatePayoutTool'          , _) ->
+    [{[party], write}];
+get_operation_access('GetContracts'              , _) ->
+    [{[party], read}];
+get_operation_access('CreateContract'            , _) ->
+    [{[party], write}];
+get_operation_access('GetContractByID'           , _) ->
+    [{[party], read}];
+get_operation_access('GetCategories'             , _) ->
+    [];
+get_operation_access('GetCategoryByRef'          , _) ->
+    [];
+get_operation_access('GetLocationsNames'         , _) ->
+    [].

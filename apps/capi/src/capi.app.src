@@ -6,6 +6,7 @@
     {applications, [
         kernel,
         stdlib,
+        public_key,
         lager,
         lager_logstash_formatter,
         genlib,
@@ -16,6 +17,7 @@
         cowboy_cors,
         rfc3339,
         base64url,
+        snowflake,
         api_client
     ]},
     {env, []},
