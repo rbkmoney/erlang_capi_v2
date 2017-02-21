@@ -1,6 +1,6 @@
 [{<<"api_client">>,
   {git,"git@github.com:rbkmoney/api_client.git",
-       {ref,"19fd71a4f90b78efe5878da93ee740d27fffee51"}},
+       {ref,"36eb5a202aaa07cb419e64c1a7596f2a27fe4e5a"}},
   0},
  {<<"base64url">>,
   {git,"https://github.com/dvv/base64url.git",
@@ -57,5 +57,5 @@
   1},
  {<<"woody">>,
   {git,"git@github.com:rbkmoney/woody_erlang.git",
-       {ref,"17bd5218432f3d958d2b8425267f13a3774b7d26"}},
+       {ref,"b5ae9ae3abc8da470f68d2e2ca15ccc606801225"}},
   0}].
