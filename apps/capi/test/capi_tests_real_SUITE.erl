@@ -157,6 +157,10 @@ groups() ->
             fulfill_invoice_ok_test,
             get_invoice_events_ok_test
         ]},
+        % TODO
+        % Extremely sensitive stuff, must verify it better.
+        % 1. Test that we're unauthorized to create payments on unrelated invoice.
+        % 2. Test that token expires properly.
         {invoice_access_token_management, [sequence], [
             create_invoice_ok_test,
             create_invoice_access_token_ok_test,
