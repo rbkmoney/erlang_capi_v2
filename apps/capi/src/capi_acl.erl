@@ -162,21 +162,22 @@ decode_entry(V, ACL) ->
 
 decode_scope(V) ->
     Hierarchy = get_resource_hierarchy(),
-    decode_scope_frags(resource, binary:split(V, <<".">>, [global]), Hierarchy).
+    decode_scope_frags(binary:split(V, <<".">>, [global]), Hierarchy).
 
-decode_scope_frags(resource, [V | Vs], H) when V =/= <<"*">> ->
-    decode_scope_frags({resource, decode_resource(V)}, Vs, H);
-decode_scope_frags(resource, [], _) ->
-    [];
-decode_scope_frags({resource, Resource}, [<<"*">> | Vs], H) ->
-    [Resource | decode_scope_frags(resource, Vs, delve(Resource, H))];
-decode_scope_frags({resource, Resource}, [ID | Vs], H) when byte_size(ID) > 0 ->
-    [{Resource, ID} | decode_scope_frags(resource, Vs, delve(Resource, H))];
-decode_scope_frags({resource, Resource}, [], H) ->
-    _ = delve(Resource, H),
-    [Resource];
-decode_scope_frags(_, Vs, _) ->
-    error({badarg, {scope_elements, Vs}}).
+decode_scope_frags([V1, V2 | Vs], H) ->
+    {Resource, H1} = decode_scope_frag_resource(V1, V2, H),
+    [Resource | decode_scope_frags(Vs, H1)];
+decode_scope_frags([V], H) ->
+    decode_scope_frags([V, <<"*">>], H);
+decode_scope_frags([], _) ->
+    [].
+
+decode_scope_frag_resource(V, <<"*">>, H) ->
+    R = decode_resource(V),
+    {R, delve(R, H)};
+decode_scope_frag_resource(V, ID, H) ->
+    R = decode_resource(V),
+    {{R, ID}, delve(R, H)}.
 
 decode_resource(V) ->
     binary_to_existing_atom(V, utf8).
