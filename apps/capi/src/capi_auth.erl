@@ -97,11 +97,6 @@ issue_invoice_access_token(PartyID, InvoiceID) ->
         {[payment_tool_tokens]             , write}
     ]),
     capi_authorizer_jwt:issue(
-        % TODO
-        % The need to know a keyname here is confusing as hell.
-        % We should have some kind of _prioritized signer_ in the authorizer,
-        % chosen during service startup.
-        capi,
         {{PartyID, ACL}, #{}},
         {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME}
     ).

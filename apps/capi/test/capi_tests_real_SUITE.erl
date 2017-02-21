@@ -289,30 +289,33 @@ init_per_group(Group, Config) ->
     [{capi_apps, Apps} | Config].
 
 start_capi(Group, Config) ->
-    Keyset = maps:map(
-        fun (_, Fn) -> {pem_file, filename:join(?config(data_dir, Config), Fn)} end,
-        get_keyset(Group)
-    ),
     capi_ct_helper:start_app(capi, [
         {ip, ?CAPI_IP},
         {port, ?CAPI_PORT},
         {service_type, ?CAPI_SERVICE_TYPE},
         {authorizers, #{
-            jwt => #{
-                keyset => Keyset
-            }
+            jwt => get_authorizer_opts(Group, Config)
         }}
     ]).
 
-get_keyset(authorization) ->
+get_authorizer_opts(authorization, Config) ->
     #{
-        local    => "keys/local/private.pem"
+        signee => local,
+        keyset => #{
+            local    => get_keysource("keys/local/private.pem", Config)
+        }
     };
-get_keyset(_) ->
+get_authorizer_opts(_, Config) ->
     #{
-        keycloak => "keys/keycloak/public.pem",
-        capi     => "keys/local/private.pem"
+        signee => capi,
+        keyset => #{
+            keycloak => get_keysource("keys/keycloak/public.pem", Config),
+            capi     => get_keysource("keys/local/private.pem", Config)
+        }
     }.
+
+get_keysource(Fn, Config) ->
+    {pem_file, filename:join(?config(data_dir, Config), Fn)}.
 
 -spec end_per_group(Name :: atom(), config()) -> config().
 
@@ -1002,7 +1005,7 @@ req_id_header(ReqID) ->
 
 auth_token(ACL, Expiration) ->
     Auth = {{?MERCHANT_ID, ACL}, #{}},
-    capi_authorizer_jwt:issue(local, Auth, Expiration).
+    capi_authorizer_jwt:issue(Auth, Expiration).
 
 default_create_invoice(Config) ->
     {{Y, M, D}, Time} = calendar:local_time(),

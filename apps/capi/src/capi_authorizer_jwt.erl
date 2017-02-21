@@ -6,8 +6,10 @@
 -export([init/1]).
 
 -export([store_key/2]).
+% TODO
+% Extend interface to support proper keystore manipulation
 
--export([issue/3]).
+-export([issue/2]).
 -export([verify/1]).
 
 %%
@@ -31,9 +33,17 @@
 
 %%
 
--type keyset() :: #{keyname() => keysource()}.
 -type options() :: #{
-    keyset => keyset()
+    %% The set of keys used to sign issued tokens and verify signatures on such
+    %% tokens.
+    keyset => keyset(),
+    %% The name of a key used exclusively to sign any issued token.
+    %% If not set any token issue is destined to fail.
+    signee => keyname()
+}.
+
+-type keyset() :: #{
+    keyname() => keysource()
 }.
 
 -type keysource() ::
@@ -58,7 +68,8 @@ parse_options(Options) ->
         end,
         Keyset
     ),
-    Keyset.
+    Signee = maps:find(signee, Options),
+    {Keyset, Signee}.
 
 is_keysource({pem_file, Fn}) ->
     is_list(Fn) orelse is_binary(Fn);
@@ -67,29 +78,46 @@ is_keysource(_) ->
 
 %%
 
--spec init(keyset()) ->
+-spec init({keyset(), {ok, keyname()} | error}) ->
     {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 
-init(Keyset) ->
+init({Keyset, Signee}) ->
     ok = create_table(),
-    ok = genlib_map:foreach(
-        fun (KID, Source) ->
-            case store_key(KID, Source) of
-                ok ->
-                    ok;
-                {error, Reason} ->
-                    _ = lager:error("Error importing key ~s: ~p", [KID, Reason]),
-                    exit({KID, Source, Reason})
-            end
-        end,
-        Keyset
-    ),
+    KeyInfos = maps:map(fun ensure_store_key/2, Keyset),
+    ok = select_signee(Signee, KeyInfos),
     {ok, {#{}, []}}.
+
+ensure_store_key(Keyname, Source) ->
+    case store_key(Keyname, Source) of
+        {ok, KeyInfo} ->
+            KeyInfo;
+        {error, Reason} ->
+            _ = lager:error("Error importing key ~p: ~p", [Keyname, Reason]),
+            exit({import_error, Keyname, Source, Reason})
+    end.
+
+select_signee({ok, Keyname}, KeyInfos) ->
+    case maps:find(Keyname, KeyInfos) of
+        {ok, #{sign := true}} ->
+            set_signee(Keyname);
+        {ok, KeyInfo} ->
+            _ = lager:error("Error setting signee: signing with ~p is not allowed", [Keyname]),
+            exit({invalid_signee, Keyname, KeyInfo});
+        error ->
+            _ = lager:error("Error setting signee: no key named ~p", [Keyname]),
+            exit({nonexstent_signee, Keyname})
+    end.
 
 %%
 
+-type keyinfo() :: #{
+    kid    => kid(),
+    sign   => boolean(),
+    verify => boolean()
+}.
+
 -spec store_key(keyname(), {pem_file, file:filename()}) ->
-    ok | {error, file:posix() | {unknown_key, _}}.
+    {ok, keyinfo()} | {error, file:posix() | {unknown_key, _}}.
 
 store_key(Keyname, {pem_file, Filename}) ->
     store_key(Keyname, {pem_file, Filename}, #{
@@ -112,27 +140,32 @@ derive_kid_from_public_key_pem_entry(JWK) ->
 store_key(Keyname, {pem_file, Filename}, Opts) ->
     case jose_jwk:from_pem_file(Filename) of
         JWK = #jose_jwk{} ->
-            insert_key(Keyname, derive_kid(JWK, Opts), JWK);
+            Key = construct_key(derive_kid(JWK, Opts), JWK),
+            ok = insert_key(Keyname, Key),
+            {ok, get_key_info(Key)};
         Error = {error, _} ->
             Error
     end.
+
+get_key_info(#{kid := KID, signer := Signer, verifier := Verifier}) ->
+    #{
+        kid    => KID,
+        sign   => Signer /= undefined,
+        verify => Verifier /= undefined
+    }.
 
 derive_kid(_JWK, #{kid := Value}) when is_binary(Value) ->
     Value;
 derive_kid(JWK, #{kid := DeriveFun}) when is_function(DeriveFun, 1) ->
     DeriveFun(JWK).
 
-insert_key(Keyname, KID, JWK) ->
-    KeyInfo = #{
+construct_key(KID, JWK) ->
+    #{
         jwk      => JWK,
         kid      => KID,
         signer   => try jose_jwk:signer(JWK)   catch error:_ -> undefined end,
         verifier => try jose_jwk:verifier(JWK) catch error:_ -> undefined end
-    },
-    insert_values(#{
-        {keyname, Keyname} => KeyInfo,
-        {kid, KID}         => KeyInfo
-    }).
+    }.
 
 %%
 
@@ -140,16 +173,20 @@ insert_key(Keyname, KID, JWK) ->
     {lifetime, Seconds :: pos_integer()} |
     {deadline, UnixTs :: pos_integer()}.
 
--spec issue(keyname(), t(), expiration()) ->
+-spec issue(t(), expiration()) ->
     {ok, token()} |
     {error,
-        nonexistent_key |
-        invalid_operation
+        nonexistent_signee
     }.
 
-issue(Keyname, Auth, Expiration) ->
-    Claims = construct_final_claims(Auth, Expiration),
-    sign(Keyname, Claims).
+issue(Auth, Expiration) ->
+    case get_signee_key() of
+        Key = #{} ->
+            Claims = construct_final_claims(Auth, Expiration),
+            sign(Key, Claims);
+        undefined ->
+            {error, nonexistent_signee}
+    end.
 
 construct_final_claims({{Subject, ACL}, Claims}, Expiration) ->
     maps:merge(
@@ -170,17 +207,7 @@ unique_id() ->
     <<ID:64>> = snowflake:new(),
     genlib_format:format_int_base(ID, 62).
 
-sign(Keyname, Claims) ->
-    case lookup_value({keyname, Keyname}) of
-        #{kid := KID, jwk := JWK, signer := #{} = JWS} ->
-            sign(KID, JWK, JWS, Claims);
-        #{signer := undefined} ->
-            {error, invalid_operation};
-        undefined ->
-            {error, nonexistent_key}
-    end.
-
-sign(KID, JWK, JWS, Claims) ->
+sign(#{kid := KID, jwk := JWK, signer := #{} = JWS}, Claims) ->
     JWT = jose_jwt:sign(JWK, JWS#{<<"kid">> => KID}, Claims),
     {_Modules, Token} = jose_jws:compact(JWT),
     {ok, Token}.
@@ -221,7 +248,7 @@ verify(Token) ->
     end.
 
 verify(KID, Alg, ExpandedToken) ->
-    case lookup_value({kid, KID}) of
+    case get_key_by_kid(KID) of
         #{jwk := JWK, verifier := Algs} ->
             _ = lists:member(Alg, Algs) orelse throw(invalid_operation),
             verify(JWK, ExpandedToken);
@@ -316,6 +343,33 @@ decode_roles(Claims = #{
     {Roles, maps:remove(<<"resource_access">>, Claims)};
 decode_roles(_) ->
     throw({invalid_token, {missing, acl}}).
+
+%%
+
+insert_key(Keyname, Key = #{kid := KID}) ->
+    insert_values(#{
+        {keyname, Keyname} => Key,
+        {kid, KID}         => Key
+    }).
+
+get_key_by_name(Keyname) ->
+    lookup_value({keyname, Keyname}).
+
+get_key_by_kid(KID) ->
+    lookup_value({kid, KID}).
+
+set_signee(Keyname) ->
+    insert_values(#{
+        signee => {keyname, Keyname}
+    }).
+
+get_signee_key() ->
+    case lookup_value(signee) of
+        {keyname, Keyname} ->
+            get_key_by_name(Keyname);
+        undefined ->
+            undefined
+    end.
 
 %%
 
