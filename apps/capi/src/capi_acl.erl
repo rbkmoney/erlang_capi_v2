@@ -52,19 +52,6 @@ insert_scope(Scope, Permission, ACL) ->
     Priority = compute_priority(Scope, Permission),
     insert({{Priority, Scope}, [Permission]}, ACL).
 
-% insert({Pr, _} = V, [{Pr0, _} = V0 | Vs]) when Pr < Pr0 ->
-%     [V0 | insert(V, Vs)];
-% insert(V, [V | _] = Vs) ->
-%     % NOTE discarding identical entries
-%     Vs;
-% insert({Pr, {S, P}}, [{Pr, {S, Ps}} | Vs]) ->
-%     % NOTE squashing permissions of entries with the same scope
-%     [{Pr, {S, lists:usort([P ++ Ps])}} | Vs];
-% insert(V, [V0 | _] = Vs) when V > V0 ->
-%     [V | Vs];
-% insert(V, []) ->
-%     [V].
-
 insert({PS, _} = V, [{PS0, _} = V0 | Vs]) when PS < PS0 ->
     [V0 | insert(V, Vs)];
 insert({PS, Perms}, [{PS, Perms0} | Vs]) ->
