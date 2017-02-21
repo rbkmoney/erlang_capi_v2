@@ -69,6 +69,8 @@ remove_scope(Scope, Permission, ACL) ->
     Priority = compute_priority(Scope, Permission),
     remove({{Priority, Scope}, [Permission]}, ACL).
 
+remove(V, [V | Vs]) ->
+    Vs;
 remove({PS, Perms}, [{PS, Perms0} | Vs]) ->
     [{PS, Perms0 -- Perms} | Vs];
 remove(V, [V0 | Vs]) ->

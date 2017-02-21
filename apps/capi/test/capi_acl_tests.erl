@@ -9,6 +9,7 @@
 -spec illegal_input_test_()   -> [testcase()].
 -spec empty_test_()           -> [testcase()].
 -spec stable_encoding_test_() -> [testcase()].
+-spec remove_scopes_test_()   -> [testcase()].
 -spec redundancy_test_()      -> [testcase()].
 -spec match_scope_test_()     -> [testcase()].
 
@@ -51,6 +52,25 @@ redundancy_test_() ->
         ?_assertEqual([<<"party:read">>], encode(from_list([{[party], read}, {[party], read}])))
     ].
 
+remove_scopes_test_() ->
+    [
+        ?_assertEqual(new(), remove([party], read, new())),
+        ?_assertEqual(
+            from_list([{[party], write}]),
+            remove([invoices], read, from_list([{[party], write}, {[invoices], read}]))
+        ),
+        ?_assertEqual(
+            new(),
+            remove([party], read,
+                remove([party], write,
+                    remove([party], read,
+                        from_list([{[party], read}, {[party], write}])
+                    )
+                )
+            )
+        )
+    ].
+
 match_scope_test_() ->
     ACL = from_list([
         {[party], read},
@@ -70,11 +90,17 @@ match_scope_test_() ->
         ?_assertEqual([]            , match([payment_tool_tokens], ACL))
     ].
 
+new() ->
+    capi_acl:new().
+
 from_list(L) ->
     capi_acl:from_list(L).
 
 to_list(L) ->
     capi_acl:to_list(L).
+
+remove(S, P, ACL) ->
+    capi_acl:remove_scope(S, P, ACL).
 
 match(S, ACL) ->
     capi_acl:match(S, ACL).
