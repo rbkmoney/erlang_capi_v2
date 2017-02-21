@@ -265,7 +265,6 @@ init_per_suite(Config) ->
         start_handler(capi_dummy_provider, 1, #{}, NewConfig),
         start_handler(capi_dummy_inspector, 2, #{<<"risk_score">> => <<"high">>}, NewConfig)
     ],
-    ok = cleanup(),
     populate_snapshot(Proxies),
 
     NewConfig.
