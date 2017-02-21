@@ -27,6 +27,7 @@
 -export_type([t/0]).
 -export_type([subject/0]).
 -export_type([claims/0]).
+-export_type([token/0]).
 
 %%
 
