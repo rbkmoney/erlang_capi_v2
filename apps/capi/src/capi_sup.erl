@@ -41,7 +41,9 @@ init([]) ->
 
 get_authorizer_child_specs() ->
     Authorizers = genlib_app:env(capi, authorizers, #{}),
-    maps:values(maps:map(fun get_authorizer_child_spec/2, Authorizers)).
+    [
+        get_authorizer_child_spec(jwt, maps:get(jwt, Authorizers))
+    ].
 
 -spec get_authorizer_child_spec(Name :: atom(), Options :: #{}) -> supervisor:child_spec().
 
