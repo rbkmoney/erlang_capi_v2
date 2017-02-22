@@ -30,7 +30,7 @@ services:
         condition: service_started
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:44825a9eec9b0fc5456b45d40ee67f14173f4a5f
+    image: dr.rbkmoney.com/rbkmoney/hellgate:6dae29bfab8ce09c26beaf8d9c2d5c8a678864e0
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -40,7 +40,7 @@ services:
         condition: service_healthy
 
   cds:
-    image: dr.rbkmoney.com/rbkmoney/cds:538659226317356bc42529299037fe6cfa651694
+    image: dr.rbkmoney.com/rbkmoney/cds:1992157ed725cdc08ad3736370eee7a591e5edf9
     restart: always
     command: /opt/cds/bin/cds foreground
     healthcheck:
@@ -50,7 +50,7 @@ services:
       retries: 12
 
   machinegun:
-    image: dr.rbkmoney.com/rbkmoney/machinegun:cfba8560591fbc33ab5883d133849e81e237a6e1
+    image: dr.rbkmoney.com/rbkmoney/machinegun:138c13579dfc64e68695e6f69f1757b3c1160c83
     restart: always
     command: /opt/machinegun/bin/machinegun foreground
     volumes:
@@ -147,7 +147,7 @@ services:
      - postgres
 
   dominant:
-    image: dr.rbkmoney.com/rbkmoney/dominant:4550428dadf2ffd0886bb158be0753ae01191f01
+    image: dr.rbkmoney.com/rbkmoney/dominant:6d5a84327094016644ae470cdeb74aa6162c08b3
     restart: always
     command: /opt/dominant/bin/dominant foreground
     depends_on:
@@ -199,7 +199,7 @@ services:
       -jar /opt/pimp/pimp.jar
 
   keycloak:
-    image: dr.rbkmoney.com/rbkmoney/keycloak:bdff17d93d1c81930e2f7fb277ec4d38e66a5f67
+    image: dr.rbkmoney.com/rbkmoney/keycloak:585b792c57103eb90271dc86e92290d3891fdb07
     healthcheck:
       test: curl --silent --show-error --output /dev/null localhost:8080/auth/realms/external
       interval: 10s

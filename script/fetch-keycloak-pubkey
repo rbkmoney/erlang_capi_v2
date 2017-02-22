@@ -1,11 +1,13 @@
 #!/bin/sh
 
-set -o pipefail
+set -e -o pipefail
 
 KK_HOST=${KK_HOST:-keycloak}
 KK_PORT=${KK_PORT:-8080}
 KK_REALM=${KK_REALM:-external}
-TARGET=${TARGET:-var/pubkey.pem}
+TARGET=${TARGET:-var/keys/keycloak/public.pem}
+
+mkdir -p "$(dirname "${TARGET}")"
 
 CURL_OPTS=${CURL_OPTS:-}
 MAX_RETRY_TIMEOUT=${MAX_RETRY_TIMEOUT:-10}

@@ -76,7 +76,7 @@ distclean:
 
 # CALL_W_CONTAINER
 test: submodules
-	$(REBAR) ct
+	$(REBAR) do eunit ct
 
 define swagger_generate
 	rm -rf $(SWAGGER_APP_PATH)

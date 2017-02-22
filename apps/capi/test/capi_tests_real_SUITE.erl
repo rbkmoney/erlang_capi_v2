@@ -18,16 +18,22 @@
 
 %% test cases
 -export([
+    authorization_ok_test/1,
     authorization_error_no_header_test/1,
     authorization_error_expired_test/1,
-    authorization_expired_ok_test/1,
     create_invoice_badard_test/1,
     create_invoice_ok_test/1,
+    create_invoice_access_token_ok_test/1,
     create_payment_ok_test/1,
+    create_payment_ok_w_access_token_test/1,
     create_payment_tool_token_ok_test/1,
+    create_payment_tool_token_w_access_token_ok_test/1,
     get_invoice_by_id_ok_test/1,
+    get_invoice_by_id_w_access_token_ok_test/1,
+    get_random_invoice_w_access_token_failed_test/1,
     get_invoice_events_ok_test/1,
     rescind_invoice_ok_test/1,
+    rescind_invoice_w_access_token_failed_test/1,
     fulfill_invoice_ok_test/1,
     get_payment_by_id_ok_test/1,
     %%%%
@@ -87,7 +93,7 @@
 -define(CAPI_HOST_NAME, "capi").
 
 -define(MERCHANT_ID, <<"281220eb-a4ef-4d03-b666-bdec4b26c5f7">>).
-
+-define(LIVE_CATEGORY_ID, 100).
 
 -behaviour(supervisor).
 
@@ -111,6 +117,7 @@ all() ->
         {group, authorization},
         {group, invoice_management},
         {group, card_payment},
+        {group, invoice_access_token_management},
         {group, statistics},
         {group, party_management},
         {group, contracts_management},
@@ -132,9 +139,9 @@ all() ->
 groups() ->
     [
         {authorization, [parallel], [
+            authorization_ok_test,
             authorization_error_no_header_test,
-            authorization_error_expired_test,
-            authorization_expired_ok_test
+            authorization_error_expired_test
         ]},
         {invoice_management, [sequence], [
             create_invoice_badard_test,
@@ -149,6 +156,19 @@ groups() ->
             get_payment_by_id_ok_test,
             fulfill_invoice_ok_test,
             get_invoice_events_ok_test
+        ]},
+        % TODO
+        % Extremely sensitive stuff, must verify it better.
+        % 1. Test that we're unauthorized to create payments on unrelated invoice.
+        % 2. Test that token expires properly.
+        {invoice_access_token_management, [sequence], [
+            create_invoice_ok_test,
+            create_invoice_access_token_ok_test,
+            get_invoice_by_id_w_access_token_ok_test,
+            get_random_invoice_w_access_token_failed_test,
+            rescind_invoice_w_access_token_failed_test,
+            create_payment_tool_token_w_access_token_ok_test,
+            create_payment_ok_w_access_token_test
         ]},
         {callback_management, [sequence], [
             get_categories_ok_test,
@@ -209,7 +229,7 @@ groups() ->
 init_per_suite(Config) ->
     % _ = dbg:tracer(),
     % _ = dbg:p(all, c),
-    % _ = dbg:tpl({'capi_auth', '_', '_'}, x),
+    % _ = dbg:tpl({'capi_authorizer_jwt', '_', '_'}, x),
     Apps =
         capi_ct_helper:start_app(lager) ++
         capi_ct_helper:start_app(cowlib) ++
@@ -272,13 +292,29 @@ start_capi(Group, Config) ->
         {ip, ?CAPI_IP},
         {port, ?CAPI_PORT},
         {service_type, ?CAPI_SERVICE_TYPE},
-        {api_auth_pubkey_path, filename:join(?config(data_dir, Config), get_pubkey_filepath(Group))}
+        {authorizers, #{
+            jwt => get_authorizer_opts(Group, Config)
+        }}
     ]).
 
-get_pubkey_filepath(authorization) ->
-    "keys/local/public.pem";
-get_pubkey_filepath(_) ->
-    "keys/keycloak/public.pem".
+get_authorizer_opts(authorization, Config) ->
+    #{
+        signee => local,
+        keyset => #{
+            local    => get_keysource("keys/local/private.pem", Config)
+        }
+    };
+get_authorizer_opts(_, Config) ->
+    #{
+        signee => capi,
+        keyset => #{
+            keycloak => get_keysource("keys/keycloak/public.pem", Config),
+            capi     => get_keysource("keys/local/private.pem", Config)
+        }
+    }.
+
+get_keysource(Fn, Config) ->
+    {pem_file, filename:join(?config(data_dir, Config), Fn)}.
 
 -spec end_per_group(Name :: atom(), config()) -> config().
 
@@ -287,42 +323,26 @@ end_per_group(_, Config) ->
     lists:keydelete(capi_apps, 1, Config).
 
 %% tests
+
+-spec authorization_ok_test(config()) -> _.
+
+authorization_ok_test(_Config) ->
+    {ok, Token} = auth_token(capi_acl:from_list([{[invoices], read}]), {lifetime, 10}),
+    Headers = [auth_header(Token), content_type_header(), req_id_header()],
+    {ok, 200, _RespHeaders, _Body} = call(get, "/v1/processing/categories", #{}, Headers).
+
 -spec authorization_error_no_header_test(config()) -> _.
 
 authorization_error_no_header_test(_Config) ->
-    {ok, 401, _RespHeaders, _Body} = call(get, "/v1/processing/invoices/22?limit=22", #{}, []).
+    Headers = [content_type_header(), req_id_header()],
+    {ok, 401, _RespHeaders, _Body} = call(get, "/v1/processing/categories", #{}, Headers).
 
 -spec authorization_error_expired_test(config()) -> _.
 
-authorization_error_expired_test(Config) ->
-    ResourceAccess = #{<<"common-api">> => #{<<"roles">> => [<<"payments:get">>]}},
-    Token = auth_token(ResourceAccess, genlib_time:unow() - 10, Config),
-    AuthHeader = auth_header(Token),
-    {ok, 401, _RespHeaders, _Body} = call(get, "/v1/processing/invoices/22?limit=22", #{}, [AuthHeader]).
-
--spec authorization_expired_ok_test(config()) -> _.
-
-authorization_expired_ok_test(Config) ->
-    ResourceAccess = #{<<"common-api">> => #{<<"roles">> => [<<"payment_tool_tokens:write">>]}},
-    Token = auth_token(ResourceAccess, genlib_time:unow() - 10, Config),
-    Headers = [
-        auth_header(Token),
-        {<<"Content-Type">>, <<"application/json; charset=utf-8">>},
-        {<<"X-Request-ID">>, <<"BLARGH">>}
-    ],
-    Body = #{
-        <<"paymentTool">> => #{
-            <<"paymentToolType">> => <<"CardData">>,
-            <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
-            <<"cardNumber">> => 4111111111111111,
-            <<"expDate">> => <<"08/27">>,
-            <<"cvv">> => <<"232">>
-        },
-        <<"clientInfo">> => #{
-            <<"fingerprint">> => <<"test fingerprint">>
-        }
-    },
-    {ok, 201, _RespHeaders, _Body} = call(post, "/v1/processing/payment_tools", Body, Headers).
+authorization_error_expired_test(_Config) ->
+    {ok, Token} = auth_token(capi_acl:from_list([{[invoices], read}]), {lifetime, -10}),
+    Headers = [auth_header(Token), content_type_header(), req_id_header()],
+    {ok, 401, _RespHeaders, _Body} = call(get, "/v1/processing/categories", #{}, Headers).
 
 -spec create_invoice_badard_test(config()) -> _.
 
@@ -336,6 +356,87 @@ create_invoice_badard_test(Config) ->
 create_invoice_ok_test(Config) ->
     #{<<"id">> := InvoiceID} = default_create_invoice(Config),
     {save_config, InvoiceID}.
+
+-spec create_invoice_access_token_ok_test(config()) -> _.
+
+create_invoice_access_token_ok_test(Config) ->
+    {create_invoice_ok_test, InvoiceID} = ?config(saved_config, Config),
+    Context = ?config(context, Config),
+    {ok, Body} = api_client_invoices:create_invoice_access_token(Context, InvoiceID),
+    #{<<"payload">> := TokenPayload} = Body,
+    InvoiceContext = api_client_lib:get_context(?CAPI_HOST, ?CAPI_PORT, TokenPayload, 10, 5000),
+    {save_config, #{
+        invoice_id      => InvoiceID,
+        invoice_context => InvoiceContext
+    }}.
+
+-spec get_invoice_by_id_w_access_token_ok_test(config()) -> _.
+
+get_invoice_by_id_w_access_token_ok_test(Config) ->
+    {create_invoice_access_token_ok_test,
+        #{invoice_id := InvoiceID, invoice_context := Context} = Info
+    } = ?config(saved_config, Config),
+    {ok, _Body} = api_client_invoices:get_invoice_by_id(Context, InvoiceID),
+    {save_config, Info}.
+
+-spec get_random_invoice_w_access_token_failed_test(config()) -> _.
+
+get_random_invoice_w_access_token_failed_test(Config) ->
+    {get_invoice_by_id_w_access_token_ok_test,
+        #{invoice_id := InvoiceID, invoice_context := Context} = Info
+    } = ?config(saved_config, Config),
+    {error, _} = api_client_invoices:get_invoice_by_id(Context, <<InvoiceID/binary, "BLARG">>),
+    {save_config, Info}.
+
+-spec rescind_invoice_w_access_token_failed_test(config()) -> _.
+
+rescind_invoice_w_access_token_failed_test(Config) ->
+    {get_random_invoice_w_access_token_failed_test,
+        #{invoice_id := InvoiceID, invoice_context := Context} = Info
+    } = ?config(saved_config, Config),
+    {error, _} = api_client_invoices:rescind_invoice(Context, InvoiceID, <<"pwnd">>),
+    {save_config, Info}.
+
+-spec create_payment_tool_token_w_access_token_ok_test(config()) -> _.
+
+create_payment_tool_token_w_access_token_ok_test(Config) ->
+    {rescind_invoice_w_access_token_failed_test,
+        #{invoice_context := Context} = Info
+    } = ?config(saved_config, Config),
+    {ok, Token, Session} = default_tokenize_card(Context, Config),
+    {save_config, Info#{
+        token => Token,
+        session => Session
+    }}.
+
+-spec create_payment_ok_w_access_token_test(config()) -> _.
+
+create_payment_ok_w_access_token_test(Config) ->
+    {create_payment_tool_token_w_access_token_ok_test, Info = #{
+        invoice_context := Context,
+        session         := PaymentSession,
+        token           := PaymentToolToken,
+        invoice_id      := InvoiceID
+    }} = ?config(saved_config, Config),
+    #{<<"id">> := PaymentID} = default_create_payment(
+        InvoiceID,
+        PaymentSession,
+        PaymentToolToken,
+        Context,
+        Config
+    ),
+    wait_event(
+        InvoiceID,
+        #{
+            <<"eventType">> => <<"EventInvoiceStatusChanged">>,
+            <<"status">> => <<"paid">>
+        },
+        3000,
+        Context
+    ),
+    {save_config, Info#{
+        payment_id => PaymentID
+    }}.
 
 -spec fulfill_invoice_ok_test(config()) -> _.
 
@@ -659,10 +760,7 @@ get_contracts_ok_test(Config) ->
 -spec get_claim_by_id_ok_test(config()) -> _.
 
 get_claim_by_id_ok_test(Config) ->
-    #{
-        <<"categoryID">> := CategoryID
-    } = get_any_category(Config),
-    ClaimID = default_create_shop(CategoryID, Config),
+    ClaimID = default_create_shop(?LIVE_CATEGORY_ID, Config),
     #{
         <<"id">> := ClaimID
     } = default_get_claim_by_id(ClaimID, Config),
@@ -887,22 +985,23 @@ call(Method, Path, Body, Headers) ->
     {ok, Code, RespHeaders, get_body(ClientRef)}.
 
 get_url(Path) ->
-
-    ?CAPI_HOST ++ ":" ++ integer_to_list(?CAPI_PORT)  ++ Path.
+    ?CAPI_HOST ++ ":" ++ integer_to_list(?CAPI_PORT) ++ Path.
 
 auth_header(Token) ->
     {<<"Authorization">>, <<"Bearer ", Token/binary>>} .
 
-auth_token(ResourseAccess, Exp, Config) ->
-    Message = #{
-        <<"sub">> => ?MERCHANT_ID,
-        <<"resource_access">> => ResourseAccess,
-        <<"exp">> => Exp
-    },
-    RSAPrivateJWK = jose_jwk:from_pem_file(filename:join(?config(data_dir, Config), "keys/local/private.pem")),
-    Signed = jose_jwt:sign(jose_jwk:from(RSAPrivateJWK), #{<<"alg">> => <<"RS256">>}, Message),
-    {_Alg, Payload} = jose_jws:compact(Signed),
-    Payload.
+content_type_header() ->
+    {<<"Content-Type">>, <<"application/json; charset=utf-8">>}.
+
+req_id_header() ->
+    req_id_header(genlib:unique()).
+
+req_id_header(ReqID) ->
+    {<<"X-Request-ID">>, genlib:to_binary(ReqID)}.
+
+auth_token(ACL, Expiration) ->
+    Auth = {{?MERCHANT_ID, ACL}, #{}},
+    capi_authorizer_jwt:issue(Auth, Expiration).
 
 default_create_invoice(Config) ->
     {{Y, M, D}, Time} = calendar:local_time(),
@@ -985,6 +1084,15 @@ get_shops(Config) ->
     Response = swagger_shops_api:get_shops(Host, Port, PreparedParams),
     handle_response(Response).
 
+get_latest(Es) ->
+    % Assuming the latest element will have highest numeric ID
+    hd(lists:sort(fun (#{<<"id">> := ID1}, #{<<"id">> := ID2}) -> compare_ids(ID1, ID2) end, Es)).
+
+compare_ids(ID1, ID2) when is_binary(ID1) ->
+    binary_to_integer(ID1) > binary_to_integer(ID2);
+compare_ids(ID1, ID2) when is_integer(ID1) ->
+    ID1 > ID2.
+
 default_create_payout_tool(ContractID, Config) ->
     Context = ?config(context, Config),
     Params = #{
@@ -1018,7 +1126,9 @@ get_payout_tools(ContractID, Config) ->
     handle_response(Response).
 
 default_tokenize_card(Config) ->
-    Context = ?config(context, Config),
+    default_tokenize_card(?config(context, Config), Config).
+
+default_tokenize_card(Context, _Config) ->
     Req = #{
         <<"paymentTool">> => #{
             <<"paymentToolType">> => <<"CardData">>,
@@ -1034,7 +1144,9 @@ default_tokenize_card(Config) ->
     api_client_tokens:create_payment_tool_token(Context, Req).
 
 default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
-    Context = ?config(context, Config),
+    default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, ?config(context, Config), Config).
+
+default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, _Config) ->
     Req = #{
         <<"paymentSession">> => PaymentSession,
         <<"paymentToolToken">> => PaymentToolToken,
@@ -1097,12 +1209,12 @@ default_create_shop(CategoryID, CallbackUrl, Config) ->
         <<"claimID">> := ClaimID0
     } = default_create_contract(Config),
     default_approve_claim(ClaimID0),
-    [#{<<"id">> := ContractID} | _] = get_contracts(Config),
+    #{<<"id">> := ContractID} = get_latest(get_contracts(Config)),
     #{
         <<"claimID">> := ClaimID1
     } = default_create_payout_tool(ContractID, Config),
     default_approve_claim(ClaimID1),
-    [#{<<"id">> := PayoutToolID} | _] = get_payout_tools(ContractID, Config),
+    #{<<"id">> := PayoutToolID} = get_latest(get_payout_tools(ContractID, Config)),
 
     default_create_shop(CategoryID, ContractID, PayoutToolID, CallbackUrl, Config).
 
@@ -1247,13 +1359,15 @@ get_domain_fixture(Proxies) ->
             {system_settlement       , <<"RUB">>},
             {external_income         , <<"RUB">>},
             {external_outcome        , <<"RUB">>},
-            {terminal_1_settlement   , <<"USD">>},
+            {terminal_1_settlement   , <<"RUB">>},
             {terminal_2_settlement   , <<"RUB">>},
             {terminal_3_settlement   , <<"RUB">>}
         ]
     ),
-    TermSet = #domain_TermSet{
+    TermSetTest = #domain_TermSet{
         payments = #domain_PaymentsServiceTerms{
+            currencies = {value, ordsets:from_list([?cur(<<"RUB">>)])},
+            categories = {value, ordsets:from_list([?cat(1)])},
             payment_methods = {value, ordsets:from_list([
                 ?pmt(bank_card, visa),
                 ?pmt(bank_card, mastercard)
@@ -1264,13 +1378,6 @@ get_domain_fixture(Proxies) ->
                     then_ = {value, #domain_CashRange{
                         lower = {inclusive, ?cash(1000, ?cur(<<"RUB">>))},
                         upper = {exclusive, ?cash(4200000, ?cur(<<"RUB">>))}
-                    }}
-                },
-                #domain_CashLimitDecision{
-                    if_ = {condition, {currency_is, ?cur(<<"USD">>)}},
-                    then_ = {value, #domain_CashRange{
-                        lower = {inclusive, ?cash(200, ?cur(<<"USD">>))},
-                        upper = {exclusive, ?cash(313370, ?cur(<<"USD">>))}
                     }}
                 }
             ]},
@@ -1284,31 +1391,26 @@ get_domain_fixture(Proxies) ->
                             ?share(45, 1000, payment_amount)
                         )
                     ]}
-                },
-                #domain_CashFlowDecision{
-                    if_ = {condition, {currency_is, ?cur(<<"USD">>)}},
-                    then_ = {value, [
-                        ?cfpost(
-                            {merchant, settlement},
-                            {system, settlement},
-                            ?share(65, 1000, payment_amount)
-                        )
-                    ]}
                 }
             ]}
+        }
+    },
+    TermSetLive = #domain_TermSet{
+        payments = #domain_PaymentsServiceTerms{
+            categories = {value, ordsets:from_list([?cat(?LIVE_CATEGORY_ID)])}
         }
     },
     Basic = [
         {globals, #domain_GlobalsObject{
             ref = #domain_GlobalsRef{},
             data = #domain_Globals{
-                party_prototype = #domain_PartyPrototypeRef{id = 42},
-                providers = {value, [?prv(1), ?prv(2)]},
-                system_account_set = {value, ?sas(1)},
-                external_account_set = {value, ?eas(1)},
-                default_contract_template = ?tmpl(1),
-                inspector = {value, ?insp(1)},
-                common_merchant_proxy = ?prx(3)
+                party_prototype           = #domain_PartyPrototypeRef{id = 42},
+                providers                 = {value, [?prv(1), ?prv(2)]},
+                system_account_set        = {value, ?sas(1)},
+                external_account_set      = {value, ?eas(1)},
+                default_contract_template = ?tmpl(2),
+                inspector                 = {value, ?insp(1)},
+                common_merchant_proxy     = ?prx(3)
             }
         }},
         {system_account_set, #domain_SystemAccountSetObject{
@@ -1346,7 +1448,6 @@ get_domain_fixture(Proxies) ->
                         name = <<"SUPER DEFAULT SHOP">>
                     }
                 },
-                %% FIXME create test template with test categories only
                 test_contract_template = ?tmpl(1)
             }
         }},
@@ -1367,13 +1468,27 @@ get_domain_fixture(Proxies) ->
                 parent_terms = undefined,
                 term_sets = [#domain_TimedTermSet{
                     action_time = #'TimestampInterval'{},
-                    terms = TermSet
+                    terms = TermSetTest
+                }]
+            }
+        }},
+        {term_set_hierarchy, #domain_TermSetHierarchyObject{
+            ref = ?trms(2),
+            data = #domain_TermSetHierarchy{
+                parent_terms = ?trms(1),
+                term_sets = [#domain_TimedTermSet{
+                    action_time = #'TimestampInterval'{},
+                    terms = TermSetLive
                 }]
             }
         }},
         {contract_template, #domain_ContractTemplateObject{
             ref = ?tmpl(1),
             data = #domain_ContractTemplate{terms = ?trms(1)}
+        }},
+        {contract_template, #domain_ContractTemplateObject{
+            ref = ?tmpl(2),
+            data = #domain_ContractTemplate{terms = ?trms(2)}
         }},
         {currency, #domain_CurrencyObject{
             ref = ?cur(<<"RUB">>),
@@ -1384,20 +1499,20 @@ get_domain_fixture(Proxies) ->
                 exponent = 2
             }
         }},
-        {currency, #domain_CurrencyObject{
-            ref = ?cur(<<"USD">>),
-            data = #domain_Currency{
-                name = <<"US Dollars">>,
-                numeric_code = 840,
-                symbolic_code = <<"USD">>,
-                exponent = 2
-            }
-        }},
         {category, #domain_CategoryObject{
             ref = ?cat(1),
             data = #domain_Category{
                 name = <<"Categories">>,
-                description = <<"Goods sold by category providers">>
+                description = <<"Goods sold by category providers">>,
+                type = test
+            }
+        }},
+        {category, #domain_CategoryObject{
+            ref = ?cat(?LIVE_CATEGORY_ID),
+            data = #domain_Category{
+                name = <<"Real deals">>,
+                description = <<"For real men">>,
+                type = live
             }
         }},
         {provider, #domain_ProviderObject{
@@ -1405,7 +1520,7 @@ get_domain_fixture(Proxies) ->
             data = #domain_Provider{
                 name = <<"Brovider">>,
                 description = <<"A provider but bro">>,
-                terminal = {value, [?trm(1), ?trm(2), ?trm(3), ?trm(4)]},
+                terminal = {value, [?trm(1), ?trm(2), ?trm(3)]},
                 proxy = #domain_Proxy{
                     ref = ?prx(1),
                     additional = #{
@@ -1435,13 +1550,13 @@ get_domain_fixture(Proxies) ->
                     )
                 ],
                 account = ?trmacc(
-                    <<"USD">>,
+                    <<"RUB">>,
                     maps:get(terminal_1_settlement, Accounts)
                 ),
                 options = #{
                     <<"override">> => <<"Brominal 1">>
                 },
-                risk_coverage = high
+                risk_coverage = low
             }
         }},
         {terminal, #domain_TerminalObject{
@@ -1449,37 +1564,8 @@ get_domain_fixture(Proxies) ->
             data = #domain_Terminal{
                 name = <<"Brominal 2">>,
                 description = <<"Brominal 2">>,
-                payment_method = ?pmt(bank_card, visa),
-                category = ?cat(1),
-                cash_flow = [
-                    ?cfpost(
-                        {provider, settlement},
-                        {merchant, settlement},
-                        ?share(1, 1, payment_amount)
-                    ),
-                    ?cfpost(
-                        {system, settlement},
-                        {provider, settlement},
-                        ?share(18, 1000, payment_amount)
-                    )
-                ],
-                account = ?trmacc(
-                    <<"USD">>,
-                    maps:get(terminal_1_settlement, Accounts)
-                ),
-                options = #{
-                    <<"override">> => <<"Brominal 2">>
-                },
-                risk_coverage = low
-            }
-        }},
-        {terminal, #domain_TerminalObject{
-            ref = ?trm(3),
-            data = #domain_Terminal{
-                name = <<"Brominal 3">>,
-                description = <<"Brominal 3">>,
                 payment_method = ?pmt(bank_card, mastercard),
-                category = ?cat(1),
+                category = ?cat(?LIVE_CATEGORY_ID),
                 cash_flow = [
                     ?cfpost(
                         {provider, settlement},
@@ -1503,12 +1589,12 @@ get_domain_fixture(Proxies) ->
             }
         }},
         {terminal, #domain_TerminalObject{
-            ref = ?trm(4),
+            ref = ?trm(3),
             data = #domain_Terminal{
-                name = <<"Brominal 4">>,
-                description = <<"Brominal 4">>,
+                name = <<"Brominal 3">>,
+                description = <<"Brominal 3">>,
                 payment_method = ?pmt(bank_card, mastercard),
-                category = ?cat(1),
+                category = ?cat(?LIVE_CATEGORY_ID),
                 cash_flow = [
                     ?cfpost(
                         {provider, settlement},
@@ -1523,10 +1609,10 @@ get_domain_fixture(Proxies) ->
                 ],
                 account = ?trmacc(
                     <<"RUB">>,
-                    maps:get(terminal_2_settlement, Accounts)
+                    maps:get(terminal_3_settlement, Accounts)
                 ),
                 options = #{
-                    <<"override">> => <<"Brominal 4">>
+                    <<"override">> => <<"Brominal 3">>
                 },
                 risk_coverage = low
             }
@@ -1552,7 +1638,7 @@ get_domain_fixture(Proxies) ->
                 name = <<"Drominal 1">>,
                 description = <<"Drominal 1">>,
                 payment_method = ?pmt(bank_card, visa),
-                category = ?cat(1),
+                category = ?cat(?LIVE_CATEGORY_ID),
                 cash_flow = [
                     ?cfpost(
                         {provider, settlement},
@@ -1581,7 +1667,7 @@ get_domain_fixture(Proxies) ->
                 name = <<"Drominal 1">>,
                 description = <<"Drominal 1">>,
                 payment_method = ?pmt(bank_card, visa),
-                category = ?cat(1),
+                category = ?cat(?LIVE_CATEGORY_ID),
                 cash_flow = [
                     ?cfpost(
                         {provider, settlement},
@@ -1656,10 +1742,7 @@ call_service(Service, Function, Args, ReqCtx) ->
     cp_proto:call_service(Service, Function, Args, ReqCtx, capi_woody_event_handler).
 
 create_and_activate_shop(Config) ->
-    #{
-        <<"categoryID">> := CategoryID
-    } = get_any_category(Config),
-    ClaimID = default_create_shop(CategoryID, Config),
+    ClaimID = default_create_shop(?LIVE_CATEGORY_ID, Config),
     {ok, _} = default_approve_claim(ClaimID),
     #{
         <<"id">> := ClaimID,
@@ -1675,10 +1758,6 @@ create_and_activate_shop(Config) ->
     } = default_get_claim_by_id(ClaimID, Config),
     ok = default_activate_shop(ShopID, Config),
     ShopID.
-
-get_any_category(Config) ->
-    [Category | _] = default_get_categories(Config),
-    Category.
 
 start_service_handler(Module, C) ->
     start_service_handler(Module, Module, C).

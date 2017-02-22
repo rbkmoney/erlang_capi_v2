@@ -11,28 +11,40 @@
 -behaviour(swagger_logic_handler).
 
 %% API callbacks
--export([handle_request/3]).
 -export([authorize_api_key/2]).
+-export([handle_request/3]).
 
 -spec authorize_api_key(OperationID :: swagger_api:operation_id(), ApiKey :: binary()) ->
-    Result :: false | {true, #{binary() => any()}}.
+    % TODO
+    % Swagger expects `map()` there instead of `capi_auth:context()` so we
+    % deliberately break his contract. We need to patch codegen to emit more
+    % relaxed spec (e.g. `term()`).
+    Result :: false | {true, capi_auth:context()}.
 
 authorize_api_key(OperationID, ApiKey) ->
-    capi_auth:auth_api_key(OperationID, ApiKey).
+    _ = capi_utils:logtag_process(operation_id, OperationID),
+    capi_auth:authorize_api_key(OperationID, ApiKey).
+
+-type request_data() :: #{atom() | binary() => term()}.
 
 -spec handle_request(
     OperationID :: swagger_api:operation_id(),
-    Req :: #{},
+    Req :: request_data(),
     Context :: swagger_api:request_context()
 ) ->
     {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
 
 handle_request(OperationID, Req, Context) ->
-    capi_utils:logtag_process(operation_id, OperationID),
     _ = lager:info("Processing request ~p", [OperationID]),
     ReqContext = create_context(Req),
     try
-        process_request(OperationID, Req, Context, ReqContext)
+        case capi_auth:authorize_operation(OperationID, Req, get_auth_context(Context)) of
+            ok ->
+                process_request(OperationID, Req, Context, ReqContext);
+            {error, _} = Error ->
+                _ = lager:info("Operation ~p authorization failed due to ~p", [OperationID, Error]),
+                {401, [], general_error(<<"Unauthorized operation">>)}
+        end
     catch
         error:{woody_error, {Source, Class, Details}} ->
             process_woody_error(OperationID, Source, Class, Details)
@@ -40,7 +52,7 @@ handle_request(OperationID, Req, Context) ->
 
 -spec process_request(
     OperationID :: swagger_api:operation_id(),
-    Req :: #{},
+    Req :: request_data(),
     Context :: swagger_api:request_context(),
     ReqCtx :: woody_context:ctx()
 ) ->
@@ -158,6 +170,20 @@ process_request(OperationID = 'CreatePaymentToolToken', Req, Context, ReqCtx) ->
                 invalidPaymentTool,
                 <<"Specified payment tool is invalid or unsupported">>
             )}
+    end;
+
+process_request(OperationID = 'CreateInvoiceAccessToken', Req, Context, ReqCtx) ->
+    PartyID = get_party_id(Context),
+    InvoiceID = maps:get(invoiceID, Req),
+    UserInfo = get_user_info(Context),
+    Result = get_invoice_by_id(ReqCtx, UserInfo, InvoiceID),
+    case Result of
+        {ok, #'payproc_InvoiceState'{}} ->
+            {ok, Token} = capi_auth:issue_invoice_access_token(PartyID, InvoiceID),
+            Resp = #{<<"payload">> => Token},
+            {201, [], Resp};
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
     end;
 
 process_request(OperationID = 'GetInvoiceByID', Req, Context, ReqCtx) ->
@@ -851,21 +877,27 @@ get_user_info(Context) ->
         type = {external_user, #payproc_ExternalUser{}}
     }.
 
-get_party_id(#{
-    auth_context := AuthContext
-}) ->
-    maps:get(<<"sub">>, AuthContext).
+get_auth_context(#{auth_context := AuthContext}) ->
+    AuthContext.
 
-get_party_params(#{
-    auth_context := AuthContext
-}) ->
+get_party_id(Context) ->
+    get_subject_id(get_auth_context(Context)).
+
+get_party_params(Context) ->
     #payproc_PartyParams{
         contact_info = #domain_PartyContactInfo{
-            email = maps:get(<<"email">>, AuthContext)
+            email = get_attribute(<<"email">>, get_auth_context(Context))
         }
     }.
 
-get_peer_info(#{peer := Peer}) -> Peer.
+get_subject_id({{SubjectID, _ACL}, _}) ->
+    SubjectID.
+
+get_attribute(AttrName, {_Subject, Attrs}) ->
+    maps:get(AttrName, Attrs).
+
+get_peer_info(#{peer := Peer}) ->
+    Peer.
 
 encode_invoice_params(PartyID, InvoiceParams) ->
     InvoiceContext = jsx:encode(genlib_map:get(<<"metadata">>, InvoiceParams)),

@@ -1,6 +1,6 @@
 [{<<"api_client">>,
   {git,"git@github.com:rbkmoney/api_client.git",
-       {ref,"19fd71a4f90b78efe5878da93ee740d27fffee51"}},
+       {ref,"36eb5a202aaa07cb419e64c1a7596f2a27fe4e5a"}},
   0},
  {<<"base64url">>,{pkg,<<"base64url">>,<<"0.0.1">>},0},
  {<<"certifi">>,{pkg,<<"certifi">>,<<"0.4.0">>},2},
