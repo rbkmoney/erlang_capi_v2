@@ -4,7 +4,9 @@
 -export([authorize_operation/3]).
 -export([issue_invoice_access_token/2]).
 
--type context() :: capi_acl:t().
+-type context() :: capi_authorizer_jwt:t().
+
+-export_type([context/0]).
 
 -spec authorize_api_key(
     OperationID :: swagger_api:operation_id(),

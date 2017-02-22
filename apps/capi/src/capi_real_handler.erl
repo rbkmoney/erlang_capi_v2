@@ -15,7 +15,11 @@
 -export([handle_request/3]).
 
 -spec authorize_api_key(OperationID :: swagger_api:operation_id(), ApiKey :: binary()) ->
-    Result :: false | {true, #{binary() => any()}}.
+    % TODO
+    % Swagger expects `map()` there instead of `capi_auth:context()` so we
+    % deliberately break his contract. We need to patch codegen to emit more
+    % relaxed spec (e.g. `term()`).
+    Result :: false | {true, capi_auth:context()}.
 
 authorize_api_key(OperationID, ApiKey) ->
     _ = capi_utils:logtag_process(operation_id, OperationID),
