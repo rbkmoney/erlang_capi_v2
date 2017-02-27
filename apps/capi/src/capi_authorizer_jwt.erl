@@ -106,7 +106,9 @@ select_signee({ok, Keyname}, KeyInfos) ->
         error ->
             _ = lager:error("Error setting signee: no key named ~p", [Keyname]),
             exit({nonexstent_signee, Keyname})
-    end.
+    end;
+select_signee(error, _KeyInfos) ->
+    ok.
 
 %%
 
