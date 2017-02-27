@@ -12,7 +12,7 @@
  {<<"cowlib">>,{pkg,<<"cowlib">>,<<"1.0.2">>},1},
  {<<"genlib">>,
   {git,"https://github.com/rbkmoney/genlib.git",
-       {ref,"66db7fe296465a875b6894eb5ac944c90f82f913"}},
+       {ref,"82ff16f4314fc406dd90752467a08fe401b009ef"}},
   0},
  {<<"goldrush">>,{pkg,<<"goldrush">>,<<"0.1.9">>},1},
  {<<"hackney">>,{pkg,<<"hackney">>,<<"1.5.7">>},1},
