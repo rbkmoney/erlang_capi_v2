@@ -1948,7 +1948,10 @@ get_merchant_proxy(ReqCtx) ->
             common_merchant_proxy = ProxyRef
         }
     } = Globals,
-    #domain_Proxy{ref = ProxyRef}.
+    #domain_Proxy{
+        ref = ProxyRef,
+        additional = #{}
+    }.
 
 create_options(CallbackUrl, ReqCtx) ->
     Params = #proxy_merch_config_MerchantProxyParams{

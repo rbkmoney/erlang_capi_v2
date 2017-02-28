@@ -133,7 +133,7 @@ derive_kid_from_public_key_pem_entry(JWK) ->
     base64url:encode(crypto:hash(sha256, Data)).
 
 -type store_opts() :: #{
-    kid => kid() | fun ((key()) -> kid())
+    kid => fun ((key()) -> kid())
 }.
 
 -spec store_key(keyname(), {pem_file, file:filename()}, store_opts()) ->
@@ -156,8 +156,6 @@ get_key_info(#{kid := KID, signer := Signer, verifier := Verifier}) ->
         verify => Verifier /= undefined
     }.
 
-derive_kid(_JWK, #{kid := Value}) when is_binary(Value) ->
-    Value;
 derive_kid(JWK, #{kid := DeriveFun}) when is_function(DeriveFun, 1) ->
     DeriveFun(JWK).
 
