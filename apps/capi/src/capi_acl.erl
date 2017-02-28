@@ -180,7 +180,10 @@ decode_scope_frag_resource(V, ID, H) ->
     {{R, ID}, delve(R, H)}.
 
 decode_resource(V) ->
-    binary_to_existing_atom(V, utf8).
+    try binary_to_existing_atom(V, utf8) catch
+        error:badarg ->
+            error({badarg, {resource, V}})
+    end.
 
 decode_permission(<<"read">>) ->
     read;
