@@ -26,7 +26,7 @@ handle_function(
     'ProcessPayment',
     [#prxprv_Context{
         session = #prxprv_Session{target = Target, state = State},
-        payment = PaymentInfo,
+        payment_info = PaymentInfo,
         options = _
     }],
     _Context,
@@ -38,7 +38,7 @@ handle_function(
     'HandlePaymentCallback',
     [_Payload, #prxprv_Context{
         session = #prxprv_Session{target = _Target, state = _State},
-        payment = PaymentInfo,
+        payment_info = PaymentInfo,
         options = _
     }],
     _Context,

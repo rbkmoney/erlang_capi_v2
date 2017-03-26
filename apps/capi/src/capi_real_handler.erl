@@ -214,7 +214,7 @@ process_request(OperationID = 'FulfillInvoice', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _} ->
-            {204, [], <<>>}; %%LIAR!
+            {204, [], <<>>};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -234,7 +234,7 @@ process_request(OperationID = 'RescindInvoice', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _} ->
-            {200, [], #{}};
+            {200, [], <<>>};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -734,7 +734,7 @@ process_request(OperationID = 'RevokeClaimByID', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _} ->
-            {200, [], #{}};
+            {200, [], <<>>};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
