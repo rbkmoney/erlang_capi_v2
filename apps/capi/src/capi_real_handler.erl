@@ -255,6 +255,18 @@ process_request(OperationID = 'GetInvoiceEvents', Req, Context, ReqCtx) ->
             process_exception(OperationID, Exception)
     end;
 
+process_request(OperationID = 'GetPayments', Req, Context, ReqCtx) ->
+    InvoiceID = maps:get(invoiceID, Req),
+    UserInfo = get_user_info(Context),
+    Result = get_invoice_by_id(ReqCtx, UserInfo, InvoiceID),
+    case Result of
+        {ok, #'payproc_InvoiceState'{payments = Payments}} ->
+            Resp = [decode_payment(InvoiceID, P) || P <- Payments],
+            {200, [], Resp};
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
+    end;
+
 process_request(OperationID = 'GetPaymentByID', Req, Context, ReqCtx) ->
     PaymentID = maps:get(paymentID, Req),
     InvoiceID = maps:get(invoiceID, Req),

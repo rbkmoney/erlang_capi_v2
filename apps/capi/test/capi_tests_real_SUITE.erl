@@ -35,6 +35,7 @@
     rescind_invoice_ok_test/1,
     rescind_invoice_w_access_token_failed_test/1,
     fulfill_invoice_ok_test/1,
+    get_payments_ok_test/1,
     get_payment_by_id_ok_test/1,
     %%%%
     get_invoices_stats_ok_test/1,
@@ -153,6 +154,7 @@ groups() ->
             create_invoice_ok_test,
             create_payment_tool_token_ok_test,
             create_payment_ok_test,
+            get_payments_ok_test,
             get_payment_by_id_ok_test,
             fulfill_invoice_ok_test,
             get_invoice_events_ok_test
@@ -327,7 +329,7 @@ end_per_group(_, Config) ->
 -spec authorization_ok_test(config()) -> _.
 
 authorization_ok_test(_Config) ->
-    {ok, Token} = auth_token(capi_acl:from_list([{[invoices], read}]), {lifetime, 10}),
+    {ok, Token} = auth_token(capi_acl:from_list([]), {lifetime, 10}),
     Headers = [auth_header(Token), content_type_header(), req_id_header()],
     {ok, 200, _RespHeaders, _Body} = call(get, "/v1/processing/categories", #{}, Headers).
 
@@ -340,7 +342,7 @@ authorization_error_no_header_test(_Config) ->
 -spec authorization_error_expired_test(config()) -> _.
 
 authorization_error_expired_test(_Config) ->
-    {ok, Token} = auth_token(capi_acl:from_list([{[invoices], read}]), {lifetime, -10}),
+    {ok, Token} = auth_token(capi_acl:from_list([]), {lifetime, -10}),
     Headers = [auth_header(Token), content_type_header(), req_id_header()],
     {ok, 401, _RespHeaders, _Body} = call(get, "/v1/processing/categories", #{}, Headers).
 
@@ -552,10 +554,20 @@ get_invoice_events_ok_test(Config) ->
         }
     ] = Events.
 
+-spec get_payments_ok_test(config()) -> _.
+
+get_payments_ok_test(Config) ->
+    {create_payment_ok_test,
+        #{payment_id := PaymentID, invoice_id := InvoiceID} = Info
+    } = ?config(saved_config, Config),
+    Context = ?config(context, Config),
+    {ok, [#{<<"id">> := PaymentID}]} = get_payments(InvoiceID, Context),
+    {save_config, Info}.
+
 -spec get_payment_by_id_ok_test(config()) -> _.
 
 get_payment_by_id_ok_test(Config) ->
-    {create_payment_ok_test,
+    {get_payments_ok_test,
         #{payment_id := PaymentID, invoice_id := InvoiceID} = Info
     } = ?config(saved_config, Config),
     Context = ?config(context, Config),
@@ -1059,6 +1071,16 @@ default_create_contract(Config) ->
     {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
     Response = swagger_contracts_api:create_contract(Host, Port, PreparedParams),
     handle_response(Response).
+
+get_payments(InvoiceID, Context) ->
+    Params = #{
+        binding => #{
+            <<"invoiceID">> => InvoiceID
+        }
+    },
+    {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
+    Response = swagger_payments_api:get_payments(Host, Port, PreparedParams),
+    api_client_lib:handle_response(Response).
 
 get_contract_by_id(ContractID, Config) ->
     Context = ?config(context, Config),
