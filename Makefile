@@ -74,7 +74,7 @@ cover:
 
 # CALL_W_CONTAINER
 test: submodules
-	$(REBAR) do eunit ct
+	$(REBAR) do eunit, ct
 
 # Swagger stuff
 

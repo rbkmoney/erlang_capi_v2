@@ -214,7 +214,7 @@ process_request(OperationID = 'FulfillInvoice', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _} ->
-            {204, [], <<>>}; %%LIAR!
+            {204, [], <<>>};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -234,7 +234,7 @@ process_request(OperationID = 'RescindInvoice', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _} ->
-            {200, [], #{}};
+            {200, [], <<>>};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -250,6 +250,18 @@ process_request(OperationID = 'GetInvoiceEvents', Req, Context, ReqCtx) ->
     case Result of
         {ok, Events} when is_list(Events) ->
             Resp = [decode_event(I) || I <- Events],
+            {200, [], Resp};
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
+    end;
+
+process_request(OperationID = 'GetPayments', Req, Context, ReqCtx) ->
+    InvoiceID = maps:get(invoiceID, Req),
+    UserInfo = get_user_info(Context),
+    Result = get_invoice_by_id(ReqCtx, UserInfo, InvoiceID),
+    case Result of
+        {ok, #'payproc_InvoiceState'{payments = Payments}} ->
+            Resp = [decode_payment(InvoiceID, P) || P <- Payments],
             {200, [], Resp};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
@@ -734,7 +746,7 @@ process_request(OperationID = 'RevokeClaimByID', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _} ->
-            {200, [], #{}};
+            {200, [], <<>>};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
