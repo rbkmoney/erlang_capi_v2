@@ -1505,7 +1505,7 @@ decode_claim_status({'denied', #payproc_ClaimDenied{
 
 decode_claim_status({'revoked', _}) ->
     #{
-        <<"status">> =><<"ClaimRevoked">>
+        <<"status">> => <<"ClaimRevoked">>
     }.
 
 decode_party_changeset(PartyChangeset, ReqCtx) ->
