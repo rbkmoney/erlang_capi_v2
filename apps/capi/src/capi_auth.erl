@@ -10,7 +10,7 @@
 
 -spec authorize_api_key(
     OperationID :: swagger_api:operation_id(),
-    ApiKey :: binary()
+    ApiKey      :: swagger_api:api_key()
 ) -> {true, Context :: context()} | false.
 
 authorize_api_key(OperationID, ApiKey) ->
@@ -31,7 +31,7 @@ authorize_api_key(OperationID, ApiKey) ->
 log_auth_error(OperationID, Error) ->
     lager:info("API Key authorization failed for ~p due to ~p", [OperationID, Error]).
 
--spec parse_api_key(ApiKey :: binary()) ->
+-spec parse_api_key(ApiKey :: swagger_api:api_key()) ->
     {ok, {bearer, Credentials :: binary()}} | {error, Reason :: atom()}.
 
 parse_api_key(ApiKey) ->
