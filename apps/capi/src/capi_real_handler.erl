@@ -692,7 +692,7 @@ process_request(OperationID = 'GetClaimsByStatus', Req, Context, ReqCtx) ->
             {ok, {200, [], []}};
         {ok, Claim} ->
             Resp = decode_claim(Claim, ReqCtx),
-            {ok, {200, [], [Resp]}}; %% pretending to have more than one pending claim at the same tim}e
+            {ok, {200, [], [Resp]}}; %% pretending to have more than one pending claim at the same time
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -1491,7 +1491,7 @@ decode_claim_status({'accepted', #payproc_ClaimAccepted{
     accepted_at = AcceptedAt
 }}) ->
     #{
-        <<"status">> =><<"ClaimAccepted">>,
+        <<"status">> => <<"ClaimAccepted">>,
         <<"acceptedAt">> => AcceptedAt
     };
 
@@ -1787,7 +1787,7 @@ parse_rfc3339_datetime(DateTime) ->
     {DateFrom, TimeFrom}.
 
 process_exception(_, #payproc_InvalidUser{}) ->
-    {ok, {400, [], logic_error(invalidUser, <<"Ivalid user">>)}};
+    {ok, {400, [], logic_error(invalidUser, <<"Invalid user">>)}};
 
 process_exception(_, #'InvalidRequest'{errors = Errors}) ->
     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
