@@ -14,11 +14,7 @@
 -export([authorize_api_key/2]).
 -export([handle_request/3]).
 
--spec authorize_api_key(OperationID :: swagger_api:operation_id(), ApiKey :: binary()) ->
-    % TODO
-    % Swagger expects `map()` there instead of `capi_auth:context()` so we
-    % deliberately break his contract. We need to patch codegen to emit more
-    % relaxed spec (e.g. `term()`).
+-spec authorize_api_key(swagger_api:operation_id(), swagger_api:api_key()) ->
     Result :: false | {true, capi_auth:context()}.
 
 authorize_api_key(OperationID, ApiKey) ->
@@ -32,7 +28,7 @@ authorize_api_key(OperationID, ApiKey) ->
     Req :: request_data(),
     Context :: swagger_api:request_context()
 ) ->
-    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
+    swagger_logic_handler:handler_response().
 
 handle_request(OperationID, Req, Context) ->
     _ = lager:info("Processing request ~p", [OperationID]),
@@ -43,11 +39,11 @@ handle_request(OperationID, Req, Context) ->
                 process_request(OperationID, Req, Context, ReqContext);
             {error, _} = Error ->
                 _ = lager:info("Operation ~p authorization failed due to ~p", [OperationID, Error]),
-                {401, [], general_error(<<"Unauthorized operation">>)}
+                {error, {401, [], general_error(<<"Unauthorized operation">>)}}
         end
     catch
         error:{woody_error, {Source, Class, Details}} ->
-            process_woody_error(OperationID, Source, Class, Details)
+            {error, process_woody_error(OperationID, Source, Class, Details)}
     end.
 
 -spec process_request(
@@ -77,7 +73,7 @@ process_request(OperationID = 'CreateInvoice', Req, Context, ReqCtx) ->
     case Result of
         {ok, InvoiceID} ->
             {ok, #'payproc_InvoiceState'{invoice = Invoice}} = get_invoice_by_id(ReqCtx, UserInfo, InvoiceID),
-            {201, [], decode_invoice(Invoice)};
+            {ok, {201, [], decode_invoice(Invoice)}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -116,7 +112,7 @@ process_request(OperationID = 'CreatePayment', Req, Context, ReqCtx) ->
         {ok, PaymentID} ->
             {ok, Payment} = get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
             Resp = decode_payment(InvoiceID, Payment),
-            {201, [], Resp};
+            {ok, {201, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -161,15 +157,15 @@ process_request(OperationID = 'CreatePaymentToolToken', Req, Context, ReqCtx) ->
                         <<"token">> => Token,
                         <<"session">> => Session
                     },
-                    {201, [], Resp};
+                    {ok, {201, [], Resp}};
                 {exception, Exception} ->
                     process_exception(OperationID, Exception)
             end;
         _ ->
-            {400, [], logic_error(
+            {ok, {400, [], logic_error(
                 invalidPaymentTool,
                 <<"Specified payment tool is invalid or unsupported">>
-            )}
+            )}}
     end;
 
 process_request(OperationID = 'CreateInvoiceAccessToken', Req, Context, ReqCtx) ->
@@ -181,7 +177,7 @@ process_request(OperationID = 'CreateInvoiceAccessToken', Req, Context, ReqCtx) 
         {ok, #'payproc_InvoiceState'{}} ->
             {ok, Token} = capi_auth:issue_invoice_access_token(PartyID, InvoiceID),
             Resp = #{<<"payload">> => Token},
-            {201, [], Resp};
+            {ok, {201, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -193,7 +189,7 @@ process_request(OperationID = 'GetInvoiceByID', Req, Context, ReqCtx) ->
     case Result of
         {ok, #'payproc_InvoiceState'{invoice = Invoice}} ->
             Resp = decode_invoice(Invoice),
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -214,7 +210,7 @@ process_request(OperationID = 'FulfillInvoice', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _} ->
-            {204, [], <<>>};
+            {ok, {204, [], undefined}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -234,7 +230,7 @@ process_request(OperationID = 'RescindInvoice', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _} ->
-            {200, [], <<>>};
+            {ok, {204, [], undefined}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -250,7 +246,7 @@ process_request(OperationID = 'GetInvoiceEvents', Req, Context, ReqCtx) ->
     case Result of
         {ok, Events} when is_list(Events) ->
             Resp = [decode_event(I) || I <- Events],
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -262,7 +258,7 @@ process_request(OperationID = 'GetPayments', Req, Context, ReqCtx) ->
     case Result of
         {ok, #'payproc_InvoiceState'{payments = Payments}} ->
             Resp = [decode_payment(InvoiceID, P) || P <- Payments],
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -275,7 +271,7 @@ process_request(OperationID = 'GetPaymentByID', Req, Context, ReqCtx) ->
     case Result of
         {ok, Payment} ->
             Resp = decode_payment(InvoiceID, Payment),
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -313,7 +309,7 @@ process_request(OperationID = 'GetInvoices', Req, Context, ReqCtx) ->
                 <<"invoices">> => DecodedInvoices,
                 <<"totalCount">> => TotalCount
             },
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -325,7 +321,7 @@ process_request(OperationID = 'GetPaymentConversionStats', Req, Context, ReqCtx)
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
             Resp = [decode_stat_response(StatType, S) || S <- Stats],
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -338,7 +334,7 @@ process_request(OperationID = 'GetPaymentRevenueStats', Req, Context, ReqCtx) ->
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
             Resp = [decode_stat_response(StatType, S) || S <- Stats],
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -350,7 +346,7 @@ process_request(OperationID = 'GetPaymentGeoStats', Req, Context, ReqCtx) ->
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
             Resp = [decode_stat_response(StatType, S) || S <- Stats],
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -369,7 +365,7 @@ process_request(OperationID = 'GetPaymentRateStats', Req, Context, ReqCtx) ->
                 [StatResponse] ->
                     decode_stat_response(StatType, StatResponse)
             end,
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -382,7 +378,7 @@ process_request(OperationID = 'GetPaymentMethodStats', Req, Context, ReqCtx) ->
             case Result of
                 {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
                     Resp = [decode_stat_response(StatType, S) || S <- Stats],
-                    {200, [], Resp};
+                    {ok, {200, [], Resp}};
                 {exception, Exception} ->
                     process_exception(OperationID, Exception)
             end
@@ -406,7 +402,7 @@ process_request(OperationID = 'GetLocationsNames', Req, _Context, ReqCtx) ->
                 [],
                 LocationNames
             ),
-            {200, [], PreparedLocationNames};
+            {ok, {200, [], PreparedLocationNames}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -441,7 +437,7 @@ process_request(OperationID = 'CreateShop', Req, Context, ReqCtx) ->
 
     case Result of
         {ok, R} ->
-            {202, [], decode_claim_result(R)};
+            {ok, {202, [], decode_claim_result(R)}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -466,11 +462,11 @@ process_request(OperationID = 'ActivateShop', Req, Context, ReqCtx) ->
 
     case Result of
         {ok, _R} ->
-            {204, [], <<>>};
+            {ok, {204, [], undefined}};
         {exception, #payproc_InvalidShopStatus{
             status = {suspension, {active, _}}
         }} ->
-            {204, [], <<>>};
+            {ok, {204, [], undefined}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -495,11 +491,11 @@ process_request(OperationID = 'SuspendShop', Req, Context, ReqCtx) ->
 
     case Result of
         {ok, _R} ->
-            {204, [], <<>>};
+            {ok, {204, [], undefined}};
         {exception, #payproc_InvalidShopStatus{
             status = {suspension, {suspended, _}}
         }} ->
-            {204, [], <<>>};
+            {ok, {204, [], undefined}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -535,7 +531,7 @@ process_request(OperationID = 'UpdateShop', Req, Context, ReqCtx) ->
 
     case Result of
         {ok, R} ->
-            {202, [], decode_claim_result(R)};
+            {ok, {202, [], decode_claim_result(R)}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -547,7 +543,7 @@ process_request(OperationID = 'GetShops', _Req, Context, ReqCtx) ->
     case Result of
         {ok, #domain_Party{shops = Shops}} ->
             Resp = decode_shops_map(Shops, ReqCtx),
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -572,7 +568,7 @@ process_request(OperationID = 'GetShopByID', Req, Context, ReqCtx) ->
     case Result of
         {ok, Shop} ->
             Resp = decode_shop(Shop, ReqCtx),
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -587,7 +583,7 @@ process_request(OperationID = 'GetContracts', _Req, Context, ReqCtx) ->
             contracts = Contracts
         }} ->
             Resp = decode_contracts_map(Contracts),
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -615,7 +611,7 @@ process_request(OperationID = 'CreateContract', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, R} ->
-            {202, [], decode_claim_result(R)};
+            {ok, {202, [], decode_claim_result(R)}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -629,7 +625,7 @@ process_request(OperationID = 'GetContractByID', Req, Context, ReqCtx) ->
     case Result of
         {ok, Contract} ->
             Resp = decode_contract(Contract),
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -643,7 +639,7 @@ process_request(OperationID = 'GetPayoutTools', Req, Context, ReqCtx) ->
     case Result of
         {ok, #domain_Contract{payout_tools = PayoutTools}} ->
             Resp = [decode_payout_tool(P) || P <- PayoutTools],
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -669,7 +665,7 @@ process_request(OperationID = 'CreatePayoutTool', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, R} ->
-            {202, [], decode_claim_result(R)};
+            {ok, {202, [], decode_claim_result(R)}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -693,10 +689,10 @@ process_request(OperationID = 'GetClaimsByStatus', Req, Context, ReqCtx) ->
     ),
     case Result of
         {exception, #payproc_ClaimNotFound{}} ->
-            {200, [], []};
+            {ok, {200, [], []}};
         {ok, Claim} ->
             Resp = decode_claim(Claim, ReqCtx),
-            {200, [], [Resp]}; %% pretending to have more than one pending claim at the same time
+            {ok, {200, [], [Resp]}}; %% pretending to have more than one pending claim at the same time
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -720,7 +716,7 @@ process_request(OperationID = 'GetClaimByID', Req, Context, ReqCtx) ->
     case Result of
         {ok, Claim} ->
             Resp = decode_claim(Claim, ReqCtx),
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -746,7 +742,7 @@ process_request(OperationID = 'RevokeClaimByID', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _} ->
-            {200, [], <<>>};
+            {ok, {204, [], undefined}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -768,11 +764,11 @@ process_request(OperationID = 'SuspendMyParty', _Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _R} ->
-            {204, [], <<>>};
+            {ok, {204, [], undefined}};
         {exception, #payproc_InvalidPartyStatus{
             status = {suspension, {suspended, _}}
         }} ->
-            {204, [], <<>>};
+            {ok, {204, [], undefined}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -794,11 +790,11 @@ process_request(OperationID = 'ActivateMyParty', _Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _R} ->
-            {204, [], <<>>};
+            {ok, {204, [], undefined}};
         {exception, #payproc_InvalidPartyStatus{
             status = {suspension, {active, _}}
         }} ->
-            {204, [], <<>>};
+            {ok, {204, [], undefined}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -810,7 +806,7 @@ process_request(OperationID = 'GetMyParty', _Req, Context, ReqCtx) ->
     case Result of
         {ok, Party} ->
             Resp = decode_party(Party),
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -820,7 +816,7 @@ process_request(_OperationID = 'GetCategories', _Req, Context, ReqCtx) ->
     _ = get_party_id(Context),
     {ok, Categories} = capi_domain:get_categories(ReqCtx),
     Resp = [decode_category(C) || C <- Categories],
-    {200, [], Resp};
+    {ok, {200, [], Resp}};
 
 process_request(_OperationID = 'GetCategoryByRef', Req, Context0, ReqCtx) ->
     _ = get_user_info(Context0),
@@ -829,7 +825,7 @@ process_request(_OperationID = 'GetCategoryByRef', Req, Context0, ReqCtx) ->
     case get_category_by_id(genlib:to_int(CategoryID), ReqCtx) of
         {ok, Category} ->
             Resp = decode_category(Category),
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {error, not_found} ->
             {404, [], general_error(<<"Category not found">>)}
     end;
@@ -853,7 +849,7 @@ process_request(OperationID = 'GetAccountByID', Req, Context, ReqCtx) ->
     case Result of
         {ok, S} ->
             Resp = decode_account_state(S),
-            {200, [], Resp};
+            {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -1490,9 +1486,13 @@ decode_claim_status({'pending', _}) ->
     #{
         <<"status">> => <<"ClaimPending">>
     };
-decode_claim_status({'accepted', _}) ->
+
+decode_claim_status({'accepted', #payproc_ClaimAccepted{
+    accepted_at = AcceptedAt
+}}) ->
     #{
-        <<"status">> =><<"ClaimAccepted">>
+        <<"status">> => <<"ClaimAccepted">>,
+        <<"acceptedAt">> => AcceptedAt
     };
 
 decode_claim_status({'denied', #payproc_ClaimDenied{
@@ -1787,55 +1787,55 @@ parse_rfc3339_datetime(DateTime) ->
     {DateFrom, TimeFrom}.
 
 process_exception(_, #payproc_InvalidUser{}) ->
-    {400, [], logic_error(invalidUser, <<"Ivalid user">>)};
+    {ok, {400, [], logic_error(invalidUser, <<"Invalid user">>)}};
 
 process_exception(_, #'InvalidRequest'{errors = Errors}) ->
-    {400, [], logic_error(invalidRequest, format_request_errors(Errors))};
+    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
 
 process_exception(_, #payproc_UserInvoiceNotFound{}) ->
-    {404, [], general_error(<<"Invoice not found">>)};
+    {ok, {404, [], general_error(<<"Invoice not found">>)}};
 
 process_exception(_, #payproc_ClaimNotFound{}) ->
-    {404, [], general_error(<<"Claim not found">>)};
+    {ok, {404, [], general_error(<<"Claim not found">>)}};
 
 process_exception(_, #payproc_ContractNotFound{}) ->
-    {404, [], general_error(<<"Contract not found">>)};
+    {ok, {404, [], general_error(<<"Contract not found">>)}};
 
 process_exception(_,  #payproc_InvalidInvoiceStatus{}) ->
-    {400, [], logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)};
+    {ok, {400, [], logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)}};
 
 process_exception(_,  #payproc_InvalidPartyStatus{}) ->
-    {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)};
+    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
 
 process_exception(_, #payproc_InvoicePaymentPending{}) ->
-    {400, [], logic_error(invalidPaymentStatus, <<"Invalid payment status">>)};
+    {ok, {400, [], logic_error(invalidPaymentStatus, <<"Invalid payment status">>)}};
 
 process_exception(_, #payproc_InvalidShopStatus{}) ->
-    {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)};
+    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
 
 process_exception(_, #payproc_InvalidContractStatus{}) ->
-    {400, [], logic_error(invalidContractStatus, <<"Invalid contract status">>)};
+    {ok, {400, [], logic_error(invalidContractStatus, <<"Invalid contract status">>)}};
 
 process_exception(_, #payproc_PartyNotFound{}) ->
-    {404, [],  general_error(<<"Party not found">>)};
+    {ok, {404, [],  general_error(<<"Party not found">>)}};
 
 process_exception(_,  #'InvalidCardData'{}) ->
-    {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)};
+    {ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}};
 
 process_exception(_, #'KeyringLocked'{}) ->
-    {503, [], <<"">>};
+    {error, {503, [], <<"">>}};
 
 process_exception(_, #payproc_EventNotFound{}) ->
-    {404, [], general_error(<<"Event not found">>)};
+    {ok, {404, [], general_error(<<"Event not found">>)}};
 
 process_exception(_, #payproc_ShopNotFound{}) ->
-    {404, [], general_error(<<"Shop not found">>)};
+    {ok, {404, [], general_error(<<"Shop not found">>)}};
 
 process_exception(_, #payproc_InvoicePaymentNotFound{}) ->
-    {404, [], general_error(<<"Payment not found">>)};
+    {ok, {404, [], general_error(<<"Payment not found">>)}};
 
 process_exception(_, #merchstat_DatasetTooBig{limit = Limit}) ->
-    {400, [], limit_exceeded_error(Limit)}.
+    {ok, {400, [], limit_exceeded_error(Limit)}}.
 
 format_request_errors([]) ->
     <<>>;
