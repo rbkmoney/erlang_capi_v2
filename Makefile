@@ -16,7 +16,7 @@ SERVICE_IMAGE_PUSH_TAG ?= $(SERVICE_IMAGE_TAG)
 BASE_IMAGE_NAME := service_erlang
 BASE_IMAGE_TAG := 13454a94990acb72f753623ec13599a9f6f4f852
 
-BUILD_IMAGE_TAG := 08086c381de6de3f24464467a7bb93c2b60cc00b
+BUILD_IMAGE_TAG := 15f6e892862df724c4a6b52008ba274059471a10
 
 CALL_ANYWHERE := all submodules rebar-update compile xref lint dialyze test start devrel release clean distclean swagger.regenerate
 
@@ -77,7 +77,6 @@ test: submodules
 	$(REBAR) do eunit, ct
 
 # Swagger stuff
-
 SWAGGER_CODEGEN = $(call which, swagger-codegen)
 SWAGGER_SCHEME_PATH = schemes/swag
 SWAGGER_SCHEME = $(SWAGGER_SCHEME_PATH)/web_deploy/swagger.yaml
