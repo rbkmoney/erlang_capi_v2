@@ -14,7 +14,7 @@
 -export([authorize_api_key/2]).
 -export([handle_request/3]).
 
--spec authorize_api_key(swagger_api:operation_id(), swagger_api:api_key()) ->
+-spec authorize_api_key(swagger:operation_id(), swagger:api_key()) ->
     Result :: false | {true, capi_auth:context()}.
 
 authorize_api_key(OperationID, ApiKey) ->
@@ -24,11 +24,11 @@ authorize_api_key(OperationID, ApiKey) ->
 -type request_data() :: #{atom() | binary() => term()}.
 
 -spec handle_request(
-    OperationID :: swagger_api:operation_id(),
+    OperationID :: swagger:operation_id(),
     Req :: request_data(),
-    Context :: swagger_api:request_context()
+    Context :: swagger:request_context()
 ) ->
-    swagger_logic_handler:handler_response().
+    {ok | error, swagger_logic_handler:response()}.
 
 handle_request(OperationID, Req, Context) ->
     _ = lager:info("Processing request ~p", [OperationID]),
@@ -47,9 +47,9 @@ handle_request(OperationID, Req, Context) ->
     end.
 
 -spec process_request(
-    OperationID :: swagger_api:operation_id(),
+    OperationID :: swagger:operation_id(),
     Req :: request_data(),
-    Context :: swagger_api:request_context(),
+    Context :: swagger:request_context(),
     ReqCtx :: woody_context:ctx()
 ) ->
     {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
