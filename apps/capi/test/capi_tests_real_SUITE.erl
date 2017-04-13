@@ -95,7 +95,6 @@
 
 -define(MERCHANT_ID, <<"281220eb-a4ef-4d03-b666-bdec4b26c5f7">>).
 -define(LIVE_CATEGORY_ID, 100).
--define(API_CLIENT_SCHEMA_URI, "https://api.rbk.money/v1").
 
 -behaviour(supervisor).
 
@@ -260,11 +259,10 @@ init_per_suite(Config) ->
         retries => 10,
         timeout => 5000
     },
-    ok = api_client:init(#{schema_uri => ?API_CLIENT_SCHEMA_URI}),
     {ok, Token} = api_client_lib:login(Params),
     Retries = 10,
     Timeout = 5000,
-    Context = api_client_lib:get_context(?CAPI_HOST, ?CAPI_PORT, Token, ?API_CLIENT_SCHEMA_URI, Retries, Timeout),
+    Context = api_client_lib:get_context(?CAPI_HOST, ?CAPI_PORT, Token, Retries, Timeout),
     NewConfig = [{apps, lists:reverse(Apps)}, {context, Context}, {test_sup, SupPid} | Config],
     Proxies = [
         start_handler(capi_dummy_provider, 1, #{}, NewConfig),
@@ -369,7 +367,7 @@ create_invoice_access_token_ok_test(Config) ->
     Context = ?config(context, Config),
     {ok, Body} = api_client_invoices:create_invoice_access_token(Context, InvoiceID),
     #{<<"payload">> := TokenPayload} = Body,
-    InvoiceContext = api_client_lib:get_context(?CAPI_HOST, ?CAPI_PORT, TokenPayload, ?API_CLIENT_SCHEMA_URI, 10, 5000),
+    InvoiceContext = api_client_lib:get_context(?CAPI_HOST, ?CAPI_PORT, TokenPayload, 10, 5000),
     {save_config, #{
         invoice_id      => InvoiceID,
         invoice_context => InvoiceContext

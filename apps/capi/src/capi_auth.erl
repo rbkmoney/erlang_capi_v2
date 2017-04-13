@@ -9,8 +9,8 @@
 -export_type([context/0]).
 
 -spec authorize_api_key(
-    OperationID :: swagger_api:operation_id(),
-    ApiKey      :: swagger_api:api_key()
+    OperationID :: swagger:operation_id(),
+    ApiKey      :: swagger:api_key()
 ) -> {true, Context :: context()} | false.
 
 authorize_api_key(OperationID, ApiKey) ->
@@ -31,7 +31,7 @@ authorize_api_key(OperationID, ApiKey) ->
 log_auth_error(OperationID, Error) ->
     lager:info("API Key authorization failed for ~p due to ~p", [OperationID, Error]).
 
--spec parse_api_key(ApiKey :: swagger_api:api_key()) ->
+-spec parse_api_key(ApiKey :: swagger:api_key()) ->
     {ok, {bearer, Credentials :: binary()}} | {error, Reason :: atom()}.
 
 parse_api_key(ApiKey) ->
@@ -43,7 +43,7 @@ parse_api_key(ApiKey) ->
     end.
 
 -spec authorize_api_key(
-    OperationID :: swagger_api:operation_id(),
+    OperationID :: swagger:operation_id(),
     Type :: atom(),
     Credentials :: binary()
 ) ->
@@ -62,7 +62,7 @@ authorize_api_key(_OperationID, bearer, Token) ->
 -type request_data() :: #{atom() | binary() => term()}.
 
 -spec authorize_operation(
-    OperationID :: swagger_api:operation_id(),
+    OperationID :: swagger:operation_id(),
     Req :: request_data(),
     Auth :: capi_authorizer_jwt:t()
 ) ->
@@ -105,7 +105,7 @@ issue_invoice_access_token(PartyID, InvoiceID) ->
 
 %%
 
--spec get_operation_access(swagger_api:operation_id(), request_data()) ->
+-spec get_operation_access(swagger:operation_id(), request_data()) ->
     [{capi_acl:scope(), capi_acl:permission()}].
 
 get_operation_access('CreateInvoice'             , _) ->
