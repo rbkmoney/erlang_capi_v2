@@ -30,7 +30,7 @@ services:
         condition: service_started
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:6dae29bfab8ce09c26beaf8d9c2d5c8a678864e0
+    image: dr.rbkmoney.com/rbkmoney/hellgate:bf50fbffda6c65ebf055446dfb27ab31392a4881
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -40,7 +40,7 @@ services:
         condition: service_healthy
 
   cds:
-    image: dr.rbkmoney.com/rbkmoney/cds:1992157ed725cdc08ad3736370eee7a591e5edf9
+    image: dr.rbkmoney.com/rbkmoney/cds:8cfd8eb58dbc1091e235fb427b53eb94d2a73b09
     restart: always
     command: /opt/cds/bin/cds foreground
     healthcheck:
@@ -50,7 +50,7 @@ services:
       retries: 12
 
   machinegun:
-    image: dr.rbkmoney.com/rbkmoney/machinegun:138c13579dfc64e68695e6f69f1757b3c1160c83
+    image: dr.rbkmoney.com/rbkmoney/machinegun:e04e529f4c5682b527d12d73a13a3cf9eb296d4d
     restart: always
     command: /opt/machinegun/bin/machinegun foreground
     volumes:
@@ -62,7 +62,7 @@ services:
       retries: 12
 
   magista:
-    image: dr.rbkmoney.com/rbkmoney/magista:2e0c7fb4d21ebc277e608a75a8c384505cfc711a
+    image: dr.rbkmoney.com/rbkmoney/magista:74e1bbf7dde05b8af66ce62c8c55dc035b655f99
     restart: always
     entrypoint:
       - java
@@ -88,7 +88,7 @@ services:
      - postgres
 
   bustermaze:
-    image: dr.rbkmoney.com/rbkmoney/bustermaze:57c4cf3f9950b6ee46f67ffca286ebe8267bedde
+    image: dr.rbkmoney.com/rbkmoney/bustermaze:52ba5a4c3327221bd082af26ca44cebb827901fb
     restart: always
     entrypoint:
       - java
@@ -118,7 +118,7 @@ services:
      - postgres
 
   shumway:
-    image: dr.rbkmoney.com/rbkmoney/shumway:94e25fd3a3e7af4c73925fb051d999d7f38c271d
+    image: dr.rbkmoney.com/rbkmoney/shumway:38c389c0132887ae3dd24e169e964fba5ab31ca3
     restart: always
     entrypoint:
       - java
@@ -147,7 +147,7 @@ services:
      - postgres
 
   dominant:
-    image: dr.rbkmoney.com/rbkmoney/dominant:6d5a84327094016644ae470cdeb74aa6162c08b3
+    image: dr.rbkmoney.com/rbkmoney/dominant:e6af73a005779d5714a1d3b9e310a12f69f6fb0c
     restart: always
     command: /opt/dominant/bin/dominant foreground
     depends_on:
@@ -199,7 +199,7 @@ services:
       -jar /opt/pimp/pimp.jar
 
   keycloak:
-    image: dr.rbkmoney.com/rbkmoney/keycloak:585b792c57103eb90271dc86e92290d3891fdb07
+    image: dr.rbkmoney.com/rbkmoney/keycloak:a4c082f48695cb02e0624deb559f9ec0378abdb4
     healthcheck:
       test: curl --silent --show-error --output /dev/null localhost:8080/auth/realms/external
       interval: 10s
