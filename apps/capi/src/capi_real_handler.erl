@@ -287,8 +287,8 @@ process_request(OperationID = 'GetInvoices', Req, Context, ReqCtx) ->
         <<"merchant_id">> => get_party_id(Context),
         <<"shop_id">> => genlib_map:get('shopID', Req),
         <<"invoice_id">> =>  genlib_map:get('invoiceID', Req),
-        <<"from_time">> => genlib_map:get('fromTime', Req),
-        <<"to_time">> => genlib_map:get('toTime', Req),
+        <<"from_time">> => get_time('fromTime', Req),
+        <<"to_time">> => get_time('toTime', Req),
         <<"invoice_status">> => InvoiceStatus
     },
     QueryParams = #{
@@ -913,7 +913,7 @@ encode_invoice_params(PartyID, InvoiceParams) ->
         party_id = PartyID,
         details = encode_invoice_details(InvoiceParams),
         cost = encode_cash(InvoiceParams),
-        due      = genlib_map:get(<<"dueDate">>, InvoiceParams),
+        due      = get_time(<<"dueDate">>, InvoiceParams),
         context  = #'Content'{
             type = <<"application/json">>,
             data = InvoiceContext
@@ -1728,8 +1728,8 @@ encode_stat_request(Dsl) when is_binary(Dsl) ->
     }.
 
 create_stat_dsl(StatType, Req, Context) ->
-    FromTime = genlib_map:get('fromTime', Req),
-    ToTime = genlib_map:get('toTime', Req),
+    FromTime = get_time('fromTime', Req),
+    ToTime  = get_time('toTime', Req),
     SplitInterval = case StatType of
         customers_rate_stat ->
             get_time_diff(FromTime, ToTime);
@@ -1756,6 +1756,26 @@ call_merchant_stat(StatType, Req, Context, ReqCtx) ->
         [encode_stat_request(Dsl)],
         ReqCtx
     ).
+
+get_time(Key, Req) ->
+    to_universal_time(genlib_map:get(Key, Req)).
+
+to_universal_time(Tz = undefined) ->
+    Tz;
+to_universal_time(Tz) ->
+    {ok, {Date, Time, Usec, TzOffset}} = rfc3339:parse(Tz),
+    TzSec = calendar:datetime_to_gregorian_seconds({Date, Time}),
+    %% The following crappy code is a dialyzer workaround
+    %% for the wrong rfc3339:parse/1 spec.
+    {UtcDate, UtcTime} = calendar:gregorian_seconds_to_datetime(
+        case TzOffset of
+            _ when is_integer(TzOffset) ->
+                TzSec - (60*TzOffset);
+            _ ->
+                TzSec
+        end),
+    {ok, Utc} = rfc3339:format({UtcDate, UtcTime, Usec, 0}),
+    Utc.
 
 get_split_interval(SplitSize, minute) ->
     SplitSize * 60;
@@ -2062,3 +2082,18 @@ get_events(Limit, After, Context) ->
         ],
         maps:get(request_context, Context)
     ).
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+-spec test() -> _.
+
+-spec to_universal_time_test() -> _.
+to_universal_time_test() ->
+    ?assertEqual(undefined,                         to_universal_time(undefined)),
+    ?assertEqual(<<"2017-04-19T13:56:07Z">>,        to_universal_time(<<"2017-04-19T13:56:07Z">>)),
+    ?assertEqual(<<"2017-04-19T13:56:07.530000Z">>, to_universal_time(<<"2017-04-19T13:56:07.53Z">>)),
+    ?assertEqual(<<"2017-04-19T10:36:07.530000Z">>, to_universal_time(<<"2017-04-19T13:56:07.53+03:20">>)),
+    ?assertEqual(<<"2017-04-19T17:16:07.530000Z">>, to_universal_time(<<"2017-04-19T13:56:07.53-03:20">>)).
+
+-endif. %%TEST
