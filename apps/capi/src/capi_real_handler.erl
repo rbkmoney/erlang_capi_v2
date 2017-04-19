@@ -862,9 +862,13 @@ process_request(_OperationID, _Req, _Context, _ReqCtx) ->
 service_call(ServiceName, Function, Args, Context) ->
     cp_proto:call_service(ServiceName, Function, Args, Context, capi_woody_event_handler).
 
-create_context(Req) ->
-    RequestID = maps:get('X-Request-ID', Req),
-    woody_context:new(genlib:to_binary(RequestID)).
+create_context(#{'X-Request-ID' := RequestID}) ->
+    TraceID = woody_context:new_req_id(),
+    _ = lager:debug("Created TraceID:~p for RequestID:~p", [TraceID, RequestID]),
+    ParentID = genlib:to_binary(RequestID),
+    SpanID = woody_context:new_req_id(),
+    RpcID = woody_context:new_rpc_id(ParentID, TraceID, SpanID),
+    woody_context:new(RpcID).
 
 logic_error(Code, Message) ->
     #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)}.
