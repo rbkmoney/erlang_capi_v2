@@ -28,6 +28,8 @@ services:
         condition: service_started
       pimp:
         condition: service_started
+      hooker:
+        condition: service_healthy
 
   hellgate:
     image: dr.rbkmoney.com/rbkmoney/hellgate:6dae29bfab8ce09c26beaf8d9c2d5c8a678864e0
@@ -197,6 +199,35 @@ services:
     command:
       -Xmx512m
       -jar /opt/pimp/pimp.jar
+
+  hooker:
+    image: dr.rbkmoney.com/rbkmoney/hooker:ba90c93b9fff182b4228f02f6dd3130d87761165
+    healthcheck:
+      test: "curl -sS -o /dev/null http://localhost:8022/"
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    entrypoint:
+      - java
+      - -jar
+      - /opt/hooker/hooker.jar
+      - --spring.datasource.url=jdbc:postgresql://hooker-db:5432/hook
+      - --spring.datasource.username=postgres
+      - --spring.datasource.password=postgres
+      - --flyway.url=jdbc:postgresql://hooker-db:5432/hook
+      - --flyway.user=postgres
+      - --flyway.password=postgres
+      - --flyway.schemas=hook
+      - --bm.pooling.url=http://bustermaze:8022/repo
+    depends_on:
+      - hooker-db
+
+  hooker-db:
+    image: dr.rbkmoney.com/rbkmoney/postgres:9.6
+    environment:
+      - POSTGRES_DB=hook
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
 
   keycloak:
     image: dr.rbkmoney.com/rbkmoney/keycloak:585b792c57103eb90271dc86e92290d3891fdb07
