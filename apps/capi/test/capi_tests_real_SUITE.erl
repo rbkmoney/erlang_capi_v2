@@ -68,10 +68,13 @@
     create_payout_tool_ok_test/1,
     get_payout_tools_ok_test/1,
     %%%%
-    get_locations_names_ok_test/1,
-    %%%%
     set_merchant_callback_ok_test/1,
-    get_merchant_callback_ok_test/1
+    get_merchant_callback_ok_test/1,
+    %%%%
+    create_webhook_error_test/1,
+    create_webhook_receive_events_test/1,
+    %%%%
+    get_locations_names_ok_test/1
 ]).
 
 -define(KEYCLOAK_HOST, "keycloak").
@@ -79,19 +82,20 @@
 -define(KEYCLOAK_USER, "demo_merchant").
 -define(KEYCLOAK_PASSWORD, "test").
 
--define(CAPI_IP, "::").
--define(CAPI_HOST, "localhost").
--define(CAPI_PORT, 8080).
--define(CAPI_SERVICE_TYPE, real).
--define(CAPI_CDS_STORAGE_URL, "http://cds:8022/v1/storage").
--define(CAPI_INVOICING_URL, "http://hellgate:8022/v1/processing/invoicing").
--define(CAPI_MERCHANT_STAT_URL, "http://magista:8022/stat").
--define(CAPI_PARTY_MANAGEMENT_URL, "http://hellgate:8022/v1/processing/partymgmt").
--define(CAPI_REPOSITORY_URL, "http://dominant:8022/v1/domain/repository").
--define(CAPI_ACCOUNTER_URL, "http://shumway:8022/accounter").
--define(GEO_IP_URL, "http://columbus:8022/repo").
--define(MERCHANT_CONFIG_URL, "http://pimp:8022/capi").
--define(CAPI_HOST_NAME, "capi").
+-define(CAPI_IP                   , "::").
+-define(CAPI_HOST                 , "localhost").
+-define(CAPI_PORT                 , 8080).
+-define(CAPI_SERVICE_TYPE         , real).
+-define(CAPI_PARTY_MANAGEMENT_URL , "http://hellgate:8022/v1/processing/partymgmt").
+-define(CAPI_ACCOUNTER_URL        , "http://shumway:8022/accounter").
+-define(CAPI_INVOICING_URL        , "http://hellgate:8022/v1/processing/invoicing").
+-define(CAPI_MERCHANT_CONFIG_URL  , "http://pimp:8022/capi").
+-define(CAPI_WEBHOOK_MGR_URL      , "http://hooker:8022/hook").
+-define(CAPI_REPOSITORY_URL       , "http://dominant:8022/v1/domain/repository").
+-define(CAPI_CDS_STORAGE_URL      , "http://cds:8022/v1/storage").
+-define(CAPI_MERCHANT_STAT_URL    , "http://magista:8022/stat").
+-define(CAPI_GEO_IP_URL           , "http://columbus:8022/repo").
+-define(CAPI_HOST_NAME            , "capi").
 
 -define(MERCHANT_ID, <<"281220eb-a4ef-4d03-b666-bdec4b26c5f7">>).
 -define(LIVE_CATEGORY_ID, 100).
@@ -125,6 +129,7 @@ all() ->
         {group, claims_management},
         {group, shops_management},
         {group, accounts_management},
+        {group, webhook_management},
         {group, callback_management},
         {group, geo_ip}
     ].
@@ -219,6 +224,10 @@ groups() ->
             create_shop_ok_test,
             get_account_by_id_ok_test
         ]},
+        {webhook_management, [sequence], [
+            create_webhook_error_test,
+            create_webhook_receive_events_test
+        ]},
         {geo_ip, [parallel], [
             get_locations_names_ok_test
         ]}
@@ -239,14 +248,15 @@ init_per_suite(Config) ->
         capi_ct_helper:start_app(api_client) ++
         capi_ct_helper:start_app(cp_proto, [
             {service_urls, #{
-                cds_storage => ?CAPI_CDS_STORAGE_URL,
-                invoicing => ?CAPI_INVOICING_URL,
-                merchant_stat => ?CAPI_MERCHANT_STAT_URL,
                 party_management => ?CAPI_PARTY_MANAGEMENT_URL,
-                repository => ?CAPI_REPOSITORY_URL,
-                accounter => ?CAPI_ACCOUNTER_URL,
-                geo_ip_service => ?GEO_IP_URL,
-                merchant_config => ?MERCHANT_CONFIG_URL
+                accounter        => ?CAPI_ACCOUNTER_URL,
+                invoicing        => ?CAPI_INVOICING_URL,
+                merchant_config  => ?CAPI_MERCHANT_CONFIG_URL,
+                webhook_manager  => ?CAPI_WEBHOOK_MGR_URL,
+                repository       => ?CAPI_REPOSITORY_URL,
+                cds_storage      => ?CAPI_CDS_STORAGE_URL,
+                merchant_stat    => ?CAPI_MERCHANT_STAT_URL,
+                geo_ip_service   => ?CAPI_GEO_IP_URL
             }}
         ]),
     {ok, SupPid} = supervisor:start_link(?MODULE, []),
@@ -981,6 +991,48 @@ get_account_by_id_ok_test(Config) ->
 
     %% @FIXME changin Account ID to string is not ok
     } = default_get_shop_account_by_id(GuaranteeID, ShopID, Config).
+
+-spec create_webhook_error_test(config()) -> _.
+create_webhook_error_test(Config) ->
+    Context = ?config(context, Config),
+    ShopID = -1, % nonexistent
+    {error, _} = api_client_webhooks:create(Context, #{
+        <<"url">> => <<"http://localhost:8080/TODO">>,
+        <<"scope">> => construct_invoices_scope(ShopID)
+    }).
+
+-spec create_webhook_receive_events_test(config()) -> _.
+create_webhook_receive_events_test(Config) ->
+    Context = ?config(context, Config),
+    % list is empty?
+    [] = api_client_webhooks:list(Context),
+    % create successful?
+    Shop = get_latest(get_shops(Config)),
+    ShopID = maps:get(<<"id">>, Shop),
+    WebhookParams = #{
+        <<"url">>   => <<"http://localhost:8080/TODO">>,
+        <<"scope">> => construct_invoices_scope(ShopID, ['InvoiceCancelled'])
+    },
+    {ok, Webhook} = api_client_webhooks:create(Context, WebhookParams),
+    WebhookID = maps:get(<<"id">>, Shop),
+    {ok, Webhook} = api_client_webhooks:get(Context, WebhookID),
+    % list is not empty then?
+    [Webhook] = api_client_webhooks:list(Context),
+    % delete succeeded idempotently?
+    ok = api_client_webhooks:delete(Context, WebhookID),
+    ok = api_client_webhooks:delete(Context, WebhookID),
+    [] = api_client_webhooks:list(Context),
+    ok.
+
+construct_invoices_scope(ShopID) ->
+    construct_invoices_scope(ShopID, []).
+
+construct_invoices_scope(ShopID, EventTypes) ->
+    #{
+        <<"topic">> => <<"InvoicesTopic">>,
+        <<"shopID">> => ShopID,
+        <<"eventTypes">> => lists:map(fun genlib:to_binary/1, EventTypes)
+    }.
 
 -spec get_locations_names_ok_test(config()) -> _.
 get_locations_names_ok_test(Config) ->
