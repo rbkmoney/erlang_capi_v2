@@ -1,6 +1,6 @@
 [submodule "schemes/swag"]
 	path = schemes/swag
-	url = git@github.com:rbkmoney/swag.git
+	url = git@github.com:keynslug/swag.git
 [submodule "apps/cp_proto/damsel"]
 	path = apps/cp_proto/damsel
 	url = git@github.com:rbkmoney/damsel.git
