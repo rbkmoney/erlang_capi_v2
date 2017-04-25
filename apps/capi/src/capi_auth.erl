@@ -126,7 +126,9 @@ get_operation_access('GetPayments'               , #{'invoiceID' := ID}) ->
     [{[{invoices, ID}, payments], read}];
 get_operation_access('GetPaymentByID'            , #{'invoiceID' := ID1, paymentID := ID2}) ->
     [{[{invoices, ID1}, {payments, ID2}], read}];
-get_operation_access('GetInvoices'               , _) ->
+get_operation_access('SearchInvoices'            , _) ->
+    [{[invoices], read}];
+get_operation_access('SearchPayments'            , _) -> %% FUCKUP with access!
     [{[invoices], read}];
 get_operation_access('CreatePaymentToolToken'    , _) ->
     [{[payment_tool_tokens] , write}];

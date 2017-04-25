@@ -38,7 +38,8 @@
     get_payments_ok_test/1,
     get_payment_by_id_ok_test/1,
     %%%%
-    get_invoices_stats_ok_test/1,
+    search_invoices_ok_test/1,
+    search_payments_ok_test/1,
     get_payment_conversion_stats_ok_test/1,
     get_payment_revenue_stats_ok_test/1,
     get_payment_geo_stats_ok_test/1,
@@ -68,10 +69,7 @@
     create_payout_tool_ok_test/1,
     get_payout_tools_ok_test/1,
     %%%%
-    get_locations_names_ok_test/1,
-    %%%%
-    set_merchant_callback_ok_test/1,
-    get_merchant_callback_ok_test/1
+    get_locations_names_ok_test/1
 ]).
 
 -define(KEYCLOAK_HOST, "keycloak").
@@ -125,7 +123,6 @@ all() ->
         {group, claims_management},
         {group, shops_management},
         {group, accounts_management},
-        {group, callback_management},
         {group, geo_ip}
     ].
 
@@ -172,14 +169,9 @@ groups() ->
             create_payment_tool_token_w_access_token_ok_test,
             create_payment_ok_w_access_token_test
         ]},
-        {callback_management, [sequence], [
-            get_categories_ok_test,
-            get_category_by_id_ok_test,
-            set_merchant_callback_ok_test,
-            get_merchant_callback_ok_test
-        ]},
         {statistics, [sequence], [
-            get_invoices_stats_ok_test,
+            search_invoices_ok_test,
+            search_payments_ok_test,
             get_payment_conversion_stats_ok_test,
             get_payment_revenue_stats_ok_test,
             get_payment_geo_stats_ok_test,
@@ -575,9 +567,9 @@ get_payment_by_id_ok_test(Config) ->
     {ok, _Body} = api_client_payments:get_payment_by_id(Context, InvoiceID, PaymentID),
     {save_config, Info}.
 
--spec get_invoices_stats_ok_test(config()) -> _.
+-spec search_invoices_ok_test(config()) -> _.
 
-get_invoices_stats_ok_test(Config) ->
+search_invoices_ok_test(Config) ->
     Context = ?config(context, Config),
     ShopID = ?config(shop_id, Config),
     Query = [
@@ -585,10 +577,44 @@ get_invoices_stats_ok_test(Config) ->
         {offset, 2},
         {from_time, {{2015, 08, 11},{19, 42, 35}}},
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
-        {status, unpaid}
+        {invoiceStatus, <<"fulfilled">>},
+        {payerEmail, <<"test@test.ru">>},
+        {payerIP, <<"192.168.0.0.1">>},
+        {paymentStatus, <<"processed">>},
+        {invoiceID, <<"testInvoiceID">>},
+        {paymentID, <<"testPaymentID">>},
+        {payerEmail, <<"test@test_rbk.ru">>},
+        {payerIP, <<"192.168.0.1">>},
+        {payerFingerprint, <<"blablablalbalbal">>},
+    %    {cardNumberMask, <<"222222**2222">>},
+        {paymentAmount, 10000}
     ],
 
-    {ok, _, _} = api_client_searches:get_invoices(Context, ShopID, Query).
+    {ok, _, _} = api_client_searches:search_invoices(Context, ShopID, Query).
+
+-spec search_payments_ok_test(config()) -> _.
+
+search_payments_ok_test(Config) ->
+    Context = ?config(context, Config),
+    ShopID = ?config(shop_id, Config),
+    Query = [
+        {limit, 2},
+        {offset, 2},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {payerEmail, <<"test@test.ru">>},
+        {payerIP, <<"192.168.0.0.1">>},
+        {paymentStatus, <<"processed">>},
+        {invoiceID, <<"testInvoiceID">>},
+        {paymentID, <<"testPaymentID">>},
+        {payerEmail, <<"test@test_rbk.ru">>},
+        {payerIP, <<"192.168.0.1">>},
+        {payerFingerprint, <<"blablablalbalbal">>},
+    %    {cardNumberMask, <<"222222**2222">>},
+        {paymentAmount, 10000}
+    ],
+
+    {ok, _, _} = api_client_searches:search_payments(Context, ShopID, Query).
 
 -spec get_payment_conversion_stats_ok_test(config()) -> _.
 
@@ -922,46 +948,6 @@ activate_shop_idempotent_ok_test(Config) ->
     } = default_get_shop_by_id(ShopID, Config),
     {save_config, ShopID}.
 
--spec set_merchant_callback_ok_test(config()) -> _.
-
-set_merchant_callback_ok_test(Config) ->
-    {get_category_by_id_ok_test,
-        CategoryID
-    } = ?config(saved_config, Config),
-    CallbackUrl = <<"http://www.test.com">>,
-    ClaimID = default_create_shop(CategoryID, CallbackUrl, Config),
-    {ok, _} = default_approve_claim(ClaimID),
-    #{
-        <<"id">> := ClaimID,
-        <<"status">> :=  #{<<"status">> := <<"ClaimAccepted">>},
-        <<"changeset">> := [
-            #{
-                <<"partyModificationType">> := <<"ShopCreation">>,
-                <<"shop">> := #{
-                    <<"id">> := ShopID
-                }
-            } | _
-        ]
-    } = default_get_claim_by_id(ClaimID, Config),
-
-    {save_config, #{shop_id => ShopID, callback_url => CallbackUrl}}.
-
--spec get_merchant_callback_ok_test(config()) -> _.
-get_merchant_callback_ok_test(Config) ->
-    {set_merchant_callback_ok_test,
-        #{
-            shop_id := ShopID,
-            callback_url := CallbackUrl
-        }
-    } = ?config(saved_config, Config),
-    #{
-        <<"id">> := ShopID,
-        <<"callbackHandler">> := #{
-            <<"url">> := CallbackUrl,
-            <<"publicKey">> := _
-        }
-    } = default_get_shop_by_id(ShopID, Config).
-
 -spec get_account_by_id_ok_test(config()) -> _.
 
 get_account_by_id_ok_test(Config) ->
@@ -1225,9 +1211,6 @@ default_get_shop_by_id(ShopID, Config) ->
     R.
 
 default_create_shop(CategoryID, Config) ->
-    default_create_shop(CategoryID, undefined, Config).
-
-default_create_shop(CategoryID, CallbackUrl, Config) ->
     #{
         <<"claimID">> := ClaimID0
     } = default_create_contract(Config),
@@ -1239,10 +1222,10 @@ default_create_shop(CategoryID, CallbackUrl, Config) ->
     default_approve_claim(ClaimID1),
     #{<<"id">> := PayoutToolID} = get_latest(get_payout_tools(ContractID, Config)),
 
-    default_create_shop(CategoryID, ContractID, PayoutToolID, CallbackUrl, Config).
+    default_create_shop(CategoryID, ContractID, PayoutToolID, Config).
 
 
-default_create_shop(CategoryID, ContractID, PayoutToolID, CallbackUrl, Config) ->
+default_create_shop(CategoryID, ContractID, PayoutToolID, Config) ->
     Context = ?config(context, Config),
     Req = genlib_map:compact(#{
         <<"categoryID">> => CategoryID,
@@ -1251,8 +1234,7 @@ default_create_shop(CategoryID, ContractID, PayoutToolID, CallbackUrl, Config) -
             <<"description">> => <<"Goods for education">>
         },
         <<"contractID">> => ContractID,
-        <<"payoutToolID">> => PayoutToolID,
-        <<"callbackUrl">> => CallbackUrl
+        <<"payoutToolID">> => PayoutToolID
     }),
     {ok, ClaimID} = api_client_shops:create_shop(Context, Req),
     ClaimID.

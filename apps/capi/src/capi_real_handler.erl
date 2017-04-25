@@ -276,20 +276,24 @@ process_request(OperationID = 'GetPaymentByID', Req, Context, ReqCtx) ->
             process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'GetInvoices', Req, Context, ReqCtx) ->
+process_request(OperationID = 'SearchInvoices', Req, Context, ReqCtx) ->
     Limit = genlib_map:get('limit', Req),
     Offset = genlib_map:get('offset', Req),
-    InvoiceStatus = case genlib_map:get('status', Req) of
-        undefined -> undefined;
-        [Status | _] -> Status
-    end,  %%@TODO deal with many statuses
     Query = #{
         <<"merchant_id">> => get_party_id(Context),
         <<"shop_id">> => genlib_map:get('shopID', Req),
         <<"invoice_id">> =>  genlib_map:get('invoiceID', Req),
         <<"from_time">> => get_time('fromTime', Req),
         <<"to_time">> => get_time('toTime', Req),
-        <<"invoice_status">> => InvoiceStatus
+        <<"invoice_status">> => genlib_map:get('invoiceStatus', Req),
+        <<"payment_status">> => genlib_map:get('paymentStatus', Req),
+        <<"payment_id">> => genlib_map:get('paymentID', Req),
+        <<"payment_email">> => genlib_map:get('payerEmail', Req),
+        <<"payment_ip">> => genlib_map:get('payerIP', Req),
+        <<"payment_fingerprint">> => genlib_map:get('payerFingerprint', Req),
+        <<"payment_pan_mask">> => genlib_map:get('cardNumberMask', Req),
+        <<"payment_amount">> => genlib_map:get('paymentAmount', Req),
+        <<"invoice_amount">> => genlib_map:get('invoiceAmount', Req)
     },
     QueryParams = #{
         <<"size">> => Limit,
@@ -304,9 +308,55 @@ process_request(OperationID = 'GetInvoices', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, #merchstat_StatResponse{data = {'invoices', Invoices}, total_count = TotalCount}} ->
-            DecodedInvoices = [decode_invoice(I) || #merchstat_StatInvoice{invoice = I} <- Invoices],
+            DecodedInvoices = [decode_invoice_search_result(I) || #merchstat_StatInvoice{invoice = I} <- Invoices],
             Resp = #{
                 <<"invoices">> => DecodedInvoices,
+                <<"totalCount">> => TotalCount
+            },
+            {ok, {200, [], Resp}};
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
+    end;
+
+process_request(OperationID = 'SearchPayments', Req, Context, ReqCtx) ->
+    Limit = genlib_map:get('limit', Req),
+    Offset = genlib_map:get('offset', Req),
+    Query = #{
+        <<"merchant_id">> => get_party_id(Context),
+        <<"shop_id">> => genlib_map:get('shopID', Req),
+        <<"invoice_id">> =>  genlib_map:get('invoiceID', Req),
+        <<"from_time">> => get_time('fromTime', Req),
+        <<"to_time">> => get_time('toTime', Req),
+        <<"payment_status">> => genlib_map:get('paymentStatus', Req),
+        <<"payment_id">> => genlib_map:get('paymentID', Req),
+        <<"payment_email">> => genlib_map:get('payerEmail', Req),
+        <<"payment_ip">> => genlib_map:get('payerIP', Req),
+        <<"payment_fingerprint">> => genlib_map:get('payerFingerprint', Req),
+        <<"payment_pan_mask">> => genlib_map:get('cardNumberMask', Req),
+        <<"payment_amount">> => genlib_map:get('paymentAmount', Req)
+    },
+    QueryParams = #{
+        <<"size">> => Limit,
+        <<"from">> => Offset
+    },
+    Dsl = create_dsl(payments, Query, QueryParams),
+    Result = service_call(
+        merchant_stat,
+        'GetPayments',
+        [encode_stat_request(Dsl)],
+        ReqCtx
+    ),
+    case Result of
+        {ok, #merchstat_StatResponse{data = {'payments', Payments}, total_count = TotalCount}} ->
+            DecodedPayments = [
+                decode_payment_search_result(InvoiceID, I)
+                || #merchstat_StatPayment{
+                    invoice_id = InvoiceID,
+                    payment = I
+                } <- Payments
+            ],
+            Resp = #{
+                <<"payments">> => DecodedPayments,
                 <<"totalCount">> => TotalCount
             },
             {ok, {200, [], Resp}};
@@ -1133,6 +1183,10 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
         payment_tool = PaymentTool,
         session = PaymentSession,
         contact_info = ContactInfo
+    },
+    cost = #domain_Cash{
+        amount = Amount,
+        currency = Currency
     }
 }) ->
     genlib_map:compact(maps:merge(#{
@@ -1141,8 +1195,14 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
         <<"createdAt">> => CreatedAt,
         <<"paymentToolToken">> => decode_payment_tool_token(PaymentTool),
         <<"contactInfo">> => decode_contact_info(ContactInfo),
-        <<"paymentSession">> => PaymentSession
+        <<"paymentSession">> => PaymentSession,
+        <<"amount">> => Amount,
+        <<"currency">> => decode_currency(Currency)
     }, decode_payment_status(Status))).
+
+decode_payment_search_result(InvoiceID, PaymentSearchResult) ->
+    decode_payment(InvoiceID, PaymentSearchResult).
+
 
 decode_payment_tool_token({bank_card, BankCard}) ->
     encode_bank_card(BankCard).
@@ -1179,7 +1239,7 @@ decode_payment_status({Status, StatusInfo}) ->
 
 decode_invoice(#domain_Invoice{
     id = InvoiceID,
-    created_at = CreatedAt, %%@TODO add it to the swagger spec
+    created_at = CreatedAt,
     status = InvoiceStatus,
     due  = DueDate,
     details = #domain_InvoiceDetails{
@@ -1204,6 +1264,9 @@ decode_invoice(#domain_Invoice{
         <<"product">> => Product,
         <<"description">> => Description
     }, decode_invoice_status(InvoiceStatus))).
+
+decode_invoice_search_result(InvoiceSearchResult) ->
+    decode_invoice(InvoiceSearchResult).
 
 decode_invoice_status({Status, StatusInfo}) ->
     Reason = case StatusInfo of
