@@ -15,6 +15,8 @@
 -export([authorize_api_key/2]).
 -export([handle_request/3]).
 
+-define(ROOT_PARENT_ID, <<"undefined">>).
+
 -spec authorize_api_key(swagger:operation_id(), swagger:api_key()) ->
     Result :: false | {true, capi_auth:context()}.
 
@@ -1003,10 +1005,10 @@ service_call(ServiceName, Function, Args, Context) ->
 create_context(#{'X-Request-ID' := RequestID}) ->
     TraceID = woody_context:new_req_id(),
     _ = lager:debug("Created TraceID:~p for RequestID:~p", [TraceID, RequestID]),
-    ParentID = genlib:to_binary(RequestID),
-    SpanID = woody_context:new_req_id(),
-    RpcID = woody_context:new_rpc_id(ParentID, TraceID, SpanID),
-    woody_context:new(RpcID).
+    ParentID = ?ROOT_PARENT_ID,
+    SpanID = genlib:to_binary(RequestID),
+    RootRpcID = woody_context:new_rpc_id(ParentID, TraceID, SpanID),
+    woody_context:new(RootRpcID).
 
 logic_error(Code, Message) ->
     #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)}.

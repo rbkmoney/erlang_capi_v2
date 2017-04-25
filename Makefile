@@ -77,7 +77,8 @@ test: submodules
 	$(REBAR) do eunit, ct
 
 # Swagger stuff
-SWAGGER_CODEGEN = $(call which, swagger-codegen)
+#SWAGGER_CODEGEN = $(call which, swagger-codegen)
+SWAGGER_CODEGEN = java -jar ./swagger-codegen-cli.jar
 SWAGGER_SCHEME_PATH = schemes/swag
 SWAGGER_SCHEME = $(SWAGGER_SCHEME_PATH)/web_deploy/swagger.yaml
 SWAGGER_APP_PATH = apps/swagger

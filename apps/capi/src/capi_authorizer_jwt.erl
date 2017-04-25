@@ -244,6 +244,9 @@ verify(Token) ->
         error:badarg = Reason ->
             {error, {invalid_token, Reason}};
         error:{badarg, _} = Reason ->
+            {error, {invalid_token, Reason}};
+        %% failed base64 decode
+        error:{badmatch, _} = Reason ->
             {error, {invalid_token, Reason}}
     end.
 

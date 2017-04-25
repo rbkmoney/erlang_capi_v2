@@ -12,12 +12,6 @@
 
 %%
 
--define(DEFAULT_SWAG_POOL_OPTS, #{
-    max_count     => 10,
-    init_count    => 10,
-    cull_interval => {0, min}
-}).
-
 -spec start_link() -> {ok, pid()} | {error, {already_started, pid()}}.
 
 start_link() ->
@@ -31,8 +25,7 @@ init([]) ->
     AuthorizerSpecs = get_authorizer_child_specs(),
     {LogicHandler, LogicHandlerSpecs} = get_logic_handler_info(),
     {ok, IP} = inet:parse_address(genlib_app:env(?MODULE, ip, "::")),
-    PoolOpts = genlib_app:env(swagger, validator_pool_opts, ?DEFAULT_SWAG_POOL_OPTS),
-    SwaggerSpec = swagger_server:child_spec(swagger, #{
+    SwaggerSpec = capi_swagger_server:child_spec(swagger, #{
         ip                => IP,
         port              => genlib_app:env(capi, port, 8080),
         net_opts          => [],
