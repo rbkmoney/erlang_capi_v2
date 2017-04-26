@@ -240,7 +240,7 @@ groups() ->
 init_per_suite(Config) ->
     % _ = dbg:tracer(),
     % _ = dbg:p(all, c),
-    % _ = dbg:tpl({'capi_authorizer_jwt', '_', '_'}, x),
+    % _ = dbg:tpl({api_client_lib, 'handle_response', '_'}, x),
     Apps =
         capi_ct_helper:start_app(lager) ++
         capi_ct_helper:start_app(cowlib) ++
@@ -1004,8 +1004,8 @@ create_webhook_error_test(Config) ->
 -spec create_webhook_receive_events_test(config()) -> _.
 create_webhook_receive_events_test(Config) ->
     Context = ?config(context, Config),
-    % list is empty?
-    [] = api_client_webhooks:list(Context),
+    % % list is empty?
+    % [] = api_client_webhooks:list(Context),
     % create successful?
     Shop = get_latest(get_shops(Config)),
     ShopID = maps:get(<<"id">>, Shop),
@@ -1013,15 +1013,14 @@ create_webhook_receive_events_test(Config) ->
         <<"url">>   => <<"http://localhost:8080/TODO">>,
         <<"scope">> => construct_invoices_scope(ShopID, ['InvoiceCancelled'])
     },
-    {ok, Webhook} = api_client_webhooks:create(Context, WebhookParams),
-    WebhookID = maps:get(<<"id">>, Shop),
+    {ok, Webhook = #{<<"id">> := WebhookID}} = api_client_webhooks:create(Context, WebhookParams),
     {ok, Webhook} = api_client_webhooks:get(Context, WebhookID),
     % list is not empty then?
-    [Webhook] = api_client_webhooks:list(Context),
+    true = lists:member(Webhook, api_client_webhooks:list(Context)),
     % delete succeeded idempotently?
     ok = api_client_webhooks:delete(Context, WebhookID),
     ok = api_client_webhooks:delete(Context, WebhookID),
-    [] = api_client_webhooks:list(Context),
+    [] = [W || #{<<"id">> := W} <- api_client_webhooks:list(Context), W =:= WebhookID],
     ok.
 
 construct_invoices_scope(ShopID) ->

@@ -884,7 +884,7 @@ process_request(_OperationID = 'GetWebhooks', _Req, Context, ReqCtx) ->
 
 process_request(OperationID = 'GetWebhookByID', Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
-    WebhookID = maps:get(webhookID, Req),
+    WebhookID = binary_to_integer(maps:get(webhookID, Req)),
     case get_webhook(PartyID, WebhookID, ReqCtx) of
         {ok, Webhook} ->
             {ok, {200, [], decode_webhook(Webhook)}};
@@ -892,9 +892,9 @@ process_request(OperationID = 'GetWebhookByID', Req, Context, ReqCtx) ->
             process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'DeleteWebhook', Req, Context, ReqCtx) ->
+process_request(OperationID = 'DeleteWebhookByID', Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
-    WebhookID = maps:get(webhookID, Req),
+    WebhookID = binary_to_integer(maps:get(webhookID, Req)),
     case get_webhook(PartyID, WebhookID, ReqCtx) of
         {ok, #webhooker_Webhook{}} ->
             case service_call(webhook_manager, 'Delete', [WebhookID], ReqCtx) of
@@ -905,6 +905,8 @@ process_request(OperationID = 'DeleteWebhook', Req, Context, ReqCtx) ->
                 {exception, Exception} ->
                     process_exception(OperationID, Exception)
             end;
+        {exception, #webhooker_WebhookNotFound{}} ->
+            {ok, {204, [], undefined}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
     end;
@@ -1848,7 +1850,7 @@ decode_event_type(
     invoice,
     {created, #webhooker_InvoiceCreated{}}
 ) ->
-    <<"InvoiceCreated">>;
+    [<<"InvoiceCreated">>];
 decode_event_type(
     invoice,
     {status_changed, #webhooker_InvoiceStatusChanged{value = undefined}}
@@ -1863,12 +1865,12 @@ decode_event_type(
     invoice,
     {status_changed, #webhooker_InvoiceStatusChanged{value = Value}}
 ) ->
-    decode_invoice_status_event_type(Value);
+    [decode_invoice_status_event_type(Value)];
 decode_event_type(
     invoice,
     {payment, {created, #webhooker_InvoicePaymentCreated{}}}
 ) ->
-    <<"PaymentCreated">>;
+    [<<"PaymentCreated">>];
 decode_event_type(
     invoice,
     {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = undefined}}}
@@ -1884,7 +1886,7 @@ decode_event_type(
     invoice,
     {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = Value}}}
 ) ->
-    decode_payment_status_event_type(Value).
+    [decode_payment_status_event_type(Value)].
 
 decode_invoice_status_event_type(?invpaid())      -> <<"InvoicePaid">>;
 decode_invoice_status_event_type(?invcancelled()) -> <<"InvoiceCancelled">>;
@@ -2022,6 +2024,9 @@ process_exception(_, #'KeyringLocked'{}) ->
 
 process_exception(_, #payproc_EventNotFound{}) ->
     {ok, {404, [], general_error(<<"Event not found">>)}};
+
+process_exception('CreateWebhook', #payproc_ShopNotFound{}) ->
+    {ok, {400, [], general_error(<<"Shop not found">>)}};
 
 process_exception(_, #payproc_ShopNotFound{}) ->
     {ok, {404, [], general_error(<<"Shop not found">>)}};

@@ -201,7 +201,7 @@ services:
       -jar /opt/pimp/pimp.jar
 
   hooker:
-    image: dr.rbkmoney.com/rbkmoney/hooker:ba90c93b9fff182b4228f02f6dd3130d87761165
+    image: dr.rbkmoney.com/rbkmoney/hooker:4865b6ca2055eafcf9242bee7103be57cce02c6a
     healthcheck:
       test: "curl -sS -o /dev/null http://localhost:8022/"
       interval: 5s
@@ -221,6 +221,7 @@ services:
       - --bm.pooling.url=http://bustermaze:8022/repo
     depends_on:
       - hooker-db
+      - bustermaze
 
   hooker-db:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
