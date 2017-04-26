@@ -178,6 +178,14 @@ get_operation_access('CreateContract'            , _) ->
     [{[party], write}];
 get_operation_access('GetContractByID'           , _) ->
     [{[party], read}];
+get_operation_access('GetWebhooks'               , _) ->
+    [{[party], read}];
+get_operation_access('GetWebhookByID'            , _) ->
+    [{[party], read}];
+get_operation_access('CreateWebhook'             , _) ->
+    [{[party], write}];
+get_operation_access('DeleteWebhookByID'         , _) ->
+    [{[party], write}];
 get_operation_access('GetCategories'             , _) ->
     [];
 get_operation_access('GetCategoryByRef'          , _) ->
