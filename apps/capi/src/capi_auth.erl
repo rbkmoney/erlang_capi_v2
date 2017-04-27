@@ -126,8 +126,10 @@ get_operation_access('GetPayments'               , #{'invoiceID' := ID}) ->
     [{[{invoices, ID}, payments], read}];
 get_operation_access('GetPaymentByID'            , #{'invoiceID' := ID1, paymentID := ID2}) ->
     [{[{invoices, ID1}, {payments, ID2}], read}];
-get_operation_access('GetInvoices'               , _) ->
+get_operation_access('SearchInvoices'            , _) ->
     [{[invoices], read}];
+get_operation_access('SearchPayments'            , _) ->
+    [{[invoices, payments], read}];
 get_operation_access('CreatePaymentToolToken'    , _) ->
     [{[payment_tool_tokens] , write}];
 get_operation_access('GetPaymentConversionStats' , _) ->
@@ -176,6 +178,14 @@ get_operation_access('CreateContract'            , _) ->
     [{[party], write}];
 get_operation_access('GetContractByID'           , _) ->
     [{[party], read}];
+get_operation_access('GetWebhooks'               , _) ->
+    [{[party], read}];
+get_operation_access('GetWebhookByID'            , _) ->
+    [{[party], read}];
+get_operation_access('CreateWebhook'             , _) ->
+    [{[party], write}];
+get_operation_access('DeleteWebhookByID'         , _) ->
+    [{[party], write}];
 get_operation_access('GetCategories'             , _) ->
     [];
 get_operation_access('GetCategoryByRef'          , _) ->

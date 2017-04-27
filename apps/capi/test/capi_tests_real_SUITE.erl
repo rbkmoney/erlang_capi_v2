@@ -38,7 +38,8 @@
     get_payments_ok_test/1,
     get_payment_by_id_ok_test/1,
     %%%%
-    get_invoices_stats_ok_test/1,
+    search_invoices_ok_test/1,
+    search_payments_ok_test/1,
     get_payment_conversion_stats_ok_test/1,
     get_payment_revenue_stats_ok_test/1,
     get_payment_geo_stats_ok_test/1,
@@ -68,10 +69,9 @@
     create_payout_tool_ok_test/1,
     get_payout_tools_ok_test/1,
     %%%%
-    get_locations_names_ok_test/1,
-    %%%%
-    set_merchant_callback_ok_test/1,
-    get_merchant_callback_ok_test/1
+    create_webhook_error_test/1,
+    create_webhook_receive_events_test/1,
+    get_locations_names_ok_test/1
 ]).
 
 -define(KEYCLOAK_HOST, "keycloak").
@@ -79,19 +79,20 @@
 -define(KEYCLOAK_USER, "demo_merchant").
 -define(KEYCLOAK_PASSWORD, "test").
 
--define(CAPI_IP, "::").
--define(CAPI_HOST, "localhost").
--define(CAPI_PORT, 8080).
--define(CAPI_SERVICE_TYPE, real).
--define(CAPI_CDS_STORAGE_URL, "http://cds:8022/v1/storage").
--define(CAPI_INVOICING_URL, "http://hellgate:8022/v1/processing/invoicing").
--define(CAPI_MERCHANT_STAT_URL, "http://magista:8022/stat").
--define(CAPI_PARTY_MANAGEMENT_URL, "http://hellgate:8022/v1/processing/partymgmt").
--define(CAPI_REPOSITORY_URL, "http://dominant:8022/v1/domain/repository").
--define(CAPI_ACCOUNTER_URL, "http://shumway:8022/accounter").
--define(GEO_IP_URL, "http://columbus:8022/repo").
--define(MERCHANT_CONFIG_URL, "http://pimp:8022/capi").
--define(CAPI_HOST_NAME, "capi").
+-define(CAPI_IP                   , "::").
+-define(CAPI_HOST                 , "localhost").
+-define(CAPI_PORT                 , 8080).
+-define(CAPI_SERVICE_TYPE         , real).
+-define(CAPI_PARTY_MANAGEMENT_URL , "http://hellgate:8022/v1/processing/partymgmt").
+-define(CAPI_ACCOUNTER_URL        , "http://shumway:8022/accounter").
+-define(CAPI_INVOICING_URL        , "http://hellgate:8022/v1/processing/invoicing").
+-define(CAPI_MERCHANT_CONFIG_URL  , "http://pimp:8022/capi").
+-define(CAPI_WEBHOOK_MGR_URL      , "http://hooker:8022/hook").
+-define(CAPI_REPOSITORY_URL       , "http://dominant:8022/v1/domain/repository").
+-define(CAPI_CDS_STORAGE_URL      , "http://cds:8022/v1/storage").
+-define(CAPI_MERCHANT_STAT_URL    , "http://magista:8022/stat").
+-define(CAPI_GEO_IP_URL           , "http://columbus:8022/repo").
+-define(CAPI_HOST_NAME            , "capi").
 
 -define(MERCHANT_ID, <<"281220eb-a4ef-4d03-b666-bdec4b26c5f7">>).
 -define(LIVE_CATEGORY_ID, 100).
@@ -125,7 +126,7 @@ all() ->
         {group, claims_management},
         {group, shops_management},
         {group, accounts_management},
-        {group, callback_management},
+        {group, webhook_management},
         {group, geo_ip}
     ].
 
@@ -172,14 +173,9 @@ groups() ->
             create_payment_tool_token_w_access_token_ok_test,
             create_payment_ok_w_access_token_test
         ]},
-        {callback_management, [sequence], [
-            get_categories_ok_test,
-            get_category_by_id_ok_test,
-            set_merchant_callback_ok_test,
-            get_merchant_callback_ok_test
-        ]},
         {statistics, [sequence], [
-            get_invoices_stats_ok_test,
+            search_invoices_ok_test,
+            search_payments_ok_test,
             get_payment_conversion_stats_ok_test,
             get_payment_revenue_stats_ok_test,
             get_payment_geo_stats_ok_test,
@@ -219,6 +215,10 @@ groups() ->
             create_shop_ok_test,
             get_account_by_id_ok_test
         ]},
+        {webhook_management, [sequence], [
+            create_webhook_error_test,
+            create_webhook_receive_events_test
+        ]},
         {geo_ip, [parallel], [
             get_locations_names_ok_test
         ]}
@@ -231,7 +231,7 @@ groups() ->
 init_per_suite(Config) ->
     % _ = dbg:tracer(),
     % _ = dbg:p(all, c),
-    % _ = dbg:tpl({'capi_authorizer_jwt', '_', '_'}, x),
+    % _ = dbg:tpl({api_client_lib, 'handle_response', '_'}, x),
     Apps =
         capi_ct_helper:start_app(lager) ++
         capi_ct_helper:start_app(cowlib) ++
@@ -239,14 +239,15 @@ init_per_suite(Config) ->
         capi_ct_helper:start_app(api_client) ++
         capi_ct_helper:start_app(cp_proto, [
             {service_urls, #{
-                cds_storage => ?CAPI_CDS_STORAGE_URL,
-                invoicing => ?CAPI_INVOICING_URL,
-                merchant_stat => ?CAPI_MERCHANT_STAT_URL,
                 party_management => ?CAPI_PARTY_MANAGEMENT_URL,
-                repository => ?CAPI_REPOSITORY_URL,
-                accounter => ?CAPI_ACCOUNTER_URL,
-                geo_ip_service => ?GEO_IP_URL,
-                merchant_config => ?MERCHANT_CONFIG_URL
+                accounter        => ?CAPI_ACCOUNTER_URL,
+                invoicing        => ?CAPI_INVOICING_URL,
+                merchant_config  => ?CAPI_MERCHANT_CONFIG_URL,
+                webhook_manager  => ?CAPI_WEBHOOK_MGR_URL,
+                repository       => ?CAPI_REPOSITORY_URL,
+                cds_storage      => ?CAPI_CDS_STORAGE_URL,
+                merchant_stat    => ?CAPI_MERCHANT_STAT_URL,
+                geo_ip_service   => ?CAPI_GEO_IP_URL
             }}
         ]),
     {ok, SupPid} = supervisor:start_link(?MODULE, []),
@@ -575,9 +576,9 @@ get_payment_by_id_ok_test(Config) ->
     {ok, _Body} = api_client_payments:get_payment_by_id(Context, InvoiceID, PaymentID),
     {save_config, Info}.
 
--spec get_invoices_stats_ok_test(config()) -> _.
+-spec search_invoices_ok_test(config()) -> _.
 
-get_invoices_stats_ok_test(Config) ->
+search_invoices_ok_test(Config) ->
     Context = ?config(context, Config),
     ShopID = ?config(shop_id, Config),
     Query = [
@@ -585,10 +586,44 @@ get_invoices_stats_ok_test(Config) ->
         {offset, 2},
         {from_time, {{2015, 08, 11},{19, 42, 35}}},
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
-        {status, unpaid}
+        {invoiceStatus, <<"fulfilled">>},
+        {payerEmail, <<"test@test.ru">>},
+        {payerIP, <<"192.168.0.0.1">>},
+        {paymentStatus, <<"processed">>},
+        {invoiceID, <<"testInvoiceID">>},
+        {paymentID, <<"testPaymentID">>},
+        {payerEmail, <<"test@test_rbk.ru">>},
+        {payerIP, <<"192.168.0.1">>},
+        {payerFingerprint, <<"blablablalbalbal">>},
+    %    {cardNumberMask, <<"222222**2222">>},
+        {paymentAmount, 10000}
     ],
 
-    {ok, _, _} = api_client_searches:get_invoices(Context, ShopID, Query).
+    {ok, _, _} = api_client_searches:search_invoices(Context, ShopID, Query).
+
+-spec search_payments_ok_test(config()) -> _.
+
+search_payments_ok_test(Config) ->
+    Context = ?config(context, Config),
+    ShopID = ?config(shop_id, Config),
+    Query = [
+        {limit, 2},
+        {offset, 2},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {payerEmail, <<"test@test.ru">>},
+        {payerIP, <<"192.168.0.0.1">>},
+        {paymentStatus, <<"processed">>},
+        {invoiceID, <<"testInvoiceID">>},
+        {paymentID, <<"testPaymentID">>},
+        {payerEmail, <<"test@test_rbk.ru">>},
+        {payerIP, <<"192.168.0.1">>},
+        {payerFingerprint, <<"blablablalbalbal">>},
+    %    {cardNumberMask, <<"222222**2222">>},
+        {paymentAmount, 10000}
+    ],
+
+    {ok, _, _} = api_client_searches:search_payments(Context, ShopID, Query).
 
 -spec get_payment_conversion_stats_ok_test(config()) -> _.
 
@@ -922,46 +957,6 @@ activate_shop_idempotent_ok_test(Config) ->
     } = default_get_shop_by_id(ShopID, Config),
     {save_config, ShopID}.
 
--spec set_merchant_callback_ok_test(config()) -> _.
-
-set_merchant_callback_ok_test(Config) ->
-    {get_category_by_id_ok_test,
-        CategoryID
-    } = ?config(saved_config, Config),
-    CallbackUrl = <<"http://www.test.com">>,
-    ClaimID = default_create_shop(CategoryID, CallbackUrl, Config),
-    {ok, _} = default_approve_claim(ClaimID),
-    #{
-        <<"id">> := ClaimID,
-        <<"status">> :=  #{<<"status">> := <<"ClaimAccepted">>},
-        <<"changeset">> := [
-            #{
-                <<"partyModificationType">> := <<"ShopCreation">>,
-                <<"shop">> := #{
-                    <<"id">> := ShopID
-                }
-            } | _
-        ]
-    } = default_get_claim_by_id(ClaimID, Config),
-
-    {save_config, #{shop_id => ShopID, callback_url => CallbackUrl}}.
-
--spec get_merchant_callback_ok_test(config()) -> _.
-get_merchant_callback_ok_test(Config) ->
-    {set_merchant_callback_ok_test,
-        #{
-            shop_id := ShopID,
-            callback_url := CallbackUrl
-        }
-    } = ?config(saved_config, Config),
-    #{
-        <<"id">> := ShopID,
-        <<"callbackHandler">> := #{
-            <<"url">> := CallbackUrl,
-            <<"publicKey">> := _
-        }
-    } = default_get_shop_by_id(ShopID, Config).
-
 -spec get_account_by_id_ok_test(config()) -> _.
 
 get_account_by_id_ok_test(Config) ->
@@ -981,6 +976,47 @@ get_account_by_id_ok_test(Config) ->
 
     %% @FIXME changin Account ID to string is not ok
     } = default_get_shop_account_by_id(GuaranteeID, ShopID, Config).
+
+-spec create_webhook_error_test(config()) -> _.
+create_webhook_error_test(Config) ->
+    Context = ?config(context, Config),
+    ShopID = -1, % nonexistent
+    {error, _} = api_client_webhooks:create_webhook(Context, #{
+        <<"url">> => <<"http://localhost:8080/TODO">>,
+        <<"scope">> => construct_invoices_scope(ShopID)
+    }).
+
+-spec create_webhook_receive_events_test(config()) -> _.
+create_webhook_receive_events_test(Config) ->
+    Context = ?config(context, Config),
+    % % list is empty?
+    % [] = api_client_webhooks:get_webhooks(Context),
+    % create successful?
+    Shop = get_latest(get_shops(Config)),
+    ShopID = maps:get(<<"id">>, Shop),
+    WebhookParams = #{
+        <<"url">>   => <<"http://localhost:8080/TODO">>,
+        <<"scope">> => construct_invoices_scope(ShopID, ['InvoiceCancelled'])
+    },
+    {ok, Webhook = #{<<"id">> := WebhookID}} = api_client_webhooks:create_webhook(Context, WebhookParams),
+    {ok, Webhook} = api_client_webhooks:get_webhook_by_id(Context, WebhookID),
+    % list is not empty then?
+    true = lists:member(Webhook, api_client_webhooks:get_webhooks(Context)),
+    % delete succeeded idempotently?
+    ok = api_client_webhooks:delete_webhook_by_id(Context, WebhookID),
+    ok = api_client_webhooks:delete_webhook_by_id(Context, WebhookID),
+    [] = [W || #{<<"id">> := W} <- api_client_webhooks:get_webhooks(Context), W =:= WebhookID],
+    ok.
+
+construct_invoices_scope(ShopID) ->
+    construct_invoices_scope(ShopID, []).
+
+construct_invoices_scope(ShopID, EventTypes) ->
+    #{
+        <<"topic">> => <<"InvoicesTopic">>,
+        <<"shopID">> => ShopID,
+        <<"eventTypes">> => lists:map(fun genlib:to_binary/1, EventTypes)
+    }.
 
 -spec get_locations_names_ok_test(config()) -> _.
 get_locations_names_ok_test(Config) ->
@@ -1225,9 +1261,6 @@ default_get_shop_by_id(ShopID, Config) ->
     R.
 
 default_create_shop(CategoryID, Config) ->
-    default_create_shop(CategoryID, undefined, Config).
-
-default_create_shop(CategoryID, CallbackUrl, Config) ->
     #{
         <<"claimID">> := ClaimID0
     } = default_create_contract(Config),
@@ -1239,10 +1272,10 @@ default_create_shop(CategoryID, CallbackUrl, Config) ->
     default_approve_claim(ClaimID1),
     #{<<"id">> := PayoutToolID} = get_latest(get_payout_tools(ContractID, Config)),
 
-    default_create_shop(CategoryID, ContractID, PayoutToolID, CallbackUrl, Config).
+    default_create_shop(CategoryID, ContractID, PayoutToolID, Config).
 
 
-default_create_shop(CategoryID, ContractID, PayoutToolID, CallbackUrl, Config) ->
+default_create_shop(CategoryID, ContractID, PayoutToolID, Config) ->
     Context = ?config(context, Config),
     Req = genlib_map:compact(#{
         <<"categoryID">> => CategoryID,
@@ -1251,8 +1284,7 @@ default_create_shop(CategoryID, ContractID, PayoutToolID, CallbackUrl, Config) -
             <<"description">> => <<"Goods for education">>
         },
         <<"contractID">> => ContractID,
-        <<"payoutToolID">> => PayoutToolID,
-        <<"callbackUrl">> => CallbackUrl
+        <<"payoutToolID">> => PayoutToolID
     }),
     {ok, ClaimID} = api_client_shops:create_shop(Context, Req),
     ClaimID.

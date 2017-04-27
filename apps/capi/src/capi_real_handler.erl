@@ -5,6 +5,7 @@
 -include_lib("cp_proto/include/cp_cds_thrift.hrl").
 -include_lib("cp_proto/include/cp_merch_stat_thrift.hrl").
 -include_lib("cp_proto/include/cp_proxy_merch_config_thrift.hrl").
+-include_lib("cp_proto/include/cp_webhooker_thrift.hrl").
 -include_lib("cp_proto/include/cp_user_interaction_thrift.hrl").
 -include_lib("cp_proto/include/cp_geo_ip_thrift.hrl").
 
@@ -276,20 +277,24 @@ process_request(OperationID = 'GetPaymentByID', Req, Context, ReqCtx) ->
             process_exception(OperationID, Exception)
     end;
 
-process_request(OperationID = 'GetInvoices', Req, Context, ReqCtx) ->
+process_request(OperationID = 'SearchInvoices', Req, Context, ReqCtx) ->
     Limit = genlib_map:get('limit', Req),
     Offset = genlib_map:get('offset', Req),
-    InvoiceStatus = case genlib_map:get('status', Req) of
-        undefined -> undefined;
-        [Status | _] -> Status
-    end,  %%@TODO deal with many statuses
     Query = #{
         <<"merchant_id">> => get_party_id(Context),
         <<"shop_id">> => genlib_map:get('shopID', Req),
         <<"invoice_id">> =>  genlib_map:get('invoiceID', Req),
         <<"from_time">> => get_time('fromTime', Req),
         <<"to_time">> => get_time('toTime', Req),
-        <<"invoice_status">> => InvoiceStatus
+        <<"invoice_status">> => genlib_map:get('invoiceStatus', Req),
+        <<"payment_status">> => genlib_map:get('paymentStatus', Req),
+        <<"payment_id">> => genlib_map:get('paymentID', Req),
+        <<"payment_email">> => genlib_map:get('payerEmail', Req),
+        <<"payment_ip">> => genlib_map:get('payerIP', Req),
+        <<"payment_fingerprint">> => genlib_map:get('payerFingerprint', Req),
+        <<"payment_pan_mask">> => genlib_map:get('cardNumberMask', Req),
+        <<"payment_amount">> => genlib_map:get('paymentAmount', Req),
+        <<"invoice_amount">> => genlib_map:get('invoiceAmount', Req)
     },
     QueryParams = #{
         <<"size">> => Limit,
@@ -304,9 +309,55 @@ process_request(OperationID = 'GetInvoices', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, #merchstat_StatResponse{data = {'invoices', Invoices}, total_count = TotalCount}} ->
-            DecodedInvoices = [decode_invoice(I) || #merchstat_StatInvoice{invoice = I} <- Invoices],
+            DecodedInvoices = [decode_invoice_search_result(I) || #merchstat_StatInvoice{invoice = I} <- Invoices],
             Resp = #{
                 <<"invoices">> => DecodedInvoices,
+                <<"totalCount">> => TotalCount
+            },
+            {ok, {200, [], Resp}};
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
+    end;
+
+process_request(OperationID = 'SearchPayments', Req, Context, ReqCtx) ->
+    Limit = genlib_map:get('limit', Req),
+    Offset = genlib_map:get('offset', Req),
+    Query = #{
+        <<"merchant_id">> => get_party_id(Context),
+        <<"shop_id">> => genlib_map:get('shopID', Req),
+        <<"invoice_id">> =>  genlib_map:get('invoiceID', Req),
+        <<"from_time">> => get_time('fromTime', Req),
+        <<"to_time">> => get_time('toTime', Req),
+        <<"payment_status">> => genlib_map:get('paymentStatus', Req),
+        <<"payment_id">> => genlib_map:get('paymentID', Req),
+        <<"payment_email">> => genlib_map:get('payerEmail', Req),
+        <<"payment_ip">> => genlib_map:get('payerIP', Req),
+        <<"payment_fingerprint">> => genlib_map:get('payerFingerprint', Req),
+        <<"payment_pan_mask">> => genlib_map:get('cardNumberMask', Req),
+        <<"payment_amount">> => genlib_map:get('paymentAmount', Req)
+    },
+    QueryParams = #{
+        <<"size">> => Limit,
+        <<"from">> => Offset
+    },
+    Dsl = create_dsl(payments, Query, QueryParams),
+    Result = service_call(
+        merchant_stat,
+        'GetPayments',
+        [encode_stat_request(Dsl)],
+        ReqCtx
+    ),
+    case Result of
+        {ok, #merchstat_StatResponse{data = {'payments', Payments}, total_count = TotalCount}} ->
+            DecodedPayments = [
+                decode_payment_search_result(InvoiceID, I)
+                || #merchstat_StatPayment{
+                    invoice_id = InvoiceID,
+                    payment = I
+                } <- Payments
+            ],
+            Resp = #{
+                <<"payments">> => DecodedPayments,
                 <<"totalCount">> => TotalCount
             },
             {ok, {200, [], Resp}};
@@ -854,8 +905,82 @@ process_request(OperationID = 'GetAccountByID', Req, Context, ReqCtx) ->
             process_exception(OperationID, Exception)
     end;
 
+process_request(OperationID = 'CreateWebhook', Req, Context, ReqCtx) ->
+    PartyID = get_party_id(Context),
+    Params = maps:get('WebhookParams', Req),
+    EventFilter = encode_event_filter(maps:get(<<"scope">>, Params)),
+    case validate_event_filter(EventFilter, Context, ReqCtx) of
+        {ok, _} ->
+            WebhookParams = #webhooker_WebhookParams{
+                party_id     = PartyID,
+                url          = maps:get(<<"url">>, Params),
+                event_filter = EventFilter
+            },
+            case service_call(webhook_manager, 'Create', [WebhookParams], ReqCtx) of
+                {ok, Webhook} ->
+                    Resp = decode_webhook(Webhook),
+                    {ok, {201, [], Resp}};
+                {exception, Exception} ->
+                    process_exception(OperationID, Exception)
+            end;
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
+    end;
+
+process_request(_OperationID = 'GetWebhooks', _Req, Context, ReqCtx) ->
+    PartyID = get_party_id(Context),
+    {ok, Webhooks} = service_call(webhook_manager, 'GetList', [PartyID], ReqCtx),
+    {ok, {200, [], [decode_webhook(V) || V <- Webhooks]}};
+
+process_request(OperationID = 'GetWebhookByID', Req, Context, ReqCtx) ->
+    PartyID = get_party_id(Context),
+    WebhookID = binary_to_integer(maps:get(webhookID, Req)),
+    case get_webhook(PartyID, WebhookID, ReqCtx) of
+        {ok, Webhook} ->
+            {ok, {200, [], decode_webhook(Webhook)}};
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
+    end;
+
+process_request(OperationID = 'DeleteWebhookByID', Req, Context, ReqCtx) ->
+    PartyID = get_party_id(Context),
+    WebhookID = binary_to_integer(maps:get(webhookID, Req)),
+    case get_webhook(PartyID, WebhookID, ReqCtx) of
+        {ok, #webhooker_Webhook{}} ->
+            case service_call(webhook_manager, 'Delete', [WebhookID], ReqCtx) of
+                {ok, _} ->
+                    {ok, {204, [], undefined}};
+                {exception, #webhooker_WebhookNotFound{}} ->
+                    {ok, {204, [], undefined}};
+                {exception, Exception} ->
+                    process_exception(OperationID, Exception)
+            end;
+        {exception, #webhooker_WebhookNotFound{}} ->
+            {ok, {204, [], undefined}};
+        {exception, Exception} ->
+            process_exception(OperationID, Exception)
+    end;
+
 process_request(_OperationID, _Req, _Context, _ReqCtx) ->
     {501, [], <<"Not implemented">>}.
+
+validate_event_filter({invoice, #webhooker_InvoiceEventFilter{
+    shop_id = ShopID
+}}, Context, ReqCtx) when ShopID /= undefined ->
+    PartyID = get_party_id(Context),
+    UserInfo = get_user_info(Context),
+    service_call(party_management, 'GetShop', [UserInfo, PartyID, ShopID], ReqCtx).
+
+get_webhook(PartyID, WebhookID, ReqCtx) ->
+    Result = service_call(webhook_manager, 'Get', [WebhookID], ReqCtx),
+    case Result of
+        {ok, Webhook = #webhooker_Webhook{party_id = PartyID}} ->
+            {ok, Webhook};
+        {ok, _Webhook} ->
+            {exception, #webhooker_WebhookNotFound{}};
+        {exception, Exception} ->
+            {exception, Exception}
+    end.
 
 %%%
 
@@ -1133,6 +1258,10 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
         payment_tool = PaymentTool,
         session = PaymentSession,
         contact_info = ContactInfo
+    },
+    cost = #domain_Cash{
+        amount = Amount,
+        currency = Currency
     }
 }) ->
     genlib_map:compact(maps:merge(#{
@@ -1141,8 +1270,14 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
         <<"createdAt">> => CreatedAt,
         <<"paymentToolToken">> => decode_payment_tool_token(PaymentTool),
         <<"contactInfo">> => decode_contact_info(ContactInfo),
-        <<"paymentSession">> => PaymentSession
+        <<"paymentSession">> => PaymentSession,
+        <<"amount">> => Amount,
+        <<"currency">> => decode_currency(Currency)
     }, decode_payment_status(Status))).
+
+decode_payment_search_result(InvoiceID, PaymentSearchResult) ->
+    decode_payment(InvoiceID, PaymentSearchResult).
+
 
 decode_payment_tool_token({bank_card, BankCard}) ->
     encode_bank_card(BankCard).
@@ -1179,7 +1314,7 @@ decode_payment_status({Status, StatusInfo}) ->
 
 decode_invoice(#domain_Invoice{
     id = InvoiceID,
-    created_at = CreatedAt, %%@TODO add it to the swagger spec
+    created_at = CreatedAt,
     status = InvoiceStatus,
     due  = DueDate,
     details = #domain_InvoiceDetails{
@@ -1204,6 +1339,9 @@ decode_invoice(#domain_Invoice{
         <<"product">> => Product,
         <<"description">> => Description
     }, decode_invoice_status(InvoiceStatus))).
+
+decode_invoice_search_result(InvoiceSearchResult) ->
+    decode_invoice(InvoiceSearchResult).
 
 decode_invoice_status({Status, StatusInfo}) ->
     Reason = case StatusInfo of
@@ -1723,6 +1861,125 @@ encode_currency(SymbolicCode) ->
         symbolic_code = SymbolicCode
     }.
 
+encode_event_filter(#{
+    <<"topic">>      := <<"InvoicesTopic">>,
+    <<"shopID">>     := ShopID,
+    <<"eventTypes">> := EventTypes
+}) ->
+    {invoice, #webhooker_InvoiceEventFilter{
+        shop_id = ShopID,
+        types   = ordsets:from_list([
+            encode_event_type(invoices, V) || V <- EventTypes
+        ])
+    }}.
+
+-define(invpaid()      , {paid, #webhooker_InvoicePaid{}}).
+-define(invcancelled() , {cancelled, #webhooker_InvoiceCancelled{}}).
+-define(invfulfilled() , {fulfilled, #webhooker_InvoiceFulfilled{}}).
+
+-define(pmtprocessed() , {processed, #webhooker_InvoicePaymentProcessed{}}).
+-define(pmtcaptured()  , {captured, #webhooker_InvoicePaymentCaptured{}}).
+-define(pmtcancelled() , {cancelled, #webhooker_InvoicePaymentCancelled{}}).
+-define(pmtfailed()    , {failed, #webhooker_InvoicePaymentFailed{}}).
+
+encode_event_type(invoices, <<"InvoiceCreated">>) ->
+    {created, #webhooker_InvoiceCreated{}};
+encode_event_type(invoices, <<"InvoicePaid">>) ->
+    {status_changed, #webhooker_InvoiceStatusChanged{value = ?invpaid()}};
+encode_event_type(invoices, <<"InvoiceCancelled">>) ->
+    {status_changed, #webhooker_InvoiceStatusChanged{value = ?invcancelled()}};
+encode_event_type(invoices, <<"InvoiceFulfilled">>) ->
+    {status_changed, #webhooker_InvoiceStatusChanged{value = ?invfulfilled()}};
+encode_event_type(invoices, <<"PaymentCreated">>) ->
+    {payment, {created, #webhooker_InvoicePaymentCreated{}}};
+encode_event_type(invoices, <<"PaymentProcessed">>) ->
+    {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtprocessed()}}};
+encode_event_type(invoices, <<"PaymentCaptured">>) ->
+    {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtcaptured()}}};
+encode_event_type(invoices, <<"PaymentCancelled">>) ->
+    {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtcancelled()}}};
+encode_event_type(invoices, <<"PaymentFailed">>) ->
+    {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtfailed()}}}.
+
+decode_event_filter({invoice, #webhooker_InvoiceEventFilter{
+    shop_id = ShopID,
+    types   = EventTypes
+}}) ->
+    #{
+        <<"topic">>      => <<"InvoicesTopic">>,
+        <<"shopID">>     => ShopID,
+        <<"eventTypes">> => lists:flatmap(
+            fun (V) -> decode_event_type(invoice, V) end, ordsets:to_list(EventTypes)
+        )
+    }.
+
+decode_event_type(
+    invoice,
+    {created, #webhooker_InvoiceCreated{}}
+) ->
+    [<<"InvoiceCreated">>];
+decode_event_type(
+    invoice,
+    {status_changed, #webhooker_InvoiceStatusChanged{value = undefined}}
+) ->
+    % TODO seems unmaintainable
+    [decode_invoice_status_event_type(V) || V <- [
+        ?invpaid(),
+        ?invcancelled(),
+        ?invfulfilled()
+    ]];
+decode_event_type(
+    invoice,
+    {status_changed, #webhooker_InvoiceStatusChanged{value = Value}}
+) ->
+    [decode_invoice_status_event_type(Value)];
+decode_event_type(
+    invoice,
+    {payment, {created, #webhooker_InvoicePaymentCreated{}}}
+) ->
+    [<<"PaymentCreated">>];
+decode_event_type(
+    invoice,
+    {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = undefined}}}
+) ->
+    % TODO seems unmaintainable
+    [decode_payment_status_event_type(V) || V <- [
+        ?pmtprocessed(),
+        ?pmtcaptured(),
+        ?pmtcancelled(),
+        ?pmtfailed()
+    ]];
+decode_event_type(
+    invoice,
+    {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = Value}}}
+) ->
+    [decode_payment_status_event_type(Value)].
+
+decode_invoice_status_event_type(?invpaid())      -> <<"InvoicePaid">>;
+decode_invoice_status_event_type(?invcancelled()) -> <<"InvoiceCancelled">>;
+decode_invoice_status_event_type(?invfulfilled()) -> <<"InvoiceFulfilled">>.
+
+decode_payment_status_event_type(?pmtprocessed()) -> <<"PaymentProcessed">>;
+decode_payment_status_event_type(?pmtcaptured())  -> <<"PaymentCaptured">>;
+decode_payment_status_event_type(?pmtcancelled()) -> <<"PaymentCancelled">>;
+decode_payment_status_event_type(?pmtfailed())    -> <<"PaymentFailed">>.
+
+decode_webhook(#webhooker_Webhook{
+    id           = ID,
+    party_id     = _PartyID,
+    event_filter = EventFilter,
+    url          = URL,
+    pub_key      = PubKey,
+    enabled      = Enabled
+}) ->
+    #{
+        <<"id">>        => integer_to_binary(ID),
+        <<"active">>    => Enabled,
+        <<"scope">>     => decode_event_filter(EventFilter),
+        <<"url">>       => URL,
+        <<"publicKey">> => PubKey
+    }.
+
 encode_stat_request(Dsl) when is_map(Dsl) ->
     encode_stat_request(jsx:encode(Dsl));
 
@@ -1810,11 +2067,11 @@ parse_rfc3339_datetime(DateTime) ->
     {ok, {DateFrom, TimeFrom, _, _}} = rfc3339:parse(DateTime),
     {DateFrom, TimeFrom}.
 
-process_exception(_, #payproc_InvalidUser{}) ->
-    {ok, {400, [], logic_error(invalidUser, <<"Invalid user">>)}};
-
 process_exception(_, #'InvalidRequest'{errors = Errors}) ->
     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+
+process_exception(_, #payproc_InvalidUser{}) ->
+    {ok, {404, [], general_error(<<"Invoice not found">>)}};
 
 process_exception(_, #payproc_UserInvoiceNotFound{}) ->
     {ok, {404, [], general_error(<<"Invoice not found">>)}};
@@ -1824,6 +2081,9 @@ process_exception(_, #payproc_ClaimNotFound{}) ->
 
 process_exception(_, #payproc_ContractNotFound{}) ->
     {ok, {404, [], general_error(<<"Contract not found">>)}};
+
+process_exception(_, #webhooker_WebhookNotFound{}) ->
+    {ok, {404, [], general_error(<<"Webhook not found">>)}};
 
 process_exception(_,  #payproc_InvalidInvoiceStatus{}) ->
     {ok, {400, [], logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)}};
@@ -1851,6 +2111,9 @@ process_exception(_, #'KeyringLocked'{}) ->
 
 process_exception(_, #payproc_EventNotFound{}) ->
     {ok, {404, [], general_error(<<"Event not found">>)}};
+
+process_exception('CreateWebhook', #payproc_ShopNotFound{}) ->
+    {ok, {400, [], general_error(<<"Shop not found">>)}};
 
 process_exception(_, #payproc_ShopNotFound{}) ->
     {ok, {404, [], general_error(<<"Shop not found">>)}};
