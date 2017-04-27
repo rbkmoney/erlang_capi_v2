@@ -981,7 +981,7 @@ get_account_by_id_ok_test(Config) ->
 create_webhook_error_test(Config) ->
     Context = ?config(context, Config),
     ShopID = -1, % nonexistent
-    {error, _} = api_client_webhooks:create(Context, #{
+    {error, _} = api_client_webhooks:create_webhook(Context, #{
         <<"url">> => <<"http://localhost:8080/TODO">>,
         <<"scope">> => construct_invoices_scope(ShopID)
     }).
@@ -990,7 +990,7 @@ create_webhook_error_test(Config) ->
 create_webhook_receive_events_test(Config) ->
     Context = ?config(context, Config),
     % % list is empty?
-    % [] = api_client_webhooks:list(Context),
+    % [] = api_client_webhooks:get_webhooks(Context),
     % create successful?
     Shop = get_latest(get_shops(Config)),
     ShopID = maps:get(<<"id">>, Shop),
@@ -998,14 +998,14 @@ create_webhook_receive_events_test(Config) ->
         <<"url">>   => <<"http://localhost:8080/TODO">>,
         <<"scope">> => construct_invoices_scope(ShopID, ['InvoiceCancelled'])
     },
-    {ok, Webhook = #{<<"id">> := WebhookID}} = api_client_webhooks:create(Context, WebhookParams),
-    {ok, Webhook} = api_client_webhooks:get(Context, WebhookID),
+    {ok, Webhook = #{<<"id">> := WebhookID}} = api_client_webhooks:create_webhook(Context, WebhookParams),
+    {ok, Webhook} = api_client_webhooks:get_webhook_by_id(Context, WebhookID),
     % list is not empty then?
-    true = lists:member(Webhook, api_client_webhooks:list(Context)),
+    true = lists:member(Webhook, api_client_webhooks:get_webhooks(Context)),
     % delete succeeded idempotently?
-    ok = api_client_webhooks:delete(Context, WebhookID),
-    ok = api_client_webhooks:delete(Context, WebhookID),
-    [] = [W || #{<<"id">> := W} <- api_client_webhooks:list(Context), W =:= WebhookID],
+    ok = api_client_webhooks:delete_webhook_by_id(Context, WebhookID),
+    ok = api_client_webhooks:delete_webhook_by_id(Context, WebhookID),
+    [] = [W || #{<<"id">> := W} <- api_client_webhooks:get_webhooks(Context), W =:= WebhookID],
     ok.
 
 construct_invoices_scope(ShopID) ->
