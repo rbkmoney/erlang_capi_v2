@@ -16,7 +16,7 @@ SERVICE_IMAGE_PUSH_TAG ?= $(SERVICE_IMAGE_TAG)
 BASE_IMAGE_NAME := service_erlang
 BASE_IMAGE_TAG := 13454a94990acb72f753623ec13599a9f6f4f852
 
-BUILD_IMAGE_TAG := b3c8e9bcfaf8adae856493868a15b29aca57a72e
+BUILD_IMAGE_TAG := ad7f71ebf9447c9339fea580d7f41d0f45752efa
 
 CALL_ANYWHERE := all submodules rebar-update compile xref lint dialyze test start devrel release clean distclean swagger.regenerate
 
@@ -77,8 +77,7 @@ test: submodules
 	$(REBAR) do eunit, ct
 
 # Swagger stuff
-#SWAGGER_CODEGEN = $(call which, swagger-codegen)
-SWAGGER_CODEGEN = java -jar ./swagger-codegen-cli.jar
+SWAGGER_CODEGEN = $(call which, swagger-codegen)
 SWAGGER_SCHEME_PATH = schemes/swag
 SWAGGER_SCHEME = $(SWAGGER_SCHEME_PATH)/web_deploy/swagger.yaml
 SWAGGER_APP_PATH = apps/swagger

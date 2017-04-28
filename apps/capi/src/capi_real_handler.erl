@@ -84,40 +84,58 @@ process_request(OperationID = 'CreateInvoice', Req, Context, ReqCtx) ->
 process_request(OperationID = 'CreatePayment', Req, Context, ReqCtx) ->
     InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('PaymentParams', Req),
-    Token = genlib_map:get(<<"paymentToolToken">>, PaymentParams),
     ContactInfo = genlib_map:get(<<"contactInfo">>, PaymentParams),
-    PaymentTool = decode_bank_card(Token),
-
+    Token = genlib_map:get(<<"paymentToolToken">>, PaymentParams),
     EncodedSession = genlib_map:get(<<"paymentSession">>, PaymentParams),
-    {ClientInfo, PaymentSession} = unwrap_session(EncodedSession),
-    Params =  #payproc_InvoicePaymentParams{
-        'payer' = #domain_Payer{
-            payment_tool = PaymentTool,
-            session = PaymentSession,
-            client_info = #domain_ClientInfo{
-                fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
-                ip_address = maps:get(<<"ip_address">>, ClientInfo)
-            },
-            contact_info = #domain_ContactInfo{
-                phone_number = genlib_map:get(<<"phoneNumber">>, ContactInfo),
-                email = genlib_map:get(<<"email">>, ContactInfo)
-            }
-        }
-    },
     UserInfo = get_user_info(Context),
-    Result = service_call(
-        invoicing,
-        'StartPayment',
-        [UserInfo, InvoiceID, Params],
-        ReqCtx
-    ),
+
+    Result = try
+        PaymentTool = decode_bank_card(Token),
+        {ClientInfo, PaymentSession} = unwrap_session(EncodedSession),
+        Params =  #payproc_InvoicePaymentParams{
+            'payer' = #domain_Payer{
+                payment_tool = PaymentTool,
+                session = PaymentSession,
+                client_info = #domain_ClientInfo{
+                    fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
+                    ip_address = maps:get(<<"ip_address">>, ClientInfo)
+                },
+                contact_info = #domain_ContactInfo{
+                    phone_number = genlib_map:get(<<"phoneNumber">>, ContactInfo),
+                    email = genlib_map:get(<<"email">>, ContactInfo)
+                }
+            }
+        },
+        service_call(
+            invoicing,
+            'StartPayment',
+            [UserInfo, InvoiceID, Params],
+            ReqCtx
+        )
+    catch
+        error:{badarg, Token} ->
+            {error, invalid_token};
+        error:{badarg, EncodedSession} ->
+            {error, invalid_payment_session}
+    end,
+
     case Result of
         {ok, PaymentID} ->
             {ok, Payment} = get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
             Resp = decode_payment(InvoiceID, Payment),
             {ok, {201, [], Resp}};
         {exception, Exception} ->
-            process_exception(OperationID, Exception)
+            process_exception(OperationID, Exception);
+        {error, invalid_token} ->
+            {ok, {400, [], logic_error(
+                invalidPaymentToolToken,
+                <<"Specified invalid paymentToolToken">>
+            )}};
+        {error, invalid_payment_session} ->
+            {ok, {400, [], logic_error(
+                invalidPaymentSession,
+                <<"Specified invalid paymentSession">>
+            )}}
     end;
 
 process_request(OperationID = 'CreatePaymentToolToken', Req, Context, ReqCtx) ->
@@ -1175,7 +1193,7 @@ decode_bank_card(Encoded) ->
         <<"payment_system">> := PaymentSystem,
         <<"bin">> := Bin,
         <<"masked_pan">> := MaskedPan
-    } = jsx:decode(base64url:decode(Encoded), [return_maps]),
+    } = jsx:decode(base64url_decode(Encoded), [return_maps]),
     {bank_card, #domain_BankCard{
         'token'  = Token,
         'payment_system' = binary_to_existing_atom(PaymentSystem, utf8),
@@ -1193,8 +1211,16 @@ unwrap_session(Encoded) ->
     #{
         <<"clientInfo">> := ClientInfo,
         <<"paymentSession">> := PaymentSession
-    } = jsx:decode(base64url:decode(Encoded), [return_maps]),
+     } = jsx:decode(base64url_decode(Encoded), [return_maps]),
     {ClientInfo, PaymentSession}.
+
+base64url_decode(Base64) ->
+    try base64url:decode(Base64)
+    catch
+        Class:Reason ->
+            _ = lager:warning("base64url:decode(~p) failed with ~p:~p", [Base64, Class, Reason]),
+            erlang:error({badarg, Base64})
+    end.
 
 decode_event(#payproc_Event{
     id = EventID,

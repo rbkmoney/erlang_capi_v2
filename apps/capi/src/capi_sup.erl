@@ -24,15 +24,7 @@ start_link() ->
 init([]) ->
     AuthorizerSpecs = get_authorizer_child_specs(),
     {LogicHandler, LogicHandlerSpecs} = get_logic_handler_info(),
-    {ok, IP} = inet:parse_address(genlib_app:env(?MODULE, ip, "::")),
-    SwaggerSpec = capi_swagger_server:child_spec(swagger, #{
-        ip                => IP,
-        port              => genlib_app:env(capi, port, 8080),
-        net_opts          => [],
-        logic_handler     => LogicHandler,
-        cowboy_extra_opts => get_cowboy_extra_opts(),
-        validator_pool_opts => PoolOpts
-    }),
+    SwaggerSpec = capi_swagger_server:child_spec(LogicHandler),
     {ok, {
         {one_for_all, 0, 1},
             AuthorizerSpecs ++ LogicHandlerSpecs ++ [SwaggerSpec]
@@ -67,13 +59,3 @@ get_logic_handler_info() ->
         undefined ->
             exit(undefined_service_type)
     end.
-
-get_cowboy_extra_opts() ->
-    [
-        {env, [{cors_policy, capi_cors_policy}]},
-        {middlewares, [
-            cowboy_router,
-            cowboy_cors,
-            cowboy_handler
-       ]}
-    ].
