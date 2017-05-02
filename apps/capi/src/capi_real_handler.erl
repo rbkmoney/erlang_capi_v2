@@ -981,7 +981,7 @@ process_request(OperationID = 'DeleteWebhookByID', Req, Context, ReqCtx) ->
     end;
 
 process_request(_OperationID, _Req, _Context, _ReqCtx) ->
-    {501, [], <<"Not implemented">>}.
+    {501, [], <<>>}.
 
 validate_event_filter({invoice, #webhooker_InvoiceEventFilter{
     shop_id = ShopID
@@ -2147,7 +2147,7 @@ process_exception(_,  #'InvalidCardData'{}) ->
     {ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}};
 
 process_exception(_, #'KeyringLocked'{}) ->
-    {error, {503, [], <<"">>}};
+    {error, {503, [], <<>>}};
 
 process_exception(_, #payproc_EventNotFound{}) ->
     {ok, {404, [], general_error(<<"Event not found">>)}};
@@ -2171,23 +2171,13 @@ format_request_errors(Errors) ->
     genlib_string:join(<<"\n">>, Errors).
 
 process_woody_error(_, external, resource_unavailable, _Details) ->
-    {503, [], <<
-        "Service is unavailable for a moment.\n"
-        "We are sorry."
-    >>};
+    {503, [], <<>>};
 
 process_woody_error(_, external, result_unexpected, _Details) ->
-    {500, [], <<
-        "We've tripped over some bug in our code or something.\n"
-        "We are sorry, we're working on fixing it."
-    >>};
+    {500, [], <<>>};
 
 process_woody_error(_, external, result_unknown, _Details) ->
-    {500, [], <<
-        "Outcome of the operation is unknown.\n"
-        "We've not managed to handle it in allotted time.\n"
-        "We are so sorry."
-    >>}.
+    {500, [], <<>>}.
 
 prepare_party(Context, ReqCtx, ServiceCall) ->
     Result0 = ServiceCall(),
