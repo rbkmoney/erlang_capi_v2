@@ -46,7 +46,7 @@ handle_request(OperationID, Req, Context) ->
         end
     catch
         error:{woody_error, {Source, Class, Details}} ->
-            {error, process_woody_error(OperationID, Source, Class, Details)}
+            process_woody_error(OperationID, Source, Class, Details)
     end.
 
 -spec process_request(
@@ -981,7 +981,7 @@ process_request(OperationID = 'DeleteWebhookByID', Req, Context, ReqCtx) ->
     end;
 
 process_request(_OperationID, _Req, _Context, _ReqCtx) ->
-    {501, [], <<>>}.
+    {error, reply_5xx(501)}.
 
 validate_event_filter({invoice, #webhooker_InvoiceEventFilter{
     shop_id = ShopID
@@ -2147,7 +2147,7 @@ process_exception(_,  #'InvalidCardData'{}) ->
     {ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}};
 
 process_exception(_, #'KeyringLocked'{}) ->
-    {error, {503, [], <<>>}};
+    {error, reply_5xx(503)};
 
 process_exception(_, #payproc_EventNotFound{}) ->
     {ok, {404, [], general_error(<<"Event not found">>)}};
@@ -2171,13 +2171,14 @@ format_request_errors(Errors) ->
     genlib_string:join(<<"\n">>, Errors).
 
 process_woody_error(_, external, resource_unavailable, _Details) ->
-    {503, [], <<>>};
+    {error, reply_5xx(503)};
 
 process_woody_error(_, external, result_unexpected, _Details) ->
-    {500, [], <<>>};
+    {error, reply_5xx(500)};
 
 process_woody_error(_, external, result_unknown, _Details) ->
-    {500, [], <<>>}.
+    {error, reply_5xx(500)}.
+
 
 prepare_party(Context, ReqCtx, ServiceCall) ->
     Result0 = ServiceCall(),
@@ -2393,6 +2394,9 @@ get_events(Limit, After, Context) ->
         ],
         maps:get(request_context, Context)
     ).
+
+reply_5xx(Code) when Code >= 500 ->
+    {Code, [], <<>>}.
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
