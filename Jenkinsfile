@@ -21,7 +21,9 @@ build('capi', 'docker-host', finalHook) {
   pipeDefault() {
     runStage('compile') {
       withGithubPrivkey {
-        sh 'make wc_compile'
+        withWsCache("schemes/swag/node_modules") {
+          sh 'make wc_compile'
+        }
       }
     }
     runStage('lint') {
