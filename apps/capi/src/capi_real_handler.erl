@@ -113,10 +113,8 @@ process_request(OperationID = 'CreatePayment', Req, Context, ReqCtx) ->
             ReqCtx
         )
     catch
-        error:{badarg, Token} ->
-            {error, invalid_token};
-        error:{badarg, EncodedSession} ->
-            {error, invalid_payment_session}
+        throw:Error when Error =:= invalid_token orelse Error =:= invalid_payment_session ->
+            {error, Error}
     end,
 
     case Result of
@@ -129,12 +127,12 @@ process_request(OperationID = 'CreatePayment', Req, Context, ReqCtx) ->
         {error, invalid_token} ->
             {ok, {400, [], logic_error(
                 invalidPaymentToolToken,
-                <<"Specified invalid paymentToolToken">>
+                <<"Specified payment tool token is invalid">>
             )}};
         {error, invalid_payment_session} ->
             {ok, {400, [], logic_error(
                 invalidPaymentSession,
-                <<"Specified invalid paymentSession">>
+                <<"Specified payment session is invalid">>
             )}}
     end;
 
@@ -1193,7 +1191,11 @@ decode_bank_card(Encoded) ->
         <<"payment_system">> := PaymentSystem,
         <<"bin">> := Bin,
         <<"masked_pan">> := MaskedPan
-    } = jsx:decode(base64url_decode(Encoded), [return_maps]),
+    } = try capi_utils:base64url_to_map(Encoded)
+    catch
+        error:badarg ->
+            erlang:throw(invalid_token)
+    end,
     {bank_card, #domain_BankCard{
         'token'  = Token,
         'payment_system' = binary_to_existing_atom(PaymentSystem, utf8),
@@ -1211,16 +1213,12 @@ unwrap_session(Encoded) ->
     #{
         <<"clientInfo">> := ClientInfo,
         <<"paymentSession">> := PaymentSession
-     } = jsx:decode(base64url_decode(Encoded), [return_maps]),
-    {ClientInfo, PaymentSession}.
-
-base64url_decode(Base64) ->
-    try base64url:decode(Base64)
+     } = try capi_utils:base64url_to_map(Encoded)
     catch
-        Class:Reason ->
-            _ = lager:warning("base64url:decode(~p) failed with ~p:~p", [Base64, Class, Reason]),
-            erlang:error({badarg, Base64})
-    end.
+        error:badarg ->
+            erlang:throw(invalid_payment_session)
+    end,
+    {ClientInfo, PaymentSession}.
 
 decode_event(#payproc_Event{
     id = EventID,
