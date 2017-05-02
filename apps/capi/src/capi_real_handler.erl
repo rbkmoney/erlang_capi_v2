@@ -943,7 +943,7 @@ process_request(OperationID = 'GetWebhookByID', Req, Context, ReqCtx) ->
                     process_exception(OperationID, Exception)
             end;
         error ->
-            {error, {400, [], logic_error(invalidWebhookID, <<"Specified invalid WebhookID">>)}}
+            {ok, {404, [], general_error(<<"Webhook not found">>)}}
     end;
 
 process_request(OperationID = 'DeleteWebhookByID', Req, Context, ReqCtx) ->
@@ -959,7 +959,7 @@ process_request(OperationID = 'DeleteWebhookByID', Req, Context, ReqCtx) ->
                     process_exception(OperationID, Exception)
             end;
         error ->
-            {error, {400, [], logic_error(invalidWebhookID, <<"Specified invalid WebhookID">>)}}
+            {ok, {404, [], general_error(<<"Webhook not found">>)}}
     end;
 
 process_request(_OperationID, _Req, _Context, _ReqCtx) ->
@@ -2228,6 +2228,14 @@ get_my_party(Context, ReqCtx, UserInfo, PartyID) ->
         end
     ).
 
+delete_webhook(PartyID, WebhookID, ReqCtx) ->
+    case get_webhook(PartyID, WebhookID, ReqCtx) of
+        {ok, #webhooker_Webhook{}} ->
+            service_call(webhook_manager, 'Delete', [WebhookID], ReqCtx);
+        Exception ->
+            Exception
+    end.
+
 get_contract_by_id(Context, ReqCtx, UserInfo, PartyID, ContractID) ->
     prepare_party(
         Context,
@@ -2369,14 +2377,6 @@ get_events(Limit, After, Context) ->
         ],
         maps:get(request_context, Context)
     ).
-
-delete_webhook(PartyID, WebhookID, ReqCtx) ->
-    case get_webhook(PartyID, WebhookID, ReqCtx) of
-        {ok, #webhooker_Webhook{}} ->
-            service_call(webhook_manager, 'Delete', [WebhookID], ReqCtx);
-        Exception ->
-            Exception
-    end.
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
