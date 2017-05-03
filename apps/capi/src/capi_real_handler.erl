@@ -2155,6 +2155,9 @@ process_exception(_, #payproc_EventNotFound{}) ->
 process_exception('CreateWebhook', #payproc_ShopNotFound{}) ->
     {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}};
 
+process_exception('CreateInvoice', #payproc_ShopNotFound{}) ->
+    {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}};
+
 process_exception(_, #payproc_ShopNotFound{}) ->
     {ok, {404, [], general_error(<<"Shop not found">>)}};
 
