@@ -22,6 +22,7 @@
     authorization_error_no_header_test/1,
     authorization_error_expired_test/1,
     create_invoice_badard_test/1,
+    create_invoice_no_shop_test/1,
     create_invoice_ok_test/1,
     create_invoice_access_token_ok_test/1,
     create_payment_ok_test/1,
@@ -147,6 +148,7 @@ groups() ->
         ]},
         {invoice_management, [sequence], [
             create_invoice_badard_test,
+            create_invoice_no_shop_test,
             create_invoice_ok_test,
             get_invoice_by_id_ok_test,
             rescind_invoice_ok_test
@@ -354,6 +356,26 @@ create_invoice_badard_test(Config) ->
     Context = ?config(context, Config),
     Req = #{},
     {error, _} = api_client_invoices:create_invoice(Context, Req).
+
+-spec create_invoice_no_shop_test(config()) -> _.
+
+create_invoice_no_shop_test(Config) ->
+    Context = ?config(context, Config),
+    Req = #{
+        <<"shopID">> => -1,
+        <<"amount">> => 100000,
+        <<"currency">> => <<"RUB">>,
+        <<"metadata">> => #{
+            <<"invoice_dummy_metadata">> => <<"test_value">>
+        },
+        <<"dueDate">> => get_due_date(),
+        <<"product">> => <<"test_product">>,
+        <<"description">> => <<"test_invoice_description">>
+    },
+    {error, Resp} = api_client_invoices:create_invoice(Context, Req),
+    #{
+        <<"code">> := <<"invalidShopID">>
+    } = jsx:decode(Resp, [return_maps]).
 
 -spec create_invoice_ok_test(config()) -> _.
 
@@ -1053,8 +1075,6 @@ auth_token(ACL, Expiration) ->
     capi_authorizer_jwt:issue(Auth, Expiration).
 
 default_create_invoice(Config) ->
-    {{Y, M, D}, Time} = calendar:local_time(),
-    {ok, DueDate} = rfc3339:format({{Y + 1, M, D}, Time}),
     ShopID = create_and_activate_shop(Config),
     Req = #{
         <<"shopID">> => ShopID,
@@ -1063,7 +1083,7 @@ default_create_invoice(Config) ->
         <<"metadata">> => #{
             <<"invoice_dummy_metadata">> => <<"test_value">>
         },
-        <<"dueDate">> => DueDate,
+        <<"dueDate">> => get_due_date(),
         <<"product">> => <<"test_product">>,
         <<"description">> => <<"test_invoice_description">>
     },
@@ -1913,3 +1933,8 @@ wait_event(InvoiceID, Pattern, TimeLeft, Context) when TimeLeft > 0 ->
 
 wait_event(InvoiceID, Pattern, _, _Context) ->
     error({event_limit_exceeded, {InvoiceID, Pattern}}).
+
+get_due_date() ->
+    {{Y, M, D}, Time} = calendar:local_time(),
+    {ok, DueDate} = rfc3339:format({{Y + 1, M, D}, Time}),
+    DueDate.
