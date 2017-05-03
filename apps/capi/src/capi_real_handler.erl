@@ -15,6 +15,8 @@
 -export([authorize_api_key/2]).
 -export([handle_request/3]).
 
+-define(ROOT_PARENT_ID, <<"undefined">>).
+
 -spec authorize_api_key(swagger:operation_id(), swagger:api_key()) ->
     Result :: false | {true, capi_auth:context()}.
 
@@ -44,7 +46,7 @@ handle_request(OperationID, Req, Context) ->
         end
     catch
         error:{woody_error, {Source, Class, Details}} ->
-            {error, process_woody_error(OperationID, Source, Class, Details)}
+            process_woody_error(OperationID, Source, Class, Details)
     end.
 
 -spec process_request(
@@ -82,40 +84,56 @@ process_request(OperationID = 'CreateInvoice', Req, Context, ReqCtx) ->
 process_request(OperationID = 'CreatePayment', Req, Context, ReqCtx) ->
     InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('PaymentParams', Req),
-    Token = genlib_map:get(<<"paymentToolToken">>, PaymentParams),
     ContactInfo = genlib_map:get(<<"contactInfo">>, PaymentParams),
-    PaymentTool = decode_bank_card(Token),
-
+    Token = genlib_map:get(<<"paymentToolToken">>, PaymentParams),
     EncodedSession = genlib_map:get(<<"paymentSession">>, PaymentParams),
-    {ClientInfo, PaymentSession} = unwrap_session(EncodedSession),
-    Params =  #payproc_InvoicePaymentParams{
-        'payer' = #domain_Payer{
-            payment_tool = PaymentTool,
-            session = PaymentSession,
-            client_info = #domain_ClientInfo{
-                fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
-                ip_address = maps:get(<<"ip_address">>, ClientInfo)
-            },
-            contact_info = #domain_ContactInfo{
-                phone_number = genlib_map:get(<<"phoneNumber">>, ContactInfo),
-                email = genlib_map:get(<<"email">>, ContactInfo)
-            }
-        }
-    },
     UserInfo = get_user_info(Context),
-    Result = service_call(
-        invoicing,
-        'StartPayment',
-        [UserInfo, InvoiceID, Params],
-        ReqCtx
-    ),
+
+    Result = try
+        PaymentTool = decode_bank_card(Token),
+        {ClientInfo, PaymentSession} = unwrap_session(EncodedSession),
+        Params =  #payproc_InvoicePaymentParams{
+            'payer' = #domain_Payer{
+                payment_tool = PaymentTool,
+                session = PaymentSession,
+                client_info = #domain_ClientInfo{
+                    fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
+                    ip_address = maps:get(<<"ip_address">>, ClientInfo)
+                },
+                contact_info = #domain_ContactInfo{
+                    phone_number = genlib_map:get(<<"phoneNumber">>, ContactInfo),
+                    email = genlib_map:get(<<"email">>, ContactInfo)
+                }
+            }
+        },
+        service_call(
+            invoicing,
+            'StartPayment',
+            [UserInfo, InvoiceID, Params],
+            ReqCtx
+        )
+    catch
+        throw:Error when Error =:= invalid_token orelse Error =:= invalid_payment_session ->
+            {error, Error}
+    end,
+
     case Result of
         {ok, PaymentID} ->
             {ok, Payment} = get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
             Resp = decode_payment(InvoiceID, Payment),
             {ok, {201, [], Resp}};
         {exception, Exception} ->
-            process_exception(OperationID, Exception)
+            process_exception(OperationID, Exception);
+        {error, invalid_token} ->
+            {ok, {400, [], logic_error(
+                invalidPaymentToolToken,
+                <<"Specified payment tool token is invalid">>
+            )}};
+        {error, invalid_payment_session} ->
+            {ok, {400, [], logic_error(
+                invalidPaymentSession,
+                <<"Specified payment session is invalid">>
+            )}}
     end;
 
 process_request(OperationID = 'CreatePaymentToolToken', Req, Context, ReqCtx) ->
@@ -963,7 +981,7 @@ process_request(OperationID = 'DeleteWebhookByID', Req, Context, ReqCtx) ->
     end;
 
 process_request(_OperationID, _Req, _Context, _ReqCtx) ->
-    {501, [], <<"Not implemented">>}.
+    {error, reply_5xx(501)}.
 
 validate_event_filter({invoice, #webhooker_InvoiceEventFilter{
     shop_id = ShopID
@@ -1003,10 +1021,10 @@ service_call(ServiceName, Function, Args, Context) ->
 create_context(#{'X-Request-ID' := RequestID}) ->
     TraceID = woody_context:new_req_id(),
     _ = lager:debug("Created TraceID:~p for RequestID:~p", [TraceID, RequestID]),
-    ParentID = genlib:to_binary(RequestID),
-    SpanID = woody_context:new_req_id(),
-    RpcID = woody_context:new_rpc_id(ParentID, TraceID, SpanID),
-    woody_context:new(RpcID).
+    ParentID = ?ROOT_PARENT_ID,
+    SpanID = genlib:to_binary(RequestID),
+    RootRpcID = woody_context:new_rpc_id(ParentID, TraceID, SpanID),
+    woody_context:new(RootRpcID).
 
 logic_error(Code, Message) ->
     #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)}.
@@ -1173,7 +1191,11 @@ decode_bank_card(Encoded) ->
         <<"payment_system">> := PaymentSystem,
         <<"bin">> := Bin,
         <<"masked_pan">> := MaskedPan
-    } = jsx:decode(base64url:decode(Encoded), [return_maps]),
+    } = try capi_utils:base64url_to_map(Encoded)
+    catch
+        error:badarg ->
+            erlang:throw(invalid_token)
+    end,
     {bank_card, #domain_BankCard{
         'token'  = Token,
         'payment_system' = binary_to_existing_atom(PaymentSystem, utf8),
@@ -1191,7 +1213,11 @@ unwrap_session(Encoded) ->
     #{
         <<"clientInfo">> := ClientInfo,
         <<"paymentSession">> := PaymentSession
-    } = jsx:decode(base64url:decode(Encoded), [return_maps]),
+     } = try capi_utils:base64url_to_map(Encoded)
+    catch
+        error:badarg ->
+            erlang:throw(invalid_payment_session)
+    end,
     {ClientInfo, PaymentSession}.
 
 decode_event(#payproc_Event{
@@ -2121,7 +2147,7 @@ process_exception(_,  #'InvalidCardData'{}) ->
     {ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}};
 
 process_exception(_, #'KeyringLocked'{}) ->
-    {error, {503, [], <<"">>}};
+    {error, reply_5xx(503)};
 
 process_exception(_, #payproc_EventNotFound{}) ->
     {ok, {404, [], general_error(<<"Event not found">>)}};
@@ -2145,23 +2171,14 @@ format_request_errors(Errors) ->
     genlib_string:join(<<"\n">>, Errors).
 
 process_woody_error(_, external, resource_unavailable, _Details) ->
-    {503, [], <<
-        "Service is unavailable for a moment.\n"
-        "We are sorry."
-    >>};
+    {error, reply_5xx(503)};
 
 process_woody_error(_, external, result_unexpected, _Details) ->
-    {500, [], <<
-        "We've tripped over some bug in our code or something.\n"
-        "We are sorry, we're working on fixing it."
-    >>};
+    {error, reply_5xx(500)};
 
 process_woody_error(_, external, result_unknown, _Details) ->
-    {500, [], <<
-        "Outcome of the operation is unknown.\n"
-        "We've not managed to handle it in allotted time.\n"
-        "We are so sorry."
-    >>}.
+    {error, reply_5xx(500)}.
+
 
 prepare_party(Context, ReqCtx, ServiceCall) ->
     Result0 = ServiceCall(),
@@ -2377,6 +2394,9 @@ get_events(Limit, After, Context) ->
         ],
         maps:get(request_context, Context)
     ).
+
+reply_5xx(Code) when Code >= 500 ->
+    {Code, [], <<>>}.
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").

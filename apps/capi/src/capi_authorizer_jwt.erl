@@ -233,11 +233,12 @@ verify(Token) ->
     try
         {_, ExpandedToken} = jose_jws:expand(Token),
         #{<<"protected">> := ProtectedHeader} = ExpandedToken,
-        Header = decode(ProtectedHeader),
+        Header = capi_utils:base64url_to_map(ProtectedHeader),
         Alg = get_alg(Header),
         KID = get_kid(Header),
         verify(KID, Alg, ExpandedToken)
     catch
+        %% from get_alg and get_kid
         throw:Reason ->
             {error, Reason};
         %% TODO we're losing error information here, e.g. stacktrace
@@ -292,9 +293,6 @@ get_alg(#{<<"alg">> := Alg}) when is_binary(Alg) ->
     Alg;
 get_alg(#{}) ->
     throw({invalid_token, {missing, alg}}).
-
-decode(Bin) ->
-    jsx:decode(base64url:decode(Bin), [return_maps]).
 
 %%
 
