@@ -2,6 +2,9 @@ REBAR := $(shell which rebar3 2>/dev/null || which ./rebar3)
 SUBMODULES = schemes/swag apps/cp_proto/damsel build_utils
 SUBTARGETS = $(patsubst %,%/.git,$(SUBMODULES))
 
+COMPOSE_HTTP_TIMEOUT := 300
+export COMPOSE_HTTP_TIMEOUT
+
 UTILS_PATH := build_utils
 TEMPLATES_PATH := .
 
