@@ -1929,7 +1929,7 @@ encode_event_type(invoices, <<"InvoiceCancelled">>) ->
     {status_changed, #webhooker_InvoiceStatusChanged{value = ?invcancelled()}};
 encode_event_type(invoices, <<"InvoiceFulfilled">>) ->
     {status_changed, #webhooker_InvoiceStatusChanged{value = ?invfulfilled()}};
-encode_event_type(invoices, <<"PaymentCreated">>) ->
+encode_event_type(invoices, <<"PaymentStarted">>) ->
     {payment, {created, #webhooker_InvoicePaymentCreated{}}};
 encode_event_type(invoices, <<"PaymentProcessed">>) ->
     {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtprocessed()}}};
@@ -1976,7 +1976,7 @@ decode_event_type(
     invoice,
     {payment, {created, #webhooker_InvoicePaymentCreated{}}}
 ) ->
-    [<<"PaymentCreated">>];
+    [<<"PaymentStarted">>];
 decode_event_type(
     invoice,
     {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = undefined}}}
