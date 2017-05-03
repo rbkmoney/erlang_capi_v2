@@ -934,20 +934,23 @@ process_request(_OperationID = 'GetWebhooks', _Req, Context, ReqCtx) ->
 
 process_request(OperationID = 'GetWebhookByID', Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
-    WebhookID = binary_to_integer(maps:get(webhookID, Req)),
-    case get_webhook(PartyID, WebhookID, ReqCtx) of
-        {ok, Webhook} ->
-            {ok, {200, [], decode_webhook(Webhook)}};
-        {exception, Exception} ->
-            process_exception(OperationID, Exception)
+    case encode_webhook_id(maps:get(webhookID, Req)) of
+        {ok, WebhookID} ->
+            case get_webhook(PartyID, WebhookID, ReqCtx) of
+                {ok, Webhook} ->
+                    {ok, {200, [], decode_webhook(Webhook)}};
+                {exception, Exception} ->
+                    process_exception(OperationID, Exception)
+            end;
+        error ->
+            {ok, {404, [], general_error(<<"Webhook not found">>)}}
     end;
 
 process_request(OperationID = 'DeleteWebhookByID', Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
-    WebhookID = binary_to_integer(maps:get(webhookID, Req)),
-    case get_webhook(PartyID, WebhookID, ReqCtx) of
-        {ok, #webhooker_Webhook{}} ->
-            case service_call(webhook_manager, 'Delete', [WebhookID], ReqCtx) of
+    case encode_webhook_id(maps:get(webhookID, Req)) of
+        {ok, WebhookID} ->
+            case delete_webhook(PartyID, WebhookID, ReqCtx) of
                 {ok, _} ->
                     {ok, {204, [], undefined}};
                 {exception, #webhooker_WebhookNotFound{}} ->
@@ -955,10 +958,8 @@ process_request(OperationID = 'DeleteWebhookByID', Req, Context, ReqCtx) ->
                 {exception, Exception} ->
                     process_exception(OperationID, Exception)
             end;
-        {exception, #webhooker_WebhookNotFound{}} ->
-            {ok, {204, [], undefined}};
-        {exception, Exception} ->
-            process_exception(OperationID, Exception)
+        error ->
+            {ok, {404, [], general_error(<<"Webhook not found">>)}}
     end;
 
 process_request(_OperationID, _Req, _Context, _ReqCtx) ->
@@ -981,6 +982,18 @@ get_webhook(PartyID, WebhookID, ReqCtx) ->
         {exception, Exception} ->
             {exception, Exception}
     end.
+
+encode_webhook_id(WebhookID) ->
+    try
+        ID = binary_to_integer(WebhookID),
+        {ok, ID}
+    catch
+        error:badarg ->
+            error
+    end.
+
+decode_webhook_id(WebhookID) when is_integer(WebhookID) ->
+    {ok, integer_to_binary(WebhookID)}.
 
 %%%
 
@@ -1972,8 +1985,9 @@ decode_webhook(#webhooker_Webhook{
     pub_key      = PubKey,
     enabled      = Enabled
 }) ->
+    {ok, WebhookID} = decode_webhook_id(ID),
     #{
-        <<"id">>        => integer_to_binary(ID),
+        <<"id">>        => WebhookID,
         <<"active">>    => Enabled,
         <<"scope">>     => decode_event_filter(EventFilter),
         <<"url">>       => URL,
@@ -2113,7 +2127,7 @@ process_exception(_, #payproc_EventNotFound{}) ->
     {ok, {404, [], general_error(<<"Event not found">>)}};
 
 process_exception('CreateWebhook', #payproc_ShopNotFound{}) ->
-    {ok, {400, [], general_error(<<"Shop not found">>)}};
+    {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}};
 
 process_exception(_, #payproc_ShopNotFound{}) ->
     {ok, {404, [], general_error(<<"Shop not found">>)}};
@@ -2214,6 +2228,14 @@ get_my_party(Context, ReqCtx, UserInfo, PartyID) ->
         end
     ).
 
+delete_webhook(PartyID, WebhookID, ReqCtx) ->
+    case get_webhook(PartyID, WebhookID, ReqCtx) of
+        {ok, #webhooker_Webhook{}} ->
+            service_call(webhook_manager, 'Delete', [WebhookID], ReqCtx);
+        Exception ->
+            Exception
+    end.
+
 get_contract_by_id(Context, ReqCtx, UserInfo, PartyID, ContractID) ->
     prepare_party(
         Context,
@@ -2289,19 +2311,25 @@ collect_events(UserInfo, InvoiceID, Limit, After, ReqCtx) ->
 collect_events(Collected, 0, _After, _Context) ->
     {ok, Collected};
 
-collect_events(Collected, Left, After, Context) ->
+collect_events(Collected0, Left, After, Context) ->
     Result = get_events(Left, After, Context),
     case Result of
         {ok, []} ->
-            {ok, Collected};
+            {ok, Collected0};
         {ok, Events} ->
             Filtered = filter_events(Events),
-            collect_events(
-                Collected ++ Filtered,
-                Left - length(Filtered),
-                get_last_event_id(Events),
-                Context
-            );
+            Collected = Collected0 ++ Filtered,
+            case length(Events) =< Left of
+                true ->
+                    {ok, Collected};
+                false ->
+                    collect_events(
+                        Collected,
+                        Left - length(Filtered),
+                        get_last_event_id(Events),
+                        Context
+                    )
+            end;
         Error ->
             Error
     end.

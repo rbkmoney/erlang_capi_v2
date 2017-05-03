@@ -205,8 +205,8 @@ services:
     healthcheck:
       test: "curl -sS -o /dev/null http://localhost:8022/"
       interval: 5s
-      timeout: 2s
-      retries: 10
+      timeout: 3s
+      retries: 15
     entrypoint:
       - java
       - -jar
@@ -221,7 +221,6 @@ services:
       - --bm.pooling.url=http://bustermaze:8022/repo
     depends_on:
       - hooker-db
-      - bustermaze
 
   hooker-db:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
