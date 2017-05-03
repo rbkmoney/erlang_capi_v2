@@ -3,6 +3,7 @@
 -export([child_spec/1]).
 -export([response_hook/4]).
 
+-define(APP, capi).
 -define(DEFAULT_ACCEPTORS_POOLSIZE, 100).
 -define(DEFAULT_IP_ADDR, "::").
 -define(DEFAULT_PORT, 8080).
@@ -14,13 +15,13 @@
 child_spec(LogicHandler) ->
     {Transport, TransportOpts} = get_socket_transport(),
     CowboyOpts = get_cowboy_config(LogicHandler),
-    AcceptorsPool = genlib_app:env(?MODULE, acceptors_poolsize, ?DEFAULT_ACCEPTORS_POOLSIZE),
+    AcceptorsPool = genlib_app:env(?APP, acceptors_poolsize, ?DEFAULT_ACCEPTORS_POOLSIZE),
     ranch:child_spec(?MODULE, AcceptorsPool,
         Transport, TransportOpts, cowboy_protocol, CowboyOpts).
 
 get_socket_transport() ->
-    {ok, IP} = inet:parse_address(genlib_app:env(?MODULE, ip, ?DEFAULT_IP_ADDR)),
-    Port     = genlib_app:env(capi, port, ?DEFAULT_PORT),
+    {ok, IP} = inet:parse_address(genlib_app:env(?APP, ip, ?DEFAULT_IP_ADDR)),
+    Port     = genlib_app:env(?APP, port, ?DEFAULT_PORT),
     {ranch_tcp, [{ip, IP}, {port, Port}]}.
 
 get_cowboy_config(LogicHandler) ->
@@ -76,6 +77,4 @@ get_oops_body_safe(Code) ->
     end.
 
 get_oops_body(Code) ->
-    Env = genlib_app:env(?MODULE),
-    BodyConf = genlib_opts:get(oops_bodies, Env, #{}),
-    genlib_map:get(Code, BodyConf, undefined).
+    genlib_map:get(Code, genlib_app:env(?APP, oops_bodies, #{}), undefined).
