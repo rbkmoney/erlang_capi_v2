@@ -63,8 +63,14 @@ send_oops_resp(Code, Headers, File, Req) ->
                 ok
         end
     end,
-    Headers1 = lists:keystore(<<"content-type">>, 1, Headers,
-        {<<"content-type">>, <<"text/plain; charset=utf-8">>}),
+    Headers1 = lists:foldl(
+        fun({K, V}, Acc) -> lists:keystore(K, 1, Acc, {K, V}) end,
+        Headers,
+        [
+            {<<"content-type">>, <<"text/plain; charset=utf-8">>},
+            {<<"content-length">>, integer_to_list(FileSize)}
+        ]
+    ),
     {ok, Req1} = cowboy_req:reply(Code, Headers1, {FileSize, F}, Req),
     Req1.
 
