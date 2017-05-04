@@ -1299,7 +1299,15 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
     id = PaymentID,
     created_at = CreatedAt,
     status = Status,
-    payer = Payer,
+    payer = #domain_Payer{
+        payment_tool = PaymentTool,
+        session = PaymentSession,
+        contact_info = ContactInfo,
+        client_info = #domain_ClientInfo{
+            ip_address = IP,
+            fingerprint = Fingerprint
+        }
+    },
     cost = #domain_Cash{
         amount = Amount,
         currency = Currency
@@ -1310,35 +1318,22 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
         <<"id">> =>  PaymentID,
         <<"invoiceID">> => InvoiceID,
         <<"createdAt">> => CreatedAt,
-        <<"payer">> => decode_payer(Payer),
         <<"amount">> => Amount,
-        <<"currency">> => decode_currency(Currency)
-    }, decode_payment_status(Status))).
-
-decode_payer(#domain_Payer{
-    payment_tool = PaymentTool,
-    session = PaymentSession,
-    contact_info = ContactInfo,
-    client_info = #domain_ClientInfo{
-        ip_address = IP,
-        fingerprint = Fingerprint
-    }
-}) ->
-    genlib_map:compact(#{
-        <<"paymentSession">> => PaymentSession,
+        <<"currency">> => decode_currency(Currency),
         <<"contactInfo">> => decode_contact_info(ContactInfo),
         <<"paymentToolDetails">> => decode_payment_tool_details(PaymentTool),
+        <<"paymentToolToken">> => decode_payment_tool_token(PaymentTool),
+        <<"paymentSession">> => PaymentSession,
         <<"ip">> => IP,
         <<"fingerprint">> => Fingerprint
-    }).
+    }, decode_payment_status(Status))).
 
 decode_payment_tool_details({bank_card, #domain_BankCard{
     'payment_system' = PaymentSystem,
     'masked_pan' = MaskedPan
-}} = PaymentTool) ->
+}}) ->
     #{
         <<"detailsType">> => <<"PaymentToolDetailsCardData">>,
-        <<"token">> => decode_payment_tool_token(PaymentTool),
         <<"cardNumberMask">> => genlib:to_binary(MaskedPan),
         <<"paymentSystem">> => genlib:to_binary(PaymentSystem)
     }.
