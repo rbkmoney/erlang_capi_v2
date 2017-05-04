@@ -1321,9 +1321,9 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
         <<"amount">> => Amount,
         <<"currency">> => decode_currency(Currency),
         <<"contactInfo">> => decode_contact_info(ContactInfo),
-        <<"paymentToolDetails">> => decode_payment_tool_details(PaymentTool),
-        <<"paymentToolToken">> => decode_payment_tool_token(PaymentTool),
         <<"paymentSession">> => PaymentSession,
+        <<"paymentToolToken">> => decode_payment_tool_token(PaymentTool),
+        <<"paymentToolDetails">> => decode_payment_tool_details(PaymentTool),
         <<"ip">> => IP,
         <<"fingerprint">> => Fingerprint
     }, decode_payment_status(Status))).
