@@ -201,7 +201,7 @@ services:
       -jar /opt/pimp/pimp.jar
 
   hooker:
-    image: dr.rbkmoney.com/rbkmoney/hooker:799d6994c9abc761b66a352c39b3287d59839b98
+    image: dr.rbkmoney.com/rbkmoney/hooker:b72ca559ebdf9ca5d59eef62e670500f0c1feaaa
     healthcheck:
       test: "curl -sS -o /dev/null http://localhost:8022/"
       interval: 5s

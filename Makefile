@@ -70,7 +70,7 @@ clean:
 
 distclean: swagger.distclean
 	$(REBAR) clean
-	rm -rfv _build apps/swagger
+	rm -rf _build apps/swagger
 
 cover:
 	$(REBAR) cover

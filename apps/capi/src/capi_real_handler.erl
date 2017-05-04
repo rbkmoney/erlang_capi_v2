@@ -329,7 +329,7 @@ process_request(OperationID = 'SearchInvoices', Req, Context, ReqCtx) ->
         {ok, #merchstat_StatResponse{data = {'invoices', Invoices}, total_count = TotalCount}} ->
             DecodedInvoices = [decode_invoice_search_result(I) || #merchstat_StatInvoice{invoice = I} <- Invoices],
             Resp = #{
-                <<"invoices">> => DecodedInvoices,
+                <<"result">> => DecodedInvoices,
                 <<"totalCount">> => TotalCount
             },
             {ok, {200, [], Resp}};
@@ -375,7 +375,7 @@ process_request(OperationID = 'SearchPayments', Req, Context, ReqCtx) ->
                 } <- Payments
             ],
             Resp = #{
-                <<"payments">> => DecodedPayments,
+                <<"result">> => DecodedPayments,
                 <<"totalCount">> => TotalCount
             },
             {ok, {200, [], Resp}};
@@ -1036,8 +1036,14 @@ general_error(Message) ->
     #{<<"message">> => genlib:to_binary(Message)}.
 
 parse_exp_date(ExpDate) when is_binary(ExpDate) ->
-    [Month,  Year] = binary:split(ExpDate, <<"/">>),
-    {genlib:to_int(Month), 2000 + genlib:to_int(Year)}.
+    [Month, Year0] = binary:split(ExpDate, <<"/">>),
+    Year = case genlib:to_int(Year0) of
+        Y when Y < 100 ->
+            2000 + Y;
+        Y ->
+            Y
+    end,
+    {genlib:to_int(Month), Year}.
 
 get_user_info(Context) ->
     #payproc_UserInfo{
@@ -1296,27 +1302,44 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
     payer = #domain_Payer{
         payment_tool = PaymentTool,
         session = PaymentSession,
-        contact_info = ContactInfo
+        contact_info = ContactInfo,
+        client_info = #domain_ClientInfo{
+            ip_address = IP,
+            fingerprint = Fingerprint
+        }
     },
     cost = #domain_Cash{
         amount = Amount,
         currency = Currency
     }
 }) ->
+
     genlib_map:compact(maps:merge(#{
         <<"id">> =>  PaymentID,
         <<"invoiceID">> => InvoiceID,
         <<"createdAt">> => CreatedAt,
-        <<"paymentToolToken">> => decode_payment_tool_token(PaymentTool),
+        <<"amount">> => Amount,
+        <<"currency">> => decode_currency(Currency),
         <<"contactInfo">> => decode_contact_info(ContactInfo),
         <<"paymentSession">> => PaymentSession,
-        <<"amount">> => Amount,
-        <<"currency">> => decode_currency(Currency)
+        <<"paymentToolToken">> => decode_payment_tool_token(PaymentTool),
+        <<"paymentToolDetails">> => decode_payment_tool_details(PaymentTool),
+        <<"ip">> => IP,
+        <<"fingerprint">> => Fingerprint
     }, decode_payment_status(Status))).
 
-decode_payment_search_result(InvoiceID, PaymentSearchResult) ->
-    decode_payment(InvoiceID, PaymentSearchResult).
+decode_payment_tool_details({bank_card, #domain_BankCard{
+    'payment_system' = PaymentSystem,
+    'masked_pan' = MaskedPan
+}}) ->
+    #{
+        <<"detailsType">> => <<"PaymentToolDetailsCardData">>,
+        <<"cardNumberMask">> => genlib:to_binary(MaskedPan),
+        <<"paymentSystem">> => genlib:to_binary(PaymentSystem)
+    }.
 
+decode_payment_search_result(InvoiceID, InvoicePayment) ->
+    decode_payment(InvoiceID, InvoicePayment).
 
 decode_payment_tool_token({bank_card, BankCard}) ->
     encode_bank_card(BankCard).
@@ -1929,7 +1952,7 @@ encode_event_type(invoices, <<"InvoiceCancelled">>) ->
     {status_changed, #webhooker_InvoiceStatusChanged{value = ?invcancelled()}};
 encode_event_type(invoices, <<"InvoiceFulfilled">>) ->
     {status_changed, #webhooker_InvoiceStatusChanged{value = ?invfulfilled()}};
-encode_event_type(invoices, <<"PaymentCreated">>) ->
+encode_event_type(invoices, <<"PaymentStarted">>) ->
     {payment, {created, #webhooker_InvoicePaymentCreated{}}};
 encode_event_type(invoices, <<"PaymentProcessed">>) ->
     {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtprocessed()}}};
@@ -1976,7 +1999,7 @@ decode_event_type(
     invoice,
     {payment, {created, #webhooker_InvoicePaymentCreated{}}}
 ) ->
-    [<<"PaymentCreated">>];
+    [<<"PaymentStarted">>];
 decode_event_type(
     invoice,
     {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = undefined}}}
