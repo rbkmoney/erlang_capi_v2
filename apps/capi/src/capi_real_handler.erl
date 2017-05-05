@@ -1362,10 +1362,7 @@ decode_payment_status({Status, StatusInfo}) ->
                 description = Description
             }
         } ->
-            #{
-                <<"code">> => Code,
-                <<"description">> => Description
-            };
+            logic_error(Code, Description);
         _ ->
             undefined
     end,
