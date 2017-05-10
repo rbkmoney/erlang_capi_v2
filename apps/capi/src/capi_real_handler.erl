@@ -35,10 +35,10 @@ authorize_api_key(OperationID, ApiKey) ->
 
 handle_request(OperationID, Req, Context) ->
     _ = lager:info("Processing request ~p", [OperationID]),
-    ReqContext = create_context(Req),
     try
         case capi_auth:authorize_operation(OperationID, Req, get_auth_context(Context)) of
             ok ->
+                ReqContext = create_context(Req, get_auth_context(Context)),
                 process_request(OperationID, Req, Context, ReqContext);
             {error, _} = Error ->
                 _ = lager:info("Operation ~p authorization failed due to ~p", [OperationID, Error]),
@@ -1018,13 +1018,21 @@ decode_webhook_id(WebhookID) when is_integer(WebhookID) ->
 service_call(ServiceName, Function, Args, Context) ->
     cp_proto:call_service(ServiceName, Function, Args, Context, capi_woody_event_handler).
 
-create_context(#{'X-Request-ID' := RequestID}) ->
+create_context(#{'X-Request-ID' := RequestID}, AuthContext) ->
     TraceID = woody_context:new_req_id(),
     _ = lager:debug("Created TraceID:~p for RequestID:~p", [TraceID, RequestID]),
     ParentID = ?ROOT_PARENT_ID,
     SpanID = genlib:to_binary(RequestID),
     RootRpcID = woody_context:new_rpc_id(ParentID, TraceID, SpanID),
-    woody_context:new(RootRpcID).
+    WoodyContext = woody_context:new(RootRpcID),
+    woody_user_identity:put(get_user_identity(AuthContext), WoodyContext).
+
+get_user_identity(AuthContext) ->
+    genlib_map:compact(#{
+        id => get_subject_id(AuthContext),
+        realm => get_attribute(<<"realm">>, AuthContext, <<"testRealm">>),
+        email => get_attribute(<<"email">>, AuthContext, undefined)
+    }).
 
 logic_error(Code, Message) ->
     #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)}.
@@ -1069,6 +1077,9 @@ get_subject_id({{SubjectID, _ACL}, _}) ->
 
 get_attribute(AttrName, {_Subject, Attrs}) ->
     maps:get(AttrName, Attrs).
+
+get_attribute(AttrName, {_Subject, Attrs}, Default) ->
+     maps:get(AttrName, Attrs, Default).
 
 get_peer_info(#{peer := Peer}) ->
     Peer.
