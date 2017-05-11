@@ -16,6 +16,7 @@
 -export([handle_request/3]).
 
 -define(ROOT_PARENT_ID, <<"undefined">>).
+-define(REALM, <<"external">>).
 
 -spec authorize_api_key(swagger:operation_id(), swagger:api_key()) ->
     Result :: false | {true, capi_auth:context()}.
@@ -1030,7 +1031,7 @@ create_context(#{'X-Request-ID' := RequestID}, AuthContext) ->
 get_user_identity(AuthContext) ->
     genlib_map:compact(#{
         id => get_subject_id(AuthContext),
-        realm => get_attribute(<<"realm">>, AuthContext, <<"testRealm">>),
+        realm => ?REALM,
         email => get_attribute(<<"email">>, AuthContext, undefined)
     }).
 
