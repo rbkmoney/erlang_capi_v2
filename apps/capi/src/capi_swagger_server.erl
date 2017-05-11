@@ -110,7 +110,7 @@ log_access(Code, Headers, Req) ->
         RemAddr  = get_remote_addr(Req),
         RespLen  = get_response_len(Headers),
         Duration = get_request_duration(Req),
-        MD = [
+        ReqMeta = [
               {remote_addr, RemAddr},
               {request_method, Method},
               {request_path, Path},
@@ -120,8 +120,10 @@ log_access(Code, Headers, Req) ->
               {'http_x-request-id', ReqId},
               {status, Code}
              ],
-        _ = lager:md(orddict:merge(fun(_Key, New, _Old) -> New end, MD, lager:md())),
-        capi_access_logger:info("Request processed")
+        Meta = orddict:merge(fun(_Key, New, _Old) -> New end, ReqMeta, lager:md()),
+        %% Call lager:log/5 here directly in order to pass request metadata (fused into
+        %% lager metadata) without storing it in a process dict via lager:md/1.
+        lager:log(capi_access_logger, info, Meta, "", [])
     catch
         Error:Reason ->
             capi_access_logger:error(
