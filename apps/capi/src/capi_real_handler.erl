@@ -17,7 +17,7 @@
 
 -define(ROOT_PARENT_ID, <<"undefined">>).
 
-%% @WARNING Must be refactored in case of different classes of customers using this API
+%% @WARNING Must be refactored in case of different classes of users using this API
 -define(REALM, <<"external">>).
 
 -spec authorize_api_key(swagger:operation_id(), swagger:api_key()) ->
@@ -197,7 +197,13 @@ process_request(OperationID = 'CreateInvoiceAccessToken', Req, Context, ReqCtx) 
     Result = get_invoice_by_id(ReqCtx, UserInfo, InvoiceID),
     case Result of
         {ok, #'payproc_InvoiceState'{}} ->
-            {ok, Token} = capi_auth:issue_invoice_access_token(PartyID, InvoiceID),
+            AuthContext = get_auth_context(Context),
+            AdditionalClaims = capi_auth:get_claims(AuthContext),
+            {ok, Token} = capi_auth:issue_invoice_access_token(
+                PartyID,
+                InvoiceID,
+                AdditionalClaims
+            ),
             Resp = #{<<"payload">> => Token},
             {ok, {201, [], Resp}};
         {exception, Exception} ->
@@ -1035,7 +1041,7 @@ get_user_identity(AuthContext) ->
         id => capi_auth:get_subject_id(AuthContext),
         realm => ?REALM,
         email => capi_auth:get_claim(<<"email">>, AuthContext, undefined),
-        username => capi_auth:get_claim(<<"username">>, AuthContext, undefined)
+        username => capi_auth:get_claim(<<"name">>, AuthContext, undefined)
     }).
 
 logic_error(Code, Message) ->

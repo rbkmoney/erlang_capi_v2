@@ -3,14 +3,18 @@
 -export([authorize_api_key/2]).
 -export([authorize_operation/3]).
 -export([issue_invoice_access_token/2]).
+-export([issue_invoice_access_token/3]).
 
 -export([get_subject_id/1]).
+-export([get_claims/1]).
 -export([get_claim/2]).
 -export([get_claim/3]).
 
 -type context() :: capi_authorizer_jwt:t().
+-type claims()  :: capi_authorizer_jwt:claims().
 
 -export_type([context/0]).
+-export_type([claims/0]).
 
 -spec authorize_api_key(
     OperationID :: swagger:operation_id(),
@@ -96,6 +100,13 @@ authorize_operation(OperationID, Req, {{_SubjectID, ACL}, _}) ->
     {ok, capi_authorizer_jwt:token()} | {error, _}.
 
 issue_invoice_access_token(PartyID, InvoiceID) ->
+    issue_invoice_access_token(PartyID, InvoiceID, #{}).
+
+
+-spec issue_invoice_access_token(PartyID :: binary(), InvoiceID :: binary(), claims()) ->
+    {ok, capi_authorizer_jwt:token()} | {error, _}.
+
+issue_invoice_access_token(PartyID, InvoiceID, Additional) ->
     ACL = capi_acl:from_list([
         {[{invoices, InvoiceID}]           , read},
         {[{invoices, InvoiceID}, payments] , read},
@@ -104,13 +115,19 @@ issue_invoice_access_token(PartyID, InvoiceID) ->
     ]),
     capi_authorizer_jwt:issue(
         {{PartyID, ACL}, #{}},
-        {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME}
+        {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME},
+        Additional
     ).
 
 -spec get_subject_id(context()) -> binary().
 
 get_subject_id({{SubjectID, _ACL}, _}) ->
     SubjectID.
+
+-spec get_claims(context()) -> claims().
+
+get_claims({_Subject, Claims}) ->
+    Claims.
 
 -spec get_claim(binary(), context()) -> term().
 
