@@ -16,6 +16,8 @@
 -export([handle_request/3]).
 
 -define(ROOT_PARENT_ID, <<"undefined">>).
+
+%% @WARNING Must be refactored in case of different classes of customers using this API
 -define(REALM, <<"external">>).
 
 -spec authorize_api_key(swagger:operation_id(), swagger:api_key()) ->
@@ -1030,9 +1032,10 @@ create_context(#{'X-Request-ID' := RequestID}, AuthContext) ->
 
 get_user_identity(AuthContext) ->
     genlib_map:compact(#{
-        id => get_subject_id(AuthContext),
+        id => capi_auth:get_subject_id(AuthContext),
         realm => ?REALM,
-        email => get_attribute(<<"email">>, AuthContext, undefined)
+        email => capi_auth:get_claim(<<"email">>, AuthContext, undefined),
+        username => capi_auth:get_claim(<<"username">>, AuthContext, undefined)
     }).
 
 logic_error(Code, Message) ->
@@ -1064,23 +1067,14 @@ get_auth_context(#{auth_context := AuthContext}) ->
     AuthContext.
 
 get_party_id(Context) ->
-    get_subject_id(get_auth_context(Context)).
+    capi_auth:get_subject_id(get_auth_context(Context)).
 
 get_party_params(Context) ->
     #payproc_PartyParams{
         contact_info = #domain_PartyContactInfo{
-            email = get_attribute(<<"email">>, get_auth_context(Context))
+            email = capi_auth:get_claim(<<"email">>, get_auth_context(Context))
         }
     }.
-
-get_subject_id({{SubjectID, _ACL}, _}) ->
-    SubjectID.
-
-get_attribute(AttrName, {_Subject, Attrs}) ->
-    maps:get(AttrName, Attrs).
-
-get_attribute(AttrName, {_Subject, Attrs}, Default) ->
-     maps:get(AttrName, Attrs, Default).
 
 get_peer_info(#{peer := Peer}) ->
     Peer.

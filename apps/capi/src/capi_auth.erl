@@ -4,6 +4,10 @@
 -export([authorize_operation/3]).
 -export([issue_invoice_access_token/2]).
 
+-export([get_subject_id/1]).
+-export([get_claim/2]).
+-export([get_claim/3]).
+
 -type context() :: capi_authorizer_jwt:t().
 
 -export_type([context/0]).
@@ -102,6 +106,21 @@ issue_invoice_access_token(PartyID, InvoiceID) ->
         {{PartyID, ACL}, #{}},
         {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME}
     ).
+
+-spec get_subject_id(context()) -> binary().
+
+get_subject_id({{SubjectID, _ACL}, _}) ->
+    SubjectID.
+
+-spec get_claim(binary(), context()) -> term().
+
+get_claim(ClaimName, {_Subject, Claims}) ->
+    maps:get(ClaimName, Claims).
+
+-spec get_claim(binary(), context(), term()) -> term().
+
+get_claim(ClaimName, {_Subject, Claims}, Default) ->
+     maps:get(ClaimName, Claims, Default).
 
 %%
 
