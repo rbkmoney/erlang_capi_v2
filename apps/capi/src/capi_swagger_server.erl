@@ -43,7 +43,6 @@ get_cowboy_config(LogicHandler) ->
         {onresponse, fun ?MODULE:response_hook/4}
     ].
 
-
 -spec request_hook(cowboy_req:req()) ->
     cowboy_req:req().
 
@@ -54,9 +53,19 @@ request_hook(Req) ->
     cowboy_req:req().
 
 response_hook(Code, Headers, _, Req) ->
-    {Code1, Headers1, Req1} = handle_response(Code, Headers, Req),
-    _ = log_access(Code1, Headers1, Req1),
-    Req1.
+    try
+        {Code1, Headers1, Req1} = handle_response(Code, Headers, Req),
+        _ = log_access(Code1, Headers1, Req1),
+        Req1
+    catch
+        Class:Reason ->
+            Stack = genlib_format:format_stacktrace(erlang:get_stacktrace(), [newlines]),
+            _ = lager:warning(
+                "Response hook failed for: [~p, ~p, ~p]~nwith: ~p:~p~nstacktrace: ~ts",
+                [Code, Headers, Req, Class, Reason, Stack]
+            ),
+            Req
+    end.
 
 handle_response(Code, Headers, Req) when Code >= 500 ->
     send_oops_resp(Code, Headers, get_oops_body_safe(Code), Req);
@@ -102,35 +111,27 @@ get_oops_body(Code) ->
     genlib_map:get(Code, genlib_app:env(?APP, oops_bodies, #{}), undefined).
 
 log_access(Code, Headers, Req) ->
-    try
-        {Method, _} = cowboy_req:method(Req),
-        {Path,   _} = cowboy_req:path(Req),
-        {ReqLen, _} = cowboy_req:body_length(Req),
-        {ReqId,  _} = cowboy_req:header(<<"x-request-id">>, Req, undefined),
-        RemAddr  = get_remote_addr(Req),
-        RespLen  = get_response_len(Headers),
-        Duration = get_request_duration(Req),
-        ReqMeta = [
-              {remote_addr, RemAddr},
-              {request_method, Method},
-              {request_path, Path},
-              {request_length, ReqLen},
-              {response_length, RespLen},
-              {request_time, Duration},
-              {'http_x-request-id', ReqId},
-              {status, Code}
-             ],
-        Meta = orddict:merge(fun(_Key, New, _Old) -> New end, ReqMeta, lager:md()),
-        %% Call lager:log/5 here directly in order to pass request metadata (fused into
-        %% lager metadata) without storing it in a process dict via lager:md/1.
-        lager:log(capi_access_logger, info, Meta, "", [])
-    catch
-        Error:Reason ->
-            capi_access_logger:error(
-                "Failed to prepare access data for [~p, ~p, ~p]: ~p:~p",
-                [Code, Headers, Req, Error, Reason]
-            )
-    end.
+    {Method, _} = cowboy_req:method(Req),
+    {Path,   _} = cowboy_req:path(Req),
+    {ReqLen, _} = cowboy_req:body_length(Req),
+    {ReqId,  _} = cowboy_req:header(<<"x-request-id">>, Req, undefined),
+    RemAddr  = get_remote_addr(Req),
+    RespLen  = get_response_len(Headers),
+    Duration = get_request_duration(Req),
+    ReqMeta = [
+        {remote_addr, RemAddr},
+        {request_method, Method},
+        {request_path, Path},
+        {request_length, ReqLen},
+        {response_length, RespLen},
+        {request_time, Duration},
+        {'http_x-request-id', ReqId},
+        {status, Code}
+    ],
+    Meta = orddict:merge(fun(_Key, New, _Old) -> New end, ReqMeta, lager:md()),
+    %% Call lager:log/5 here directly in order to pass request metadata (fused into
+    %% lager metadata) without storing it in a process dict via lager:md/1.
+    lager:log(capi_access_lager_event, info, Meta, "", []).
 
 get_remote_addr(Req) ->
     case swagger_handler_api:determine_peer(Req) of
