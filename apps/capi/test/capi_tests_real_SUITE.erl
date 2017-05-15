@@ -1095,17 +1095,12 @@ default_create_contract(Config) ->
     Context = ?config(context, Config),
     Request = #{
         <<"contractor">> => #{
-            <<"bankAccount">> => #{
-                <<"account">> => <<"testAccount">>,
-                <<"bankName">> => <<"testBankName">>,
-                <<"bankPostAccount">> => <<"testBankPostAccount">>,
-                <<"bankBik">> => <<"testBankBik">>
-            },
+            <<"bankAccount">> => default_bank_account(),
             <<"legalEntity">> => #{
                 <<"entityType">> => <<"RussianLegalEntity">>,
                 <<"registeredName">> => <<"testRegisteredName">>,
-                <<"registeredNumber">> => <<"testRegisteredNumber">>,
-                <<"inn">> => <<"testInn">>,
+                <<"registeredNumber">> => <<"1234567890123">>,
+                <<"inn">> => <<"1234567890">>,
                 <<"actualAddress">> => <<"testActualAddress">>,
                 <<"postAddress">> => <<"testPostAddress">>,
                 <<"representativePosition">> => <<"testRepresentativePosition">>,
@@ -1116,12 +1111,7 @@ default_create_contract(Config) ->
         <<"payoutToolParams">> => #{
             <<"currency">> => <<"RUB">>,
             <<"payoutToolType">> => <<"PayoutToolBankAccount">>,
-            <<"bankAccount">> => #{
-                <<"account">> => <<"testAccount">>,
-                <<"bankName">> => <<"testBankName">>,
-                <<"bankPostAccount">> => <<"testBankPostAccount">>,
-                <<"bankBik">> => <<"testBankBik">>
-            }
+            <<"bankAccount">> => default_bank_account()
         }
     },
     Params = #{body => Request},
@@ -1181,17 +1171,20 @@ default_create_payout_tool(ContractID, Config) ->
         body => #{
             <<"currency">> => <<"RUB">>,
             <<"payoutToolType">> => <<"PayoutToolBankAccount">>,
-            <<"bankAccount">> => #{
-                <<"account">> => <<"testAccount">>,
-                <<"bankName">> => <<"testBankName">>,
-                <<"bankPostAccount">> => <<"testBankPostAccount">>,
-                <<"bankBik">> => <<"testBankBik">>
-            }
+            <<"bankAccount">> => default_bank_account()
         }
     },
     {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
     Response = swagger_payouts_api:create_payout_tool(Host, Port, PreparedParams),
     handle_response(Response).
+
+default_bank_account() ->
+    #{
+        <<"account">> => <<"12345678901234567890">>,
+        <<"bankName">> => <<"testBankName">>,
+        <<"bankPostAccount">> => <<"12345678901234567890">>,
+        <<"bankBik">> => <<"123456789">>
+    }.
 
 get_payout_tools(ContractID, Config) ->
     Context = ?config(context, Config),
