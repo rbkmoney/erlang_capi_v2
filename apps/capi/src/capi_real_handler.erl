@@ -197,8 +197,10 @@ process_request(OperationID = 'CreateInvoiceAccessToken', Req, Context, ReqCtx) 
     Result = get_invoice_by_id(ReqCtx, UserInfo, InvoiceID),
     case Result of
         {ok, #'payproc_InvoiceState'{}} ->
-            AuthContext = get_auth_context(Context),
-            AdditionalClaims = capi_auth:get_claims(AuthContext),
+            AdditionalClaims = maps:with(
+                [<<"name">>, <<"email">>],
+                capi_auth:get_claims(get_auth_context(Context))
+            ),
             {ok, Token} = capi_auth:issue_invoice_access_token(
                 PartyID,
                 InvoiceID,

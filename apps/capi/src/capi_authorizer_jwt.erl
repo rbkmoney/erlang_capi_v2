@@ -10,7 +10,6 @@
 % Extend interface to support proper keystore manipulation
 
 -export([issue/2]).
--export([issue/3]).
 -export([verify/1]).
 
 %%
@@ -181,18 +180,9 @@ construct_key(KID, JWK) ->
     }.
 
 issue(Auth, Expiration) ->
-    issue(Auth, Expiration, #{}).
-
--spec issue(t(), expiration(), claims()) ->
-    {ok, token()} |
-    {error,
-        nonexistent_signee
-    }.
-
-issue(Auth, Expiration, AdditionalClaims) ->
     case get_signee_key() of
         Key = #{} ->
-            Claims = maps:merge(AdditionalClaims, construct_final_claims(Auth, Expiration)),
+            Claims = construct_final_claims(Auth, Expiration),
             sign(Key, Claims);
         undefined ->
             {error, nonexistent_signee}

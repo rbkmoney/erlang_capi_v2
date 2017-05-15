@@ -106,7 +106,7 @@ issue_invoice_access_token(PartyID, InvoiceID) ->
 -spec issue_invoice_access_token(PartyID :: binary(), InvoiceID :: binary(), claims()) ->
     {ok, capi_authorizer_jwt:token()} | {error, _}.
 
-issue_invoice_access_token(PartyID, InvoiceID, Additional) ->
+issue_invoice_access_token(PartyID, InvoiceID, Claims) ->
     ACL = capi_acl:from_list([
         {[{invoices, InvoiceID}]           , read},
         {[{invoices, InvoiceID}, payments] , read},
@@ -114,9 +114,8 @@ issue_invoice_access_token(PartyID, InvoiceID, Additional) ->
         {[payment_tool_tokens]             , write}
     ]),
     capi_authorizer_jwt:issue(
-        {{PartyID, ACL}, #{}},
-        {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME},
-        Additional
+        {{PartyID, ACL}, Claims},
+        {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME}
     ).
 
 -spec get_subject_id(context()) -> binary().
