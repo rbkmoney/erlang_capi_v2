@@ -15,8 +15,6 @@
 -export([authorize_api_key/2]).
 -export([handle_request/3]).
 
--define(ROOT_PARENT_ID, <<"undefined">>).
-
 %% @WARNING Must be refactored in case of different classes of users using this API
 -define(REALM, <<"external">>).
 
@@ -1030,15 +1028,12 @@ service_call(ServiceName, Function, Args, Context) ->
     cp_proto:call_service(ServiceName, Function, Args, Context, capi_woody_event_handler).
 
 create_context(#{'X-Request-ID' := RequestID}, AuthContext) ->
-    TraceID = woody_context:new_req_id(),
-    _ = lager:debug("Created TraceID:~p for RequestID:~p", [TraceID, RequestID]),
-    ParentID = ?ROOT_PARENT_ID,
-    SpanID = genlib:to_binary(RequestID),
-    RootRpcID = woody_context:new_rpc_id(ParentID, TraceID, SpanID),
-    WoodyContext = woody_context:new(RootRpcID),
-    woody_user_identity:put(get_user_identity(AuthContext), WoodyContext).
+    RpcID = #{trace_id := TraceID} = woody_context:new_rpc_id(genlib:to_binary(RequestID)),
+    _ = lager:debug("Created TraceID:~p for RequestID:~p", [TraceID , RequestID]),
+    WoodyContext = woody_context:new(RpcID),
+    woody_user_identity:put(collect_user_identity(AuthContext), WoodyContext).
 
-get_user_identity(AuthContext) ->
+collect_user_identity(AuthContext) ->
     genlib_map:compact(#{
         id => capi_auth:get_subject_id(AuthContext),
         realm => ?REALM,
