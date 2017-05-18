@@ -53,7 +53,7 @@
   1},
  {<<"woody">>,
   {git,"git@github.com:rbkmoney/woody_erlang.git",
-       {ref,"992c279466e7eb1c24a9d9c6e7e8d66c597bc7e1"}},
+       {ref,"62e6e19f4ac1d6fd5a7d77a3f6b8b17664def7a9"}},
   0},
  {<<"woody_user_identity">>,
   {git,"git@github.com:rbkmoney/woody_erlang_user_identity.git",
