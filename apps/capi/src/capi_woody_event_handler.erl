@@ -4,87 +4,91 @@
 -include_lib("woody/src/woody_defs.hrl").
 -export([handle_event/4]).
 
--spec handle_event(Event, RpcId, Meta, Opts) -> ok when
+-spec handle_event(Event, RpcID, Meta, Opts) -> ok when
     Event :: woody_event_handler:event(),
-    RpcId :: woody:rpc_id() | undefined,
+    RpcID :: woody:rpc_id() | undefined,
     Meta  :: woody_event_handler:event_meta(),
     Opts  :: woody:options().
 
 handle_event(EventType, RpcID, EventMeta, _Opts) ->
     Msg = woody_event_handler:format_event(EventType, EventMeta, RpcID),
-    format_event(EventType, RpcID, EventMeta, #{event => EventType}, Msg).
-
--define(SCOPE, 'rpc.client').
+    format_event(EventType, RpcID, EventMeta, Msg).
 
 %% common
 
-format_event(EventType, RpcID, _EventMeta, MD, Msg) when
+-define(CLIENT, 'rpc.client').
+
+format_event(EventType, RpcID, _EventMeta, Msg) when
     EventType == ?EV_INTERNAL_ERROR;
     EventType == ?EV_TRACE
 ->
-    log(RpcID, MD, Msg);
+    log(RpcID, Msg, collect(?CLIENT, #{
+        event => EventType
+    }));
 
 %% client
 
-format_event(?EV_CALL_SERVICE, RpcID, #{
+format_event(EventType = ?EV_CALL_SERVICE, RpcID, #{
     service  := Service,
     function := Function,
     type     := Type,
     metadata := Metadata
-}, MD, Msg) ->
-    ok = enter(?SCOPE, maps:merge(Metadata, #{
+}, Msg) ->
+    ok = enter(?CLIENT, maps:merge(Metadata, #{
         service  => Service,
         function => Function,
         type     => Type
     })),
-    log(RpcID, MD, Msg);
+    log(RpcID, Msg, collect(?CLIENT, #{
+        event => EventType
+    }));
 
-format_event(?EV_CLIENT_SEND, RpcID, #{}, MD, Msg) ->
-    log(RpcID, MD, Msg);
+format_event(EventType = ?EV_CLIENT_SEND, RpcID, #{}, Msg) ->
+    log(RpcID, Msg, collect(?CLIENT, #{
+        event => EventType
+    }));
 
-format_event(?EV_CLIENT_RECEIVE, RpcID, #{status := Status}, MD, Msg) ->
-    log(RpcID, MD#{status => Status}, Msg);
+format_event(EventType = ?EV_CLIENT_RECEIVE, RpcID, #{status := Status}, Msg) ->
+    log(RpcID, Msg, collect(?CLIENT, #{
+        event => EventType,
+        status => Status
+    }));
 
-format_event(?EV_SERVICE_RESULT, RpcID, #{status := Status}, MD, Msg) ->
-    ok = log(RpcID, MD#{status => Status}, Msg),
-    leave(?SCOPE);
+format_event(EventType = ?EV_SERVICE_RESULT, RpcID, #{status := Status}, Msg) ->
+    _ = log(RpcID, Msg, collect(?CLIENT, #{
+        event => EventType,
+        status => Status
+    })),
+    leave(?CLIENT);
 
 %% server
 
-format_event(_EventType, _RpcID, _EventMeta, _MD, _Msg) ->
+format_event(_EventType, _RpcID, _EventMeta, _Msg) ->
     % skip safely, there's no woody servers around
     ok.
 
 %%
 
-log(RpcID, MD, {Level, {Format, Args}}) ->
-    ok = set_md(?SCOPE, MD),
-    _ = lager:log(Level, [{pid, self()}] ++ collect_md(RpcID), Format, Args),
-    ok = unset_md(?SCOPE, MD),
-    ok.
+log(RpcID, {Level, {Format, Args}}, MD) ->
+    lager:log(Level, [{pid, self()}] ++ rpc_id_to_md(RpcID) ++ orddict:to_list(MD), Format, Args).
 
-collect_md(MD = #{}) ->
-    maps:fold(
-        fun (K, V, Acc) -> lists:keystore(K, 1, Acc, {K, V}) end,
-        lager:md(),
-        MD
-    ).
+rpc_id_to_md(undefined) ->
+    [];
+rpc_id_to_md(RpcID = #{}) ->
+    maps:to_list(RpcID).
 
 %%
 
 enter(Name, Meta) ->
-    lager:md(orddict:store(Name, maps:merge(find_md(Name), Meta), lager:md())).
-
-set_md(Name, Meta) ->
-    enter(Name, Meta).
-
-unset_md(Name, Meta) ->
-    lager:md(orddict:store(Name, maps:without(maps:keys(Meta), find_md(Name)), lager:md())).
+    lager:md(collect(Name, Meta)).
 
 leave(Name) ->
     lager:md(orddict:erase(Name, lager:md())).
 
-find_md(Name) ->
+collect(Name, Meta) ->
+    orddict:store(Name, maps:merge(find_scope(Name), Meta), lager:md()).
+
+find_scope(Name) ->
     case orddict:find(Name, lager:md()) of
         {ok, V = #{}} -> V;
         error         -> #{}
