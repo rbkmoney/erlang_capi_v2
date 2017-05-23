@@ -36,6 +36,9 @@ build('capi', 'docker-host', finalHook) {
       }
     }
     runStage('test') {
+      withGithubPrivkey {
+        sh "make wc_testdeps"
+      }
       sh "make wdeps_test"
     }
     runStage('make release') {

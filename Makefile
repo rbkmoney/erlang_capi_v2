@@ -21,7 +21,22 @@ BASE_IMAGE_TAG := 13454a94990acb72f753623ec13599a9f6f4f852
 
 BUILD_IMAGE_TAG := da3d14f1cc5c4749aac771adb685bb36fd4d5c1e
 
-CALL_ANYWHERE := all submodules rebar-update compile xref lint dialyze test start devrel release clean distclean swagger.regenerate
+CALL_ANYWHERE := \
+	all \
+	submodules \
+	rebar-update \
+	compile \
+	xref \
+	lint \
+	dialyze \
+	testdeps \
+	test \
+	start \
+	devrel \
+	release \
+	clean \
+	distclean \
+	swagger.regenerate
 
 CALL_W_CONTAINER := $(CALL_ANYWHERE)
 
@@ -74,6 +89,9 @@ distclean: swagger.distclean
 
 cover:
 	$(REBAR) cover
+
+testdeps:
+	$(REBAR) as test compile
 
 # CALL_W_CONTAINER
 test: submodules
