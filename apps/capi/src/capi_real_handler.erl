@@ -1297,12 +1297,12 @@ decode_payment_event(_, {
 
 decode_payment_event(_, {
     invoice_payment_status_changed,
-    #'payproc_InvoicePaymentStatusChanged'{payment_id = PaymentID, status = {Status, _}}
+    #'payproc_InvoicePaymentStatusChanged'{payment_id = PaymentID, status = Status}
 }) ->
-    {<<"EventPaymentStatusChanged">>, #{
-        <<"paymentID">> => PaymentID,
-        <<"status">> => genlib:to_binary(Status)
-    }}.
+    {
+        <<"EventPaymentStatusChanged">>,
+        genlib_map:compact(maps:merge(#{<<"paymentID">> => PaymentID}, decode_payment_status(Status)))
+    }.
 
 decode_payment(InvoiceID, #domain_InvoicePayment{
     id = PaymentID,
