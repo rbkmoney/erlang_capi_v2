@@ -19,7 +19,7 @@ SERVICE_IMAGE_PUSH_TAG ?= $(SERVICE_IMAGE_TAG)
 BASE_IMAGE_NAME := service_erlang
 BASE_IMAGE_TAG := 13454a94990acb72f753623ec13599a9f6f4f852
 
-BUILD_IMAGE_TAG := ad7f71ebf9447c9339fea580d7f41d0f45752efa
+BUILD_IMAGE_TAG := da3d14f1cc5c4749aac771adb685bb36fd4d5c1e
 
 CALL_ANYWHERE := all submodules rebar-update compile xref lint dialyze test start devrel release clean distclean swagger.regenerate
 
