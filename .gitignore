@@ -11,8 +11,8 @@ erl_crash.dump
 # rebar
 /_checkouts/
 
-# compiled
-swagger
+# generated
+apps/swag_server/*
 
 
 # containerization

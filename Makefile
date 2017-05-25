@@ -70,7 +70,7 @@ clean:
 
 distclean: swagger.distclean
 	$(REBAR) clean
-	rm -rf _build apps/swagger
+	rm -rf _build
 
 cover:
 	$(REBAR) cover
@@ -83,7 +83,8 @@ test: submodules
 SWAGGER_CODEGEN = $(call which, swagger-codegen)
 SWAGGER_SCHEME_PATH = schemes/swag
 SWAGGER_SCHEME = $(SWAGGER_SCHEME_PATH)/web_deploy/swagger.yaml
-SWAGGER_APP_PATH = apps/swagger
+SWAGGER_PREFIX = swag_server
+SWAGGER_APP_PATH = apps/$(SWAGGER_PREFIX)
 SWAGGER_APP_TARGET = $(SWAGGER_APP_PATH)/rebar.config
 
 swagger.generate: $(SWAGGER_APP_TARGET)
@@ -94,7 +95,7 @@ swagger.distclean:
 swagger.regenerate: swagger.distclean swagger.generate
 
 $(SWAGGER_APP_TARGET): $(SWAGGER_SCHEME)
-	$(SWAGGER_CODEGEN) generate -i $(SWAGGER_SCHEME) -l erlang-server -o $(SWAGGER_APP_PATH) --additional-properties packageName=swagger
+	$(SWAGGER_CODEGEN) generate -i $(SWAGGER_SCHEME) -l erlang-server -o $(SWAGGER_APP_PATH) --additional-properties packageName=$(SWAGGER_PREFIX)
 
 $(SWAGGER_SCHEME): $(SWAGGER_SCHEME_PATH)/.git
 	$(MAKE) -C $(SWAGGER_SCHEME_PATH)
