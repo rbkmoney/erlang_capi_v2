@@ -1116,7 +1116,7 @@ default_create_contract(Config) ->
     },
     Params = #{body => Request},
     {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swagger_contracts_api:create_contract(Host, Port, PreparedParams),
+    Response = swag_client_contracts_api:create_contract(Host, Port, PreparedParams),
     handle_response(Response).
 
 get_payments(InvoiceID, Context) ->
@@ -1126,7 +1126,7 @@ get_payments(InvoiceID, Context) ->
         }
     },
     {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swagger_payments_api:get_payments(Host, Port, PreparedParams),
+    Response = swag_client_payments_api:get_payments(Host, Port, PreparedParams),
     api_client_lib:handle_response(Response).
 
 get_contract_by_id(ContractID, Config) ->
@@ -1137,20 +1137,20 @@ get_contract_by_id(ContractID, Config) ->
         }
     },
     {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swagger_contracts_api:get_contract_by_id(Host, Port, PreparedParams),
+    Response = swag_client_contracts_api:get_contract_by_id(Host, Port, PreparedParams),
     handle_response(Response).
 
 get_contracts(Config) ->
     Context = ?config(context, Config),
     {Host, Port, PreparedParams} = api_client_lib:make_request(Context, #{}),
-    Response = swagger_contracts_api:get_contracts(Host, Port, PreparedParams),
+    Response = swag_client_contracts_api:get_contracts(Host, Port, PreparedParams),
     handle_response(Response).
 
 get_shops(Config) ->
     Context = ?config(context, Config),
     Params = #{},
     {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swagger_shops_api:get_shops(Host, Port, PreparedParams),
+    Response = swag_client_shops_api:get_shops(Host, Port, PreparedParams),
     handle_response(Response).
 
 get_latest(Es) ->
@@ -1175,7 +1175,7 @@ default_create_payout_tool(ContractID, Config) ->
         }
     },
     {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swagger_payouts_api:create_payout_tool(Host, Port, PreparedParams),
+    Response = swag_client_payouts_api:create_payout_tool(Host, Port, PreparedParams),
     handle_response(Response).
 
 default_bank_account() ->
@@ -1194,7 +1194,7 @@ get_payout_tools(ContractID, Config) ->
         }
     },
     {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swagger_payouts_api:get_payout_tools(Host, Port, PreparedParams),
+    Response = swag_client_payouts_api:get_payout_tools(Host, Port, PreparedParams),
     handle_response(Response).
 
 default_tokenize_card(Config) ->
@@ -1269,7 +1269,7 @@ default_get_shop_by_id(ShopID, Config) ->
         }
     },
     {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swagger_shops_api:get_shop_by_id(Host, Port, PreparedParams),
+    Response = swag_client_shops_api:get_shop_by_id(Host, Port, PreparedParams),
     {ok, R} = api_client_lib:handle_response(Response),
     R.
 
@@ -1342,7 +1342,7 @@ get_locations_names(GeoIDs, Lang, Config) ->
         }
     },
     {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swagger_geo_api:get_locations_names(Host, Port, PreparedParams),
+    Response = swag_client_geo_api:get_locations_names(Host, Port, PreparedParams),
     {ok, R} = api_client_lib:handle_response(Response),
     R.
 
@@ -1793,7 +1793,7 @@ default_get_shop_account_by_id(AccountID, ShopID, Config) ->
         }
     },
     {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response =  swagger_accounts_api:get_account_by_id(Host, Port, PreparedParams),
+    Response =  swag_client_accounts_api:get_account_by_id(Host, Port, PreparedParams),
     handle_response(Response).
 
 get_body(ClientRef) ->
