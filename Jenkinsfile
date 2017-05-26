@@ -20,25 +20,28 @@ build('capi', 'docker-host', finalHook) {
   }
 
   pipeDefault() {
-    runStage('compile') {
-      withGithubPrivkey {
-        sh 'make wc_compile'
+    if (env.BRANCH_NAME =! 'master') {
+      runStage('compile') {
+        withGithubPrivkey {
+          sh 'make wc_compile'
+        }
+      }
+      runStage('lint') {
+        sh 'make wc_lint'
+      }
+      runStage('xref') {
+        sh 'make wc_xref'
+      }
+      runStage('dialyze') {
+        withWsCache("_build/default/rebar3_19.1_plt") {
+          sh 'make wc_dialyze'
+        }
+      }
+      runStage('test') {
+        sh "make wdeps_test"
       }
     }
-    runStage('lint') {
-      sh 'make wc_lint'
-    }
-    runStage('xref') {
-      sh 'make wc_xref'
-    }
-    runStage('dialyze') {
-      withWsCache("_build/default/rebar3_19.1_plt") {
-        sh 'make wc_dialyze'
-      }
-    }
-    runStage('test') {
-      sh "make wdeps_test"
-    }
+
     runStage('make release') {
       withGithubPrivkey {
         sh "make wc_release"
@@ -61,4 +64,5 @@ build('capi', 'docker-host', finalHook) {
     }
   }
 }
+
 
