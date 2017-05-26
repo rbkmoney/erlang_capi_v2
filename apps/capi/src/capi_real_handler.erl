@@ -1540,7 +1540,10 @@ decode_context(#'Content'{
     data = InvoiceContext
 }) ->
     % @TODO deal with non json contexts
-    jsx:decode(InvoiceContext,  [return_maps]).
+    jsx:decode(InvoiceContext,  [return_maps]);
+
+decode_context(undefined) ->
+    undefined.
 
 decode_party(#domain_Party{
     id = PartyID,
@@ -2028,7 +2031,10 @@ decode_geo_location_info(#geo_ip_LocationInfo{
     #{
         <<"cityGeoID">> => CityID,
         <<"countryGeoID">> => CountryID
-    }.
+    };
+
+decode_geo_location_info(undefined) ->
+    undefined.
 
 decode_location_name(GeoID, Name) ->
     #{
