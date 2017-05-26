@@ -96,7 +96,7 @@ process_request(OperationID = 'CreatePayment', Req, Context, ReqCtx) ->
         Params =  #payproc_InvoicePaymentParams{
             'payer' = #domain_Payer{
                 payment_tool = PaymentTool,
-                session = PaymentSession,
+                session_id = PaymentSession,
                 client_info = #domain_ClientInfo{
                     fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
                     ip_address = maps:get(<<"ip_address">>, ClientInfo)
@@ -162,7 +162,7 @@ process_request(OperationID = 'CreatePaymentToolToken', Req, Context, ReqCtx) ->
             ),
             case Result of
                 {ok, #'PutCardDataResult'{
-                    session = PaymentSession,
+                    session_id = PaymentSession,
                     bank_card = BankCard
                 }} ->
                     Token = encode_bank_card(BankCard),
@@ -336,7 +336,7 @@ process_request(OperationID = 'SearchInvoices', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, #merchstat_StatResponse{data = {'invoices', Invoices}, total_count = TotalCount}} ->
-            DecodedInvoices = [decode_invoice_search_result(I) || #merchstat_StatInvoice{invoice = I} <- Invoices],
+            DecodedInvoices = [decode_stat_invoice(I) || I <- Invoices],
             Resp = #{
                 <<"result">> => DecodedInvoices,
                 <<"totalCount">> => TotalCount
@@ -376,13 +376,7 @@ process_request(OperationID = 'SearchPayments', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, #merchstat_StatResponse{data = {'payments', Payments}, total_count = TotalCount}} ->
-            DecodedPayments = [
-                decode_payment_search_result(InvoiceID, I)
-                || #merchstat_StatPayment{
-                    invoice_id = InvoiceID,
-                    payment = I
-                } <- Payments
-            ],
+            DecodedPayments = [decode_stat_payment(P) || P <- Payments],
             Resp = #{
                 <<"result">> => DecodedPayments,
                 <<"totalCount">> => TotalCount
@@ -1310,7 +1304,7 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
     status = Status,
     payer = #domain_Payer{
         payment_tool = PaymentTool,
-        session = PaymentSession,
+        session_id = PaymentSession,
         contact_info = ContactInfo,
         client_info = #domain_ClientInfo{
             ip_address = IP,
@@ -1337,6 +1331,9 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
         <<"fingerprint">> => Fingerprint
     }, decode_payment_status(Status))).
 
+decode_payment_tool_token({bank_card, BankCard}) ->
+    encode_bank_card(BankCard).
+
 decode_payment_tool_details({bank_card, #domain_BankCard{
     'payment_system' = PaymentSystem,
     'masked_pan' = MaskedPan
@@ -1346,12 +1343,6 @@ decode_payment_tool_details({bank_card, #domain_BankCard{
         <<"cardNumberMask">> => genlib:to_binary(MaskedPan),
         <<"paymentSystem">> => genlib:to_binary(PaymentSystem)
     }.
-
-decode_payment_search_result(InvoiceID, InvoicePayment) ->
-    decode_payment(InvoiceID, InvoicePayment).
-
-decode_payment_tool_token({bank_card, BankCard}) ->
-    encode_bank_card(BankCard).
 
 %% @TODO deal with an empty map here
 decode_contact_info(#domain_ContactInfo{
@@ -1379,6 +1370,104 @@ decode_payment_status({Status, StatusInfo}) ->
         <<"status">> => genlib:to_binary(Status),
         <<"error">> => Error
     }.
+
+decode_stat_payment(#merchstat_StatPayment{
+    id = PaymentID,
+    invoice_id = InvoiceID,
+    shop_id = ShopID,
+    created_at = CreatedAt,
+    status = Status,
+    amount = Amount,
+    fee = Fee,
+    currency_symbolic_code = Currency,
+    payment_tool = PaymentTool,
+    ip_address = IP,
+    fingerprint = Fingerprint,
+    phone_number = PhoneNumber,
+    email = Email,
+    session_id = PaymentSession,
+    context = RawContext,
+    location_info = Location
+}) ->
+    genlib_map:compact(maps:merge(#{
+        <<"id">> =>  PaymentID,
+        <<"invoiceID">> => InvoiceID,
+        <<"shopID">> => ShopID,
+        <<"createdAt">> => CreatedAt,
+        <<"amount">> => Amount,
+        <<"fee">> => Fee,
+        <<"currency">> => Currency,
+        <<"contactInfo">> => #{
+            <<"phone_number">> => PhoneNumber,
+            <<"email">> => Email
+        },
+        <<"paymentSession">> => PaymentSession,
+        <<"paymentToolToken">> => decode_stat_payment_tool_token(PaymentTool),
+        <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool),
+        <<"ip">> => IP,
+        <<"geoLocationInfo">> => decode_geo_location_info(Location),
+        <<"fingerprint">> => Fingerprint,
+        <<"metadata">> =>  decode_context(RawContext)
+    }, decode_stat_payment_status(Status))).
+
+decode_stat_payment_tool_token(PaymentTool) ->
+    decode_payment_tool_token(merchstat_to_domain(PaymentTool)).
+
+decode_stat_payment_tool_details(PaymentTool) ->
+    decode_payment_tool_details(merchstat_to_domain(PaymentTool)).
+
+decode_stat_payment_status(PaymentStatus) ->
+    decode_payment_status(merchstat_to_domain(PaymentStatus)).
+
+merchstat_to_domain({bank_card, #merchstat_BankCard{
+    'token'  = Token,
+    'payment_system' = PaymentSystem,
+    'bin' = Bin,
+    'masked_pan' = MaskedPan
+}}) ->
+    {bank_card, #domain_BankCard{
+        'token'  = Token,
+        'payment_system' = PaymentSystem,
+        'bin' = Bin,
+        'masked_pan' = MaskedPan
+    }};
+
+merchstat_to_domain({Status, #merchstat_InvoicePaymentPending{}}) ->
+    {Status, #domain_InvoicePaymentPending{}};
+
+merchstat_to_domain({Status, #merchstat_InvoicePaymentProcessed{}}) ->
+    {Status, #domain_InvoicePaymentProcessed{}};
+
+merchstat_to_domain({Status, #merchstat_InvoicePaymentCaptured{}}) ->
+    {Status, #domain_InvoicePaymentCaptured{}};
+
+merchstat_to_domain({Status, #merchstat_InvoicePaymentCancelled{}}) ->
+    {Status, #domain_InvoicePaymentCancelled{}};
+
+merchstat_to_domain({Status, #merchstat_InvoicePaymentFailed{
+    failure = #merchstat_OperationFailure{
+        code = Code,
+        description = Description
+    }
+}}) ->
+    {Status, #domain_InvoicePaymentFailed{
+        failure = #domain_OperationFailure{
+            code = Code,
+            description = Description
+        }
+    }};
+
+merchstat_to_domain({Status, #merchstat_InvoiceUnpaid{}}) ->
+    {Status, #domain_InvoiceUnpaid{}};
+
+merchstat_to_domain({Status, #merchstat_InvoicePaid{}}) ->
+    {Status, #domain_InvoicePaid{}};
+
+merchstat_to_domain({Status, #merchstat_InvoiceCancelled{details = Details}}) ->
+    {Status, #domain_InvoiceCancelled{details = Details}};
+
+merchstat_to_domain({Status, #merchstat_InvoiceFulfilled{details = Details}}) ->
+    {Status, #domain_InvoiceFulfilled{details = Details}}.
 
 decode_invoice(#domain_Invoice{
     id = InvoiceID,
@@ -1408,9 +1497,6 @@ decode_invoice(#domain_Invoice{
         <<"description">> => Description
     }, decode_invoice_status(InvoiceStatus))).
 
-decode_invoice_search_result(InvoiceSearchResult) ->
-    decode_invoice(InvoiceSearchResult).
-
 decode_invoice_status({Status, StatusInfo}) ->
     Reason = case StatusInfo of
         #domain_InvoiceCancelled{details = Details} -> Details;
@@ -1421,6 +1507,33 @@ decode_invoice_status({Status, StatusInfo}) ->
         <<"status">> => genlib:to_binary(Status),
         <<"reason">> => Reason
     }.
+
+decode_stat_invoice(#merchstat_StatInvoice{
+    id = InvoiceID,
+    shop_id = ShopID,
+    created_at = CreatedAt,
+    status = InvoiceStatus,
+    product = Product,
+    description = Description,
+    due  = DueDate,
+    amount = Amount,
+    currency_symbolic_code = Currency,
+    context = RawContext
+}) ->
+    genlib_map:compact(maps:merge(#{
+        <<"id">> => InvoiceID,
+        <<"shopID">> => ShopID,
+        <<"createdAt">> => CreatedAt,
+        <<"dueDate">> => DueDate,
+        <<"amount">> => Amount,
+        <<"currency">> =>  Currency,
+        <<"metadata">> =>  decode_context(RawContext),
+        <<"product">> => Product,
+        <<"description">> => Description
+    }, decode_stat_invoice_status(InvoiceStatus))).
+
+decode_stat_invoice_status(Status) ->
+    decode_invoice_status(merchstat_to_domain(Status)).
 
 decode_context(#'Content'{
     type = <<"application/json">>,
@@ -1907,6 +2020,15 @@ decode_user_interaction_form(Form) ->
         [],
         Form
     ).
+
+decode_geo_location_info(#geo_ip_LocationInfo{
+    city_geo_id = CityID,
+    country_geo_id = CountryID
+}) ->
+    #{
+        <<"cityGeoID">> => CityID,
+        <<"countryGeoID">> => CountryID
+    }.
 
 decode_location_name(GeoID, Name) ->
     #{
