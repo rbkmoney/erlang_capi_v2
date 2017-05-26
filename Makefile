@@ -61,7 +61,7 @@ start: submodules
 devrel: submodules
 	$(REBAR) release
 
-release: distclean generate
+release: submodules distclean generate
 	$(REBAR) as prod release
 
 clean:
