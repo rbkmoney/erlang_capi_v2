@@ -20,7 +20,7 @@ build('capi', 'docker-host', finalHook) {
   }
 
   pipeDefault() {
-    if (env.BRANCH_NAME =! 'master') {
+    if (env.BRANCH_NAME != 'master') {
       runStage('compile') {
         withGithubPrivkey {
           sh 'make wc_compile'
