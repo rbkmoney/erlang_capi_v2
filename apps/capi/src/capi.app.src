@@ -12,7 +12,7 @@
         genlib,
         woody,
         cp_proto,
-        swagger,
+        swag_server,
         jose,
         cowboy_cors,
         rfc3339,

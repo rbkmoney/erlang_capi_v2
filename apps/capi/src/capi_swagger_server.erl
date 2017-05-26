@@ -28,7 +28,7 @@ get_socket_transport() ->
     {ranch_tcp, [{ip, IP}, {port, Port}]}.
 
 get_cowboy_config(LogicHandler) ->
-    Dispatch = cowboy_router:compile(swagger_router:get_paths(LogicHandler)),
+    Dispatch = cowboy_router:compile(swag_server_router:get_paths(LogicHandler)),
     [
         {env, [
             {dispatch, Dispatch},
@@ -134,7 +134,7 @@ log_access(Code, Headers, Req) ->
     lager:log(capi_access_lager_event, info, Meta, "", []).
 
 get_remote_addr(Req) ->
-    case swagger_handler_api:determine_peer(Req) of
+    case swag_server_handler_api:determine_peer(Req) of
         {{ok, #{ip_address := IP}}, _} ->
             genlib:to_binary(inet:ntoa(IP));
         {_, _} ->

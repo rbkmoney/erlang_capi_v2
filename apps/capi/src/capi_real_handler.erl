@@ -9,7 +9,7 @@
 -include_lib("cp_proto/include/cp_user_interaction_thrift.hrl").
 -include_lib("cp_proto/include/cp_geo_ip_thrift.hrl").
 
--behaviour(swagger_logic_handler).
+-behaviour(swag_server_logic_handler).
 
 %% API callbacks
 -export([authorize_api_key/2]).
@@ -18,7 +18,7 @@
 %% @WARNING Must be refactored in case of different classes of users using this API
 -define(REALM, <<"external">>).
 
--spec authorize_api_key(swagger:operation_id(), swagger:api_key()) ->
+-spec authorize_api_key(swag_server:operation_id(), swag_server:api_key()) ->
     Result :: false | {true, capi_auth:context()}.
 
 authorize_api_key(OperationID, ApiKey) ->
@@ -28,11 +28,11 @@ authorize_api_key(OperationID, ApiKey) ->
 -type request_data() :: #{atom() | binary() => term()}.
 
 -spec handle_request(
-    OperationID :: swagger:operation_id(),
+    OperationID :: swag_server:operation_id(),
     Req :: request_data(),
-    Context :: swagger:request_context()
+    Context :: swag_server:request_context()
 ) ->
-    {ok | error, swagger_logic_handler:response()}.
+    {ok | error, swag_server_logic_handler:response()}.
 
 handle_request(OperationID, Req, Context) ->
     _ = lager:info("Processing request ~p", [OperationID]),
@@ -51,9 +51,9 @@ handle_request(OperationID, Req, Context) ->
     end.
 
 -spec process_request(
-    OperationID :: swagger:operation_id(),
+    OperationID :: swag_server:operation_id(),
     Req :: request_data(),
-    Context :: swagger:request_context(),
+    Context :: swag_server:request_context(),
     ReqCtx :: woody_context:ctx()
 ) ->
     {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.

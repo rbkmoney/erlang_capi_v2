@@ -1,4 +1,5 @@
 #!groovy
+// -*- mode: groovy -*-
 
 def finalHook = {
   runStage('store CT logs') {
