@@ -1340,19 +1340,25 @@ decode_payment_tool_details({bank_card, #domain_BankCard{
 }}) ->
     #{
         <<"detailsType">> => <<"PaymentToolDetailsCardData">>,
-        <<"cardNumberMask">> => genlib:to_binary(MaskedPan),
+        <<"cardNumberMask">> => decode_masked_pan(MaskedPan),
         <<"paymentSystem">> => genlib:to_binary(PaymentSystem)
     }.
 
-%% @TODO deal with an empty map here
+-define(MASKED_PAN_MAX_LENGTH, 4).
+
+decode_masked_pan(MaskedPan) when byte_size(MaskedPan) < ?MASKED_PAN_MAX_LENGTH ->
+    MaskedPan;
+decode_masked_pan(MaskedPan) ->
+    binary:part(MaskedPan, {byte_size(MaskedPan), -?MASKED_PAN_MAX_LENGTH}).
+
 decode_contact_info(#domain_ContactInfo{
     phone_number = PhoneNumber,
     email = Email
 }) ->
-    #{
-        <<"phone_number">> => PhoneNumber,
+    genlib_map:compact(#{
+        <<"phoneNumber">> => PhoneNumber,
         <<"email">> => Email
-    }.
+    }).
 
 decode_payment_status({Status, StatusInfo}) ->
     Error = case StatusInfo of
@@ -1397,10 +1403,10 @@ decode_stat_payment(#merchstat_StatPayment{
         <<"amount">> => Amount,
         <<"fee">> => Fee,
         <<"currency">> => Currency,
-        <<"contactInfo">> => #{
-            <<"phone_number">> => PhoneNumber,
+        <<"contactInfo">> => genlib_map:compact(#{
+            <<"phoneNumber">> => PhoneNumber,
             <<"email">> => Email
-        },
+        }),
         <<"paymentSession">> => PaymentSession,
         <<"paymentToolToken">> => decode_stat_payment_tool_token(PaymentTool),
         <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool),
