@@ -2322,6 +2322,9 @@ process_exception('CreateInvoice', #payproc_ShopNotFound{}) ->
 process_exception(_, #payproc_ShopNotFound{}) ->
     {ok, {404, [], general_error(<<"Shop not found">>)}};
 
+process_exception(_, #payproc_AccountNotFound{}) ->
+    {ok, {400, [], general_error(<<"Account not found">>)}};
+
 process_exception(_, #payproc_InvoicePaymentNotFound{}) ->
     {ok, {404, [], general_error(<<"Payment not found">>)}};
 
