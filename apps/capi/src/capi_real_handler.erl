@@ -913,7 +913,7 @@ process_request(OperationID = 'GetAccountByID', Req, Context, ReqCtx) ->
             service_call(
                 party_management,
                 'GetAccountState',
-                [UserInfo, PartyID, genlib:to_int(AccountID)],
+                [UserInfo, PartyID, AccountID],
                 ReqCtx
             )
         end
