@@ -1973,8 +1973,8 @@ decode_shop_account(#domain_ShopAccount{
     guarantee = GuaranteeID
 }) ->
     #{
-        <<"guaranteeID">> => genlib:to_binary(GuaranteeID),
-        <<"settlementID">> => genlib:to_binary(SettlementID),
+        <<"guaranteeID">> => GuaranteeID,
+        <<"settlementID">> => SettlementID,
         <<"currency">> => decode_currency(Currency)
     }.
 
@@ -1985,7 +1985,7 @@ decode_account_state(#payproc_AccountState{
     currency = Currency
 }) ->
     #{
-        <<"id">> => genlib:to_binary(AccountID),
+        <<"id">> => AccountID,
         <<"ownAmount">> => OwnAmount,
         <<"availableAmount">> => AvailableAmount,
         <<"currency">> => decode_currency(Currency)
