@@ -4,7 +4,6 @@
 -include_lib("cp_proto/include/cp_domain_thrift.hrl").
 -include_lib("cp_proto/include/cp_cds_thrift.hrl").
 -include_lib("cp_proto/include/cp_merch_stat_thrift.hrl").
--include_lib("cp_proto/include/cp_proxy_merch_config_thrift.hrl").
 -include_lib("cp_proto/include/cp_webhooker_thrift.hrl").
 -include_lib("cp_proto/include/cp_user_interaction_thrift.hrl").
 -include_lib("cp_proto/include/cp_geo_ip_thrift.hrl").
@@ -484,14 +483,11 @@ process_request(OperationID = 'CreateShop', Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
     Params = maps:get('ShopParams', Req),
 
-    Proxy = populate_proxy_options(genlib_map:get(<<"callbackUrl">>, Params), ReqCtx),
-
     ShopParams = #payproc_ShopParams{
         category =  encode_category_ref(genlib_map:get(<<"categoryID">>, Params)),
         details = encode_shop_details(genlib_map:get(<<"details">>, Params)),
         contract_id = genlib_map:get(<<"contractID">>, Params),
-        payout_tool_id = genlib_map:get(<<"payoutToolID">>, Params),
-        proxy = Proxy
+        payout_tool_id = genlib_map:get(<<"payoutToolID">>, Params)
     },
 
     Result = prepare_party(
@@ -578,14 +574,11 @@ process_request(OperationID = 'UpdateShop', Req, Context, ReqCtx) ->
     ShopID = maps:get(shopID, Req),
     Params = maps:get('UpdateShopParams', Req),
 
-    Proxy = populate_proxy_options(genlib_map:get(<<"callbackUrl">>, Params), ReqCtx),
-
     ShopUpdate = #payproc_ShopUpdate{
         category = encode_category_ref(genlib_map:get(<<"categoryID">>, Params)),
         details =  encode_shop_details(genlib_map:get(<<"details">>, Params)),
         contract_id = genlib_map:get(<<"contractID">>, Params),
-        payout_tool_id = genlib_map:get(<<"payoutToolID">>, Params),
-        proxy = Proxy
+        payout_tool_id = genlib_map:get(<<"payoutToolID">>, Params)
     },
 
     Result = prepare_party(
@@ -2418,37 +2411,6 @@ get_contract_by_id(Context, ReqCtx, UserInfo, PartyID, ContractID) ->
 get_category_by_id(CategoryID, ReqCtx) ->
     CategoryRef = {category, #domain_CategoryRef{id = CategoryID}},
     capi_domain:get(CategoryRef, ReqCtx).
-
-populate_proxy_options(undefined, _ReqCtx) ->
-    undefined;
-
-populate_proxy_options(CallbackUrl, ReqCtx) ->
-    Proxy = get_merchant_proxy(ReqCtx),
-    {ok, ProxyOptions} = create_options(CallbackUrl, ReqCtx),
-    Proxy#domain_Proxy{additional = ProxyOptions}.
-
-get_merchant_proxy(ReqCtx) ->
-    {ok, Globals} = capi_domain:get({globals, #domain_GlobalsRef{}}, ReqCtx),
-    #domain_GlobalsObject{
-        data = #domain_Globals{
-            common_merchant_proxy = ProxyRef
-        }
-    } = Globals,
-    #domain_Proxy{
-        ref = ProxyRef,
-        additional = #{}
-    }.
-
-create_options(CallbackUrl, ReqCtx) ->
-    Params = #proxy_merch_config_MerchantProxyParams{
-        callback_url = CallbackUrl
-    },
-    service_call(
-        merchant_config,
-        'CreateOptions',
-        [Params],
-        ReqCtx
-    ).
 
 collect_events(UserInfo, InvoiceID, Limit, After, ReqCtx) ->
     Context = #{
