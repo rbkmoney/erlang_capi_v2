@@ -906,7 +906,7 @@ process_request(OperationID = 'GetAccountByID', Req, Context, ReqCtx) ->
             service_call(
                 party_management,
                 'GetAccountState',
-                [UserInfo, PartyID, genlib:to_int(AccountID)],
+                [UserInfo, PartyID, AccountID],
                 ReqCtx
             )
         end
@@ -1950,8 +1950,8 @@ decode_shop_account(#domain_ShopAccount{
     guarantee = GuaranteeID
 }) ->
     #{
-        <<"guaranteeID">> => genlib:to_binary(GuaranteeID),
-        <<"settlementID">> => genlib:to_binary(SettlementID),
+        <<"guaranteeID">> => GuaranteeID,
+        <<"settlementID">> => SettlementID,
         <<"currency">> => decode_currency(Currency)
     }.
 
@@ -1962,7 +1962,7 @@ decode_account_state(#payproc_AccountState{
     currency = Currency
 }) ->
     #{
-        <<"id">> => genlib:to_binary(AccountID),
+        <<"id">> => AccountID,
         <<"ownAmount">> => OwnAmount,
         <<"availableAmount">> => AvailableAmount,
         <<"currency">> => decode_currency(Currency)
@@ -2298,6 +2298,9 @@ process_exception('CreateInvoice', #payproc_ShopNotFound{}) ->
 
 process_exception(_, #payproc_ShopNotFound{}) ->
     {ok, {404, [], general_error(<<"Shop not found">>)}};
+
+process_exception(_, #payproc_AccountNotFound{}) ->
+    {ok, {400, [], general_error(<<"Account not found">>)}};
 
 process_exception(_, #payproc_InvoicePaymentNotFound{}) ->
     {ok, {404, [], general_error(<<"Payment not found">>)}};
