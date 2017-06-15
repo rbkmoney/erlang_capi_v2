@@ -87,7 +87,6 @@
 -define(CAPI_PARTY_MANAGEMENT_URL , "http://hellgate:8022/v1/processing/partymgmt").
 -define(CAPI_ACCOUNTER_URL        , "http://shumway:8022/accounter").
 -define(CAPI_INVOICING_URL        , "http://hellgate:8022/v1/processing/invoicing").
--define(CAPI_MERCHANT_CONFIG_URL  , "http://pimp:8022/capi").
 -define(CAPI_WEBHOOK_MGR_URL      , "http://hooker:8022/hook").
 -define(CAPI_REPOSITORY_URL       , "http://dominant:8022/v1/domain/repository").
 -define(CAPI_CDS_STORAGE_URL      , "http://cds:8022/v1/storage").
@@ -244,7 +243,6 @@ init_per_suite(Config) ->
                 party_management => ?CAPI_PARTY_MANAGEMENT_URL,
                 accounter        => ?CAPI_ACCOUNTER_URL,
                 invoicing        => ?CAPI_INVOICING_URL,
-                merchant_config  => ?CAPI_MERCHANT_CONFIG_URL,
                 webhook_manager  => ?CAPI_WEBHOOK_MGR_URL,
                 repository       => ?CAPI_REPOSITORY_URL,
                 cds_storage      => ?CAPI_CDS_STORAGE_URL,

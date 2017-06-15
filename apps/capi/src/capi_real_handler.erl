@@ -4,7 +4,6 @@
 -include_lib("cp_proto/include/cp_domain_thrift.hrl").
 -include_lib("cp_proto/include/cp_cds_thrift.hrl").
 -include_lib("cp_proto/include/cp_merch_stat_thrift.hrl").
--include_lib("cp_proto/include/cp_proxy_merch_config_thrift.hrl").
 -include_lib("cp_proto/include/cp_webhooker_thrift.hrl").
 -include_lib("cp_proto/include/cp_user_interaction_thrift.hrl").
 -include_lib("cp_proto/include/cp_geo_ip_thrift.hrl").
@@ -484,14 +483,11 @@ process_request(OperationID = 'CreateShop', Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
     Params = maps:get('ShopParams', Req),
 
-    Proxy = populate_proxy_options(genlib_map:get(<<"callbackUrl">>, Params), ReqCtx),
-
     ShopParams = #payproc_ShopParams{
         category =  encode_category_ref(genlib_map:get(<<"categoryID">>, Params)),
         details = encode_shop_details(genlib_map:get(<<"details">>, Params)),
         contract_id = genlib_map:get(<<"contractID">>, Params),
-        payout_tool_id = genlib_map:get(<<"payoutToolID">>, Params),
-        proxy = Proxy
+        payout_tool_id = genlib_map:get(<<"payoutToolID">>, Params)
     },
 
     Result = prepare_party(
@@ -578,14 +574,11 @@ process_request(OperationID = 'UpdateShop', Req, Context, ReqCtx) ->
     ShopID = maps:get(shopID, Req),
     Params = maps:get('UpdateShopParams', Req),
 
-    Proxy = populate_proxy_options(genlib_map:get(<<"callbackUrl">>, Params), ReqCtx),
-
     ShopUpdate = #payproc_ShopUpdate{
         category = encode_category_ref(genlib_map:get(<<"categoryID">>, Params)),
         details =  encode_shop_details(genlib_map:get(<<"details">>, Params)),
         contract_id = genlib_map:get(<<"contractID">>, Params),
-        payout_tool_id = genlib_map:get(<<"payoutToolID">>, Params),
-        proxy = Proxy
+        payout_tool_id = genlib_map:get(<<"payoutToolID">>, Params)
     },
 
     Result = prepare_party(
@@ -614,7 +607,7 @@ process_request(OperationID = 'GetShops', _Req, Context, ReqCtx) ->
     Result = get_my_party(Context, ReqCtx, UserInfo, PartyID),
     case Result of
         {ok, #domain_Party{shops = Shops}} ->
-            Resp = decode_shops_map(Shops, ReqCtx),
+            Resp = decode_shops_map(Shops),
             {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
@@ -639,7 +632,7 @@ process_request(OperationID = 'GetShopByID', Req, Context, ReqCtx) ->
 
     case Result of
         {ok, Shop} ->
-            Resp = decode_shop(Shop, ReqCtx),
+            Resp = decode_shop(Shop),
             {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
@@ -763,7 +756,7 @@ process_request(OperationID = 'GetClaimsByStatus', Req, Context, ReqCtx) ->
         {exception, #payproc_ClaimNotFound{}} ->
             {ok, {200, [], []}};
         {ok, Claim} ->
-            Resp = decode_claim(Claim, ReqCtx),
+            Resp = decode_claim(Claim),
             {ok, {200, [], [Resp]}}; %% pretending to have more than one pending claim at the same time
         {exception, Exception} ->
             process_exception(OperationID, Exception)
@@ -787,7 +780,7 @@ process_request(OperationID = 'GetClaimByID', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, Claim} ->
-            Resp = decode_claim(Claim, ReqCtx),
+            Resp = decode_claim(Claim),
             {ok, {200, [], Resp}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
@@ -1563,8 +1556,8 @@ decode_party(#domain_Party{
 decode_contracts_map(Contracts) ->
     decode_map(Contracts, fun decode_contract/1).
 
-decode_shops_map(Shops, ReqCtx) ->
-    decode_map(Shops, fun (S) -> decode_shop(S, ReqCtx) end).
+decode_shops_map(Shops) ->
+    decode_map(Shops, fun (S) -> decode_shop(S) end).
 
 decode_map(Items, Fun) ->
     maps:values(maps:map(
@@ -1645,9 +1638,8 @@ decode_shop(#domain_Shop{
     details  = ShopDetails,
     account = ShopAccount,
     contract_id = ContractID,
-    payout_tool_id = PayoutToolID,
-    proxy = Proxy
-}, ReqCtx) ->
+    payout_tool_id = PayoutToolID
+}) ->
     genlib_map:compact(#{
         <<"id">> => ShopID,
         <<"isBlocked">> => is_blocked(Blocking),
@@ -1656,21 +1648,8 @@ decode_shop(#domain_Shop{
         <<"details">> => decode_shop_details(ShopDetails),
         <<"contractID">> => ContractID,
         <<"payoutToolID">> => PayoutToolID,
-        <<"account">> => decode_shop_account(ShopAccount),
-        <<"callbackHandler">> => decode_callback_handler(get_proxy_options(Proxy, ReqCtx))
+        <<"account">> => decode_shop_account(ShopAccount)
     }).
-
-decode_callback_handler(undefined) ->
-    undefined;
-
-decode_callback_handler(#proxy_merch_config_MerchantProxyConfiguration{
-    callback_url  = CallbackUrl,
-    pub_key = PubKey
-}) ->
-    #{
-        <<"url">> => CallbackUrl,
-        <<"publicKey">> => PubKey
-    }.
 
 decode_shop_details(undefined) ->
     undefined;
@@ -1805,11 +1784,11 @@ decode_claim(#payproc_Claim{
     id = ID,
     status = Status,
     changeset = ChangeSet
-}, ReqCtx) ->
+}) ->
     #{
         <<"id">> => ID,
         <<"status">> => decode_claim_status(Status),
-        <<"changeset">> => decode_party_changeset(ChangeSet, ReqCtx)
+        <<"changeset">> => decode_party_changeset(ChangeSet)
     }.
 
 decode_claim_status({'pending', _}) ->
@@ -1838,16 +1817,16 @@ decode_claim_status({'revoked', _}) ->
         <<"status">> => <<"ClaimRevoked">>
     }.
 
-decode_party_changeset(PartyChangeset, ReqCtx) ->
-    [decode_party_modification(PartyModification, ReqCtx) || PartyModification <- PartyChangeset].
+decode_party_changeset(PartyChangeset) ->
+    [decode_party_modification(PartyModification) || PartyModification <- PartyChangeset].
 
-decode_party_modification({suspension, Suspension}, _ReqCtx) ->
+decode_party_modification({suspension, Suspension}) ->
     #{
         <<"partyModificationType">> => <<"PartySuspension">>,
         <<"details">> => decode_suspension(Suspension)
     };
 
-decode_party_modification({contract_creation, Contract}, _ReqCtx) ->
+decode_party_modification({contract_creation, Contract}) ->
     #{
         <<"partyModificationType">> => <<"ContractCreation">>,
         <<"contract">> => decode_contract(Contract)
@@ -1859,16 +1838,16 @@ decode_party_modification({
         id = ContractID,
         modification = Modification
     }
-}, _ReqCtx) ->
+}) ->
     maps:merge(#{
         <<"partyModificationType">> => <<"ContractModification">>,
         <<"contractID">> => ContractID
     }, decode_contract_modification(Modification));
 
-decode_party_modification({shop_creation, Shop}, ReqCtx) ->
+decode_party_modification({shop_creation, Shop}) ->
     #{
         <<"partyModificationType">> => <<"ShopCreation">>,
-        <<"shop">> => decode_shop(Shop, ReqCtx)
+        <<"shop">> => decode_shop(Shop)
     };
 
 decode_party_modification({
@@ -1877,11 +1856,11 @@ decode_party_modification({
         id = ShopID,
         modification = ShopModification
     }
-}, ReqCtx) ->
+}) ->
     maps:merge(#{
         <<"partyModificationType">> => <<"ShopModification">>,
         <<"shopID">> => ShopID
-    }, decode_shop_modification(ShopModification, ReqCtx)).
+    }, decode_shop_modification(ShopModification)).
 
 decode_contract_modification({termination, #payproc_ContractTermination{
     terminated_at = TerminatedAt,
@@ -1903,7 +1882,7 @@ decode_contract_modification(_) ->
     #{}. %% Fiding adjustments and legal agreements
 
 
-decode_shop_modification({suspension, Suspension}, _ReqCtx) ->
+decode_shop_modification({suspension, Suspension}) ->
     #{
         <<"shopModificationType">> => <<"ShopSuspension">>,
         <<"details">> => decode_suspension(Suspension)
@@ -1915,18 +1894,16 @@ decode_shop_modification({
         category = Category,
         details = Details,
         contract_id = ContractID,
-        payout_tool_id = PayoutToolID,
-        proxy = Proxy
+        payout_tool_id = PayoutToolID
     }
-}, ReqCtx) ->
+}) ->
     #{
         <<"shopModificationType">> => <<"ShopUpdate">>,
         <<"details">> => genlib_map:compact(#{
             <<"categoryID">> => decode_category_ref(Category),
             <<"details">> => decode_shop_details(Details),
             <<"contractID">> => ContractID,
-            <<"payoutToolID">> => PayoutToolID,
-            <<"callbackHandler">> => decode_callback_handler(get_proxy_options(Proxy, ReqCtx))
+            <<"payoutToolID">> => PayoutToolID
         })
     };
 
@@ -1935,7 +1912,7 @@ decode_shop_modification({
     #payproc_ShopAccountCreated{
         account = Account
     }
-}, _ReqCtx) ->
+}) ->
     #{
         <<"shopModificationType">> => <<"ShopAccountCreation">>,
         <<"account">> => decode_shop_account(Account)
@@ -2437,52 +2414,6 @@ get_contract_by_id(Context, ReqCtx, UserInfo, PartyID, ContractID) ->
 get_category_by_id(CategoryID, ReqCtx) ->
     CategoryRef = {category, #domain_CategoryRef{id = CategoryID}},
     capi_domain:get(CategoryRef, ReqCtx).
-
-populate_proxy_options(undefined, _ReqCtx) ->
-    undefined;
-
-populate_proxy_options(CallbackUrl, ReqCtx) ->
-    Proxy = get_merchant_proxy(ReqCtx),
-    {ok, ProxyOptions} = create_options(CallbackUrl, ReqCtx),
-    Proxy#domain_Proxy{additional = ProxyOptions}.
-
-get_merchant_proxy(ReqCtx) ->
-    {ok, Globals} = capi_domain:get({globals, #domain_GlobalsRef{}}, ReqCtx),
-    #domain_GlobalsObject{
-        data = #domain_Globals{
-            common_merchant_proxy = ProxyRef
-        }
-    } = Globals,
-    #domain_Proxy{
-        ref = ProxyRef,
-        additional = #{}
-    }.
-
-create_options(CallbackUrl, ReqCtx) ->
-    Params = #proxy_merch_config_MerchantProxyParams{
-        callback_url = CallbackUrl
-    },
-    service_call(
-        merchant_config,
-        'CreateOptions',
-        [Params],
-        ReqCtx
-    ).
-
-get_proxy_options(#domain_Proxy{additional = ProxyOptions}, ReqCtx) ->
-    {ok, Result} = render_options(ProxyOptions, ReqCtx),
-    Result;
-
-get_proxy_options(undefined, _ReqCtx) ->
-    undefined.
-
-render_options(ProxyOptions, ReqCtx) ->
-    service_call(
-        merchant_config,
-        'RenderOptions',
-        [ProxyOptions],
-        ReqCtx
-    ).
 
 collect_events(UserInfo, InvoiceID, Limit, After, ReqCtx) ->
     Context = #{
