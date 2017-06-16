@@ -52,7 +52,7 @@ services:
       retries: 12
 
   machinegun:
-    image: dr.rbkmoney.com/rbkmoney/machinegun:e04e529f4c5682b527d12d73a13a3cf9eb296d4d
+    image: dr.rbkmoney.com/rbkmoney/machinegun:a7681aeda8cbe8e3ed6664455aff60da6cd41841
     restart: always
     command: /opt/machinegun/bin/machinegun foreground
     volumes:
@@ -149,7 +149,7 @@ services:
      - postgres
 
   dominant:
-    image: dr.rbkmoney.com/rbkmoney/dominant:e6af73a005779d5714a1d3b9e310a12f69f6fb0c
+    image: dr.rbkmoney.com/rbkmoney/dominant:6e31359681eccfae1b603b22cff8202b1599600f
     restart: always
     command: /opt/dominant/bin/dominant foreground
     depends_on:
