@@ -1898,7 +1898,7 @@ handle_response(Response) ->
     R.
 
 wait_event(InvoiceID, Pattern, TimeLeft, Context) when TimeLeft > 0 ->
-    Started = genlib_time:now(),
+    Started = genlib_time:ticks(),
     Limit = 1000,
     {ok, Events} = api_client_invoices:get_invoice_events(Context, InvoiceID, Limit),
     Filtered = lists:filter(
@@ -1916,8 +1916,8 @@ wait_event(InvoiceID, Pattern, TimeLeft, Context) when TimeLeft > 0 ->
     case Filtered of
         [] ->
             timer:sleep(200),
-            Now = genlib_time:now(),
-            wait_event(InvoiceID, Pattern, TimeLeft - (Now - Started), Context);
+            Now = genlib_time:ticks(),
+            wait_event(InvoiceID, Pattern, TimeLeft - (Now - Started) div 1000, Context);
         _ ->
             ok
     end;

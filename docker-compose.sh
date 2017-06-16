@@ -32,7 +32,7 @@ services:
         condition: service_healthy
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:bf50fbffda6c65ebf055446dfb27ab31392a4881
+    image: dr.rbkmoney.com/rbkmoney/hellgate:bb0bae22ef89d788b8e2d3ec665d1c960e820d55
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -52,7 +52,7 @@ services:
       retries: 12
 
   machinegun:
-    image: dr.rbkmoney.com/rbkmoney/machinegun:e04e529f4c5682b527d12d73a13a3cf9eb296d4d
+    image: dr.rbkmoney.com/rbkmoney/machinegun:a7681aeda8cbe8e3ed6664455aff60da6cd41841
     restart: always
     command: /opt/machinegun/bin/machinegun foreground
     volumes:
@@ -149,7 +149,7 @@ services:
      - postgres
 
   dominant:
-    image: dr.rbkmoney.com/rbkmoney/dominant:e6af73a005779d5714a1d3b9e310a12f69f6fb0c
+    image: dr.rbkmoney.com/rbkmoney/dominant:6e31359681eccfae1b603b22cff8202b1599600f
     restart: always
     command: /opt/dominant/bin/dominant foreground
     depends_on:
