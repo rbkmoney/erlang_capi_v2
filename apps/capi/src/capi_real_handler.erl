@@ -74,8 +74,7 @@ process_request(OperationID = 'CreateInvoice', Req, Context, ReqCtx) ->
        end
     ),
     case Result of
-        {ok, InvoiceID} ->
-            {ok, #'payproc_InvoiceState'{invoice = Invoice}} = get_invoice_by_id(ReqCtx, UserInfo, InvoiceID),
+        {ok, #'payproc_InvoiceState'{invoice = Invoice}} ->
             {ok, {201, [], decode_invoice(Invoice)}};
         {exception, Exception} ->
             process_exception(OperationID, Exception)
@@ -118,10 +117,8 @@ process_request(OperationID = 'CreatePayment', Req, Context, ReqCtx) ->
     end,
 
     case Result of
-        {ok, PaymentID} ->
-            {ok, Payment} = get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
-            Resp = decode_payment(InvoiceID, Payment),
-            {ok, {201, [], Resp}};
+        {ok, Payment} ->
+            {ok, {201, [], decode_payment(InvoiceID, Payment)}};
         {exception, Exception} ->
             process_exception(OperationID, Exception);
         {error, invalid_token} ->
@@ -2251,7 +2248,7 @@ process_exception(_, #'InvalidRequest'{errors = Errors}) ->
 process_exception(_, #payproc_InvalidUser{}) ->
     {ok, {404, [], general_error(<<"Invoice not found">>)}};
 
-process_exception(_, #payproc_UserInvoiceNotFound{}) ->
+process_exception(_, #payproc_InvoiceNotFound{}) ->
     {ok, {404, [], general_error(<<"Invoice not found">>)}};
 
 process_exception(_, #payproc_ClaimNotFound{}) ->
