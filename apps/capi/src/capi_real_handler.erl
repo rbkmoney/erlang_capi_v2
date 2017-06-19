@@ -163,49 +163,7 @@ process_request('CreatePaymentToolToken', Req, Context, ReqCtx) ->
     PaymentTool = maps:get(<<"paymentTool">>, Params),
     case PaymentTool of
         #{<<"paymentToolType">> := <<"CardData">>} ->
-            {Month, Year} = parse_exp_date(genlib_map:get(<<"expDate">>, PaymentTool)),
-            CardNumber = genlib:to_binary(genlib_map:get(<<"cardNumber">>, PaymentTool)),
-            CardData = #'CardData'{
-                pan  = CardNumber,
-                exp_date = #'ExpDate'{
-                    month = Month,
-                    year = Year
-                },
-                cardholder_name = genlib_map:get(<<"cardHolder">>, PaymentTool),
-                cvv = genlib_map:get(<<"cvv">>, PaymentTool)
-            },
-            Result = service_call(
-                cds_storage,
-                'PutCardData',
-                [CardData],
-                ReqCtx
-            ),
-            case Result of
-                {ok, #'PutCardDataResult'{
-                    session_id = PaymentSession,
-                    bank_card = BankCard
-                }} ->
-                    Token = encode_bank_card(BankCard),
-                    #{
-                        ip_address := IP
-                    } = get_peer_info(Context),
-                    PreparedIP = genlib:to_binary(inet:ntoa(IP)),
-                    ClientInfo = ClientInfo0#{<<"ip_address">> => PreparedIP},
-
-                    Session = wrap_session(ClientInfo, PaymentSession),
-                    Resp = #{
-                        <<"token">> => Token,
-                        <<"session">> => Session
-                    },
-                    {ok, {201, [], Resp}};
-                {exception, Exception} ->
-                    case Exception of
-                        #'InvalidCardData'{} ->
-                            {ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}};
-                        #'KeyringLocked'{} ->
-                            {error, reply_5xx(503)}
-                    end
-            end;
+            process_card_data(ClientInfo0, PaymentTool, Context, ReqCtx);
         _ ->
             {ok, {400, [], logic_error(
                 invalidPaymentTool,
@@ -231,7 +189,7 @@ process_request('CreateInvoiceAccessToken', Req, Context, ReqCtx) ->
             ),
             Resp = #{<<"payload">> => Token},
             {ok, {201, [], Resp}};
-        {exception, Exception} when Exception == #payproc_InvalidUser{}; 
+        {exception, Exception} when Exception == #payproc_InvalidUser{};
                                     Exception == #payproc_InvoiceNotFound{} ->
             {ok, {404, [], general_error(<<"Invoice not found">>)}}
     end;
@@ -244,7 +202,7 @@ process_request('GetInvoiceByID', Req, Context, ReqCtx) ->
         {ok, #'payproc_InvoiceState'{invoice = Invoice}} ->
             Resp = decode_invoice(Invoice),
             {ok, {200, [], Resp}};
-        {exception, Exception} when Exception == #payproc_InvalidUser{}; 
+        {exception, Exception} when Exception == #payproc_InvalidUser{};
                                     Exception == #payproc_InvoiceNotFound{} ->
             {ok, {404, [], general_error(<<"Invoice not found">>)}}
     end;
@@ -343,7 +301,7 @@ process_request('GetPayments', Req, Context, ReqCtx) ->
         {ok, #'payproc_InvoiceState'{payments = Payments}} ->
             Resp = [decode_payment(InvoiceID, P) || P <- Payments],
             {ok, {200, [], Resp}};
-        {exception, Exception} when Exception == #payproc_InvalidUser{}; 
+        {exception, Exception} when Exception == #payproc_InvalidUser{};
                                     Exception == #payproc_InvoiceNotFound{} ->
             {ok, {400, [], general_error(<<"Invoice not found">>)}}
     end;
@@ -361,7 +319,7 @@ process_request('GetPaymentByID', Req, Context, ReqCtx) ->
             case Exception of
                 #payproc_InvoicePaymentNotFound{} ->
                     {ok, {404, [], general_error(<<"Payment not found">>)}};
-                Other when Other == #payproc_InvalidUser{}; 
+                Other when Other == #payproc_InvalidUser{};
                            Other == #payproc_InvoiceNotFound{} ->
                     {ok, {400, [], general_error(<<"Invoice not found">>)}}
             end
@@ -2321,7 +2279,7 @@ process_merchant_stat(StatType, Req, Context, ReqCtx) ->
 
     process_merchant_stat_result(StatType, Result).
 
-process_merchant_stat_result(customers_rate_stat = StatType, 
+process_merchant_stat_result(customers_rate_stat = StatType,
                              {ok, #merchstat_StatResponse{data = {records, Stats}}}) ->
     Resp = case Stats of
         [] ->
@@ -2583,6 +2541,57 @@ get_events(Limit, After, Context) ->
 
 reply_5xx(Code) when Code >= 500 ->
     {Code, [], <<>>}.
+
+process_card_data(ClientInfo0, PaymentTool, Context, ReqCtx) ->
+    CardData = get_card_data(PaymentTool),
+    Result = service_call(
+        cds_storage,
+        'PutCardData',
+        [CardData],
+        ReqCtx
+    ),
+    case Result of
+        {ok, #'PutCardDataResult'{
+            session_id = PaymentSession,
+            bank_card = BankCard
+        }} ->
+            Token = encode_bank_card(BankCard),
+            PreparedIP = get_prepared_ip(Context),
+            ClientInfo = ClientInfo0#{<<"ip_address">> => PreparedIP},
+
+            Session = wrap_session(ClientInfo, PaymentSession),
+            Resp = #{
+                <<"token">> => Token,
+                <<"session">> => Session
+            },
+            {ok, {201, [], Resp}};
+        {exception, Exception} ->
+            case Exception of
+                #'InvalidCardData'{} ->
+                    {ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}};
+                #'KeyringLocked'{} ->
+                    {error, reply_5xx(503)}
+            end
+    end.
+
+get_card_data(PaymentTool) ->
+    {Month, Year} = parse_exp_date(genlib_map:get(<<"expDate">>, PaymentTool)),
+    CardNumber = genlib:to_binary(genlib_map:get(<<"cardNumber">>, PaymentTool)),
+    #'CardData'{
+        pan  = CardNumber,
+        exp_date = #'ExpDate'{
+            month = Month,
+            year = Year
+        },
+        cardholder_name = genlib_map:get(<<"cardHolder">>, PaymentTool),
+        cvv = genlib_map:get(<<"cvv">>, PaymentTool)
+    }.
+
+get_prepared_ip(Context) ->
+    #{
+        ip_address := IP
+    } = get_peer_info(Context),
+    genlib:to_binary(inet:ntoa(IP)).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
