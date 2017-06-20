@@ -2299,7 +2299,7 @@ process_merchant_stat(StatType, Req, Context, ReqCtx) ->
     process_merchant_stat_result(StatType, Result).
 
 process_merchant_stat_result(
-    customers_rate_stat = StatType, 
+    customers_rate_stat = StatType,
     {ok, #merchstat_StatResponse{data = {records, Stats}}}
 ) ->
     Resp = case Stats of
