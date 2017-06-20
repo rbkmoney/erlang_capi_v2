@@ -142,7 +142,9 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
                     {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
-                Other when Other == #payproc_InvalidUser{}; Other == #payproc_InvoiceNotFound{} ->
+                #payproc_InvalidUser{} ->
+                    {ok, {400, [], general_error(<<"Invoice not found">>)}};
+                #payproc_InvoiceNotFound{} ->
                     {ok, {400, [], general_error(<<"Invoice not found">>)}}
             end;
         {error, invalid_token} ->
@@ -189,9 +191,13 @@ process_request('CreateInvoiceAccessToken', Req, Context, ReqCtx) ->
             ),
             Resp = #{<<"payload">> => Token},
             {ok, {201, [], Resp}};
-        {exception, Exception} when Exception == #payproc_InvalidUser{};
-                                    Exception == #payproc_InvoiceNotFound{} ->
-            {ok, {404, [], general_error(<<"Invoice not found">>)}}
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                #payproc_InvoiceNotFound{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+            end
     end;
 
 process_request('GetInvoiceByID', Req, Context, ReqCtx) ->
@@ -202,9 +208,13 @@ process_request('GetInvoiceByID', Req, Context, ReqCtx) ->
         {ok, #'payproc_InvoiceState'{invoice = Invoice}} ->
             Resp = decode_invoice(Invoice),
             {ok, {200, [], Resp}};
-        {exception, Exception} when Exception == #payproc_InvalidUser{};
-                                    Exception == #payproc_InvoiceNotFound{} ->
-            {ok, {404, [], general_error(<<"Invoice not found">>)}}
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                #payproc_InvoiceNotFound{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+            end
     end;
 
 process_request('FulfillInvoice', Req, Context, ReqCtx) ->
@@ -232,7 +242,9 @@ process_request('FulfillInvoice', Req, Context, ReqCtx) ->
                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
                     {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
-                Other when Other == #payproc_InvalidUser{}; Other == #payproc_InvoiceNotFound{} ->
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                #payproc_InvoiceNotFound{} ->
                     {ok, {404, [], general_error(<<"Invoice not found">>)}}
             end
     end;
@@ -263,7 +275,9 @@ process_request('RescindInvoice', Req, Context, ReqCtx) ->
                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
                     {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
-                Other when Other == #payproc_InvalidUser{}; Other == #payproc_InvoiceNotFound{} ->
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                #payproc_InvoiceNotFound{} ->
                     {ok, {404, [], general_error(<<"Invoice not found">>)}}
             end
     end;
@@ -301,9 +315,13 @@ process_request('GetPayments', Req, Context, ReqCtx) ->
         {ok, #'payproc_InvoiceState'{payments = Payments}} ->
             Resp = [decode_payment(InvoiceID, P) || P <- Payments],
             {ok, {200, [], Resp}};
-        {exception, Exception} when Exception == #payproc_InvalidUser{};
-                                    Exception == #payproc_InvoiceNotFound{} ->
-            {ok, {400, [], general_error(<<"Invoice not found">>)}}
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {400, [], general_error(<<"Invoice not found">>)}};
+                #payproc_InvoiceNotFound{} ->
+                    {ok, {400, [], general_error(<<"Invoice not found">>)}}
+            end
     end;
 
 process_request('GetPaymentByID', Req, Context, ReqCtx) ->
@@ -319,8 +337,9 @@ process_request('GetPaymentByID', Req, Context, ReqCtx) ->
             case Exception of
                 #payproc_InvoicePaymentNotFound{} ->
                     {ok, {404, [], general_error(<<"Payment not found">>)}};
-                Other when Other == #payproc_InvalidUser{};
-                           Other == #payproc_InvoiceNotFound{} ->
+                #payproc_InvalidUser{} ->
+                    {ok, {400, [], general_error(<<"Invoice not found">>)}};
+                #payproc_InvoiceNotFound{} ->
                     {ok, {400, [], general_error(<<"Invoice not found">>)}}
             end
     end;
@@ -2279,8 +2298,10 @@ process_merchant_stat(StatType, Req, Context, ReqCtx) ->
 
     process_merchant_stat_result(StatType, Result).
 
-process_merchant_stat_result(customers_rate_stat = StatType,
-                             {ok, #merchstat_StatResponse{data = {records, Stats}}}) ->
+process_merchant_stat_result(
+    customers_rate_stat = StatType, 
+    {ok, #merchstat_StatResponse{data = {records, Stats}}}
+) ->
     Resp = case Stats of
         [] ->
             #{
