@@ -292,8 +292,7 @@ process_request('GetInvoiceEvents', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, Events} when is_list(Events) ->
-            Resp = remove_empty_events([decode_event(I) || I <- Events]),
-            {ok, {200, [], Resp}};
+            {ok, {200, [], Events}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -476,51 +475,6 @@ process_request('GetLocationsNames', Req, _Context, ReqCtx) ->
             {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
     end;
 
-% process_request('CreateShop', Req, Context, ReqCtx) ->
-%     UserInfo = get_user_info(Context),
-%     PartyID = get_party_id(Context),
-%     Params = maps:get('ShopParams', Req),
-
-%     ShopParams = #payproc_ShopParams{
-%         category =  encode_category_ref(genlib_map:get(<<"categoryID">>, Params)),
-%         details = encode_shop_details(genlib_map:get(<<"details">>, Params)),
-%         contract_id = genlib_map:get(<<"contractID">>, Params),
-%         payout_tool_id = genlib_map:get(<<"payoutToolID">>, Params)
-%     },
-
-%     Result = prepare_party(
-%         Context,
-%         ReqCtx,
-%         fun () ->
-%             service_call(
-%                 party_management,
-%                 'CreateShop',
-%                 [UserInfo, PartyID, ShopParams],
-%                 ReqCtx
-%             )
-%         end
-%     ),
-
-%     case Result of
-%         {ok, R} ->
-%             {ok, {202, [], decode_claim_result(R)}};
-%         {exception, Exception} ->
-%             case Exception of
-%                 #payproc_InvalidUser{} ->
-%                     {ok, {400, [], general_error(<<"Invalid party">>)}};
-%                 #payproc_InvalidPartyStatus{} ->
-%                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
-%                 #payproc_ContractNotFound{} ->
-%                     {ok, {400, [], general_error(<<"Contract not found">>)}};
-%                 #payproc_InvalidContractStatus{} ->
-%                     {ok, {400, [], logic_error(invalidContractStatus, <<"Invalid contract status">>)}};
-%                 #payproc_PayoutToolNotFound{} ->
-%                     {ok, {400, [], general_error(<<"Payout tool not found">>)}};
-%                 #'InvalidRequest'{errors = Errors} ->
-%                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
-%             end
-%     end;
-
 process_request('ActivateShop', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
@@ -589,56 +543,6 @@ process_request('SuspendShop', Req, Context, ReqCtx) ->
             end
     end;
 
-% process_request('UpdateShop', Req, Context, ReqCtx) ->
-%     UserInfo = get_user_info(Context),
-%     PartyID = get_party_id(Context),
-%     ShopID = maps:get(shopID, Req),
-%     Params = maps:get('UpdateShopParams', Req),
-
-%     ShopUpdate = #payproc_ShopUpdate{
-%         category = encode_category_ref(genlib_map:get(<<"categoryID">>, Params)),
-%         details =  encode_shop_details(genlib_map:get(<<"details">>, Params)),
-%         contract_id = genlib_map:get(<<"contractID">>, Params),
-%         payout_tool_id = genlib_map:get(<<"payoutToolID">>, Params)
-%     },
-
-%     Result = prepare_party(
-%         Context,
-%         ReqCtx,
-%         fun () ->
-%             service_call(
-%                 party_management,
-%                 'UpdateShop',
-%                 [UserInfo, PartyID, ShopID, ShopUpdate],
-%                 ReqCtx
-%             )
-%         end
-%     ),
-
-%     case Result of
-%         {ok, R} ->
-%             {ok, {202, [], decode_claim_result(R)}};
-%         {exception, Exception} ->
-%             case Exception of
-%                 #payproc_InvalidUser{} ->
-%                     {ok, {400, [], general_error(<<"Invalid party">>)}};
-%                 #payproc_ShopNotFound{} ->
-%                     {ok, {404, [], general_error(<<"Shop not found">>)}};
-%                 #payproc_InvalidPartyStatus{} ->
-%                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
-%                 #payproc_InvalidShopStatus{} ->
-%                     {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
-%                 #payproc_ContractNotFound{} ->
-%                     {ok, {400, [], general_error(<<"Contract not found">>)}};
-%                 #payproc_InvalidContractStatus{} ->
-%                     {ok, {400, [], logic_error(invalidContractStatus, <<"Invalid contract status">>)}};
-%                 #payproc_PayoutToolNotFound{} ->
-%                     {ok, {400, [], general_error(<<"Payout tool not found">>)}};
-%                 #'InvalidRequest'{errors = Errors} ->
-%                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
-%             end
-%     end;
-
 process_request('GetShops', _Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
@@ -696,41 +600,6 @@ process_request('GetContracts', _Req, Context, ReqCtx) ->
             {ok, {400, [], general_error(<<"Invalid party">>)}}
     end;
 
-% process_request('CreateContract', Req, Context, ReqCtx) ->
-%     UserInfo = get_user_info(Context),
-%     PartyID = get_party_id(Context),
-%     Params = maps:get('ContractParams', Req),
-
-%     ContractParams = #payproc_ContractParams{
-%         contractor = encode_contractor(genlib_map:get(<<"contractor">>, Params)),
-%         payout_tool_params = encode_payout_tool_params(genlib_map:get(<<"payoutToolParams">>, Params))
-%     },
-%     Result = prepare_party(
-%         Context,
-%         ReqCtx,
-%         fun () ->
-%             service_call(
-%                 party_management,
-%                 'CreateContract',
-%                 [UserInfo, PartyID, ContractParams],
-%                 ReqCtx
-%             )
-%         end
-%     ),
-%     case Result of
-%         {ok, R} ->
-%             {ok, {202, [], decode_claim_result(R)}};
-%         {exception, Exception} ->
-%             case Exception of
-%                 #payproc_InvalidUser{} ->
-%                     {ok, {400, [], general_error(<<"Invalid party">>)}};
-%                 #payproc_InvalidPartyStatus{} ->
-%                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
-%                 #'InvalidRequest'{errors = Errors} ->
-%                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
-%             end
-%     end;
-
 process_request('GetContractByID', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
@@ -769,45 +638,29 @@ process_request('GetPayoutTools', Req, Context, ReqCtx) ->
             end
     end;
 
-% process_request('CreatePayoutTool', Req, Context, ReqCtx) ->
-%     UserInfo = get_user_info(Context),
-%     PartyID = get_party_id(Context),
-%     ContractID = maps:get('contractID', Req),
-%     Params = maps:get('PayoutToolParams', Req),
-%     PayoutToolParams = encode_payout_tool_params(Params),
-%     Result = prepare_party(
-%         Context,
-%         ReqCtx,
-%         fun () ->
-%             service_call(
-%                 party_management,
-%                 'CreatePayoutTool',
-%                 [UserInfo, PartyID, ContractID, PayoutToolParams],
-%                 ReqCtx
-%             )
-%         end
-%     ),
-%     case Result of
-%         {ok, _R} ->
-%             {ok, {204, [], undefined}};
-%         {exception, #payproc_InvalidPartyStatus{
-%             status = {suspension, {suspended, _}}
-%         }} ->
-%             {ok, {204, [], undefined}};
-%         {exception, Exception} ->
-%             case Exception of
-%                 #payproc_InvalidUser{} ->
-%                     {ok, {400, [], general_error(<<"Invalid party">>)}};
-%                 #payproc_InvalidPartyStatus{} ->
-%                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
-%                 #payproc_ContractNotFound{} ->
-%                     {ok, {400, [], general_error(<<"Contract not found">>)}};
-%                 #payproc_InvalidContractStatus{} ->
-%                     {ok, {400, [], logic_error(invalidContractStatus, <<"Invalid contract status">>)}};
-%                 #'InvalidRequest'{errors = Errors} ->
-%                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
-%             end
-%     end;
+process_request('GetPayoutToolByID', Req, Context, ReqCtx) ->
+    UserInfo = get_user_info(Context),
+    PartyID = get_party_id(Context),
+    ContractID = maps:get('contractID', Req),
+    PayoutToolID = maps:get('payoutToolID', Req),
+
+    Result = get_contract_by_id(Context, ReqCtx, UserInfo, PartyID, ContractID),
+    case Result of
+        {ok, #domain_Contract{payout_tools = PayoutTools}} ->
+            case lists:keyfind(PayoutToolID, #domain_PayoutTool.id, PayoutTools) of
+                #domain_PayoutTool{} = P ->
+                    {ok, {200, [], decode_payout_tool(P)}};
+                false ->
+                    {ok, {404, [], general_error(<<"PayoutTool not found">>)}}
+            end;
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {400, [], general_error(<<"Invalid party">>)}};
+                #payproc_ContractNotFound{} ->
+                    {ok, {404, [], general_error(<<"Contract not found">>)}}
+            end
+    end;
 
 process_request('GetMyParty', _Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
@@ -843,9 +696,7 @@ process_request('SuspendMyParty', _Req, Context, ReqCtx) ->
             case Exception of
                 #payproc_InvalidUser{} ->
                     {ok, {400, [], general_error(<<"Invalid party">>)}};
-                #payproc_InvalidPartyStatus{
-                    status = {suspension, {suspended, _}}
-                } ->
+                #payproc_InvalidPartyStatus{status = {suspension, {suspended, _}}} ->
                     {ok, {204, [], undefined}}
             end
     end;
@@ -942,17 +793,8 @@ process_request('GetClaims', Req, Context, ReqCtx) ->
         {ok, Claims} ->
             Resp = decode_claims(filter_claims(ClaimStatus, Claims)),
             {ok, {200, [], Resp}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
-                #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
-                #payproc_ClaimNotFound{} ->
-                    {ok, {404, [], general_error(<<"Claim not found">>)}};
-                #payproc_InvalidClaimStatus{} ->
-                    {ok, {400, [], general_error(<<"Invalid claim status">>)}}
-            end
+        {exception, #payproc_InvalidUser{}} ->
+            {ok, {400, [], general_error(<<"Invalid party">>)}}
     end;
 
 process_request('GetClaimByID', Req, Context, ReqCtx) ->
@@ -979,42 +821,47 @@ process_request('GetClaimByID', Req, Context, ReqCtx) ->
             case Exception of
                 #payproc_InvalidUser{} ->
                     {ok, {400, [], general_error(<<"Invalid party">>)}};
-                #payproc_InvalidPartyStatus{
-                    status = {suspension, {suspended, _}}
-                } ->
-                    {ok, {204, [], undefined}}
+                #payproc_ClaimNotFound{} ->
+                    {ok, {404, [], general_error(<<"Claim not found">>)}}
             end
     end;
 
 process_request('CreateClaim', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
-    Changeset = encode_claim_changeset(maps:get('claimChangeset', Req)),
-    Result = prepare_party(
-        Context,
-        ReqCtx,
-        fun () ->
-            service_call(
-                party_management,
-                'CreateClaim',
-                [UserInfo, PartyID, Changeset],
-                ReqCtx
-            )
-        end
-    ),
-    case Result of
-        {ok, Claim} ->
-            Resp = decode_claim(Claim),
-            {ok, {201, [], Resp}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
-                #payproc_InvalidPartyStatus{
-                    status = {suspension, {active, _}}
-                } ->
-                    {ok, {204, [], undefined}}
+    try
+        Changeset = encode_claim_changeset(maps:get('claimChangeset', Req)),
+        Result = prepare_party(
+            Context,
+            ReqCtx,
+            fun () ->
+                service_call(
+                    party_management,
+                    'CreateClaim',
+                    [UserInfo, PartyID, Changeset],
+                    ReqCtx
+                )
             end
+        ),
+        case Result of
+            {ok, Claim} ->
+                Resp = decode_claim(Claim),
+                {ok, {201, [], Resp}};
+            {exception, Exception} ->
+                case Exception of
+                    #payproc_InvalidUser{} ->
+                        {ok, {400, [], general_error(<<"Invalid party">>)}};
+                    #payproc_InvalidPartyStatus{} ->
+                        {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    #payproc_ChangesetConflict{} ->
+                        {ok, {400, [], logic_error(changesetConflict, <<"Changeset conflict">>)}};
+                    #payproc_InvalidChangeset{} ->
+                        {ok, {400, [], logic_error(invalidChangeset, <<"Invalid changeset">>)}}
+                end
+        end
+    catch
+        throw:{encode_contract_modification, adjustment_creation_not_supported} ->
+            {ok, {400, [], logic_error(invalidChangeset, <<"Contract adjustment creation not supported">>)}}
     end;
 
 % TODO disabled temporary, exception handling must be fixed befor enabling
@@ -1069,8 +916,14 @@ process_request('RevokeClaimByID', Req, Context, ReqCtx) ->
             case Exception of
                 #payproc_InvalidUser{} ->
                     {ok, {400, [], general_error(<<"Invalid party">>)}};
+                #payproc_InvalidPartyStatus{} ->
+                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_ClaimNotFound{} ->
-                    {ok, {404, [], general_error(<<"Claim not found">>)}}
+                    {ok, {404, [], general_error(<<"Claim not found">>)}};
+                #payproc_InvalidClaimStatus{} ->
+                    {ok, {400, [], logic_error(invalidClaimStatus, <<"Invalid claim status">>)}};
+                #payproc_InvalidClaimRevision{} ->
+                    {ok, {400, [], logic_error(invalidClaimRevision, <<"Invalid claim revision">>)}}
             end
     end;
 
@@ -1334,14 +1187,15 @@ encode_contract_modification(#{<<"contractID">> := ContractID} = Modification) -
             }};
         <<"ContractLegalAgreementBinding">> ->
             {legal_agreement_binding, encode_legal_agreement(maps:get(<<"legalAgreement">>, Modification))};
+        <<"ContractAdjustmentCreation">> ->
         % FIXME need swag supprot for template ref
-        % <<"ContractAdjustmentCreation">> ->
         %     {adjustment_modification, #payproc_ContractAdjustmentModificationUnit{
         %         adjustment_id = maps:get(<<"adjustmentID">>, Modification),
         %         modification = {creation, #payproc_ContractAdjustmentParams{
         %             template = NOT_SUPPORTED
         %         }}
         %     }};
+            erlang:throw({encode_contract_modification, adjustment_creation_not_supported});
         <<"ContractPayoutToolCreation">> ->
             {payout_tool_modification, #payproc_PayoutToolModificationUnit{
                 payout_tool_id = maps:get(<<"payoutToolID">>, Modification),
@@ -1472,17 +1326,6 @@ unwrap_session(Encoded) ->
     end,
     {ClientInfo, PaymentSession}.
 
-remove_empty_events(DecodedEvents) when is_list(DecodedEvents)->
-    lists:filter(
-        fun
-            (#{<<"changes">> := [_Something | _]}) ->
-                true;
-            (_) ->
-                false
-        end,
-        DecodedEvents
-    ).
-
 decode_event(#payproc_Event{
     id = EventID,
     created_at = CreatedAt,
@@ -1587,9 +1430,7 @@ decode_payment_change(_, _, _) ->
     undefined.
 
 decode_invoice_payment(InvoiceID, #payproc_InvoicePayment{
-    payment = Payment,
-    % FIXME add to swag and decode adjustments
-    adjustments = _Adjustments
+    payment = Payment
 }) ->
     decode_payment(InvoiceID, Payment).
 
@@ -1666,7 +1507,7 @@ decode_payment_status({Status, StatusInfo}) ->
     }.
 
 decode_operation_failure({operation_timeout, _}) ->
-    logic_error(<<"500">>, <<"timeout">>);
+    logic_error(timeout, <<"timeout">>);
 decode_operation_failure({external_failure, #domain_ExternalFailure{
     code = Code,
     description = Description
@@ -1875,14 +1716,16 @@ decode_contract(#domain_Contract{
     contractor = Contractor,
     valid_since = ValidSince,
     valid_until = ValidUntil,
-    status = Status0
+    status = Status0,
+    legal_agreement = LegalAgreement
 }) ->
     Status = decode_contract_status(Status0),
     genlib_map:compact(maps:merge(#{
         <<"id">> => ContractID,
         <<"contractor">> => decode_contractor(Contractor),
         <<"validSince">> => ValidSince,
-        <<"validUntil">> => ValidUntil
+        <<"validUntil">> => ValidUntil,
+        <<"legalAgreement">> => decode_legal_agreement(LegalAgreement)
     }, Status)).
 
 decode_contract_status({active, _}) ->
@@ -2086,15 +1929,19 @@ decode_claims(Claims) ->
 decode_claim(#payproc_Claim{
     id = ID,
     revision = Revision,
+    created_at = CreatedAt,
+    updated_at = UpdatedAt,
     status = Status,
     changeset = ChangeSet
 }) ->
-    #{
+    genlib_map:compact(#{
         <<"id">> => ID,
         <<"revision">> => genlib:to_binary(Revision),
+        <<"createdAt">> => CreatedAt,
+        <<"updatedAt">> => UpdatedAt,
         <<"status">> => decode_claim_status(Status),
         <<"changeset">> => decode_party_changeset(ChangeSet)
-    }.
+    }).
 
 decode_claim_status({'pending', _}) ->
     #{
@@ -2114,9 +1961,12 @@ decode_claim_status({'denied', #payproc_ClaimDenied{
         <<"reason">> => Reason
     };
 
-decode_claim_status({'revoked', _}) ->
+decode_claim_status({'revoked', #payproc_ClaimRevoked{
+    reason = Reason
+}}) ->
     #{
-        <<"status">> => <<"ClaimRevoked">>
+        <<"status">> => <<"ClaimRevoked">>,
+        <<"reason">> => Reason
     }.
 
 decode_party_changeset(PartyChangeset) ->
@@ -2722,7 +2572,51 @@ collect_events(UserInfo, InvoiceID, Limit, After, ReqCtx) ->
         user_info => UserInfo,
         request_context => ReqCtx
     },
-    get_events(Limit, After, Context).
+    collect_events([], Limit, After, Context).
+
+collect_events(Collected, 0, _After, _Context) ->
+    {ok, Collected};
+
+collect_events(Collected0, Left, After, Context) ->
+    Result = get_events(Left, After, Context),
+    case Result of
+        {ok, []} ->
+            {ok, Collected0};
+        {ok, Events} ->
+            Filtered = decode_and_filter_events(Events),
+            Collected = Collected0 ++ Filtered,
+            case length(Events) =< Left of
+                true ->
+                    {ok, Collected};
+                false ->
+                    collect_events(
+                        Collected,
+                        Left - length(Filtered),
+                        get_last_event_id(Events),
+                        Context
+                    )
+            end;
+        Error ->
+            Error
+    end.
+
+decode_and_filter_events(Events) ->
+    lists:filtermap(fun decode_if_public_event/1, Events).
+
+decode_if_public_event(Event) ->
+    DecodedEvent = decode_event(Event),
+    case DecodedEvent of
+        #{<<"changes">> := [_Something | _]} ->
+            {true, DecodedEvent};
+        _ ->
+            false
+    end.
+
+get_last_event_id(Events) ->
+    #payproc_Event{
+        id = ID
+    } = lists:last(Events),
+    ID.
 
 get_events(Limit, After, Context) ->
     EventRange = #'payproc_EventRange'{
@@ -2793,14 +2687,6 @@ get_prepared_ip(Context) ->
         ip_address := IP
     } = get_peer_info(Context),
     genlib:to_binary(inet:ntoa(IP)).
-
-% format_now() ->
-%     case rfc3339:format(erlang:system_time()) of
-%         {ok, Timestamp} ->
-%             Timestamp;
-%         {error, Error} ->
-%             error(Error)
-%     end.
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
