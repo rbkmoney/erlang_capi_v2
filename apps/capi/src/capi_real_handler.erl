@@ -1017,31 +1017,32 @@ process_request('CreateClaim', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('UpdateClaimByID', Req, Context, ReqCtx) ->
-    UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
-    ClaimID = genlib:to_int(maps:get('claimID', Req)),
-    ClaimRevision = genlib:to_int(maps:get('claimRevision', Req)),
-    Changeset = encode_claim_changeset(maps:get('claimChangeset', Req)),
-    Result = prepare_party(
-        Context,
-        ReqCtx,
-        fun () ->
-            service_call(
-                party_management,
-                'UpdateClaim',
-                [UserInfo, PartyID, ClaimID, ClaimRevision, Changeset],
-                ReqCtx
-            )
-        end
-    ),
-    case Result of
-        {ok, Party} ->
-            Resp = decode_party(Party),
-            {ok, {200, [], Resp}};
-        {exception, #payproc_InvalidUser{}} ->
-            {ok, {400, [], general_error(<<"Invalid party">>)}}
-    end;
+% TODO disabled temporary, exception handling must be fixed befor enabling
+% process_request('UpdateClaimByID', Req, Context, ReqCtx) ->
+%     UserInfo = get_user_info(Context),
+%     PartyID = get_party_id(Context),
+%     ClaimID = genlib:to_int(maps:get('claimID', Req)),
+%     ClaimRevision = genlib:to_int(maps:get('claimRevision', Req)),
+%     Changeset = encode_claim_changeset(maps:get('claimChangeset', Req)),
+%     Result = prepare_party(
+%         Context,
+%         ReqCtx,
+%         fun () ->
+%             service_call(
+%                 party_management,
+%                 'UpdateClaim',
+%                 [UserInfo, PartyID, ClaimID, ClaimRevision, Changeset],
+%                 ReqCtx
+%             )
+%         end
+%     ),
+%     case Result of
+%         {ok, Party} ->
+%             Resp = decode_party(Party),
+%             {ok, {200, [], Resp}};
+%         {exception, #payproc_InvalidUser{}} ->
+%             {ok, {400, [], general_error(<<"Invalid party">>)}}
+%     end;
 
 process_request('RevokeClaimByID', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
