@@ -32,7 +32,7 @@ services:
         condition: service_healthy
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:bb0bae22ef89d788b8e2d3ec665d1c960e820d55
+    image: dr.rbkmoney.com/rbkmoney/hellgate:1ad1cd8a69621a5b1354da66529c5af52e6d2c02
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -64,7 +64,7 @@ services:
       retries: 12
 
   magista:
-    image: dr.rbkmoney.com/rbkmoney/magista:2028536aa6ac7c327b7f63e11914e5cd5c616400
+    image: dr.rbkmoney.com/rbkmoney/magista:f1f3fe4ebd6f1d7da52cbadbe1de3a1368a318e8
     restart: always
     entrypoint:
       - java
@@ -149,7 +149,7 @@ services:
      - postgres
 
   dominant:
-    image: dr.rbkmoney.com/rbkmoney/dominant:6e31359681eccfae1b603b22cff8202b1599600f
+    image: dr.rbkmoney.com/rbkmoney/dominant:f6d260e235a9c4f418166221943f8b277267465f
     restart: always
     command: /opt/dominant/bin/dominant foreground
     depends_on:
@@ -258,7 +258,8 @@ services:
 networks:
   default:
     driver: bridge
-    driver_opts:
-      com.docker.network.enable_ipv6: "true"
-      com.docker.network.bridge.enable_ip_masquerade: "false"
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 2001::/32
 EOF
