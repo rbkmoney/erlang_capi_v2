@@ -181,16 +181,16 @@ get_operation_access('GetMyParty'                , _) ->
     [{[party], read}];
 get_operation_access('ActivateShop'              , _) ->
     [{[party], write}];
-get_operation_access('CreateShop'                , _) ->
-    [{[party], write}];
 get_operation_access('SuspendShop'               , _) ->
-    [{[party], write}];
-get_operation_access('UpdateShop'                , _) ->
     [{[party], write}];
 get_operation_access('SuspendMyParty'            , _) ->
     [{[party], write}];
 get_operation_access('ActivateMyParty'           , _) ->
     [{[party], write}];
+get_operation_access('CreateClaim'               , _) ->
+    [{[party], write}];
+get_operation_access('GetClaims'                 , _) ->
+    [{[party], read}];
 get_operation_access('GetClaimByID'              , _) ->
     [{[party], read}];
 get_operation_access('GetClaimsByStatus'         , _) ->
@@ -205,12 +205,8 @@ get_operation_access('GetShops'                  , _) ->
     [{[party], read}];
 get_operation_access('GetPayoutTools'            , _) ->
     [{[party], read}];
-get_operation_access('CreatePayoutTool'          , _) ->
-    [{[party], write}];
 get_operation_access('GetContracts'              , _) ->
     [{[party], read}];
-get_operation_access('CreateContract'            , _) ->
-    [{[party], write}];
 get_operation_access('GetContractByID'           , _) ->
     [{[party], read}];
 get_operation_access('GetWebhooks'               , _) ->
