@@ -776,7 +776,7 @@ process_request('GetAccountByID', Req, Context, ReqCtx) ->
 process_request('GetClaims', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
-    ClaimStatus = encode_claim_status(maps:get('claimStatus', Req)),
+    ClaimStatus = maps:get('claimStatus', Req),
     Result = prepare_party(
         Context,
         ReqCtx,
@@ -830,7 +830,7 @@ process_request('CreateClaim', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     try
-        Changeset = encode_claim_changeset(maps:get('claimChangeset', Req)),
+        Changeset = encode_claim_changeset(maps:get('ClaimChangeset', Req)),
         Result = prepare_party(
             Context,
             ReqCtx,
@@ -896,7 +896,7 @@ process_request('RevokeClaimByID', Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
     ClaimID = genlib:to_int(maps:get('claimID', Req)),
     ClaimRevision = genlib:to_int(maps:get('claimRevision', Req)),
-    Reason = encode_reason(maps:get('reason', Req)),
+    Reason = encode_reason(maps:get('Reason', Req)),
     Result = prepare_party(
         Context,
         ReqCtx,
@@ -1150,20 +1150,6 @@ encode_category_ref(Ref) ->
         id = Ref
     }.
 
-encode_claim_status(Status) ->
-    case Status of
-        undefined ->
-            undefined;
-        <<"pending">> ->
-            pending;
-        <<"accepted">> ->
-            accepted;
-        <<"denied">> ->
-            denied;
-        <<"revoked">> ->
-            revoked
-    end.
-
 encode_claim_changeset(Changeset) when is_list(Changeset)->
     lists:map(fun encode_party_modification/1, Changeset).
 
@@ -1244,14 +1230,15 @@ encode_legal_agreement(#{<<"id">> := ID, <<"signedAt">> := SignedAt}) ->
     }.
 
 encode_payout_tool_params(#{
-    <<"currency">> := Currency
-} = Params) ->
+    <<"currency">> := Currency,
+    <<"details">> := Details
+}) ->
     #payproc_PayoutToolParams{
         currency = encode_currency(Currency),
-        tool_info = encode_payout_tool_info(Params)
+        tool_info = encode_payout_tool_info(Details)
     }.
 
-encode_payout_tool_info(#{<<"payoutToolType">> := <<"PayoutToolBankAccount">>} = Tool) ->
+encode_payout_tool_info(#{<<"type">> := <<"PayoutToolBankAccount">>} = Tool) ->
    {bank_account, encode_bank_account(maps:get(<<"bankAccount">>, Tool))}.
 
 encode_bank_account(#{
@@ -1457,6 +1444,8 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
         <<"id">> =>  PaymentID,
         <<"invoiceID">> => InvoiceID,
         <<"createdAt">> => CreatedAt,
+        % TODO whoops, nothing to get it from yet
+        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"amount">> => Amount,
         <<"currency">> => decode_currency(Currency),
         <<"contactInfo">> => decode_contact_info(ContactInfo),
@@ -1713,6 +1702,7 @@ decode_map(Items, Fun) ->
 
 decode_contract(#domain_Contract{
     id = ContractID,
+    created_at = CreatedAt,
     contractor = Contractor,
     valid_since = ValidSince,
     valid_until = ValidUntil,
@@ -1722,6 +1712,7 @@ decode_contract(#domain_Contract{
     Status = decode_contract_status(Status0),
     genlib_map:compact(maps:merge(#{
         <<"id">> => ContractID,
+        <<"createdAt">> => CreatedAt,
         <<"contractor">> => decode_contractor(Contractor),
         <<"validSince">> => ValidSince,
         <<"validUntil">> => ValidUntil,
@@ -1784,6 +1775,7 @@ decode_bank_account(#domain_BankAccount{
 
 decode_shop(#domain_Shop{
     id = ShopID,
+    created_at = CreatedAt,
     blocking = Blocking,
     suspension = Suspension,
     category  = #domain_CategoryRef{
@@ -1797,6 +1789,7 @@ decode_shop(#domain_Shop{
 }) ->
     genlib_map:compact(#{
         <<"id">> => ShopID,
+        <<"createdAt">> => CreatedAt,
         <<"isBlocked">> => is_blocked(Blocking),
         <<"isSuspended">> => is_suspended(Suspension),
         <<"categoryID">> => CategoryRef,
@@ -1934,14 +1927,16 @@ decode_claim(#payproc_Claim{
     status = Status,
     changeset = ChangeSet
 }) ->
-    genlib_map:compact(#{
-        <<"id">> => ID,
-        <<"revision">> => genlib:to_binary(Revision),
-        <<"createdAt">> => CreatedAt,
-        <<"updatedAt">> => UpdatedAt,
-        <<"status">> => decode_claim_status(Status),
-        <<"changeset">> => decode_party_changeset(ChangeSet)
-    }).
+    genlib_map:compact(maps:merge(
+        #{
+            <<"id">> => ID,
+            <<"revision">> => Revision,
+            <<"createdAt">> => CreatedAt,
+            <<"updatedAt">> => UpdatedAt,
+            <<"changeset">> => decode_party_changeset(ChangeSet)
+        },
+        decode_claim_status(Status)
+    )).
 
 decode_claim_status({'pending', _}) ->
     #{
@@ -2047,7 +2042,10 @@ decode_legal_agreement(#domain_LegalAgreement{
     #{
         <<"id">> => ID,
         <<"signedAt">> => SignedAt
-    }.
+    };
+
+decode_legal_agreement(undefined) ->
+    undefined.
 
 
 decode_shop_modification({creation, ShopParams}) ->
