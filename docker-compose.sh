@@ -21,7 +21,7 @@ services:
       starter:
         condition: service_started
       dominant:
-        condition: service_started
+        condition: service_healthy
       keycloak:
         condition: service_healthy
       columbus:
@@ -155,6 +155,11 @@ services:
     depends_on:
       machinegun:
         condition: service_healthy
+    healthcheck:
+      test: "curl http://localhost:8022/"
+      interval: 5s
+      timeout: 1s
+      retries: 12
 
   starter:
     image: ${BUILD_IMAGE}
