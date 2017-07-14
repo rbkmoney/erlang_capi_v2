@@ -263,8 +263,7 @@ services:
 networks:
   default:
     driver: bridge
-    enable_ipv6: true
-    ipam:
-      config:
-        - subnet: 2001::/32
+    driver_opts:
+      com.docker.network.enable_ipv6: "true"
+      com.docker.network.bridge.enable_ip_masquerade: "false"
 EOF
