@@ -774,29 +774,14 @@ activate_my_party_idempotent_ok_test(Config) ->
 -spec create_contract_ok_test(config()) -> _.
 
 create_contract_ok_test(Config) ->
-    #{
-        <<"id">> := ClaimID,
-        <<"changeset">> := ChangeSet,
-        <<"revision">> := ClaimRevision
-    }  = default_create_contract(Config),
-    default_approve_claim(ClaimID, ClaimRevision),
-    {ok, ContractID} = lists:foldl(
-        fun
-            (
-                #{
-                    <<"partyModificationType">> := <<"ContractModification">>,
-                    <<"contractModificationType">> := <<"ContractCreation">>,
-                    <<"contractID">> := ID
-                }, _Acc
-            ) ->
-                {ok, ID};
-            (_, Acc) ->
-                Acc
-
-        end,
-        undefined,
-        ChangeSet
-    ),
+    ContractID = generate_contract_id(),
+    Claim = default_create_contract(ContractID, Config),
+    #{<<"changeset">> := [#{
+        <<"partyModificationType">> := <<"ContractModification">>,
+        <<"contractModificationType">> := <<"ContractCreation">>,
+        <<"contractID">> := ContractID
+    } | _]} = Claim,
+    default_approve_claim(Claim),
     {save_config, ContractID}.
 
 -spec get_contract_by_id_ok_test(config()) -> _.
@@ -816,9 +801,9 @@ create_payout_tool_ok_test(Config) ->
     {get_contract_by_id_ok_test,
         ContractID
     } = ?config(saved_config, Config),
-    #{
-        <<"id">> := _
-    } = default_create_payout_tool(ContractID, Config),
+    PayoutToolID  = generate_payout_tool_id(),
+    Claim = default_create_payout_tool(PayoutToolID, ContractID, Config),
+    default_approve_claim(Claim),
     {save_config, ContractID}.
 
 -spec get_payout_tools_ok_test(config()) -> _.
@@ -829,7 +814,7 @@ get_payout_tools_ok_test(Config) ->
     } = ?config(saved_config, Config),
     [#{
         <<"id">> := _PayoutToolID
-    }] = get_payout_tools(ContractID, Config),
+    } | _] = get_payout_tools(ContractID, Config),
     {save_config, ContractID}.
 
 -spec get_contracts_ok_test(config()) -> _.
@@ -846,7 +831,7 @@ get_contracts_ok_test(Config) ->
 -spec get_claim_by_id_ok_test(config()) -> _.
 
 get_claim_by_id_ok_test(Config) ->
-    #{<<"id">> := ClaimID} = default_create_shop(?LIVE_CATEGORY_ID, Config),
+    #{<<"id">> := ClaimID} = default_create_shop(generate_shop_id(), ?LIVE_CATEGORY_ID, Config),
     #{
         <<"id">> := ClaimID
     } = default_get_claim_by_id(ClaimID, Config),
@@ -862,7 +847,7 @@ get_claims_by_status_ok_test(Config) ->
     lists:any(
         fun (#{
                 <<"id">> := ID,
-                <<"status">> := #{<<"status">> := <<"ClaimPending">>}
+                <<"status">> := <<"ClaimPending">>
             }) when ClaimID =:= ID ->
                 true;
             (_) ->
@@ -910,8 +895,9 @@ create_shop_ok_test(Config) ->
     {get_category_by_id_ok_test,
         CategoryID
     } = ?config(saved_config, Config),
-    #{<<"id">> := ClaimID, <<"revision">> := ClaimRevision} = default_create_shop(CategoryID, Config),
-    {ok, _} = default_approve_claim(ClaimID, ClaimRevision),
+    ShopID = generate_shop_id(),
+    #{<<"id">> := ClaimID} = Claim = default_create_shop(ShopID, CategoryID, Config),
+    {ok, _} = default_approve_claim(Claim),
     #{
         <<"id">> := ClaimID,
         <<"status">> := <<"ClaimAccepted">>,
@@ -963,8 +949,8 @@ update_shop_ok_test(Config) ->
         <<"shopModificationType">> => <<"ShopLocationChange">>,
         <<"location">> => NewLocation
     }],
-    #{<<"id">> := ClaimID, <<"revision">> := ClaimRevision} = create_claim(Config, Changeset),
-    default_approve_claim(ClaimID, ClaimRevision),
+    Claim = create_claim(Config, Changeset),
+    default_approve_claim(Claim),
     #{<<"location">> := NewLocation} = default_get_shop_by_id(ShopID, Config),
     {save_config, ShopID}.
 
@@ -1108,10 +1094,8 @@ default_create_invoice(Config) ->
     {ok, Body} = api_client_invoices:create_invoice(Context, Req),
     Body.
 
-default_create_contract(Config) ->
+default_create_contract(ContractID, Config) ->
     BankAccount = default_bank_account(),
-    ID = genlib:to_binary(rand:uniform(100000000)),
-    ContractID = <<"ZCONTRACT_", ID/binary>>,
     Changeset = [
         #{
             <<"partyModificationType">> => <<"ContractModification">>,
@@ -1135,7 +1119,7 @@ default_create_contract(Config) ->
             <<"partyModificationType">> => <<"ContractModification">>,
             <<"contractID">> => ContractID,
             <<"contractModificationType">> => <<"ContractPayoutToolCreation">>,
-            <<"payoutToolID">> => <<"PAYOUTTOOL1">>,
+            <<"payoutToolID">> => generate_payout_tool_id(),
             <<"currency">> => <<"RUB">>,
             <<"details">> => #{
                 <<"type">> => <<"PayoutToolBankAccount">>,
@@ -1186,26 +1170,26 @@ get_shops(Config) ->
 
 get_latest(Es) ->
     % Assuming the latest element will have highest numeric ID
-    hd(lists:sort(fun (#{<<"id">> := ID1}, #{<<"id">> := ID2}) -> compare_ids(ID1, ID2) end, Es)).
+    % or latest creation time
+    hd(lists:sort(
+        fun (#{<<"createdAt">> := T1}, #{<<"createdAt">> := T2}) ->
+                compare_timestamps(T1, T2);
+            (#{<<"id">> := ID1}, #{<<"id">> := ID2}) ->
+                ID1 > ID2
+        end,
+        Es
+    )).
 
-compare_ids(ID1, ID2) when is_binary(ID1) ->
-    % FIXME broken as hell, burn with fire
-    try
-        binary_to_integer(ID1) > binary_to_integer(ID2)
-    catch
-        error:badarg ->
-            ID1 > ID2
-    end;
-compare_ids(ID1, ID2) when is_integer(ID1) ->
-    ID1 > ID2.
+compare_timestamps(T1, T2) ->
+    rfc3339:parse_to_local_datetime(T1) > rfc3339:parse_to_local_datetime(T2).
 
-default_create_payout_tool(ContractID, Config) ->
+default_create_payout_tool(PayoutToolID, ContractID, Config) ->
     Changeset = [
         #{
             <<"partyModificationType">> => <<"ContractModification">>,
             <<"contractID">> => ContractID,
             <<"contractModificationType">> => <<"ContractPayoutToolCreation">>,
-            <<"payoutToolID">> => genlib:to_binary(rand:uniform(100000000)),
+            <<"payoutToolID">> => PayoutToolID,
             <<"currency">> => <<"RUB">>,
             <<"details">> => #{
                 <<"type">> => <<"PayoutToolBankAccount">>,
@@ -1311,18 +1295,15 @@ default_get_shop_by_id(ShopID, Config) ->
     {ok, R} = api_client_lib:handle_response(Response),
     R.
 
-default_create_shop(CategoryID, Config) ->
-    #{<<"id">> := ClaimID0, <<"revision">> := ClaimRevision} = default_create_contract(Config),
-    default_approve_claim(ClaimID0, ClaimRevision),
-    #{<<"id">> := ContractID} = get_latest(get_contracts(Config)),
-    #{<<"id">> := PayoutToolID} = get_latest(get_payout_tools(ContractID, Config)),
+default_create_shop(ShopID, CategoryID, Config) ->
+    ContractID = generate_contract_id(),
+    Claim = default_create_contract(ContractID, Config),
+    default_approve_claim(Claim),
+    #{<<"id">> := PayoutToolID} = lists:last(get_payout_tools(ContractID, Config)),
+    default_create_shop(ShopID, CategoryID, ContractID, PayoutToolID, Config).
 
-    default_create_shop(CategoryID, ContractID, PayoutToolID, Config).
 
-
-default_create_shop(CategoryID, ContractID, PayoutToolID, Config) ->
-    ID = genlib:to_binary(rand:uniform(100000000)),
-    ShopID = <<"SHOP_", ID/binary>>,
+default_create_shop(ShopID, CategoryID, ContractID, PayoutToolID, Config) ->
     Changeset = [
         genlib_map:compact(#{
             <<"partyModificationType">> => <<"ShopModification">>,
@@ -1392,7 +1373,7 @@ get_locations_names(GeoIDs, Lang, Config) ->
     R.
 
 %% @FIXME thats dirty
-default_approve_claim(ClaimID, ClaimRevision) ->
+default_approve_claim(#{<<"id">> := ClaimID, <<"revision">> := ClaimRevision}) ->
     UserInfo = #payproc_UserInfo{
         id = ?MERCHANT_ID,
         type = {internal_user, #payproc_InternalUser{}}
@@ -1403,6 +1384,17 @@ default_approve_claim(ClaimID, ClaimRevision) ->
         [UserInfo, ?MERCHANT_ID, ClaimID, ClaimRevision]
     ).
 
+generate_contract_id() ->
+    ID = genlib:to_binary(rand:uniform(100000000)),
+    <<"CONTRACT_", ID/binary>>.
+
+generate_shop_id() ->
+    ID = genlib:to_binary(rand:uniform(100000000)),
+    <<"SHOP_", ID/binary>>.
+
+generate_payout_tool_id() ->
+    ID = genlib:to_binary(rand:uniform(100000000)),
+    <<"PAYOUTTOOL_", ID/binary>>.
 
 -define(cur(ID), #domain_CurrencyRef{symbolic_code = ID}).
 -define(pmt(C, T), #domain_PaymentMethodRef{id = {C, T}}).
@@ -1870,8 +1862,9 @@ call_service(Service, Function, Args, ReqCtx) ->
     cp_proto:call_service(Service, Function, Args, ReqCtx, capi_woody_event_handler).
 
 create_and_activate_shop(Config) ->
-    #{<<"id">> := ClaimID, <<"revision">> := ClaimRevision} = default_create_shop(?LIVE_CATEGORY_ID, Config),
-    {ok, _} = default_approve_claim(ClaimID, ClaimRevision),
+    ShopID = generate_shop_id(),
+    #{<<"id">> := ClaimID} = Claim = default_create_shop(ShopID, ?LIVE_CATEGORY_ID, Config),
+    {ok, _} = default_approve_claim(Claim),
     #{
         <<"id">> := ClaimID,
         <<"status">> := <<"ClaimAccepted">>,
