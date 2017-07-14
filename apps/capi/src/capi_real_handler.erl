@@ -662,6 +662,49 @@ process_request('GetPayoutToolByID', Req, Context, ReqCtx) ->
             end
     end;
 
+process_request('GetContractAdjustments', Req, Context, ReqCtx) ->
+    UserInfo = get_user_info(Context),
+    PartyID = get_party_id(Context),
+    ContractID = maps:get('contractID', Req),
+
+    Result = get_contract_by_id(Context, ReqCtx, UserInfo, PartyID, ContractID),
+    case Result of
+        {ok, #domain_Contract{adjustments = Adjustments}} ->
+            Resp = [decode_contract_adjustment(A) || A <- Adjustments],
+            {ok, {200, [], Resp}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {400, [], general_error(<<"Invalid party">>)}};
+                #payproc_ContractNotFound{} ->
+                    {ok, {404, [], general_error(<<"Contract not found">>)}}
+            end
+    end;
+
+process_request('GetContractAdjustmentByID', Req, Context, ReqCtx) ->
+    UserInfo = get_user_info(Context),
+    PartyID = get_party_id(Context),
+    ContractID = maps:get('contractID', Req),
+    AdjustmentID = maps:get('adjustmentID', Req),
+
+    Result = get_contract_by_id(Context, ReqCtx, UserInfo, PartyID, ContractID),
+    case Result of
+        {ok, #domain_Contract{adjustments = Adjustments}} ->
+            case lists:keyfind(AdjustmentID, #domain_ContractAdjustment.id, Adjustments) of
+                #domain_ContractAdjustment{} = A ->
+                    {ok, {200, [], decode_contract_adjustment(A)}};
+                false ->
+                    {ok, {404, [], general_error(<<"Adjustment not found">>)}}
+            end;
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {400, [], general_error(<<"Invalid party">>)}};
+                #payproc_ContractNotFound{} ->
+                    {ok, {404, [], general_error(<<"Contract not found">>)}}
+            end
+    end;
+
 process_request('GetMyParty', _Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
@@ -1773,6 +1816,19 @@ decode_bank_account(#domain_BankAccount{
         <<"bankBik">> => BankBik
     }.
 
+decode_contract_adjustment(#domain_ContractAdjustment{
+    id = ID,
+    created_at = CreatedAt,
+    valid_since = ValidSince,
+    valid_until = ValidUntil
+}) ->
+    genlib_map:compact(#{
+        <<"id">> => ID,
+        <<"createdAt">> => CreatedAt,
+        <<"validSince">> => ValidSince,
+        <<"validUntil">> => ValidUntil
+    }).
+
 decode_shop(#domain_Shop{
     id = ShopID,
     created_at = CreatedAt,
@@ -2264,13 +2320,13 @@ decode_event_filter({invoice, #webhooker_InvoiceEventFilter{
     shop_id = ShopID,
     types   = EventTypes
 }}) ->
-    #{
+    genlib_map:compact(#{
         <<"topic">>      => <<"InvoicesTopic">>,
         <<"shopID">>     => ShopID,
         <<"eventTypes">> => lists:flatmap(
             fun (V) -> decode_event_type(invoice, V) end, ordsets:to_list(EventTypes)
         )
-    }.
+    }).
 
 decode_event_type(
     invoice,
