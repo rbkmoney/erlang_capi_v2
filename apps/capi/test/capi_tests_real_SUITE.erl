@@ -449,12 +449,12 @@ create_payment_ok_w_access_token_test(Config) ->
         Context,
         Config
     ),
-    wait_event_w_changes(
+    wait_event_w_change(
         InvoiceID,
-        [#{
+        #{
             <<"changeType">> => <<"InvoiceStatusChanged">>,
             <<"status">> => <<"paid">>
-        }],
+        },
         3000,
         Context
     ),
@@ -470,12 +470,12 @@ fulfill_invoice_ok_test(Config) ->
     } = ?config(saved_config, Config),
     Context = ?config(context, Config),
 
-    wait_event_w_changes(
+    wait_event_w_change(
         InvoiceID,
-        [#{
+        #{
             <<"changeType">> => <<"InvoiceStatusChanged">>,
             <<"status">> => <<"paid">>
-        }],
+        },
         3000,
         Context
     ),
@@ -538,12 +538,12 @@ get_invoice_events_ok_test(Config) ->
         #{invoice_id := InvoiceID}
     } = ?config(saved_config, Config),
     Context = ?config(context, Config),
-    wait_event_w_changes(
+    wait_event_w_change(
         InvoiceID,
-        [#{
+        #{
             <<"changeType">> => <<"InvoiceStatusChanged">>,
             <<"status">> => <<"fulfilled">>
-        }],
+        },
         3000,
         Context
     ),
@@ -781,7 +781,7 @@ create_contract_ok_test(Config) ->
         <<"contractModificationType">> := <<"ContractCreation">>,
         <<"contractID">> := ContractID
     } | _]} = Claim,
-    default_approve_claim(Claim),
+    {ok, _} = default_approve_claim(Claim),
     {save_config, ContractID}.
 
 -spec get_contract_by_id_ok_test(config()) -> _.
@@ -803,7 +803,7 @@ create_payout_tool_ok_test(Config) ->
     } = ?config(saved_config, Config),
     PayoutToolID  = generate_payout_tool_id(),
     Claim = default_create_payout_tool(PayoutToolID, ContractID, Config),
-    default_approve_claim(Claim),
+    {ok, _} = default_approve_claim(Claim),
     {save_config, ContractID}.
 
 -spec get_payout_tools_ok_test(config()) -> _.
@@ -950,7 +950,7 @@ update_shop_ok_test(Config) ->
         <<"location">> => NewLocation
     }],
     Claim = create_claim(Config, Changeset),
-    default_approve_claim(Claim),
+    {ok, _} = default_approve_claim(Claim),
     #{<<"location">> := NewLocation} = default_get_shop_by_id(ShopID, Config),
     {save_config, ShopID}.
 
@@ -1298,7 +1298,7 @@ default_get_shop_by_id(ShopID, Config) ->
 default_create_shop(ShopID, CategoryID, Config) ->
     ContractID = generate_contract_id(),
     Claim = default_create_contract(ContractID, Config),
-    default_approve_claim(Claim),
+    {ok, _} = default_approve_claim(Claim),
     #{<<"id">> := PayoutToolID} = lists:last(get_payout_tools(ContractID, Config)),
     default_create_shop(ShopID, CategoryID, ContractID, PayoutToolID, Config).
 
@@ -1378,7 +1378,7 @@ default_approve_claim(#{<<"id">> := ClaimID, <<"revision">> := ClaimRevision}) -
         id = ?MERCHANT_ID,
         type = {internal_user, #payproc_InternalUser{}}
     },
-    {ok, _} = call_service(
+    call_service(
         party_management,
         'AcceptClaim',
         [UserInfo, ?MERCHANT_ID, ClaimID, ClaimRevision]
@@ -1951,13 +1951,13 @@ handle_response(Response) ->
     {ok, R} = api_client_lib:handle_response(Response),
     R.
 
-wait_event_w_changes(InvoiceID, ChangePatterns, TimeLeft, Context) when TimeLeft > 0 ->
+wait_event_w_change(InvoiceID, ChangePattern, TimeLeft, Context) when TimeLeft > 0 ->
     Started = genlib_time:ticks(),
     Limit = 1000,
     {ok, Events} = api_client_invoices:get_invoice_events(Context, InvoiceID, Limit),
     Filtered = lists:filter(
         fun(#{<<"changes">> := EventChanges}) ->
-            is_changes_match_patterns(EventChanges, ChangePatterns)
+            is_changes_match_patterns(EventChanges, ChangePattern)
         end,
         Events
     ),
@@ -1965,30 +1965,21 @@ wait_event_w_changes(InvoiceID, ChangePatterns, TimeLeft, Context) when TimeLeft
         [] ->
             timer:sleep(200),
             Now = genlib_time:ticks(),
-            wait_event_w_changes(InvoiceID, ChangePatterns, TimeLeft - (Now - Started) div 1000, Context);
+            wait_event_w_change(InvoiceID, ChangePattern, TimeLeft - (Now - Started) div 1000, Context);
         _ ->
             ok
     end;
 
-wait_event_w_changes(InvoiceID, ChangePatterns, _, _Context) ->
-    error({event_limit_exceeded, {InvoiceID, ChangePatterns}}).
+wait_event_w_change(InvoiceID, ChangePattern, _, _Context) ->
+    error({event_limit_exceeded, {InvoiceID, ChangePattern}}).
 
-is_changes_match_patterns(Changes, [P | Patterns]) when is_list(Changes) ->
-    R = lists:any(
+is_changes_match_patterns(Changes, Pattern) when is_list(Changes) ->
+    lists:any(
         fun(Change) ->
-            maps:merge(Change, P) =:= Change
+            maps:merge(Change, Pattern) =:= Change
         end,
         Changes
-    ),
-    case R of
-        true ->
-            is_changes_match_patterns(Changes, Patterns);
-        false ->
-            false
-    end;
-
-is_changes_match_patterns(Changes, []) when is_list(Changes) ->
-    true.
+    ).
 
 get_due_date() ->
     {{Y, M, D}, Time} = calendar:local_time(),
