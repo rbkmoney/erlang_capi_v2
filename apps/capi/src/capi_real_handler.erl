@@ -2320,13 +2320,13 @@ decode_event_filter({invoice, #webhooker_InvoiceEventFilter{
     shop_id = ShopID,
     types   = EventTypes
 }}) ->
-    #{
+    genlib_map:compact(#{
         <<"topic">>      => <<"InvoicesTopic">>,
         <<"shopID">>     => ShopID,
         <<"eventTypes">> => lists:flatmap(
             fun (V) -> decode_event_type(invoice, V) end, ordsets:to_list(EventTypes)
         )
-    }.
+    }).
 
 decode_event_type(
     invoice,
