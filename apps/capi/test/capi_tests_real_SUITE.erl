@@ -1243,7 +1243,7 @@ default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, _Co
     Req = #{
         <<"paymentSession">> => PaymentSession,
         <<"paymentToolToken">> => PaymentToolToken,
-        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
+        <<"flow">> => #{<<"type">> => <<"PaymentParamsFlowInstant">>},
         <<"contactInfo">> => #{
             <<"email">> => <<"bla@bla.ru">>
         }
