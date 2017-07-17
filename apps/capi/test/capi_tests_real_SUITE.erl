@@ -360,7 +360,7 @@ create_invoice_badard_test(Config) ->
 create_invoice_no_shop_test(Config) ->
     Context = ?config(context, Config),
     Req = #{
-        <<"shopID">> => -1,
+        <<"shopID">> => <<"INVALID_SHOP_ID">>,
         <<"amount">> => 100000,
         <<"currency">> => <<"RUB">>,
         <<"metadata">> => #{
@@ -449,10 +449,10 @@ create_payment_ok_w_access_token_test(Config) ->
         Context,
         Config
     ),
-    wait_event(
+    wait_event_w_change(
         InvoiceID,
         #{
-            <<"eventType">> => <<"EventInvoiceStatusChanged">>,
+            <<"changeType">> => <<"InvoiceStatusChanged">>,
             <<"status">> => <<"paid">>
         },
         3000,
@@ -470,10 +470,10 @@ fulfill_invoice_ok_test(Config) ->
     } = ?config(saved_config, Config),
     Context = ?config(context, Config),
 
-    wait_event(
+    wait_event_w_change(
         InvoiceID,
         #{
-            <<"eventType">> => <<"EventInvoiceStatusChanged">>,
+            <<"changeType">> => <<"InvoiceStatusChanged">>,
             <<"status">> => <<"paid">>
         },
         3000,
@@ -538,10 +538,10 @@ get_invoice_events_ok_test(Config) ->
         #{invoice_id := InvoiceID}
     } = ?config(saved_config, Config),
     Context = ?config(context, Config),
-    wait_event(
+    wait_event_w_change(
         InvoiceID,
         #{
-            <<"eventType">> => <<"EventInvoiceStatusChanged">>,
+            <<"changeType">> => <<"InvoiceStatusChanged">>,
             <<"status">> => <<"fulfilled">>
         },
         3000,
@@ -550,29 +550,50 @@ get_invoice_events_ok_test(Config) ->
     {ok, Events} = api_client_invoices:get_invoice_events(Context, InvoiceID, 10),
     [
         #{
-            <<"eventType">> := <<"EventInvoiceCreated">>,
-            <<"invoice">> := #{
-                <<"id">> := InvoiceID
-            }
+            <<"id">> := 1,
+            <<"changes">> := [#{
+                <<"changeType">> := <<"InvoiceCreated">>,
+                <<"invoice">> := #{<<"id">> := InvoiceID}
+            }]
         },
         #{
-            <<"eventType">> := <<"EventPaymentStarted">>
+            <<"id">> := 2,
+            <<"changes">> := [#{
+                <<"changeType">> := <<"PaymentStarted">>,
+                <<"payment">> := #{
+                    <<"id">> := PaymentID,
+                    <<"invoiceID">> := InvoiceID
+                }
+            }]
         },
         #{
-            <<"eventType">> := <<"EventPaymentStatusChanged">>,
-            <<"status">> := <<"processed">>
+            <<"id">> := 3,
+            <<"changes">> := [#{
+                <<"changeType">> := <<"PaymentStatusChanged">>,
+                <<"status">> := <<"processed">>,
+                <<"paymentID">> := PaymentID
+            }]
         },
         #{
-            <<"eventType">> := <<"EventPaymentStatusChanged">>,
-            <<"status">> := <<"captured">>
+            <<"id">> := 4,
+            <<"changes">> := [
+                #{
+                    <<"changeType">> := <<"PaymentStatusChanged">>,
+                    <<"status">> := <<"captured">>,
+                    <<"paymentID">> := PaymentID
+                },
+                #{
+                    <<"changeType">> := <<"InvoiceStatusChanged">>,
+                    <<"status">> := <<"paid">>
+                }
+            ]
         },
         #{
-            <<"eventType">> := <<"EventInvoiceStatusChanged">>,
-            <<"status">> := <<"paid">>
-        },
-        #{
-            <<"eventType">> := <<"EventInvoiceStatusChanged">>,
-            <<"status">> := <<"fulfilled">>
+            <<"id">> := 5,
+            <<"changes">> := [#{
+                <<"changeType">> := <<"InvoiceStatusChanged">>,
+                <<"status">> := <<"fulfilled">>
+            }]
         }
     ] = Events.
 
@@ -753,32 +774,14 @@ activate_my_party_idempotent_ok_test(Config) ->
 -spec create_contract_ok_test(config()) -> _.
 
 create_contract_ok_test(Config) ->
-    #{
-        <<"claimID">> := ClaimID
-    }  = default_create_contract(Config),
-    default_approve_claim(ClaimID),
-    #{
-        <<"id">> := ClaimID,
-        <<"changeset">> := ChangeSet
-    } = default_get_claim_by_id(ClaimID, Config),
-    #{
-        <<"id">> := ContractID
-    } = lists:foldl(
-        fun
-            (
-                #{
-                    <<"partyModificationType">> := <<"ContractCreation">>,
-                    <<"contract">> := Contract
-                }, _Acc
-            ) ->
-                Contract;
-            (_, Acc) ->
-                Acc
-
-        end,
-        undefined,
-        ChangeSet
-    ),
+    ContractID = generate_contract_id(),
+    Claim = default_create_contract(ContractID, Config),
+    #{<<"changeset">> := [#{
+        <<"partyModificationType">> := <<"ContractModification">>,
+        <<"contractModificationType">> := <<"ContractCreation">>,
+        <<"contractID">> := ContractID
+    } | _]} = Claim,
+    {ok, _} = default_approve_claim(Claim),
     {save_config, ContractID}.
 
 -spec get_contract_by_id_ok_test(config()) -> _.
@@ -798,9 +801,9 @@ create_payout_tool_ok_test(Config) ->
     {get_contract_by_id_ok_test,
         ContractID
     } = ?config(saved_config, Config),
-    #{
-        <<"claimID">> := _
-    } = default_create_payout_tool(ContractID, Config),
+    PayoutToolID  = generate_payout_tool_id(),
+    Claim = default_create_payout_tool(PayoutToolID, ContractID, Config),
+    {ok, _} = default_approve_claim(Claim),
     {save_config, ContractID}.
 
 -spec get_payout_tools_ok_test(config()) -> _.
@@ -811,7 +814,7 @@ get_payout_tools_ok_test(Config) ->
     } = ?config(saved_config, Config),
     [#{
         <<"id">> := _PayoutToolID
-    }] = get_payout_tools(ContractID, Config),
+    } | _] = get_payout_tools(ContractID, Config),
     {save_config, ContractID}.
 
 -spec get_contracts_ok_test(config()) -> _.
@@ -828,7 +831,7 @@ get_contracts_ok_test(Config) ->
 -spec get_claim_by_id_ok_test(config()) -> _.
 
 get_claim_by_id_ok_test(Config) ->
-    ClaimID = default_create_shop(?LIVE_CATEGORY_ID, Config),
+    #{<<"id">> := ClaimID} = default_create_shop(generate_shop_id(), ?LIVE_CATEGORY_ID, Config),
     #{
         <<"id">> := ClaimID
     } = default_get_claim_by_id(ClaimID, Config),
@@ -840,10 +843,18 @@ get_claims_by_status_ok_test(Config) ->
     {get_claim_by_id_ok_test,
         ClaimID
     } = ?config(saved_config, Config),
-    [#{
-        <<"id">> := ClaimID,
-        <<"status">> := #{<<"status">> := <<"ClaimPending">>}
-    }] = default_get_claims_by_status(pending, Config),
+    Claims = default_get_claims_by_status(pending, Config),
+    lists:any(
+        fun (#{
+                <<"id">> := ID,
+                <<"status">> := <<"ClaimPending">>
+            }) when ClaimID =:= ID ->
+                true;
+            (_) ->
+                false
+        end,
+        Claims
+    ),
     {save_config, ClaimID}.
 
 -spec revoke_claim_ok_test(config()) -> _.
@@ -855,7 +866,7 @@ revoke_claim_ok_test(Config) ->
     ok = default_revoke_claim(ClaimID, Config),
     #{
         <<"id">> := ClaimID,
-        <<"status">> := #{<<"status">> := <<"ClaimRevoked">>}
+        <<"status">> := <<"ClaimRevoked">>
     } = default_get_claim_by_id(ClaimID, Config),
     Config.
 
@@ -884,21 +895,20 @@ create_shop_ok_test(Config) ->
     {get_category_by_id_ok_test,
         CategoryID
     } = ?config(saved_config, Config),
-    ClaimID = default_create_shop(CategoryID, Config),
-    {ok, _} = default_approve_claim(ClaimID),
+    ShopID = generate_shop_id(),
+    #{<<"id">> := ClaimID} = Claim = default_create_shop(ShopID, CategoryID, Config),
+    {ok, _} = default_approve_claim(Claim),
     #{
         <<"id">> := ClaimID,
-        <<"status">> :=  #{<<"status">> := <<"ClaimAccepted">>},
+        <<"status">> := <<"ClaimAccepted">>,
         <<"changeset">> := [
             #{
-                <<"partyModificationType">> := <<"ShopCreation">>,
-                <<"shop">> := #{
-                    <<"id">> := ShopID
-                }
+                <<"partyModificationType">> := <<"ShopModification">>,
+                <<"shopID">> := ShopID,
+                <<"shopModificationType">> := <<"ShopCreation">>
             } | _
         ]
     } = default_get_claim_by_id(ClaimID, Config),
-
     {save_config, ShopID}.
 
 -spec get_shop_by_id_ok_test(config()) -> _.
@@ -929,24 +939,19 @@ update_shop_ok_test(Config) ->
     {activate_shop_idempotent_ok_test,
         ShopID
     } = ?config(saved_config, Config),
-    #{
-        <<"details">> := ShopDetails
-    } = default_get_shop_by_id(ShopID, Config),
-    NewShopDetails = ShopDetails#{
-        <<"location">> => #{
-            <<"locationType">> => <<"ShopLocationUrl">>,
-            <<"url">> => <<"kill.me">>
-        }
+    NewLocation = #{
+        <<"locationType">> => <<"ShopLocationUrl">>,
+        <<"url">> => <<"kill.me">>
     },
-    Req = #{
-        <<"details">> => NewShopDetails,
-        <<"categoryID">> => 1
-    },
-    ClaimID = update_shop(Req, ShopID, Config),
-    default_approve_claim(ClaimID),
-    #{
-        <<"details">> := NewShopDetails
-    } = default_get_shop_by_id(ShopID, Config),
+    Changeset = [#{
+        <<"partyModificationType">> => <<"ShopModification">>,
+        <<"shopID">> => ShopID,
+        <<"shopModificationType">> => <<"ShopLocationChange">>,
+        <<"location">> => NewLocation
+    }],
+    Claim = create_claim(Config, Changeset),
+    {ok, _} = default_approve_claim(Claim),
+    #{<<"location">> := NewLocation} = default_get_shop_by_id(ShopID, Config),
     {save_config, ShopID}.
 
 -spec suspend_shop_ok_test(config()) -> _.
@@ -1089,12 +1094,15 @@ default_create_invoice(Config) ->
     {ok, Body} = api_client_invoices:create_invoice(Context, Req),
     Body.
 
-default_create_contract(Config) ->
-    Context = ?config(context, Config),
-    Request = #{
-        <<"contractor">> => #{
-            <<"bankAccount">> => default_bank_account(),
-            <<"legalEntity">> => #{
+default_create_contract(ContractID, Config) ->
+    BankAccount = default_bank_account(),
+    Changeset = [
+        #{
+            <<"partyModificationType">> => <<"ContractModification">>,
+            <<"contractID">> => ContractID,
+            <<"contractModificationType">> => <<"ContractCreation">>,
+            <<"contractor">> => #{
+                <<"contractorType">> => <<"LegalEntity">>,
                 <<"entityType">> => <<"RussianLegalEntity">>,
                 <<"registeredName">> => <<"testRegisteredName">>,
                 <<"registeredNumber">> => <<"1234567890123">>,
@@ -1103,19 +1111,28 @@ default_create_contract(Config) ->
                 <<"postAddress">> => <<"testPostAddress">>,
                 <<"representativePosition">> => <<"testRepresentativePosition">>,
                 <<"representativeFullName">> => <<"testRepresentativeFullName">>,
-                <<"representativeDocument">> => <<"testRepresentativeDocument">>
+                <<"representativeDocument">> => <<"testRepresentativeDocument">>,
+                <<"bankAccount">> => BankAccount
             }
         },
-        <<"payoutToolParams">> => #{
+        #{
+            <<"partyModificationType">> => <<"ContractModification">>,
+            <<"contractID">> => ContractID,
+            <<"contractModificationType">> => <<"ContractPayoutToolCreation">>,
+            <<"payoutToolID">> => generate_payout_tool_id(),
             <<"currency">> => <<"RUB">>,
-            <<"payoutToolType">> => <<"PayoutToolBankAccount">>,
-            <<"bankAccount">> => default_bank_account()
+            <<"details">> => #{
+                <<"type">> => <<"PayoutToolBankAccount">>,
+                <<"bankAccount">> => BankAccount
+            }
         }
-    },
-    Params = #{body => Request},
-    {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swag_client_contracts_api:create_contract(Host, Port, PreparedParams),
-    handle_response(Response).
+    ],
+    create_claim(Config, Changeset).
+
+create_claim(Config, Changeset) ->
+    Context = ?config(context, Config),
+    {ok, Claim} = api_client_claims:create_claim(Context, Changeset),
+    Claim.
 
 get_payments(InvoiceID, Context) ->
     Params = #{
@@ -1153,28 +1170,34 @@ get_shops(Config) ->
 
 get_latest(Es) ->
     % Assuming the latest element will have highest numeric ID
-    hd(lists:sort(fun (#{<<"id">> := ID1}, #{<<"id">> := ID2}) -> compare_ids(ID1, ID2) end, Es)).
+    % or latest creation time
+    hd(lists:sort(
+        fun (#{<<"createdAt">> := T1}, #{<<"createdAt">> := T2}) ->
+                compare_timestamps(T1, T2);
+            (#{<<"id">> := ID1}, #{<<"id">> := ID2}) ->
+                ID1 > ID2
+        end,
+        Es
+    )).
 
-compare_ids(ID1, ID2) when is_binary(ID1) ->
-    binary_to_integer(ID1) > binary_to_integer(ID2);
-compare_ids(ID1, ID2) when is_integer(ID1) ->
-    ID1 > ID2.
+compare_timestamps(T1, T2) ->
+    rfc3339:parse_to_local_datetime(T1) > rfc3339:parse_to_local_datetime(T2).
 
-default_create_payout_tool(ContractID, Config) ->
-    Context = ?config(context, Config),
-    Params = #{
-        binding => #{
-            <<"contractID">> => ContractID
-        },
-        body => #{
+default_create_payout_tool(PayoutToolID, ContractID, Config) ->
+    Changeset = [
+        #{
+            <<"partyModificationType">> => <<"ContractModification">>,
+            <<"contractID">> => ContractID,
+            <<"contractModificationType">> => <<"ContractPayoutToolCreation">>,
+            <<"payoutToolID">> => PayoutToolID,
             <<"currency">> => <<"RUB">>,
-            <<"payoutToolType">> => <<"PayoutToolBankAccount">>,
-            <<"bankAccount">> => default_bank_account()
+            <<"details">> => #{
+                <<"type">> => <<"PayoutToolBankAccount">>,
+                <<"bankAccount">> => default_bank_account()
+            }
         }
-    },
-    {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swag_client_payouts_api:create_payout_tool(Host, Port, PreparedParams),
-    handle_response(Response).
+    ],
+    create_claim(Config, Changeset).
 
 default_bank_account() ->
     #{
@@ -1220,6 +1243,7 @@ default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, _Co
     Req = #{
         <<"paymentSession">> => PaymentSession,
         <<"paymentToolToken">> => PaymentToolToken,
+        <<"flow">> => #{<<"type">> => <<"PaymentParamsFlowInstant">>},
         <<"contactInfo">> => #{
             <<"email">> => <<"bla@bla.ru">>
         }
@@ -1271,39 +1295,39 @@ default_get_shop_by_id(ShopID, Config) ->
     {ok, R} = api_client_lib:handle_response(Response),
     R.
 
-default_create_shop(CategoryID, Config) ->
-    #{
-        <<"claimID">> := ClaimID0
-    } = default_create_contract(Config),
-    default_approve_claim(ClaimID0),
-    #{<<"id">> := ContractID} = get_latest(get_contracts(Config)),
-    #{
-        <<"claimID">> := ClaimID1
-    } = default_create_payout_tool(ContractID, Config),
-    default_approve_claim(ClaimID1),
-    #{<<"id">> := PayoutToolID} = get_latest(get_payout_tools(ContractID, Config)),
-
-    default_create_shop(CategoryID, ContractID, PayoutToolID, Config).
+default_create_shop(ShopID, CategoryID, Config) ->
+    ContractID = generate_contract_id(),
+    Claim = default_create_contract(ContractID, Config),
+    {ok, _} = default_approve_claim(Claim),
+    #{<<"id">> := PayoutToolID} = lists:last(get_payout_tools(ContractID, Config)),
+    default_create_shop(ShopID, CategoryID, ContractID, PayoutToolID, Config).
 
 
-default_create_shop(CategoryID, ContractID, PayoutToolID, Config) ->
-    Context = ?config(context, Config),
-    Req = genlib_map:compact(#{
-        <<"categoryID">> => CategoryID,
-        <<"details">> => #{
-            <<"name">> => <<"OOOBlackMaster">>,
-            <<"description">> => <<"Goods for education">>
-        },
-        <<"contractID">> => ContractID,
-        <<"payoutToolID">> => PayoutToolID
-    }),
-    {ok, ClaimID} = api_client_shops:create_shop(Context, Req),
-    ClaimID.
-
-update_shop(Req, ShopID, Config) ->
-    Context = ?config(context, Config),
-    {ok, ClaimID} = api_client_shops:update_shop(Context, Req,  ShopID),
-    ClaimID.
+default_create_shop(ShopID, CategoryID, ContractID, PayoutToolID, Config) ->
+    Changeset = [
+        genlib_map:compact(#{
+            <<"partyModificationType">> => <<"ShopModification">>,
+            <<"shopID">> => ShopID,
+            <<"shopModificationType">> => <<"ShopCreation">>,
+            <<"location">> => #{
+                <<"locationType">> => <<"ShopLocationUrl">>,
+                <<"url">> => <<"http://default.html">>
+            },
+            <<"details">> => #{
+                <<"name">> => <<"OOOBlackMaster">>,
+                <<"description">> => <<"Goods for education">>
+            },
+            <<"contractID">> => ContractID,
+            <<"payoutToolID">> => PayoutToolID
+        }),
+        #{
+            <<"partyModificationType">> => <<"ShopModification">>,
+            <<"shopID">> => ShopID,
+            <<"shopModificationType">> => <<"ShopCategoryChange">>,
+            <<"categoryID">> => CategoryID
+        }
+    ],
+    create_claim(Config, Changeset).
 
 default_get_categories(Config) ->
     Context = ?config(context, Config),
@@ -1317,8 +1341,12 @@ default_get_category_by_id(CategoryID, Config) ->
 
 default_revoke_claim(ClaimID, Config) ->
     Context = ?config(context, Config),
+    {ok, #{
+        <<"id">> := ClaimID,
+        <<"revision">> := ClaimRevision
+    }} = api_client_claims:get_claim_by_id(Context, ClaimID),
     Reason = "me want dat",
-    api_client_claims:revoke_claim_by_id(Context, Reason, ClaimID).
+    api_client_claims:revoke_claim_by_id(Context, Reason, ClaimID, ClaimRevision).
 
 default_fulfill_invoice(InvoiceID, Config) ->
     Context = ?config(context, Config),
@@ -1345,7 +1373,7 @@ get_locations_names(GeoIDs, Lang, Config) ->
     R.
 
 %% @FIXME thats dirty
-default_approve_claim(ClaimID) ->
+default_approve_claim(#{<<"id">> := ClaimID, <<"revision">> := ClaimRevision}) ->
     UserInfo = #payproc_UserInfo{
         id = ?MERCHANT_ID,
         type = {internal_user, #payproc_InternalUser{}}
@@ -1353,9 +1381,20 @@ default_approve_claim(ClaimID) ->
     call_service(
         party_management,
         'AcceptClaim',
-        [UserInfo, ?MERCHANT_ID, ClaimID]
+        [UserInfo, ?MERCHANT_ID, ClaimID, ClaimRevision]
     ).
 
+generate_contract_id() ->
+    ID = genlib:to_binary(rand:uniform(100000000)),
+    <<"CONTRACT_", ID/binary>>.
+
+generate_shop_id() ->
+    ID = genlib:to_binary(rand:uniform(100000000)),
+    <<"SHOP_", ID/binary>>.
+
+generate_payout_tool_id() ->
+    ID = genlib:to_binary(rand:uniform(100000000)),
+    <<"PAYOUTTOOL_", ID/binary>>.
 
 -define(cur(ID), #domain_CurrencyRef{symbolic_code = ID}).
 -define(pmt(C, T), #domain_PaymentMethodRef{id = {C, T}}).
@@ -1508,13 +1547,28 @@ get_domain_fixture(Proxies) ->
             ref = #domain_PartyPrototypeRef{id = 42},
             data = #domain_PartyPrototype{
                 shop = #domain_ShopPrototype{
+                    shop_id = <<"TESTSHOP">>,
                     category = ?cat(1),
                     currency = ?cur(<<"RUB">>),
                     details  = #domain_ShopDetails{
                         name = <<"SUPER DEFAULT SHOP">>
-                    }
+                    },
+                    location = {url, <<"">>}
                 },
-                test_contract_template = ?tmpl(1)
+                contract = #domain_ContractPrototype{
+                    contract_id = <<"TESTCONTRACT">>,
+                    test_contract_template = ?tmpl(1),
+                    payout_tool = #domain_PayoutToolPrototype{
+                        payout_tool_id = <<"TESTPAYOUTTOOL">>,
+                        payout_tool_info = {bank_account, #domain_BankAccount{
+                            account = <<"">>,
+                            bank_name = <<"">>,
+                            bank_post_account = <<"">>,
+                            bank_bik = <<"">>
+                        }},
+                        payout_tool_currency = ?cur(<<"RUB">>)
+                    }
+                }
             }
         }},
         {inspector, #domain_InspectorObject{
@@ -1808,17 +1862,17 @@ call_service(Service, Function, Args, ReqCtx) ->
     cp_proto:call_service(Service, Function, Args, ReqCtx, capi_woody_event_handler).
 
 create_and_activate_shop(Config) ->
-    ClaimID = default_create_shop(?LIVE_CATEGORY_ID, Config),
-    {ok, _} = default_approve_claim(ClaimID),
+    ShopID = generate_shop_id(),
+    #{<<"id">> := ClaimID} = Claim = default_create_shop(ShopID, ?LIVE_CATEGORY_ID, Config),
+    {ok, _} = default_approve_claim(Claim),
     #{
         <<"id">> := ClaimID,
-        <<"status">> := #{<<"status">> := <<"ClaimAccepted">>},
+        <<"status">> := <<"ClaimAccepted">>,
         <<"changeset">> := [
             #{
-                <<"partyModificationType">> := <<"ShopCreation">>,
-                <<"shop">> := #{
-                    <<"id">> := ShopID
-                }
+                <<"partyModificationType">> := <<"ShopModification">>,
+                <<"shopID">> := ShopID,
+                <<"shopModificationType">> := <<"ShopCreation">>
             } | _
         ]
     } = default_get_claim_by_id(ClaimID, Config),
@@ -1897,19 +1951,13 @@ handle_response(Response) ->
     {ok, R} = api_client_lib:handle_response(Response),
     R.
 
-wait_event(InvoiceID, Pattern, TimeLeft, Context) when TimeLeft > 0 ->
+wait_event_w_change(InvoiceID, ChangePattern, TimeLeft, Context) when TimeLeft > 0 ->
     Started = genlib_time:ticks(),
     Limit = 1000,
     {ok, Events} = api_client_invoices:get_invoice_events(Context, InvoiceID, Limit),
     Filtered = lists:filter(
-        fun(E) ->
-            Intersection = maps:with(maps:keys(Pattern), E),
-            case Intersection of
-                Pattern ->
-                    true;
-                _Unknown ->
-                    false
-            end
+        fun(#{<<"changes">> := EventChanges}) ->
+            is_changes_match_patterns(EventChanges, ChangePattern)
         end,
         Events
     ),
@@ -1917,13 +1965,21 @@ wait_event(InvoiceID, Pattern, TimeLeft, Context) when TimeLeft > 0 ->
         [] ->
             timer:sleep(200),
             Now = genlib_time:ticks(),
-            wait_event(InvoiceID, Pattern, TimeLeft - (Now - Started) div 1000, Context);
+            wait_event_w_change(InvoiceID, ChangePattern, TimeLeft - (Now - Started) div 1000, Context);
         _ ->
             ok
     end;
 
-wait_event(InvoiceID, Pattern, _, _Context) ->
-    error({event_limit_exceeded, {InvoiceID, Pattern}}).
+wait_event_w_change(InvoiceID, ChangePattern, _, _Context) ->
+    error({event_limit_exceeded, {InvoiceID, ChangePattern}}).
+
+is_changes_match_patterns(Changes, Pattern) when is_list(Changes) ->
+    lists:any(
+        fun(Change) ->
+            maps:merge(Change, Pattern) =:= Change
+        end,
+        Changes
+    ).
 
 get_due_date() ->
     {{Y, M, D}, Time} = calendar:local_time(),

@@ -21,7 +21,7 @@ services:
       starter:
         condition: service_started
       dominant:
-        condition: service_started
+        condition: service_healthy
       keycloak:
         condition: service_healthy
       columbus:
@@ -32,7 +32,7 @@ services:
         condition: service_healthy
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:bb0bae22ef89d788b8e2d3ec665d1c960e820d55
+    image: dr.rbkmoney.com/rbkmoney/hellgate:1ad1cd8a69621a5b1354da66529c5af52e6d2c02
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -64,7 +64,7 @@ services:
       retries: 12
 
   magista:
-    image: dr.rbkmoney.com/rbkmoney/magista:2028536aa6ac7c327b7f63e11914e5cd5c616400
+    image: dr.rbkmoney.com/rbkmoney/magista:f1f3fe4ebd6f1d7da52cbadbe1de3a1368a318e8
     restart: always
     entrypoint:
       - java
@@ -149,12 +149,17 @@ services:
      - postgres
 
   dominant:
-    image: dr.rbkmoney.com/rbkmoney/dominant:6e31359681eccfae1b603b22cff8202b1599600f
+    image: dr.rbkmoney.com/rbkmoney/dominant:f6d260e235a9c4f418166221943f8b277267465f
     restart: always
     command: /opt/dominant/bin/dominant foreground
     depends_on:
       machinegun:
         condition: service_healthy
+    healthcheck:
+      test: "curl http://localhost:8022/"
+      interval: 5s
+      timeout: 1s
+      retries: 12
 
   starter:
     image: ${BUILD_IMAGE}
@@ -201,7 +206,7 @@ services:
       -jar /opt/pimp/pimp.jar
 
   hooker:
-    image: dr.rbkmoney.com/rbkmoney/hooker:b72ca559ebdf9ca5d59eef62e670500f0c1feaaa
+    image: dr.rbkmoney.com/rbkmoney/hooker:6a9074bb00862d5c7960baee7baab2ab36d89f0d
     healthcheck:
       test: "curl -sS -o /dev/null http://localhost:8022/"
       interval: 5s
