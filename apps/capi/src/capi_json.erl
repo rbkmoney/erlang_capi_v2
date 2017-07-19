@@ -9,6 +9,7 @@
 -include_lib("cp_proto/include/cp_geo_ip_thrift.hrl").
 
 -export([decode/1]).
+-export([encode/2]).
 
 
 -define(invpaid()      , {paid, #webhooker_InvoicePaid{}}).
@@ -41,7 +42,22 @@ decode(X) ->
         #payproc_Event{} -> decode_event(X);
         #domain_BankCard{} -> decode_bank_card(X);
         #webhooker_Webhook{} -> decode_webhook(X);
-        {StatType, #merchstat_StatResponse{data = {records, S}}} -> decode_stat_response(StatType, S)
+        {StatType, #merchstat_StatResponse{data = {records, S}}} -> decode_stat_response(StatType, S);
+        _ -> error({badarg, X})
+    end.
+
+-spec encode(atom(), map() | [map()] | binary()) -> any().
+
+encode(Type, X) ->
+    case Type of
+        invoice_params  -> encode_invoice_params(X);
+        bank_card       -> encode_bank_card(X);
+        stat_request    -> encode_stat_request(X);
+        claim_changeset -> encode_claim_changeset(X);
+        reason          -> encode_reason(X);
+        event_filter    -> encode_event_filter(X);
+        webhook_id      -> encode_webhook_id(X);
+        _ -> error({badarg, X})
     end.
 
 %% Internal
@@ -1034,3 +1050,260 @@ is_suspended({suspended, _}) ->
 is_suspended({active, _}) ->
     false.
 
+encode_invoice_params(InvoiceParams) ->
+    InvoiceContext = jsx:encode(genlib_map:get(<<"metadata">>, InvoiceParams)),
+    #payproc_InvoiceParams{
+        party_id = genlib_map:get(<<"partyID">>, InvoiceParams),
+        details = encode_invoice_details(InvoiceParams),
+        cost = encode_cash(InvoiceParams),
+        due = capi_utils:to_universal_time(genlib_map:get(<<"dueDate">>, InvoiceParams)),
+        context  = #'Content'{
+            type = <<"application/json">>,
+            data = InvoiceContext
+        },
+        shop_id = genlib_map:get(<<"shopID">>, InvoiceParams)
+    }.
+
+encode_invoice_details(Params) ->
+    #domain_InvoiceDetails{
+        product = genlib_map:get(<<"product">>, Params),
+        description = genlib_map:get(<<"description">>, Params)
+    }.
+
+encode_cash(Params) ->
+    #domain_Cash{
+        amount = genlib_map:get(<<"amount">>, Params),
+        currency = encode_currency(genlib_map:get(<<"currency">>, Params))
+    }.
+
+encode_shop_params(Params) ->
+    #payproc_ShopParams{
+        location =  encode_shop_location(genlib_map:get(<<"location">>, Params)),
+        details = encode_shop_details(genlib_map:get(<<"details">>, Params)),
+        contract_id = genlib_map:get(<<"contractID">>, Params),
+        payout_tool_id = genlib_map:get(<<"payoutToolID">>, Params)
+    }.
+
+encode_shop_details(undefined) ->
+    undefined;
+
+encode_shop_details(Details = #{
+    <<"name">> := Name
+}) ->
+    #domain_ShopDetails{
+        name = Name,
+        description = genlib_map:get(<<"description">>, Details)
+    }.
+
+encode_shop_location(#{
+    <<"locationType">> := <<"ShopLocationUrl">>,
+    <<"url">> := Url
+}) ->
+    {url, Url}.
+
+encode_category_ref(undefined) ->
+    undefined;
+
+encode_category_ref(Ref) ->
+    #domain_CategoryRef{
+        id = Ref
+    }.
+
+encode_claim_changeset(Changeset) when is_list(Changeset)->
+    lists:map(fun encode_party_modification/1, Changeset).
+
+encode_party_modification(#{<<"partyModificationType">> := Type} = Modification) ->
+    case Type of
+        <<"ContractModification">> ->
+            {contract_modification, encode_contract_modification(Modification)};
+        <<"ShopModification">> ->
+            {shop_modification, encode_shop_modification(Modification)}
+    end.
+
+encode_contract_modification(#{<<"contractID">> := ContractID} = Modification) ->
+    EncodedMod = case maps:get(<<"contractModificationType">>, Modification) of
+        <<"ContractCreation">> ->
+            {creation, #payproc_ContractParams{
+                contractor = encode_contractor(maps:get(<<"contractor">>, Modification))
+            }};
+        <<"ContractTermination">> ->
+            {termination, #payproc_ContractTermination{
+                reason = encode_reason(maps:get(<<"reason">>, Modification))
+            }};
+        <<"ContractLegalAgreementBinding">> ->
+            {legal_agreement_binding, encode_legal_agreement(maps:get(<<"legalAgreement">>, Modification))};
+        <<"ContractAdjustmentCreation">> ->
+        % FIXME need swag supprot for template ref
+        %     {adjustment_modification, #payproc_ContractAdjustmentModificationUnit{
+        %         adjustment_id = maps:get(<<"adjustmentID">>, Modification),
+        %         modification = {creation, #payproc_ContractAdjustmentParams{
+        %             template = NOT_SUPPORTED
+        %         }}
+        %     }};
+            erlang:throw({encode_contract_modification, adjustment_creation_not_supported});
+        <<"ContractPayoutToolCreation">> ->
+            {payout_tool_modification, #payproc_PayoutToolModificationUnit{
+                payout_tool_id = maps:get(<<"payoutToolID">>, Modification),
+                modification = {creation, encode_payout_tool_params(Modification)}
+            }}
+    end,
+    #payproc_ContractModificationUnit{
+        id = ContractID,
+        modification = EncodedMod
+    }.
+
+encode_shop_modification(#{<<"shopID">> := ShopID} = Modification) ->
+    EncodedMod = case maps:get(<<"shopModificationType">>, Modification) of
+        <<"ShopCreation">> ->
+            {creation, encode_shop_params(Modification)};
+        <<"ShopAccountCreation">> ->
+            {shop_account_creation, #payproc_ShopAccountParams{
+                currency = encode_currency(maps:get(<<"currency">>, Modification))
+            }};
+        <<"ShopCategoryChange">> ->
+            {category_modification, encode_category_ref(maps:get(<<"categoryID">>, Modification))};
+        <<"ShopLocationChange">> ->
+            {location_modification, encode_shop_location(maps:get(<<"location">>, Modification))};
+        <<"ShopDetailsChange">> ->
+            {details_modification, encode_shop_details(maps:get(<<"details">>, Modification))};
+        <<"ShopContractBinding">> ->
+            {contract_modification, #payproc_ShopContractModification{
+                contract_id = maps:get(<<"contractID">>, Modification),
+                payout_tool_id = maps:get(<<"payoutToolID">>, Modification)
+            }}
+    end,
+    #payproc_ShopModificationUnit{
+        id = ShopID,
+        modification = EncodedMod
+    }.
+
+encode_reason(undefined) ->
+    undefined;
+encode_reason(#{<<"reason">> := Reason}) ->
+    Reason.
+
+encode_legal_agreement(#{<<"id">> := ID, <<"signedAt">> := SignedAt}) ->
+    #domain_LegalAgreement{
+        signed_at = SignedAt,
+        legal_agreement_id = ID
+    }.
+
+encode_payout_tool_params(#{
+    <<"currency">> := Currency,
+    <<"details">> := Details
+}) ->
+    #payproc_PayoutToolParams{
+        currency = encode_currency(Currency),
+        tool_info = encode_payout_tool_info(Details)
+    }.
+
+encode_payout_tool_info(#{<<"type">> := <<"PayoutToolBankAccount">>} = Tool) ->
+   {bank_account, encode_bank_account(maps:get(<<"bankAccount">>, Tool))}.
+
+encode_bank_account(#{
+    <<"account">> := Account,
+    <<"bankName">> := BankName,
+    <<"bankPostAccount">> := BankPostAccount,
+    <<"bankBik">> := BankBik
+}) ->
+    #domain_BankAccount{
+        account = Account,
+        bank_name = BankName,
+        bank_post_account = BankPostAccount,
+        bank_bik = BankBik
+    }.
+
+encode_contractor(#{<<"contractorType">> := <<"LegalEntity">>} = Contractor) ->
+    {legal_entity, encode_legal_entity(Contractor)};
+
+encode_contractor(#{<<"contractorType">> := <<"RegisteredUser">>} = Contractor) ->
+    {registered_user, encode_registered_user(Contractor)}.
+
+encode_legal_entity(#{
+    <<"entityType">> := <<"RussianLegalEntity">>
+} = Entity) ->
+    {russian_legal_entity , #domain_RussianLegalEntity{
+        registered_name = maps:get(<<"registeredName">>, Entity),
+        registered_number = maps:get(<<"registeredNumber">>, Entity),
+        inn = maps:get(<<"inn">>, Entity),
+        actual_address = maps:get(<<"actualAddress">>, Entity),
+        post_address = maps:get(<<"postAddress">>, Entity),
+        representative_position = maps:get(<<"representativePosition">>, Entity),
+        representative_full_name = maps:get(<<"representativeFullName">>, Entity),
+        representative_document = maps:get(<<"representativeDocument">>, Entity),
+        bank_account = encode_bank_account(maps:get(<<"bankAccount">>, Entity))
+    }}.
+
+encode_registered_user(#{<<"email">> := Email}) ->
+    #domain_RegisteredUser{email = Email}.
+
+encode_bank_card(Encoded) ->
+    #{
+        <<"token">> := Token,
+        <<"payment_system">> := PaymentSystem,
+        <<"bin">> := Bin,
+        <<"masked_pan">> := MaskedPan
+    } = try capi_utils:base64url_to_map(Encoded)
+    catch
+        error:badarg ->
+            erlang:throw(invalid_token)
+    end,
+    {bank_card, #domain_BankCard{
+        'token'  = Token,
+        'payment_system' = binary_to_existing_atom(PaymentSystem, utf8),
+        'bin' = Bin,
+        'masked_pan' = MaskedPan
+    }}.
+
+encode_currency(SymbolicCode) ->
+    #domain_CurrencyRef{
+        symbolic_code = SymbolicCode
+    }.
+
+encode_event_filter(#{
+    <<"topic">>      := <<"InvoicesTopic">>,
+    <<"shopID">>     := ShopID,
+    <<"eventTypes">> := EventTypes
+}) ->
+    {invoice, #webhooker_InvoiceEventFilter{
+        shop_id = ShopID,
+        types   = ordsets:from_list([
+            encode_event_type(invoices, V) || V <- EventTypes
+        ])
+    }}.
+
+encode_event_type(invoices, <<"InvoiceCreated">>) ->
+    {created, #webhooker_InvoiceCreated{}};
+encode_event_type(invoices, <<"InvoicePaid">>) ->
+    {status_changed, #webhooker_InvoiceStatusChanged{value = ?invpaid()}};
+encode_event_type(invoices, <<"InvoiceCancelled">>) ->
+    {status_changed, #webhooker_InvoiceStatusChanged{value = ?invcancelled()}};
+encode_event_type(invoices, <<"InvoiceFulfilled">>) ->
+    {status_changed, #webhooker_InvoiceStatusChanged{value = ?invfulfilled()}};
+encode_event_type(invoices, <<"PaymentStarted">>) ->
+    {payment, {created, #webhooker_InvoicePaymentCreated{}}};
+encode_event_type(invoices, <<"PaymentProcessed">>) ->
+    {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtprocessed()}}};
+encode_event_type(invoices, <<"PaymentCaptured">>) ->
+    {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtcaptured()}}};
+encode_event_type(invoices, <<"PaymentCancelled">>) ->
+    {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtcancelled()}}};
+encode_event_type(invoices, <<"PaymentFailed">>) ->
+    {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtfailed()}}}.
+
+encode_stat_request(Dsl) when is_map(Dsl) ->
+    encode_stat_request(jsx:encode(Dsl));
+
+encode_stat_request(Dsl) when is_binary(Dsl) ->
+    #merchstat_StatRequest{
+        dsl = Dsl
+    }.
+
+encode_webhook_id(WebhookID) ->
+    try
+        ID = binary_to_integer(WebhookID),
+        {ok, ID}
+    catch
+        error:badarg ->
+            error
+    end.
