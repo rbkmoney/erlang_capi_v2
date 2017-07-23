@@ -131,14 +131,14 @@ issue_invoice_template_access_token(PartyID, InvoiceID) ->
 
 issue_invoice_template_access_token(PartyID, InvoiceTplID, Claims) ->
     ACL = [
-        {[{invoice_templates, InvoiceTplID}, invoice_template_invoices] , read},
-        {[{invoice_templates, InvoiceTplID}, invoice_template_invoices] , write}
+        {[party, {invoice_templates, InvoiceTplID}] , read},
+        {[party, {invoice_templates, InvoiceTplID}, invoice_template_invoices] , write}
     ],
     issue_access_token(PartyID, Claims, ACL, unlimited).
 
 -type acl() :: [{capi_acl:scope(), capi_acl:permission()}].
 
--spec issue_access_token(PartyID :: binary(), claims(), acl(), capi_authorizer_jwt:exp()) ->
+-spec issue_access_token(PartyID :: binary(), claims(), acl(), capi_authorizer_jwt:expiration()) ->
     {ok, capi_authorizer_jwt:token()} | {error, _}.
 
 issue_access_token(PartyID, Claims, ACL, Expiration) ->
@@ -246,13 +246,13 @@ get_operation_access('DeleteWebhookByID'         , _) ->
 get_operation_access('CreateInvoiceTemplate'     , _) ->
     [{[party], write}];
 get_operation_access('GetInvoiceTemplateByID'    , #{'invoiceTemplateID' := ID}) ->
-    [{[{invoice_templates, ID}, invoice_template_invoices], read}];
-get_operation_access('UpdateInvoiceTemplate'     , _) ->
-    [{[party], write}];
-get_operation_access('DeleteInvoiceTemplate'     , _) ->
-    [{[party], write}];
-get_operation_access('CreateInvoiceWithTemplate', #{'invoiceTemplateID' := ID}) ->
-    [{[{invoice_templates, ID}, invoice_template_invoices], write}];
+    [{[party, {invoice_templates, ID}], read}];
+get_operation_access('UpdateInvoiceTemplate'     , #{'invoiceTemplateID' := ID}) ->
+    [{[party, {invoice_templates, ID}], write}];
+get_operation_access('DeleteInvoiceTemplate'     , #{'invoiceTemplateID' := ID}) ->
+    [{[party, {invoice_templates, ID}], write}];
+get_operation_access('CreateInvoiceWithTemplate' , #{'invoiceTemplateID' := ID}) ->
+    [{[party, {invoice_templates, ID}, invoice_template_invoices], write}];
 get_operation_access('GetCategories'             , _) ->
     [];
 get_operation_access('GetCategoryByRef'          , _) ->
@@ -264,8 +264,7 @@ get_operation_access('GetLocationsNames'         , _) ->
 
 get_resource_hierarchy() ->
     #{
-        party               => #{},
+        party               => #{invoice_templates => #{invoice_template_invoices => #{}}},
         invoices            => #{payments => #{}},
-        invoice_templates   => #{invoice_template_invoices => #{}},
         payment_tool_tokens => #{}
     }.

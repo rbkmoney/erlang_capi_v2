@@ -25,7 +25,7 @@
 -type subject()    :: {subject_id(), capi_acl:t()}.
 -type subject_id() :: binary().
 -type t()          :: {subject(), claims()}.
--type exp()        ::
+-type expiration()        ::
     {lifetime, Seconds :: pos_integer()} |
     {deadline, UnixTs :: pos_integer()}  |
     unlimited.
@@ -34,7 +34,7 @@
 -export_type([subject/0]).
 -export_type([claims/0]).
 -export_type([token/0]).
--export_type([exp/0]).
+-export_type([expiration/0]).
 
 %%
 
@@ -174,7 +174,7 @@ construct_key(KID, JWK) ->
 
 %%
 
--spec issue(t(), exp()) ->
+-spec issue(t(), expiration()) ->
     {ok, token()} |
     {error,
         nonexistent_signee
