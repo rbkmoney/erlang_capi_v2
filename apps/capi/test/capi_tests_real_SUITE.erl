@@ -42,10 +42,12 @@
     create_invoice_template_badard_test/1,
     create_invoice_template_no_shop_test/1,
     create_invoice_with_template_invalid_id_test/1,
+    create_invoice_template_0_lifetime_test/1,
     create_invoice_template_ok_test/1,
     get_invoice_template_by_id_ok_test/1,
     create_invoice_with_template_ok_test/1,
     update_invoice_template_ok_test/1,
+    update_invoice_template_0_lifetime_test/1,
     delete_invoice_template_ok_test/1,
     create_invoice_with_template_removed_template_test/1,
     %%%%
@@ -108,6 +110,12 @@
 -define(MERCHANT_ID, <<"281220eb-a4ef-4d03-b666-bdec4b26c5f7">>).
 -define(LIVE_CATEGORY_ID, 100).
 
+-define(DEFAULT_PRODUCT         , <<"test_product">>).
+-define(DEFAULT_DESCRIPTION     , <<"test_invoice_description">>).
+-define(DEFAULT_META            , #{<<"invoice_dummy_metadata">> => <<"test_value">>}).
+-define(DEFAULT_TPL_PRODUCT     , <<"test_invoice_template_product">>).
+-define(DEFAULT_TPL_DESCRIPTION , <<"test_invoice_template_description">>).
+-define(DEFAULT_TPL_META        , #{<<"invoice_template_dummy_metadata">> => <<"test_value">>}).
 -behaviour(supervisor).
 
 -spec init([]) ->
@@ -168,10 +176,12 @@ groups() ->
             create_invoice_template_badard_test,
             create_invoice_template_no_shop_test,
             create_invoice_with_template_invalid_id_test,
+            create_invoice_template_0_lifetime_test,
             create_invoice_template_ok_test,
             get_invoice_template_by_id_ok_test,
             create_invoice_with_template_ok_test,
             update_invoice_template_ok_test,
+            update_invoice_template_0_lifetime_test,
             delete_invoice_template_ok_test,
             create_invoice_with_template_removed_template_test
         ]},
@@ -387,12 +397,10 @@ create_invoice_no_shop_test(Config) ->
         <<"shopID">> => <<"INVALID_SHOP_ID">>,
         <<"amount">> => 100000,
         <<"currency">> => <<"RUB">>,
-        <<"metadata">> => #{
-            <<"invoice_dummy_metadata">> => <<"test_value">>
-        },
+        <<"metadata">> => ?DEFAULT_META,
         <<"dueDate">> => get_due_date(),
-        <<"product">> => <<"test_product">>,
-        <<"description">> => <<"test_invoice_description">>
+        <<"product">> => ?DEFAULT_PRODUCT,
+        <<"description">> => ?DEFAULT_DESCRIPTION
     },
     {error, Resp} = api_client_invoices:create_invoice(Context, Req),
     #{
@@ -537,11 +545,9 @@ create_invoice_template_no_shop_test(Config) ->
         <<"shopID">> => <<"INVALID_SHOP_ID">>,
         <<"cost">> => default_invoice_tpl_cost(fixed),
         <<"lifetime">> => get_lifetime(),
-        <<"product">> => <<"test_product">>,
-        <<"description">> => <<"test_invoice_template_description">>,
-        <<"metadata">> => #{
-            <<"invoice_template_dummy_metadata">> => <<"test_value">>
-        }
+        <<"product">> => ?DEFAULT_TPL_PRODUCT,
+        <<"description">> => ?DEFAULT_TPL_DESCRIPTION,
+        <<"metadata">> => ?DEFAULT_TPL_META
     },
     {error, Resp} = api_client_invoice_templates:create(Context, Req),
     #{
@@ -558,6 +564,21 @@ create_invoice_with_template_invalid_id_test(Config) ->
     TplContext = get_context(TokenPayload),
     InvoiceTplID = <<"INVALID_INVOICE_TEMPLATE_ID">>,
     {error, _} = api_client_invoice_templates:create_invoice(TplContext, InvoiceTplID, #{}).
+
+-spec create_invoice_template_0_lifetime_test(config()) -> _.
+
+create_invoice_template_0_lifetime_test(Config) ->
+    Context = ?config(context, Config),
+    ShopID = create_and_activate_shop(Config),
+    Req = #{
+        <<"shopID">> => ShopID,
+        <<"cost">> => default_invoice_tpl_cost(fixed),
+        <<"lifetime">> => get_lifetime(0, 0, 0),
+        <<"product">> => ?DEFAULT_TPL_PRODUCT,
+        <<"description">> => ?DEFAULT_TPL_DESCRIPTION,
+        <<"metadata">> => ?DEFAULT_TPL_META
+    },
+    {error, _} = api_client_invoice_templates:create(Context, Req).
 
 -spec create_invoice_template_ok_test(config()) -> _.
 
@@ -596,18 +617,52 @@ update_invoice_template_ok_test(Config) ->
     {create_invoice_with_template_ok_test,
         #{invoice_tpl_id := InvoiceTplID} = Info
     } = ?config(saved_config, Config),
-    Cost = default_invoice_tpl_cost(range),
-    Req = #{<<"cost">> => Cost},
     Context = ?config(context, Config),
-    {ok,
-        #{<<"id">> := InvoiceTplID, <<"cost">> := Cost}
-    } = api_client_invoice_templates:update(Context, InvoiceTplID, Req),
+    {ok, InvoiceTpl} = api_client_invoice_templates:get_template_by_id(Context, InvoiceTplID),
+    Req1 = #{<<"cost">> => default_invoice_tpl_cost(range)},
+    Expect1 = maps:merge(InvoiceTpl, Req1),
+    {ok, Expect1} = api_client_invoice_templates:update(Context, InvoiceTplID, Req1),
+
+    Req2 = #{<<"product">> => <<"rubber duck">>},
+    Expect2 = maps:merge(Expect1, Req2),
+    {ok, Expect2} = api_client_invoice_templates:update(Context, InvoiceTplID, Req2),
+
+    Req3 = #{<<"description">> => <<"only best rubber">>},
+    Expect3 = maps:merge(Expect2, Req3),
+    {ok, Expect3} = api_client_invoice_templates:update(Context, InvoiceTplID, Req3),
+
+    Req4 = #{
+        <<"product">> => <<"degu shampoo">>,
+        <<"description">> => <<"fine soft sand for your pet">>
+    },
+    Expect4 = maps:merge(Expect3, Req4),
+    {ok, Expect4} = api_client_invoice_templates:update(Context, InvoiceTplID, Req4),
+
+    Req5 = #{<<"lifetime">> => get_lifetime(0, 1, 0)},
+    Expect5 = maps:merge(Expect4, Req5),
+    {ok, Expect5} = api_client_invoice_templates:update(Context, InvoiceTplID, Req5),
+
+    Req6 = #{<<"metadata">> => #{<<"1">> => <<"2">>}},
+    Expect6 = maps:merge(Expect5, Req6),
+    {ok, Expect6} = api_client_invoice_templates:update(Context, InvoiceTplID, Req6),
+
+    {save_config, Info}.
+
+-spec update_invoice_template_0_lifetime_test(config()) -> _.
+
+update_invoice_template_0_lifetime_test(Config) ->
+    {update_invoice_template_ok_test,
+        #{invoice_tpl_id := InvoiceTplID} = Info
+    } = ?config(saved_config, Config),
+    Context = ?config(context, Config),
+    Req = #{<<"lifetime">> => get_lifetime(0, 0, 0)},
+    {error, _} = api_client_invoice_templates:update(Context, InvoiceTplID, Req),
     {save_config, Info}.
 
 -spec delete_invoice_template_ok_test(config()) -> _.
 
 delete_invoice_template_ok_test(Config) ->
-    {update_invoice_template_ok_test,
+    {update_invoice_template_0_lifetime_test,
         #{invoice_tpl_id := InvoiceTplID} = Info
     } = ?config(saved_config, Config),
     Context = ?config(context, Config),
@@ -1217,12 +1272,10 @@ default_create_invoice(Config) ->
         <<"shopID">> => ShopID,
         <<"amount">> => 100000,
         <<"currency">> => <<"RUB">>,
-        <<"metadata">> => #{
-            <<"invoice_dummy_metadata">> => <<"test_value">>
-        },
+        <<"metadata">> => ?DEFAULT_META,
         <<"dueDate">> => get_due_date(),
-        <<"product">> => <<"test_product">>,
-        <<"description">> => <<"test_invoice_description">>
+        <<"product">> => ?DEFAULT_PRODUCT,
+        <<"description">> => ?DEFAULT_DESCRIPTION
     },
     Context = ?config(context, Config),
     {ok, Body} = api_client_invoices:create_invoice(Context, Req),
@@ -1234,11 +1287,9 @@ default_create_invoice_tpl(Config) ->
         <<"shopID">> => ShopID,
         <<"cost">> => default_invoice_tpl_cost(fixed),
         <<"lifetime">> => get_lifetime(),
-        <<"product">> => <<"test_product">>,
-        <<"description">> => <<"test_invoice_template_description">>,
-        <<"metadata">> => #{
-            <<"invoice_template_dummy_metadata">> => <<"test_value">>
-        }
+        <<"product">> => ?DEFAULT_TPL_PRODUCT,
+        <<"description">> => ?DEFAULT_TPL_DESCRIPTION,
+        <<"metadata">> => ?DEFAULT_TPL_META
     },
     Context = ?config(context, Config),
     {ok, Body} = api_client_invoice_templates:create(Context, Req),
@@ -2158,8 +2209,11 @@ get_due_date() ->
     DueDate.
 
 get_lifetime() ->
+    get_lifetime(0, 0, 7).
+
+get_lifetime(YY, MM, DD) ->
     #{
-       <<"years">>  => 0,
-       <<"months">> => 0,
-       <<"days">>   => 7
+       <<"years">>  => YY,
+       <<"months">> => MM,
+       <<"days">>   => DD
      }.

@@ -17,6 +17,8 @@
 %% @WARNING Must be refactored in case of different classes of users using this API
 -define(REALM, <<"external">>).
 
+-define(DEFAULT_INVOICE_META, #{}).
+
 -spec authorize_api_key(swag_server:operation_id(), swag_server:api_key()) ->
     Result :: false | {true, capi_auth:context()}.
 
@@ -468,21 +470,22 @@ process_request('GetLocationsNames', Req, _Context, ReqCtx) ->
 
 process_request('CreateInvoiceTemplate', Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
-    Params = encode_invoice_tpl_create_params(PartyID, maps:get('InvoiceTemplateCreateParams', Req)),
     UserInfo = get_user_info(Context),
-    Result = prepare_party(
-        Context,
-        ReqCtx,
-        fun () ->
-            service_call(
-                invoice_templating,
-                'Create',
-                [UserInfo, Params],
-                ReqCtx
-            )
-        end
-    ),
-    case Result of
+    try
+        Params = encode_invoice_tpl_create_params(PartyID, maps:get('InvoiceTemplateCreateParams', Req)),
+        prepare_party(
+            Context,
+            ReqCtx,
+            fun () ->
+                service_call(
+                    invoice_templating,
+                    'Create',
+                    [UserInfo, Params],
+                    ReqCtx
+                )
+            end
+        )
+    of
         {ok, InvoiceTpl} ->
             {ok, {201, [], make_invoice_tpl_and_token(InvoiceTpl, PartyID, Context)}};
         {exception, Exception} ->
@@ -498,41 +501,19 @@ process_request('CreateInvoiceTemplate', Req, Context, ReqCtx) ->
                 #payproc_InvalidShopStatus{} ->
                     {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
             end
+    catch
+        throw:zero_invoice_lifetime ->
+            {ok, {422, [], logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}}
     end;
 
 process_request('GetInvoiceTemplateByID', Req, Context, ReqCtx) ->
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
     UserInfo = get_user_info(Context),
-    Result = get_invoice_tpl_by_id(ReqCtx, UserInfo, InvoiceTplID),
-    case Result of
-        {ok, InvoiceTpl} ->
-            {ok, {200, [], decode_invoice_tpl(InvoiceTpl)}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
-                #payproc_InvoiceTemplateNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
-                #payproc_InvoiceTemplateRemoved{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}}
-            end
-    end;
-
-process_request('UpdateInvoiceTemplate', Req, Context, ReqCtx) ->
-    PartyID = get_party_id(Context),
-    InvoiceTplID = maps:get('invoiceTemplateID', Req),
-    Params = encode_invoice_tpl_update_params(PartyID, maps:get('InvoiceTemplateUpdateParams', Req)),
-    UserInfo = get_user_info(Context),
     Result = prepare_party(
         Context,
         ReqCtx,
         fun () ->
-            service_call(
-                invoice_templating,
-                'Update',
-                [UserInfo, InvoiceTplID, Params],
-                ReqCtx
-            )
+            get_invoice_tpl_by_id(ReqCtx, UserInfo, InvoiceTplID)
         end
     ),
     case Result of
@@ -541,11 +522,45 @@ process_request('UpdateInvoiceTemplate', Req, Context, ReqCtx) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
+                    {error, {400, [], general_error(<<"Invalid party">>)}};
+                #payproc_InvoiceTemplateNotFound{} ->
+                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
+                #payproc_InvoiceTemplateRemoved{} ->
+                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}}
+            end
+    end;
+
+process_request('UpdateInvoiceTemplate', Req, Context, ReqCtx) ->
+    InvoiceTplID = maps:get('invoiceTemplateID', Req),
+    UserInfo = get_user_info(Context),
+    try
+        Params = encode_invoice_tpl_update_params(
+            maps:get('InvoiceTemplateUpdateParams', Req),
+            fun() ->
+                get_invoice_tpl(InvoiceTplID, UserInfo, ReqCtx, Context)
+            end
+        ),
+        prepare_party(
+            Context,
+            ReqCtx,
+            fun () ->
+                service_call(
+                    invoice_templating,
+                    'Update',
+                    [UserInfo, InvoiceTplID, Params],
+                    ReqCtx
+                )
+            end
+        )
+    of
+        {ok, InvoiceTpl} ->
+            {ok, {200, [], decode_invoice_tpl(InvoiceTpl)}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {error, {400, [], general_error(<<"Invalid party">>)}};
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-                #payproc_ShopNotFound{} ->
-                    {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}};
                 #payproc_InvalidPartyStatus{} ->
                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
@@ -555,6 +570,15 @@ process_request('UpdateInvoiceTemplate', Req, Context, ReqCtx) ->
                 #payproc_InvoiceTemplateRemoved{} ->
                     {ok, {404, [], general_error(<<"Invoice Template not found">>)}}
             end
+    catch
+        throw:#payproc_InvalidUser{} ->
+            {error, {400, [], general_error(<<"Invalid party">>)}};
+        throw:#payproc_InvoiceTemplateNotFound{} ->
+            {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
+        throw:#payproc_InvoiceTemplateRemoved{} ->
+            {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
+        throw:zero_invoice_lifetime ->
+            {ok, {422, [], logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}}
     end;
 
 process_request('DeleteInvoiceTemplate', Req, Context, ReqCtx) ->
@@ -578,9 +602,7 @@ process_request('DeleteInvoiceTemplate', Req, Context, ReqCtx) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
-                #payproc_ShopNotFound{} ->
-                    {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}};
+                    {error, {400, [], general_error(<<"Invalid party">>)}};
                 #payproc_InvalidPartyStatus{} ->
                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
@@ -617,11 +639,9 @@ process_request('CreateInvoiceWithTemplate', Req, Context, ReqCtx) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
+                    {error, {400, [], general_error(<<"Invalid party">>)}};
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-                #payproc_ShopNotFound{} ->
-                    {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}};
                 #payproc_InvalidPartyStatus{} ->
                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
@@ -633,9 +653,9 @@ process_request('CreateInvoiceWithTemplate', Req, Context, ReqCtx) ->
             end
     catch
         throw:{bad_invoice_params, currency_no_amount} ->
-            {ok, {400, [], logic_error(invalidRequest, <<"Amount is required for the currency">>)}};
+            {ok, {422, [], logic_error(invalidRequest, <<"Amount is required for the currency">>)}};
         throw:{bad_invoice_params, amount_no_currency} ->
-            {ok, {400, [], logic_error(invalidRequest, <<"Currency is required for the amount">>)}}
+            {ok, {422, [], logic_error(invalidRequest, <<"Currency is required for the amount">>)}}
     end;
 
 process_request('ActivateShop', Req, Context, ReqCtx) ->
@@ -661,8 +681,6 @@ process_request('ActivateShop', Req, Context, ReqCtx) ->
             {ok, {204, [], undefined}};
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
                 #payproc_ShopNotFound{} ->
                     {ok, {404, [], general_error(<<"Shop not found">>)}};
                 #payproc_InvalidShopStatus{
@@ -695,8 +713,6 @@ process_request('SuspendShop', Req, Context, ReqCtx) ->
             {ok, {204, [], undefined}};
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
                 #payproc_ShopNotFound{} ->
                     {ok, {404, [], general_error(<<"Shop not found">>)}};
                 #payproc_InvalidShopStatus{
@@ -713,9 +729,7 @@ process_request('GetShops', _Req, Context, ReqCtx) ->
     case Result of
         {ok, #domain_Party{shops = Shops}} ->
             Resp = decode_shops_map(Shops),
-            {ok, {200, [], Resp}};
-        {exception, #payproc_InvalidUser{}} ->
-            {ok, {400, [], general_error(<<"Invalid party">>)}}
+            {ok, {200, [], Resp}}
     end;
 
 process_request('GetShopByID', Req, Context, ReqCtx) ->
@@ -741,8 +755,6 @@ process_request('GetShopByID', Req, Context, ReqCtx) ->
             {ok, {200, [], Resp}};
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
                 #payproc_ShopNotFound{} ->
                     {ok, {404, [], general_error(<<"Shop not found">>)}}
             end
@@ -758,9 +770,7 @@ process_request('GetContracts', _Req, Context, ReqCtx) ->
             contracts = Contracts
         }} ->
             Resp = decode_contracts_map(Contracts),
-            {ok, {200, [], Resp}};
-        {exception, #payproc_InvalidUser{}} ->
-            {ok, {400, [], general_error(<<"Invalid party">>)}}
+            {ok, {200, [], Resp}}
     end;
 
 process_request('GetContractByID', Req, Context, ReqCtx) ->
@@ -775,8 +785,6 @@ process_request('GetContractByID', Req, Context, ReqCtx) ->
             {ok, {200, [], Resp}};
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
                 #payproc_ContractNotFound{} ->
                     {ok, {404, [], general_error(<<"Contract not found">>)}}
             end
@@ -794,8 +802,6 @@ process_request('GetPayoutTools', Req, Context, ReqCtx) ->
             {ok, {200, [], Resp}};
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
                 #payproc_ContractNotFound{} ->
                     {ok, {404, [], general_error(<<"Contract not found">>)}}
             end
@@ -837,8 +843,6 @@ process_request('GetContractAdjustments', Req, Context, ReqCtx) ->
             {ok, {200, [], Resp}};
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
                 #payproc_ContractNotFound{} ->
                     {ok, {404, [], general_error(<<"Contract not found">>)}}
             end
@@ -861,8 +865,6 @@ process_request('GetContractAdjustmentByID', Req, Context, ReqCtx) ->
             end;
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
                 #payproc_ContractNotFound{} ->
                     {ok, {404, [], general_error(<<"Contract not found">>)}}
             end
@@ -875,9 +877,7 @@ process_request('GetMyParty', _Req, Context, ReqCtx) ->
     case Result of
         {ok, Party} ->
             Resp = decode_party(Party),
-            {ok, {200, [], Resp}};
-        {exception, #payproc_InvalidUser{}} ->
-            {ok, {400, [], general_error(<<"Invalid party">>)}}
+            {ok, {200, [], Resp}}
     end;
 
 process_request('SuspendMyParty', _Req, Context, ReqCtx) ->
@@ -900,8 +900,6 @@ process_request('SuspendMyParty', _Req, Context, ReqCtx) ->
             {ok, {204, [], undefined}};
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
                 #payproc_InvalidPartyStatus{status = {suspension, {suspended, _}}} ->
                     {ok, {204, [], undefined}}
             end
@@ -925,8 +923,6 @@ process_request('ActivateMyParty', _Req, Context, ReqCtx) ->
     case Result of
         {ok, _R} ->
             {ok, {204, [], undefined}};
-        {exception, #payproc_InvalidUser{}} ->
-            {ok, {400, [], general_error(<<"Invalid party">>)}};
         {exception, #payproc_InvalidPartyStatus{status = {suspension, {active, _}}}} ->
             {ok, {204, [], undefined}}
     end;
@@ -972,8 +968,6 @@ process_request('GetAccountByID', Req, Context, ReqCtx) ->
             {ok, {200, [], Resp}};
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
                 #payproc_AccountNotFound{} ->
                     {ok, {404, [], general_error(<<"Account not found">>)}}
             end
@@ -1297,14 +1291,20 @@ encode_invoice_params(PartyID, InvoiceParams) ->
 encode_invoice_params_with_tpl(InvoiceTplID, InvoiceParams) ->
     #payproc_InvoiceWithTemplateParams{
         template_id = InvoiceTplID,
-        cost        = encode_optional_param([<<"amount">>, <<"currency">>], fun encode_invoice_cost/1, InvoiceParams),
-        context     = encode_optional_param(<<"metadata">>, fun encode_invoice_context/1, InvoiceParams)
+        cost        = encode_optional_param(cost, invoice, InvoiceParams),
+        context     = encode_optional_param(context, invoice, InvoiceParams)
     }.
 
 encode_invoice_details(Params) ->
+    encode_invoice_details(
+        genlib_map:get(<<"product">>, Params),
+        genlib_map:get(<<"description">>, Params)
+    ).
+
+encode_invoice_details(Product, Description) ->
     #domain_InvoiceDetails{
-        product = genlib_map:get(<<"product">>, Params),
-        description = genlib_map:get(<<"description">>, Params)
+        product = Product,
+        description = Description
     }.
 
 encode_cash(Params) ->
@@ -1333,81 +1333,112 @@ encode_invoice_tpl_create_params(PartyID, Params) ->
         details          = encode_invoice_details(Params),
         invoice_lifetime = encode_lifetime(Params),
         cost             = encode_invoice_tpl_cost(Params),
-        context          = encode_optional_param(<<"metadata">>, fun encode_invoice_context/1, Params)
+        context          = encode_invoice_context(Params)
     }.
 
-encode_invoice_tpl_update_params(PartyID, Params) ->
+encode_invoice_tpl_update_params(Params, Opts) ->
     #payproc_InvoiceTemplateUpdateParams{
-        party_id         = PartyID,
-        shop_id          = genlib_map:get(<<"shopID">>, Params),
-        invoice_lifetime = encode_optional_param(<<"lifetime">>, fun encode_lifetime/1, Params),
-        cost             = encode_optional_param(<<"cost">>, fun encode_invoice_tpl_cost/1, Params),
-        context          = encode_optional_param(<<"metadata">>, fun encode_invoice_context/1, Params),
-        details          = encode_optional_param(
-            [<<"product">>, <<"descritpion">>],
-            fun encode_invoice_details/1,
-            Params
-        )
+        invoice_lifetime = encode_optional_param(invoice_lifetime, invoice_tpl, Params),
+        cost             = encode_optional_param(cost, invoice_tpl, Params),
+        context          = encode_optional_param(context, invoice_tpl, Params),
+        details          = encode_optional_details(Params, Opts)
     }.
 
-encode_optional_param(SwagNames, EncodeFun, Params) when is_list(SwagNames) ->
-    case lists:filter(fun(X) -> maps:is_key(X, Params) end, SwagNames) of
-        [] ->
-            undefined;
-        _ ->
-            EncodeFun(Params)
+encode_optional_param(invoice_lifetime, invoice_tpl, Params) ->
+    case is_param_set(<<"lifetime">>, Params) of
+        true ->
+            encode_lifetime(Params);
+        false ->
+            undefined
     end;
+encode_optional_param(cost, invoice_tpl, Params) ->
+    case is_param_set(<<"cost">>, Params) of
+        true ->
+            encode_invoice_tpl_cost(Params);
+        false ->
+            undefined
+    end;
+encode_optional_param(cost, invoice, Params) ->
+    case {is_param_set(<<"amount">>, Params), is_param_set(<<"currency">>, Params)} of
+        {false, false} ->
+            undefined;
+        {false, true} ->
+            throw({bad_invoice_params, currency_no_amount});
+        {true, false} ->
+            throw({bad_invoice_params, amount_no_currency});
+        {true, true} ->
+            encode_cash(Params)
+    end;
+encode_optional_param(context, _, Params) ->
+    case is_param_set(<<"metadata">>, Params) of
+        true ->
+            encode_invoice_context(Params);
+        false ->
+            undefined
+    end.
 
-encode_optional_param(SwagName, EncodeFun, Params) ->
-    encode_optional_param([SwagName], EncodeFun, Params).
+encode_optional_details(Params, GetInvoiceTpl) ->
+    case {is_param_set(<<"product">>, Params), is_param_set(<<"description">>, Params)} of
+        {true, true} ->
+            encode_invoice_details(Params);
+        {true, false} ->
+            #domain_InvoiceTemplate{
+                details = #domain_InvoiceDetails{description = Description}
+            } = GetInvoiceTpl(),
+            encode_invoice_details(genlib_map:get(<<"product">>, Params), Description);
+        {false, true} ->
+            #domain_InvoiceTemplate{
+                details = #domain_InvoiceDetails{product = Product}
+            } = GetInvoiceTpl(),
+            encode_invoice_details(Product, genlib_map:get(<<"description">>, Params));
+        {false, false} ->
+            undefined
+    end.
+
+is_param_set(Name, Params) ->
+    maps:is_key(Name, Params).
 
 encode_invoice_context(Params) ->
-    Context = jsx:encode(genlib_map:get(<<"metadata">>, Params)),
+    encode_invoice_context(Params, ?DEFAULT_INVOICE_META).
+
+encode_invoice_context(Params, DefaultMeta) ->
+    Context = jsx:encode(genlib_map:get(<<"metadata">>, Params, DefaultMeta)),
     #'Content'{
         type = <<"application/json">>,
         data = Context
     }.
 
-encode_invoice_cost(Params) ->
-    case {genlib_map:get(<<"amount">>, Params), genlib_map:get(<<"currency">>, Params)} of
-        {undefined, undefined} ->
-            undefined;
-        {undefined, _Currency} ->
-            throw({bad_invoice_params, currency_no_amount});
-        {_Amount, undefined} ->
-            throw({bad_invoice_params, amount_no_currency});
-        {Amount, Currency} ->
-            #domain_Cash{
-               amount = Amount,
-               currency =  encode_currency(Currency)
-            }
-    end.
-
 encode_invoice_tpl_cost(Params) ->
-    case genlib_map:get(<<"cost">>, Params) of
-        undefined ->
-            {cost_unlim, #domain_InvoiceTemplateCostUnlimited{}};
-        Cost ->
-            encode_invoice_tpl_cost_limit(genlib_map:get(<<"invoiceTemplateCostType">>, Cost), Cost)
-    end.
+    Cost = genlib_map:get(<<"cost">>, Params),
+    encode_invoice_tpl_cost(genlib_map:get(<<"invoiceTemplateCostType">>, Cost), Cost).
 
-encode_invoice_tpl_cost_limit(<<"InvoiceTemplateCostFixed">>, Cost) ->
-    {cost_fixed, encode_cash(Cost)};
-
-encode_invoice_tpl_cost_limit(<<"InvoiceTemplateCostRange">>, Cost) ->
+encode_invoice_tpl_cost(<<"InvoiceTemplateCostUnlim">>, _Cost) ->
+    {unlim, #domain_InvoiceTemplateCostUnlimited{}};
+encode_invoice_tpl_cost(<<"InvoiceTemplateCostFixed">>, Cost) ->
+    {fixed, encode_cash(Cost)};
+encode_invoice_tpl_cost(<<"InvoiceTemplateCostRange">>, Cost) ->
     Range = genlib_map:get(<<"range">>, Cost),
-    {cost_range, #domain_CashRange{
+    {range, #domain_CashRange{
         lower = {inclusive, encode_cash(Cost#{<<"amount">> => genlib_map:get(<<"lowerBound">>, Range)})},
         upper = {inclusive, encode_cash(Cost#{<<"amount">> => genlib_map:get(<<"upperBound">>, Range)})}
     }}.
 
 encode_lifetime(Params) ->
     Lifetime = genlib_map:get(<<"lifetime">>, Params),
+    encode_lifetime(
+        genlib_map:get(<<"days">>, Lifetime),
+        genlib_map:get(<<"months">>, Lifetime),
+        genlib_map:get(<<"years">>, Lifetime)
+    ).
+
+encode_lifetime(0, 0, 0) ->
+    throw(zero_invoice_lifetime);
+encode_lifetime(YY, MM, DD) ->
     #domain_LifetimeInterval{
-        days   = genlib_map:get(<<"days">>, Lifetime),
-        months = genlib_map:get(<<"months">>, Lifetime),
-        years  = genlib_map:get(<<"years">>, Lifetime)
-    }.
+        days   = DD,
+        months = MM,
+        years  = YY
+      }.
 
 encode_shop_params(Params) ->
     #payproc_ShopParams{
@@ -2039,17 +2070,17 @@ decode_context(#'Content'{
 decode_context(undefined) ->
     undefined.
 
-decode_invoice_tpl_cost({cost_unlim, _}) ->
+decode_invoice_tpl_cost({unlim, _}) ->
     undefined;
 
-decode_invoice_tpl_cost({cost_fixed, #domain_Cash{amount = Amount, currency = Currency}}) ->
+decode_invoice_tpl_cost({fixed, #domain_Cash{amount = Amount, currency = Currency}}) ->
     #{
         <<"invoiceTemplateCostType">> => <<"InvoiceTemplateCostFixed">>,
         <<"currency">> => decode_currency(Currency),
         <<"amount">> => Amount
     };
 
-decode_invoice_tpl_cost({cost_range, #domain_CashRange{
+decode_invoice_tpl_cost({range, #domain_CashRange{
     upper = {_, #domain_Cash{amount = UpperBound, currency = Currency}},
     lower = {_, #domain_Cash{amount = LowerBound, currency = Currency}}
 }}) ->
@@ -2912,6 +2943,21 @@ get_invoice_by_id(ReqCtx, UserInfo, InvoiceID) ->
         [UserInfo, InvoiceID],
         ReqCtx
     ).
+
+get_invoice_tpl(InvoiceTplID, UserInfo, ReqCtx, Context) ->
+    Result = prepare_party(
+        Context,
+        ReqCtx,
+        fun () ->
+            get_invoice_tpl_by_id(ReqCtx, UserInfo, InvoiceTplID)
+        end
+    ),
+    case Result of
+        {ok, InvoiceTpl} ->
+            InvoiceTpl;
+        {exception, Exception} ->
+            throw(Exception)
+    end.
 
 get_invoice_tpl_by_id(ReqCtx, UserInfo, InvoiceTplID) ->
     service_call(
