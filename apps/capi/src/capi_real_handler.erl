@@ -2078,7 +2078,9 @@ decode_context(undefined) ->
     undefined.
 
 decode_invoice_tpl_cost({unlim, _}) ->
-    undefined;
+    #{
+        <<"invoiceTemplateCostType">> => <<"InvoiceTemplateCostUnlim">>
+    };
 
 decode_invoice_tpl_cost({fixed, #domain_Cash{amount = Amount, currency = Currency}}) ->
     #{

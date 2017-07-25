@@ -578,7 +578,10 @@ create_invoice_template_0_lifetime_test(Config) ->
         <<"description">> => ?DEFAULT_TPL_DESCRIPTION,
         <<"metadata">> => ?DEFAULT_TPL_META
     },
-    {error, _} = api_client_invoice_templates:create(Context, Req).
+    {error, Resp} = api_client_invoice_templates:create(Context, Req),
+    #{
+        <<"code">> := <<"invalidRequest">>
+    } = jsx:decode(Resp, [return_maps]).
 
 -spec create_invoice_template_ok_test(config()) -> _.
 
@@ -619,6 +622,11 @@ update_invoice_template_ok_test(Config) ->
     } = ?config(saved_config, Config),
     Context = ?config(context, Config),
     {ok, InvoiceTpl} = api_client_invoice_templates:get_template_by_id(Context, InvoiceTplID),
+
+    Req0 = #{<<"cost">> => default_invoice_tpl_cost(unlim)},
+    Expect0 = maps:merge(InvoiceTpl, Req0),
+    {ok, Expect0} = api_client_invoice_templates:update(Context, InvoiceTplID, Req0),
+
     Req1 = #{<<"cost">> => default_invoice_tpl_cost(range)},
     Expect1 = maps:merge(InvoiceTpl, Req1),
     {ok, Expect1} = api_client_invoice_templates:update(Context, InvoiceTplID, Req1),
@@ -656,7 +664,10 @@ update_invoice_template_0_lifetime_test(Config) ->
     } = ?config(saved_config, Config),
     Context = ?config(context, Config),
     Req = #{<<"lifetime">> => get_lifetime(0, 0, 0)},
-    {error, _} = api_client_invoice_templates:update(Context, InvoiceTplID, Req),
+    {error, Resp} = api_client_invoice_templates:update(Context, InvoiceTplID, Req),
+    #{
+        <<"code">> := <<"invalidRequest">>
+    } = jsx:decode(Resp, [return_maps]),
     {save_config, Info}.
 
 -spec delete_invoice_template_ok_test(config()) -> _.
@@ -1300,12 +1311,16 @@ default_create_invoice_with_tpl(InvoiceTplID, Context) ->
     {ok, Body} = api_client_invoice_templates:create_invoice(Context, InvoiceTplID, Req),
     Body.
 
+default_invoice_tpl_cost(unlim) ->
+    #{
+       <<"invoiceTemplateCostType">> => <<"InvoiceTemplateCostUnlim">>
+    };
 default_invoice_tpl_cost(fixed) ->
     #{
        <<"invoiceTemplateCostType">> => <<"InvoiceTemplateCostFixed">>,
         <<"amount">> => 100000,
         <<"currency">> => <<"RUB">>
-     };
+    };
 default_invoice_tpl_cost(range) ->
     #{
         <<"invoiceTemplateCostType">> => <<"InvoiceTemplateCostRange">>,
@@ -1314,7 +1329,7 @@ default_invoice_tpl_cost(range) ->
             <<"upperBound">> => 100000,
             <<"lowerBound">> => 100
         }
-     }.
+    }.
 
 default_create_contract(ContractID, Config) ->
     BankAccount = default_bank_account(),
