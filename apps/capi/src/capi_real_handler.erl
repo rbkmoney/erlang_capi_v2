@@ -1936,16 +1936,23 @@ merchstat_to_domain({Status, #merchstat_InvoicePaymentCancelled{}}) ->
     {Status, #domain_InvoicePaymentCancelled{}};
 
 merchstat_to_domain({Status, #merchstat_InvoicePaymentFailed{
-    failure = #merchstat_OperationFailure{
+    failure = {external_failure, #merchstat_ExternalFailure{
         code = Code,
         description = Description
-    }
+    }}
 }}) ->
     {Status, #domain_InvoicePaymentFailed{
         failure = {external_failure, #domain_ExternalFailure{
             code = Code,
             description = Description
         }}
+    }};
+
+merchstat_to_domain({Status, #merchstat_InvoicePaymentFailed{
+    failure = {operation_timeout, #merchstat_OperationTimeout{}}
+}}) ->
+    {Status, #domain_InvoicePaymentFailed{
+        failure = {operation_timeout, #domain_OperationTimeout{}}
     }};
 
 merchstat_to_domain({Status, #merchstat_InvoiceUnpaid{}}) ->
