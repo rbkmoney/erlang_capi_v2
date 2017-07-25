@@ -80,8 +80,6 @@ process_request('CreateInvoice', Req, Context, ReqCtx) ->
             {ok, {201, [], make_invoice_and_token(Invoice, PartyID, Context)}};
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
                 #payproc_ShopNotFound{} ->
@@ -145,9 +143,9 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
                 #payproc_InvalidShopStatus{} ->
                     {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
                 #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {400, [], general_error(<<"Invoice not found">>)}}
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
             end;
         {error, invalid_token} ->
             {ok, {400, [], logic_error(
@@ -289,9 +287,9 @@ process_request('GetInvoiceEvents', Req, Context, ReqCtx) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {400, [],  general_error(<<"Invoice not found">>)}};
+                    {ok, {404, [],  general_error(<<"Invoice not found">>)}};
                 #payproc_EventNotFound{} ->
                     {ok, {404, [], general_error(<<"Event not found">>)}};
                 #'InvalidRequest'{errors = Errors} ->
@@ -310,9 +308,9 @@ process_request('GetPayments', Req, Context, ReqCtx) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {400, [], general_error(<<"Invoice not found">>)}}
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
             end
     end;
 
@@ -330,9 +328,9 @@ process_request('GetPaymentByID', Req, Context, ReqCtx) ->
                 #payproc_InvoicePaymentNotFound{} ->
                     {ok, {404, [], general_error(<<"Payment not found">>)}};
                 #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {400, [], general_error(<<"Invoice not found">>)}}
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
             end
     end;
 
@@ -490,8 +488,6 @@ process_request('CreateInvoiceTemplate', Req, Context, ReqCtx) ->
             {ok, {201, [], make_invoice_tpl_and_token(InvoiceTpl, PartyID, Context)}};
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
                 #payproc_ShopNotFound{} ->
@@ -503,7 +499,7 @@ process_request('CreateInvoiceTemplate', Req, Context, ReqCtx) ->
             end
     catch
         throw:zero_invoice_lifetime ->
-            {ok, {422, [], logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}}
+            {ok, {400, [], logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}}
     end;
 
 process_request('GetInvoiceTemplateByID', Req, Context, ReqCtx) ->
@@ -522,7 +518,7 @@ process_request('GetInvoiceTemplateByID', Req, Context, ReqCtx) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {error, {400, [], general_error(<<"Invalid party">>)}};
+                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
                 #payproc_InvoiceTemplateNotFound{} ->
                     {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
                 #payproc_InvoiceTemplateRemoved{} ->
@@ -558,7 +554,7 @@ process_request('UpdateInvoiceTemplate', Req, Context, ReqCtx) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {error, {400, [], general_error(<<"Invalid party">>)}};
+                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
                 #payproc_InvalidPartyStatus{} ->
@@ -572,13 +568,13 @@ process_request('UpdateInvoiceTemplate', Req, Context, ReqCtx) ->
             end
     catch
         throw:#payproc_InvalidUser{} ->
-            {error, {400, [], general_error(<<"Invalid party">>)}};
+            {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
         throw:#payproc_InvoiceTemplateNotFound{} ->
             {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
         throw:#payproc_InvoiceTemplateRemoved{} ->
             {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
         throw:zero_invoice_lifetime ->
-            {ok, {422, [], logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}}
+            {ok, {400, [], logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}}
     end;
 
 process_request('DeleteInvoiceTemplate', Req, Context, ReqCtx) ->
@@ -602,7 +598,7 @@ process_request('DeleteInvoiceTemplate', Req, Context, ReqCtx) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {error, {400, [], general_error(<<"Invalid party">>)}};
+                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
                 #payproc_InvalidPartyStatus{} ->
                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
@@ -639,7 +635,7 @@ process_request('CreateInvoiceWithTemplate', Req, Context, ReqCtx) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {error, {400, [], general_error(<<"Invalid party">>)}};
+                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
                 #payproc_InvalidPartyStatus{} ->
@@ -653,9 +649,9 @@ process_request('CreateInvoiceWithTemplate', Req, Context, ReqCtx) ->
             end
     catch
         throw:{bad_invoice_params, currency_no_amount} ->
-            {ok, {422, [], logic_error(invalidRequest, <<"Amount is required for the currency">>)}};
+            {ok, {400, [], logic_error(invalidRequest, <<"Amount is required for the currency">>)}};
         throw:{bad_invoice_params, amount_no_currency} ->
-            {ok, {422, [], logic_error(invalidRequest, <<"Currency is required for the amount">>)}}
+            {ok, {400, [], logic_error(invalidRequest, <<"Currency is required for the amount">>)}}
     end;
 
 process_request('ActivateShop', Req, Context, ReqCtx) ->
@@ -725,12 +721,9 @@ process_request('SuspendShop', Req, Context, ReqCtx) ->
 process_request('GetShops', _Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
-    Result = get_my_party(Context, ReqCtx, UserInfo, PartyID),
-    case Result of
-        {ok, #domain_Party{shops = Shops}} ->
-            Resp = decode_shops_map(Shops),
-            {ok, {200, [], Resp}}
-    end;
+    {ok, #domain_Party{shops = Shops}} = get_my_party(Context, ReqCtx, UserInfo, PartyID),
+    Resp = decode_shops_map(Shops),
+    {ok, {200, [], Resp}};
 
 process_request('GetShopByID', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
@@ -753,11 +746,8 @@ process_request('GetShopByID', Req, Context, ReqCtx) ->
         {ok, Shop} ->
             Resp = decode_shop(Shop),
             {ok, {200, [], Resp}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_ShopNotFound{} ->
-                    {ok, {404, [], general_error(<<"Shop not found">>)}}
-            end
+        {exception, #payproc_ShopNotFound{}} ->
+            {ok, {404, [], general_error(<<"Shop not found">>)}}
     end;
 
 process_request('GetContracts', _Req, Context, ReqCtx) ->
@@ -800,11 +790,8 @@ process_request('GetPayoutTools', Req, Context, ReqCtx) ->
         {ok, #domain_Contract{payout_tools = PayoutTools}} ->
             Resp = [decode_payout_tool(P) || P <- PayoutTools],
             {ok, {200, [], Resp}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_ContractNotFound{} ->
-                    {ok, {404, [], general_error(<<"Contract not found">>)}}
-            end
+        {exception, #payproc_ContractNotFound{}} ->
+            {ok, {404, [], general_error(<<"Contract not found">>)}}
     end;
 
 process_request('GetPayoutToolByID', Req, Context, ReqCtx) ->
@@ -822,13 +809,8 @@ process_request('GetPayoutToolByID', Req, Context, ReqCtx) ->
                 false ->
                     {ok, {404, [], general_error(<<"PayoutTool not found">>)}}
             end;
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
-                #payproc_ContractNotFound{} ->
-                    {ok, {404, [], general_error(<<"Contract not found">>)}}
-            end
+        {exception, #payproc_ContractNotFound{}} ->
+            {ok, {404, [], general_error(<<"Contract not found">>)}}
     end;
 
 process_request('GetContractAdjustments', Req, Context, ReqCtx) ->
@@ -841,11 +823,8 @@ process_request('GetContractAdjustments', Req, Context, ReqCtx) ->
         {ok, #domain_Contract{adjustments = Adjustments}} ->
             Resp = [decode_contract_adjustment(A) || A <- Adjustments],
             {ok, {200, [], Resp}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_ContractNotFound{} ->
-                    {ok, {404, [], general_error(<<"Contract not found">>)}}
-            end
+        {exception, #payproc_ContractNotFound{}} ->
+            {ok, {404, [], general_error(<<"Contract not found">>)}}
     end;
 
 process_request('GetContractAdjustmentByID', Req, Context, ReqCtx) ->
@@ -863,22 +842,16 @@ process_request('GetContractAdjustmentByID', Req, Context, ReqCtx) ->
                 false ->
                     {ok, {404, [], general_error(<<"Adjustment not found">>)}}
             end;
-        {exception, Exception} ->
-            case Exception of
-                #payproc_ContractNotFound{} ->
-                    {ok, {404, [], general_error(<<"Contract not found">>)}}
-            end
+        {exception, #payproc_ContractNotFound{}} ->
+            {ok, {404, [], general_error(<<"Contract not found">>)}}
     end;
 
 process_request('GetMyParty', _Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
-    Result = get_my_party(Context, ReqCtx, UserInfo, PartyID),
-    case Result of
-        {ok, Party} ->
-            Resp = decode_party(Party),
-            {ok, {200, [], Resp}}
-    end;
+    {ok, Party} = get_my_party(Context, ReqCtx, UserInfo, PartyID),
+    Resp = decode_party(Party),
+    {ok, {200, [], Resp}};
 
 process_request('SuspendMyParty', _Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
@@ -966,18 +939,15 @@ process_request('GetAccountByID', Req, Context, ReqCtx) ->
         {ok, S} ->
             Resp = decode_account_state(S),
             {ok, {200, [], Resp}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_AccountNotFound{} ->
-                    {ok, {404, [], general_error(<<"Account not found">>)}}
-            end
+        {exception, #payproc_AccountNotFound{}} ->
+            {ok, {404, [], general_error(<<"Account not found">>)}}
     end;
 
 process_request('GetClaims', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     ClaimStatus = maps:get('claimStatus', Req),
-    Result = prepare_party(
+    {ok, Claims} = prepare_party(
         Context,
         ReqCtx,
         fun () ->
@@ -989,13 +959,8 @@ process_request('GetClaims', Req, Context, ReqCtx) ->
             )
         end
     ),
-    case Result of
-        {ok, Claims} ->
-            Resp = decode_claims(filter_claims(ClaimStatus, Claims)),
-            {ok, {200, [], Resp}};
-        {exception, #payproc_InvalidUser{}} ->
-            {ok, {400, [], general_error(<<"Invalid party">>)}}
-    end;
+    Resp = decode_claims(filter_claims(ClaimStatus, Claims)),
+    {ok, {200, [], Resp}};
 
 process_request('GetClaimByID', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
@@ -1017,13 +982,8 @@ process_request('GetClaimByID', Req, Context, ReqCtx) ->
         {ok, Claim} ->
             Resp = decode_claim(Claim),
             {ok, {200, [], Resp}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
-                #payproc_ClaimNotFound{} ->
-                    {ok, {404, [], general_error(<<"Claim not found">>)}}
-            end
+        {exception, #payproc_ClaimNotFound{}} ->
+            {ok, {404, [], general_error(<<"Claim not found">>)}}
     end;
 
 process_request('CreateClaim', Req, Context, ReqCtx) ->
@@ -1049,8 +1009,6 @@ process_request('CreateClaim', Req, Context, ReqCtx) ->
                 {ok, {201, [], Resp}};
             {exception, Exception} ->
                 case Exception of
-                    #payproc_InvalidUser{} ->
-                        {ok, {400, [], general_error(<<"Invalid party">>)}};
                     #payproc_InvalidPartyStatus{} ->
                         {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                     #payproc_ChangesetConflict{} ->
@@ -1071,7 +1029,7 @@ process_request('CreateClaim', Req, Context, ReqCtx) ->
 %     ClaimID = genlib:to_int(maps:get('claimID', Req)),
 %     ClaimRevision = genlib:to_int(maps:get('claimRevision', Req)),
 %     Changeset = encode_claim_changeset(maps:get('claimChangeset', Req)),
-%     Result = prepare_party(
+%     {ok, Party} = prepare_party(
 %         Context,
 %         ReqCtx,
 %         fun () ->
@@ -1083,13 +1041,8 @@ process_request('CreateClaim', Req, Context, ReqCtx) ->
 %             )
 %         end
 %     ),
-%     case Result of
-%         {ok, Party} ->
-%             Resp = decode_party(Party),
-%             {ok, {200, [], Resp}};
-%         {exception, #payproc_InvalidUser{}} ->
-%             {ok, {400, [], general_error(<<"Invalid party">>)}}
-%     end;
+%     Resp = decode_party(Party),
+%     {ok, {200, [], Resp}};
 
 process_request('RevokeClaimByID', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
@@ -1114,8 +1067,6 @@ process_request('RevokeClaimByID', Req, Context, ReqCtx) ->
             {ok, {204, [], undefined}};
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
                 #payproc_InvalidPartyStatus{} ->
                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_ClaimNotFound{} ->
@@ -1141,15 +1092,8 @@ process_request('CreateWebhook', Req, Context, ReqCtx) ->
             {ok, Webhook} = service_call(webhook_manager, 'Create', [WebhookParams], ReqCtx),
             Resp = decode_webhook(Webhook),
             {ok, {201, [], Resp}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], general_error(<<"Invalid party">>)}};
-                #payproc_PartyNotFound{} ->
-                    {ok, {400, [],  general_error(<<"Party not found">>)}};
-                #payproc_ShopNotFound{} ->
-                    {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}}
-            end
+        {exception, #payproc_ShopNotFound{}} ->
+            {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}}
     end;
 
 process_request('GetWebhooks', _Req, Context, ReqCtx) ->
@@ -1193,7 +1137,18 @@ validate_event_filter({invoice, #webhooker_InvoiceEventFilter{
 }}, Context, ReqCtx) when ShopID /= undefined ->
     PartyID = get_party_id(Context),
     UserInfo = get_user_info(Context),
-    service_call(party_management, 'GetShop', [UserInfo, PartyID, ShopID], ReqCtx).
+    prepare_party(
+        Context,
+        ReqCtx,
+        fun () ->
+            service_call(
+                party_management,
+                'GetShop',
+                [UserInfo, PartyID, ShopID],
+                ReqCtx
+            )
+        end
+    ).
 
 get_webhook(PartyID, WebhookID, ReqCtx) ->
     Result = service_call(webhook_manager, 'Get', [WebhookID], ReqCtx),
