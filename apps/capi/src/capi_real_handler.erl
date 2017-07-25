@@ -1291,8 +1291,8 @@ encode_invoice_params(PartyID, InvoiceParams) ->
 encode_invoice_params_with_tpl(InvoiceTplID, InvoiceParams) ->
     #payproc_InvoiceWithTemplateParams{
         template_id = InvoiceTplID,
-        cost        = encode_optional_param(cost, invoice, InvoiceParams),
-        context     = encode_optional_param(context, invoice, InvoiceParams)
+        cost        = encode_optional_invoice_cost(InvoiceParams),
+        context     = encode_optional_context(InvoiceParams)
     }.
 
 encode_invoice_details(Params) ->
@@ -1336,67 +1336,52 @@ encode_invoice_tpl_create_params(PartyID, Params) ->
         context          = encode_invoice_context(Params)
     }.
 
-encode_invoice_tpl_update_params(Params, Opts) ->
+encode_invoice_tpl_update_params(Params, InvoiceTplGetter) ->
     #payproc_InvoiceTemplateUpdateParams{
-        invoice_lifetime = encode_optional_param(invoice_lifetime, invoice_tpl, Params),
-        cost             = encode_optional_param(cost, invoice_tpl, Params),
-        context          = encode_optional_param(context, invoice_tpl, Params),
-        details          = encode_optional_details(Params, Opts)
+        invoice_lifetime = encode_optional_invoice_tpl_lifetime(Params),
+        cost             = encode_optional_invoice_tpl_cost(Params),
+        context          = encode_optional_context(Params),
+        details          = encode_optional_details(Params, InvoiceTplGetter)
     }.
 
-encode_optional_param(invoice_lifetime, invoice_tpl, Params) ->
-    case is_param_set(<<"lifetime">>, Params) of
-        true ->
-            encode_lifetime(Params);
-        false ->
-            undefined
-    end;
-encode_optional_param(cost, invoice_tpl, Params) ->
-    case is_param_set(<<"cost">>, Params) of
-        true ->
-            encode_invoice_tpl_cost(Params);
-        false ->
-            undefined
-    end;
-encode_optional_param(cost, invoice, Params) ->
-    case {is_param_set(<<"amount">>, Params), is_param_set(<<"currency">>, Params)} of
-        {false, false} ->
-            undefined;
-        {false, true} ->
-            throw({bad_invoice_params, currency_no_amount});
-        {true, false} ->
-            throw({bad_invoice_params, amount_no_currency});
-        {true, true} ->
-            encode_cash(Params)
-    end;
-encode_optional_param(context, _, Params) ->
-    case is_param_set(<<"metadata">>, Params) of
-        true ->
-            encode_invoice_context(Params);
-        false ->
-            undefined
-    end.
+encode_optional_invoice_tpl_lifetime(Params = #{<<"lifetime">> := _}) ->
+    encode_lifetime(Params);
+encode_optional_invoice_tpl_lifetime(_) ->
+    undefined.
 
-encode_optional_details(Params, GetInvoiceTpl) ->
-    case {is_param_set(<<"product">>, Params), is_param_set(<<"description">>, Params)} of
-        {true, true} ->
-            encode_invoice_details(Params);
-        {true, false} ->
-            #domain_InvoiceTemplate{
-                details = #domain_InvoiceDetails{description = Description}
-            } = GetInvoiceTpl(),
-            encode_invoice_details(genlib_map:get(<<"product">>, Params), Description);
-        {false, true} ->
-            #domain_InvoiceTemplate{
-                details = #domain_InvoiceDetails{product = Product}
-            } = GetInvoiceTpl(),
-            encode_invoice_details(Product, genlib_map:get(<<"description">>, Params));
-        {false, false} ->
-            undefined
-    end.
+encode_optional_invoice_tpl_cost(Params = #{<<"cost">> := _}) ->
+    encode_invoice_tpl_cost(Params);
+encode_optional_invoice_tpl_cost(_) ->
+    undefined.
 
-is_param_set(Name, Params) ->
-    maps:is_key(Name, Params).
+encode_optional_invoice_cost(Params = #{<<"amount">> := _, <<"currency">> := _}) ->
+    encode_cash(Params);
+encode_optional_invoice_cost(#{<<"amount">> := _}) ->
+    throw({bad_invoice_params, amount_no_currency});
+encode_optional_invoice_cost(#{<<"currency">> := _}) ->
+    throw({bad_invoice_params, currency_no_amount});
+encode_optional_invoice_cost(_) ->
+    undefined.
+
+encode_optional_context(Params = #{<<"metadata">> := _}) ->
+    encode_invoice_context(Params);
+encode_optional_context(#{}) ->
+    undefined.
+
+encode_optional_details(Params = #{<<"product">> := _, <<"description">> := _}, _) ->
+    encode_invoice_details(Params);
+encode_optional_details(#{<<"product">> := Product}, InvoiceTplGetter) ->
+    #domain_InvoiceTemplate{
+        details = #domain_InvoiceDetails{description = Description}
+    } = InvoiceTplGetter(),
+    encode_invoice_details(Product, Description);
+encode_optional_details(#{<<"description">> := Description}, InvoiceTplGetter) ->
+    #domain_InvoiceTemplate{
+        details = #domain_InvoiceDetails{product = Product}
+    } = InvoiceTplGetter(),
+    encode_invoice_details(Product, Description);
+encode_optional_details(_, _) ->
+    undefined.
 
 encode_invoice_context(Params) ->
     encode_invoice_context(Params, ?DEFAULT_INVOICE_META).
