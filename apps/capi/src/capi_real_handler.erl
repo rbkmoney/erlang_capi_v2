@@ -1373,7 +1373,7 @@ encode_lifetime(Params) ->
 
 encode_lifetime(0, 0, 0) ->
     throw(zero_invoice_lifetime);
-encode_lifetime(YY, MM, DD) ->
+encode_lifetime(DD, MM, YY) ->
     #domain_LifetimeInterval{
         days   = DD,
         months = MM,
