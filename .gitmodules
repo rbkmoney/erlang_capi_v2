@@ -5,7 +5,7 @@
 [submodule "apps/cp_proto/damsel"]
 	path = apps/cp_proto/damsel
 	url = git@github.com:rbkmoney/damsel.git
-    branch = epic/invoice-templates
+    branch = master
 [submodule "build_utils"]
 	path = build_utils
 	url = git@github.com:rbkmoney/build_utils.git
