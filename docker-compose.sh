@@ -32,7 +32,7 @@ services:
         condition: service_healthy
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:a50ecf64e9a366097c0223928fa41e1902e940f5
+    image: dr.rbkmoney.com/rbkmoney/hellgate:376afd74896e78d624ee1db9097fa60999399796
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -52,11 +52,11 @@ services:
       retries: 12
 
   machinegun:
-    image: dr.rbkmoney.com/rbkmoney/machinegun:a7681aeda8cbe8e3ed6664455aff60da6cd41841
+    image: dr.rbkmoney.com/rbkmoney/machinegun:535d1492b20e0151ba245cbbd3152efc70726c91
     restart: always
     command: /opt/machinegun/bin/machinegun foreground
     volumes:
-      - ./test/machinegun/sys.config:/opt/machinegun/releases/0.1.0/sys.config
+      - ./test/machinegun/config.yaml:/opt/machinegun/etc/config.yaml
     healthcheck:
       test: "curl http://localhost:8022/"
       interval: 5s

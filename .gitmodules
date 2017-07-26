@@ -1,11 +1,11 @@
 [submodule "schemes/swag"]
 	path = schemes/swag
-	branch = epic/invoice-templates-release
+	branch = release
 	url = git@github.com:rbkmoney/swag.git
 [submodule "apps/cp_proto/damsel"]
 	path = apps/cp_proto/damsel
 	url = git@github.com:rbkmoney/damsel.git
-    branch = master
+	branch = master
 [submodule "build_utils"]
 	path = build_utils
 	url = git@github.com:rbkmoney/build_utils.git

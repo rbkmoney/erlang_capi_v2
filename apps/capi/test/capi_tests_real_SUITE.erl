@@ -87,14 +87,15 @@
     get_locations_names_ok_test/1
 ]).
 
--define(KEYCLOAK_HOST, "keycloak").
--define(KEYCLOAK_PORT, 8080).
+-define(PROTOCOL, ipv6).
+
+-define(KEYCLOAK_URL, "keycloak:8080").
 -define(KEYCLOAK_USER, "demo_merchant").
 -define(KEYCLOAK_PASSWORD, "test").
 
 -define(CAPI_IP                     , "::").
--define(CAPI_HOST                   , "localhost").
 -define(CAPI_PORT                   , 8080).
+-define(CAPI_URL                    , "localhost:" ++ integer_to_list(?CAPI_PORT)).
 -define(CAPI_SERVICE_TYPE           , real).
 -define(CAPI_PARTY_MANAGEMENT_URL   , "http://hellgate:8022/v1/processing/partymgmt").
 -define(CAPI_ACCOUNTER_URL          , "http://shumway:8022/accounter").
@@ -287,12 +288,12 @@ init_per_suite(Config) ->
     {ok, SupPid} = supervisor:start_link(?MODULE, []),
     _ = unlink(SupPid),
     Params = #{
-        host => ?KEYCLOAK_HOST,
-        port => ?KEYCLOAK_PORT,
+        url  => ?KEYCLOAK_URL,
         user => ?KEYCLOAK_USER,
         password => ?KEYCLOAK_PASSWORD,
         retries => 10,
-        timeout => 5000
+        timeout => 5000,
+        protocol => ?PROTOCOL
     },
     {ok, Token} = api_client_lib:login(Params),
     Retries = 10,
@@ -1259,7 +1260,7 @@ call(Method, Path, Body, Headers) ->
     {ok, Code, RespHeaders, get_body(ClientRef)}.
 
 get_url(Path) ->
-    ?CAPI_HOST ++ ":" ++ integer_to_list(?CAPI_PORT) ++ Path.
+    ?CAPI_URL ++ Path.
 
 auth_header(Token) ->
     {<<"Authorization">>, <<"Bearer ", Token/binary>>} .
@@ -1377,8 +1378,8 @@ get_payments(InvoiceID, Context) ->
             <<"invoiceID">> => InvoiceID
         }
     },
-    {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swag_client_payments_api:get_payments(Host, Port, PreparedParams),
+    {Url, PreparedParams, Opts} = api_client_lib:make_request(Context, Params),
+    Response = swag_client_payments_api:get_payments(Url, PreparedParams, Opts),
     api_client_lib:handle_response(Response).
 
 get_contract_by_id(ContractID, Config) ->
@@ -1388,21 +1389,21 @@ get_contract_by_id(ContractID, Config) ->
             <<"contractID">> => ContractID
         }
     },
-    {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swag_client_contracts_api:get_contract_by_id(Host, Port, PreparedParams),
+    {Url, PreparedParams, Opts} = api_client_lib:make_request(Context, Params),
+    Response = swag_client_contracts_api:get_contract_by_id(Url, PreparedParams, Opts),
     handle_response(Response).
 
 get_contracts(Config) ->
     Context = ?config(context, Config),
-    {Host, Port, PreparedParams} = api_client_lib:make_request(Context, #{}),
-    Response = swag_client_contracts_api:get_contracts(Host, Port, PreparedParams),
+    {Url, PreparedParams, Opts} = api_client_lib:make_request(Context, #{}),
+    Response = swag_client_contracts_api:get_contracts(Url, PreparedParams, Opts),
     handle_response(Response).
 
 get_shops(Config) ->
     Context = ?config(context, Config),
     Params = #{},
-    {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swag_client_shops_api:get_shops(Host, Port, PreparedParams),
+    {Url, PreparedParams, Opts} = api_client_lib:make_request(Context, Params),
+    Response = swag_client_shops_api:get_shops(Url, PreparedParams, Opts),
     handle_response(Response).
 
 get_latest(Es) ->
@@ -1448,7 +1449,7 @@ get_context(Token) ->
     get_context(Token, 10, 5000).
 
 get_context(Token, Retries, Timeout) ->
-    api_client_lib:get_context(?CAPI_HOST, ?CAPI_PORT, Token, Retries, Timeout).
+    api_client_lib:get_context(?CAPI_URL, Token, Retries, Timeout, ?PROTOCOL).
 
 get_payout_tools(ContractID, Config) ->
     Context = ?config(context, Config),
@@ -1457,8 +1458,8 @@ get_payout_tools(ContractID, Config) ->
             <<"contractID">> => ContractID
         }
     },
-    {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swag_client_payouts_api:get_payout_tools(Host, Port, PreparedParams),
+    {Url, PreparedParams, Opts} = api_client_lib:make_request(Context, Params),
+    Response = swag_client_payouts_api:get_payout_tools(Url, PreparedParams, Opts),
     handle_response(Response).
 
 default_tokenize_card(Context, _Config) ->
@@ -1527,8 +1528,8 @@ default_get_shop_by_id(ShopID, Config) ->
             <<"shopID">> => ShopID
         }
     },
-    {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swag_client_shops_api:get_shop_by_id(Host, Port, PreparedParams),
+    {Url, PreparedParams, Opts} = api_client_lib:make_request(Context, Params),
+    Response = swag_client_shops_api:get_shop_by_id(Url, PreparedParams, Opts),
     {ok, R} = api_client_lib:handle_response(Response),
     R.
 
@@ -1604,8 +1605,8 @@ get_locations_names(GeoIDs, Lang, Config) ->
             <<"language">> => Lang
         }
     },
-    {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response = swag_client_geo_api:get_locations_names(Host, Port, PreparedParams),
+    {Url, PreparedParams, Opts} = api_client_lib:make_request(Context, Params),
+    Response = swag_client_geo_api:get_locations_names(Url, PreparedParams, Opts),
     {ok, R} = api_client_lib:handle_response(Response),
     R.
 
@@ -2081,8 +2082,8 @@ default_get_shop_account_by_id(AccountID, ShopID, Config) ->
             <<"shopID">> => ShopID
         }
     },
-    {Host, Port, PreparedParams} = api_client_lib:make_request(Context, Params),
-    Response =  swag_client_accounts_api:get_account_by_id(Host, Port, PreparedParams),
+    {Url, PreparedParams, Opts} = api_client_lib:make_request(Context, Params),
+    Response =  swag_client_accounts_api:get_account_by_id(Url, PreparedParams, Opts),
     handle_response(Response).
 
 get_body(ClientRef) ->
