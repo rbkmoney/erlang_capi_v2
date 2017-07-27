@@ -87,7 +87,7 @@
     get_locations_names_ok_test/1
 ]).
 
--define(PROTOCOL, ipv6).
+-define(PROTOCOL, ipv4).
 
 -define(KEYCLOAK_URL, "keycloak:8080").
 -define(KEYCLOAK_USER, "demo_merchant").
