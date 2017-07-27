@@ -230,11 +230,7 @@ encode_permission(write) ->
 %%
 
 get_resource_hierarchy() ->
-    #{
-        party               => #{},
-        invoices            => #{payments => #{}},
-        payment_tool_tokens => #{}
-    }.
+    capi_auth:get_resource_hierarchy().
 
 delve(Resource, Hierarchy) ->
     case maps:find(Resource, Hierarchy) of

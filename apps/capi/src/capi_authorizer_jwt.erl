@@ -25,11 +25,16 @@
 -type subject()    :: {subject_id(), capi_acl:t()}.
 -type subject_id() :: binary().
 -type t()          :: {subject(), claims()}.
+-type expiration()        ::
+    {lifetime, Seconds :: pos_integer()} |
+    {deadline, UnixTs :: pos_integer()}  |
+    unlimited.
 
 -export_type([t/0]).
 -export_type([subject/0]).
 -export_type([claims/0]).
 -export_type([token/0]).
+-export_type([expiration/0]).
 
 %%
 
@@ -169,10 +174,6 @@ construct_key(KID, JWK) ->
 
 %%
 
--type expiration() ::
-    {lifetime, Seconds :: pos_integer()} |
-    {deadline, UnixTs :: pos_integer()}.
-
 -spec issue(t(), expiration()) ->
     {ok, token()} |
     {error,
@@ -201,7 +202,9 @@ construct_final_claims({{Subject, ACL}, Claims}, Expiration) ->
 get_expires_at({lifetime, Lt}) ->
     genlib_time:unow() + Lt;
 get_expires_at({deadline, Dl}) ->
-    Dl.
+    Dl;
+get_expires_at(unlimited) ->
+    0.
 
 unique_id() ->
     <<ID:64>> = snowflake:new(),
@@ -308,6 +311,8 @@ check_presence(_, V) when is_binary(V) ->
 check_presence(C, undefined) ->
     throw({invalid_token, {missing, C}}).
 
+check_expiration(_, Exp = 0) ->
+    Exp;
 check_expiration(_, Exp) when is_integer(Exp) ->
     case genlib_time:unow() of
         Now when Exp > Now ->

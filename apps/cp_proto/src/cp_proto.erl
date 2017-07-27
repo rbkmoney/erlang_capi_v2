@@ -22,6 +22,8 @@ get_service_url(ServiceName) ->
 
 get_service_modname(invoicing) ->
     {cp_payment_processing_thrift, 'Invoicing'};
+get_service_modname(invoice_templating) ->
+    {cp_payment_processing_thrift, 'InvoiceTemplating'};
 get_service_modname(cds_storage) ->
     {cp_cds_thrift, 'Storage'};
 get_service_modname(merchant_stat) ->
