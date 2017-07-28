@@ -119,10 +119,9 @@ services:
   pg-db:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
     environment:
-      - POSTGRES_DB=bustermaze
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - PG_DBS=hooker keycloak magista shumway
+      - PG_DBS=hooker keycloak magista shumway bustermaze
     entrypoint:
      - /docker-entrypoint.sh
      - postgres
