@@ -6,7 +6,7 @@
 -type context() :: capi_client_lib:context().
 -type analytics_search_query() :: capi_client_lib:analytics_search_query().
 
--spec search_invoices(context(), integer(), analytics_search_query()) -> {ok, term(), term()} | {error, term()}.
+-spec search_invoices(context(), binary(), analytics_search_query()) -> {ok, term(), term()} | {error, term()}.
 search_invoices(Context, ShopID, Query) ->
     Qs = capi_client_lib:make_analytics_search_query_string(Query),
     Params = #{
@@ -21,7 +21,7 @@ search_invoices(Context, ShopID, Query) ->
         {error, Error} -> {error, Error}
     end.
 
--spec search_payments(context(), integer(), analytics_search_query()) -> {ok, term(), term()} | {error, term()}.
+-spec search_payments(context(), binary(), analytics_search_query()) -> {ok, term(), term()} | {error, term()}.
 search_payments(Context, ShopID, Query) ->
     Qs = capi_client_lib:make_analytics_search_query_string(Query),
     Params = #{

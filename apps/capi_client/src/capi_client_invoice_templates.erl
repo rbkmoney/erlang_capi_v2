@@ -15,7 +15,7 @@ create(Context, Request) ->
     Response = swag_client_invoice_templates_api:create_invoice_template(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 
--spec get_template_by_id(context(), integer()) -> {ok, term()} | {error, term()}.
+-spec get_template_by_id(context(), binary()) -> {ok, term()} | {error, term()}.
 get_template_by_id(Context, InvoiceTplID) ->
     Params = #{binding => #{<<"invoiceTemplateID">> => InvoiceTplID}},
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
@@ -45,7 +45,7 @@ delete(Context, InvoiceTplID) ->
         {error, Error} -> {error, Error}
     end.
 
--spec create_invoice(context(), binary(), string()) -> ok | {error, term()}.
+-spec create_invoice(context(), binary(), map()) -> ok | {error, term()}.
 create_invoice(Context, InvoiceTplID, Request) ->
     Params = #{
         binding => #{<<"invoiceTemplateID">> => InvoiceTplID},

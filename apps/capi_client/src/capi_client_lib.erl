@@ -30,8 +30,8 @@
 -type analytics_search_query() :: list().
 -export_type([analytics_search_query/0]).
 
--type analytics_search_query_string() :: map().
--export_type([analytics_search_query_string/0]).
+-type query_string() :: map().
+-export_type([query_string/0]).
 
 -type idempotency() :: idempotent | non_idempotent.
 -export_type([idempotency/0]).
@@ -186,7 +186,7 @@ log_error(finish, Code, Body) ->
         [Code, Body]
     ).
 
--spec make_analytics_search_query_string(analytics_search_query()) -> analytics_search_query_string().
+-spec make_analytics_search_query_string(analytics_search_query()) -> query_string().
 make_analytics_search_query_string(ParamList) ->
     lists:foldl(fun(Elem, Acc) -> maps:merge(Acc, prepare_param(Elem)) end, #{}, ParamList).
 
