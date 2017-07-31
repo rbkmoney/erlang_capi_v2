@@ -18,7 +18,6 @@
         rfc3339,
         base64url,
         snowflake,
-        api_client,
         woody_user_identity
     ]},
     {env, []},

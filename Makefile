@@ -19,9 +19,13 @@ SERVICE_IMAGE_PUSH_TAG ?= $(SERVICE_IMAGE_TAG)
 BASE_IMAGE_NAME := service_erlang
 BASE_IMAGE_TAG := 13454a94990acb72f753623ec13599a9f6f4f852
 
-BUILD_IMAGE_TAG := 4799280a02cb73761a3ba3641285aac8ec4ec482
+BUILD_IMAGE_TAG := 26e939cb900451bd15b797d45fe52e9733be3952
 
-CALL_ANYWHERE := all submodules rebar-update compile xref lint dialyze test start devrel release clean distclean swagger.regenerate
+CALL_ANYWHERE := \
+	submodules \
+	all rebar-update compile xref lint dialyze test \
+	start devrel release clean distclean \
+	generate regenerate swag_server.regenerate swag_client.regenerate
 
 CALL_W_CONTAINER := $(CALL_ANYWHERE)
 
@@ -41,7 +45,9 @@ submodules: $(SUBTARGETS)
 rebar-update:
 	$(REBAR) update
 
-generate: swagger.generate
+generate: swag_server.generate swag_client.generate
+
+regenerate: swag_server.regenerate swag_client.regenerate
 
 compile: submodules rebar-update generate
 	$(REBAR) compile
@@ -68,7 +74,7 @@ clean:
 	$(REBAR) cover -r
 	$(REBAR) clean
 
-distclean: swagger.distclean
+distclean: swag_server.distclean swag_client.distclean
 	$(REBAR) clean
 	rm -rf _build
 
@@ -76,30 +82,52 @@ cover:
 	$(REBAR) cover
 
 # CALL_W_CONTAINER
-test: submodules
+test: submodules generate
 	$(REBAR) do eunit, ct
 
 # Swagger stuff
 SWAGGER_CODEGEN = $(call which, swagger-codegen)
 SWAGGER_SCHEME_PATH = schemes/swag
 SWAGGER_SCHEME = $(SWAGGER_SCHEME_PATH)/swagger.yaml
-SWAGGER_PREFIX = swag_server
-SWAGGER_APP_PATH = apps/$(SWAGGER_PREFIX)
-SWAGGER_APP_TARGET = $(SWAGGER_APP_PATH)/rebar.config
 
-swagger.generate: $(SWAGGER_APP_TARGET)
+$(SWAGGER_SCHEME): $(SWAGGER_SCHEME_PATH)/.git
 
-swagger.distclean:
-	rm -rf $(SWAGGER_APP_PATH)
+# Swagger server
+SWAG_SERVER_PREFIX = swag_server
+SWAG_SERVER_APP_PATH = apps/$(SWAG_SERVER_PREFIX)
+SWAG_SERVER_APP_TARGET = $(SWAG_SERVER_APP_PATH)/rebar.config
 
-swagger.regenerate: swagger.distclean swagger.generate
+swag_server.generate: $(SWAG_SERVER_APP_TARGET)
 
-$(SWAGGER_APP_TARGET): $(SWAGGER_SCHEME)
+swag_server.distclean:
+	rm -rf $(SWAG_SERVER_APP_PATH)
+
+swag_server.regenerate: swag_server.distclean swag_server.generate
+
+$(SWAG_SERVER_APP_TARGET): $(SWAGGER_SCHEME)
 	$(SWAGGER_CODEGEN) generate \
 		-i $(SWAGGER_SCHEME) \
 		-l erlang-server \
-		-o $(SWAGGER_APP_PATH) \
+		-o $(SWAG_SERVER_APP_PATH) \
 		--additional-properties \
-			packageName=$(SWAGGER_PREFIX)
+			packageName=$(SWAG_SERVER_PREFIX)
 
-$(SWAGGER_SCHEME): $(SWAGGER_SCHEME_PATH)/.git
+# Swagger client
+SWAG_CLIENT_PREFIX = swag_client
+SWAG_CLIENT_APP_PATH = apps/$(SWAG_CLIENT_PREFIX)
+SWAG_CLIENT_APP_TARGET = $(SWAG_CLIENT_APP_PATH)/rebar.config
+
+swag_client.generate: $(SWAG_CLIENT_APP_TARGET)
+
+swag_client.distclean:
+	rm -rf $(SWAG_CLIENT_APP_PATH)
+
+swag_client.regenerate: swag_client.distclean swag_client.generate
+
+$(SWAG_CLIENT_APP_TARGET): $(SWAGGER_SCHEME)
+	$(SWAGGER_CODEGEN) generate \
+		-i $(SWAGGER_SCHEME) \
+		-l erlang-client \
+		-o $(SWAG_CLIENT_APP_PATH) \
+		--additional-properties \
+			packageName=$(SWAG_CLIENT_PREFIX)

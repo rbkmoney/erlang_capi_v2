@@ -26,8 +26,6 @@ services:
         condition: service_healthy
       columbus:
         condition: service_started
-      pimp:
-        condition: service_started
       hooker:
         condition: service_healthy
 
@@ -71,23 +69,13 @@ services:
       - -Xmx512m
       - -jar
       - /opt/magista/magista.jar
-      - --spring.datasource.url=jdbc:postgresql://magista-db:5432/magista
+      - --spring.datasource.url=jdbc:postgresql://pg-db:5432/magista
       - --spring.datasource.username=postgres
       - --spring.datasource.password=postgres
       - --bm.pooling.url=http://bustermaze:8022/repo
     depends_on:
-      - magista-db
+      - pg-db
       - bustermaze
-
-  magista-db:
-    image: dr.rbkmoney.com/rbkmoney/postgres:9.6
-    environment:
-      - POSTGRES_DB=magista
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-    entrypoint:
-     - /docker-entrypoint.sh
-     - postgres
 
   bustermaze:
     image: dr.rbkmoney.com/rbkmoney/bustermaze:52ba5a4c3327221bd082af26ca44cebb827901fb
@@ -97,27 +85,17 @@ services:
       - -Xmx512m
       - -jar
       - /opt/bustermaze/bustermaze.jar
-      - --spring.datasource.url=jdbc:postgresql://bustermaze-db:5432/bustermaze
+      - --spring.datasource.url=jdbc:postgresql://pg-db:5432/bustermaze
       - --spring.datasource.username=postgres
       - --spring.datasource.password=postgres
       - --hg.pooling.url=http://hellgate:8022/v1/processing/eventsink
-      - --flyway.url=jdbc:postgresql://bustermaze-db:5432/bustermaze
+      - --flyway.url=jdbc:postgresql://pg-db:5432/bustermaze
       - --flyway.user=postgres
       - --flyway.password=postgres
       - --flyway.schemas=bm
     depends_on:
       - hellgate
-      - bustermaze-db
-
-  bustermaze-db:
-    image: dr.rbkmoney.com/rbkmoney/postgres:9.6
-    environment:
-      - POSTGRES_DB=bustermaze
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-    entrypoint:
-     - /docker-entrypoint.sh
-     - postgres
+      - pg-db
 
   shumway:
     image: dr.rbkmoney.com/rbkmoney/shumway:38c389c0132887ae3dd24e169e964fba5ab31ca3
@@ -127,7 +105,7 @@ services:
       - -Xmx512m
       - -jar
       - /opt/shumway/shumway.jar
-      - --spring.datasource.url=jdbc:postgresql://shumway-db:5432/shumway
+      - --spring.datasource.url=jdbc:postgresql://pg-db:5432/shumway
       - --spring.datasource.username=postgres
       - --spring.datasource.password=postgres
     healthcheck:
@@ -136,17 +114,19 @@ services:
       timeout: 2s
       retries: 30
     depends_on:
-      - shumway-db
+      - pg-db
 
-  shumway-db:
+  pg-db:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
     environment:
-      - POSTGRES_DB=shumway
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
+      - PG_DBS=hooker keycloak magista shumway bustermaze
     entrypoint:
      - /docker-entrypoint.sh
      - postgres
+    volumes:
+      - ./test/pg-db/init-dbs.sh:/docker-entrypoint-initdb.d/init-dbs.sh
 
   dominant:
     image: dr.rbkmoney.com/rbkmoney/dominant:f6d260e235a9c4f418166221943f8b277267465f
@@ -197,14 +177,6 @@ services:
      - /docker-entrypoint.sh
      - postgres
 
-  pimp:
-    image: dr.rbkmoney.com/rbkmoney/pimp:ba9807b0d6b38ec2d65078af171c52713b5257e2
-    entrypoint:
-      - java
-    command:
-      -Xmx512m
-      -jar /opt/pimp/pimp.jar
-
   hooker:
     image: dr.rbkmoney.com/rbkmoney/hooker:6a9074bb00862d5c7960baee7baab2ab36d89f0d
     healthcheck:
@@ -216,23 +188,16 @@ services:
       - java
       - -jar
       - /opt/hooker/hooker.jar
-      - --spring.datasource.url=jdbc:postgresql://hooker-db:5432/hook
+      - --spring.datasource.url=jdbc:postgresql://pg-db:5432/hooker
       - --spring.datasource.username=postgres
       - --spring.datasource.password=postgres
-      - --flyway.url=jdbc:postgresql://hooker-db:5432/hook
+      - --flyway.url=jdbc:postgresql://pg-db:5432/hooker
       - --flyway.user=postgres
       - --flyway.password=postgres
       - --flyway.schemas=hook
       - --bm.pooling.url=http://bustermaze:8022/repo
     depends_on:
-      - hooker-db
-
-  hooker-db:
-    image: dr.rbkmoney.com/rbkmoney/postgres:9.6
-    environment:
-      - POSTGRES_DB=hook
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - pg-db
 
   keycloak:
     image: dr.rbkmoney.com/rbkmoney/keycloak:a4c082f48695cb02e0624deb559f9ec0378abdb4
@@ -243,22 +208,12 @@ services:
       retries: 15
     environment:
         SERVICE_NAME: keycloak
-        POSTGRES_PASSWORD: keycloak
-        POSTGRES_USER: keycloak
+        POSTGRES_PASSWORD: postgres
+        POSTGRES_USER: postgres
         POSTGRES_DATABASE: keycloak
-        POSTGRES_PORT_5432_TCP_ADDR: keycloak-db
+        POSTGRES_PORT_5432_TCP_ADDR: pg-db
     depends_on:
-      - keycloak-db
-
-  keycloak-db:
-    image: dr.rbkmoney.com/rbkmoney/postgres:9.6
-    environment:
-        POSTGRES_PASSWORD: keycloak
-        POSTGRES_USER: keycloak
-        POSTGRES_DB: keycloak
-    entrypoint:
-     - /docker-entrypoint.sh
-     - postgres
+      - pg-db
 
 networks:
   default:

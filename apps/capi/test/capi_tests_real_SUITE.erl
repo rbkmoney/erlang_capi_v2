@@ -266,12 +266,11 @@ groups() ->
 init_per_suite(Config) ->
     % _ = dbg:tracer(),
     % _ = dbg:p(all, c),
-    % _ = dbg:tpl({api_client_lib, 'handle_response', '_'}, x),
+    % _ = dbg:tpl({capi_client_lib, 'handle_response', '_'}, x),
     Apps =
         capi_ct_helper:start_app(lager) ++
         capi_ct_helper:start_app(cowlib) ++
         capi_ct_helper:start_app(woody) ++
-        capi_ct_helper:start_app(api_client) ++
         capi_ct_helper:start_app(cp_proto, [
             {service_urls, #{
                 party_management   => ?CAPI_PARTY_MANAGEMENT_URL,
@@ -295,7 +294,7 @@ init_per_suite(Config) ->
         timeout => 5000,
         protocol => ?PROTOCOL
     },
-    {ok, Token} = api_client_lib:login(Params),
+    {ok, Token} = capi_ct_helper:login(Params),
     Retries = 10,
     Timeout = 5000,
     Context = get_context(Token, Retries, Timeout),
@@ -388,7 +387,7 @@ authorization_error_expired_test(_Config) ->
 create_invoice_badard_test(Config) ->
     Context = ?config(context, Config),
     Req = #{},
-    {error, _} = api_client_invoices:create_invoice(Context, Req).
+    {error, _} = capi_client_invoices:create_invoice(Context, Req).
 
 -spec create_invoice_no_shop_test(config()) -> _.
 
@@ -403,7 +402,7 @@ create_invoice_no_shop_test(Config) ->
         <<"product">> => ?DEFAULT_PRODUCT,
         <<"description">> => ?DEFAULT_DESCRIPTION
     },
-    {error, Resp} = api_client_invoices:create_invoice(Context, Req),
+    {error, Resp} = capi_client_invoices:create_invoice(Context, Req),
     #{
         <<"code">> := <<"invalidShopID">>
     } = jsx:decode(Resp, [return_maps]).
@@ -428,7 +427,7 @@ create_invoice_access_token_ok_test(Config) ->
         invoice_id := InvoiceID
     }} = ?config(saved_config, Config),
     Context = ?config(context, Config),
-    {ok, Body} = api_client_invoices:create_invoice_access_token(Context, InvoiceID),
+    {ok, Body} = capi_client_invoices:create_invoice_access_token(Context, InvoiceID),
     #{<<"payload">> := TokenPayload} = Body,
     InvoiceContext = get_context(TokenPayload),
     {save_config, #{
@@ -442,7 +441,7 @@ get_invoice_by_id_w_access_token_ok_test(Config) ->
     {create_invoice_access_token_ok_test,
         #{invoice_id := InvoiceID, invoice_context := Context} = Info
     } = ?config(saved_config, Config),
-    {ok, _Body} = api_client_invoices:get_invoice_by_id(Context, InvoiceID),
+    {ok, _Body} = capi_client_invoices:get_invoice_by_id(Context, InvoiceID),
     {save_config, Info}.
 
 -spec get_random_invoice_w_access_token_failed_test(config()) -> _.
@@ -451,7 +450,7 @@ get_random_invoice_w_access_token_failed_test(Config) ->
     {get_invoice_by_id_w_access_token_ok_test,
         #{invoice_id := InvoiceID, invoice_context := Context} = Info
     } = ?config(saved_config, Config),
-    {error, _} = api_client_invoices:get_invoice_by_id(Context, <<InvoiceID/binary, "BLARG">>),
+    {error, _} = capi_client_invoices:get_invoice_by_id(Context, <<InvoiceID/binary, "BLARG">>),
     {save_config, Info}.
 
 -spec rescind_invoice_w_access_token_failed_test(config()) -> _.
@@ -460,7 +459,7 @@ rescind_invoice_w_access_token_failed_test(Config) ->
     {get_random_invoice_w_access_token_failed_test,
         #{invoice_id := InvoiceID, invoice_context := Context} = Info
     } = ?config(saved_config, Config),
-    {error, _} = api_client_invoices:rescind_invoice(Context, InvoiceID, <<"pwnd">>),
+    {error, _} = capi_client_invoices:rescind_invoice(Context, InvoiceID, <<"pwnd">>),
     {save_config, Info}.
 
 -spec create_payment_tool_token_w_access_token_ok_test(config()) -> _.
@@ -536,7 +535,7 @@ rescind_invoice_ok_test(Config) ->
 create_invoice_template_badard_test(Config) ->
     Context = ?config(context, Config),
     Req = #{},
-    {error, _} = api_client_invoice_templates:create(Context, Req).
+    {error, _} = capi_client_invoice_templates:create(Context, Req).
 
 -spec create_invoice_template_no_shop_test(config()) -> _.
 
@@ -550,7 +549,7 @@ create_invoice_template_no_shop_test(Config) ->
         <<"description">> => ?DEFAULT_TPL_DESCRIPTION,
         <<"metadata">> => ?DEFAULT_TPL_META
     },
-    {error, Resp} = api_client_invoice_templates:create(Context, Req),
+    {error, Resp} = capi_client_invoice_templates:create(Context, Req),
     #{
         <<"code">> := <<"invalidShopID">>
     } = jsx:decode(Resp, [return_maps]).
@@ -564,7 +563,7 @@ create_invoice_with_template_invalid_id_test(Config) ->
     } = default_create_invoice_tpl(Config),
     TplContext = get_context(TokenPayload),
     InvoiceTplID = <<"INVALID_INVOICE_TEMPLATE_ID">>,
-    {error, _} = api_client_invoice_templates:create_invoice(TplContext, InvoiceTplID, #{}).
+    {error, _} = capi_client_invoice_templates:create_invoice(TplContext, InvoiceTplID, #{}).
 
 -spec create_invoice_template_0_lifetime_test(config()) -> _.
 
@@ -579,7 +578,7 @@ create_invoice_template_0_lifetime_test(Config) ->
         <<"description">> => ?DEFAULT_TPL_DESCRIPTION,
         <<"metadata">> => ?DEFAULT_TPL_META
     },
-    {error, Resp} = api_client_invoice_templates:create(Context, Req),
+    {error, Resp} = capi_client_invoice_templates:create(Context, Req),
     #{
         <<"code">> := <<"invalidRequest">>
     } = jsx:decode(Resp, [return_maps]).
@@ -603,7 +602,7 @@ get_invoice_template_by_id_ok_test(Config) ->
     {create_invoice_template_ok_test,
         #{invoice_tpl_id := InvoiceTplID, invoice_tpl_context := TplContext} = Info
     } = ?config(saved_config, Config),
-    {ok, _Body} = api_client_invoice_templates:get_template_by_id(TplContext, InvoiceTplID),
+    {ok, _Body} = capi_client_invoice_templates:get_template_by_id(TplContext, InvoiceTplID),
     {save_config, Info}.
 
 -spec create_invoice_with_template_ok_test(config()) -> _.
@@ -622,38 +621,38 @@ update_invoice_template_ok_test(Config) ->
         #{invoice_tpl_id := InvoiceTplID} = Info
     } = ?config(saved_config, Config),
     Context = ?config(context, Config),
-    {ok, InvoiceTpl} = api_client_invoice_templates:get_template_by_id(Context, InvoiceTplID),
+    {ok, InvoiceTpl} = capi_client_invoice_templates:get_template_by_id(Context, InvoiceTplID),
 
     Req0 = #{<<"cost">> => default_invoice_tpl_cost(unlim)},
     Expect0 = maps:merge(InvoiceTpl, Req0),
-    {ok, Expect0} = api_client_invoice_templates:update(Context, InvoiceTplID, Req0),
+    {ok, Expect0} = capi_client_invoice_templates:update(Context, InvoiceTplID, Req0),
 
     Req1 = #{<<"cost">> => default_invoice_tpl_cost(range)},
     Expect1 = maps:merge(InvoiceTpl, Req1),
-    {ok, Expect1} = api_client_invoice_templates:update(Context, InvoiceTplID, Req1),
+    {ok, Expect1} = capi_client_invoice_templates:update(Context, InvoiceTplID, Req1),
 
     Req2 = #{<<"product">> => <<"rubber duck">>},
     Expect2 = maps:merge(Expect1, Req2),
-    {ok, Expect2} = api_client_invoice_templates:update(Context, InvoiceTplID, Req2),
+    {ok, Expect2} = capi_client_invoice_templates:update(Context, InvoiceTplID, Req2),
 
     Req3 = #{<<"description">> => <<"only best rubber">>},
     Expect3 = maps:merge(Expect2, Req3),
-    {ok, Expect3} = api_client_invoice_templates:update(Context, InvoiceTplID, Req3),
+    {ok, Expect3} = capi_client_invoice_templates:update(Context, InvoiceTplID, Req3),
 
     Req4 = #{
         <<"product">> => <<"degu shampoo">>,
         <<"description">> => <<"fine soft sand for your pet">>
     },
     Expect4 = maps:merge(Expect3, Req4),
-    {ok, Expect4} = api_client_invoice_templates:update(Context, InvoiceTplID, Req4),
+    {ok, Expect4} = capi_client_invoice_templates:update(Context, InvoiceTplID, Req4),
 
     Req5 = #{<<"lifetime">> => get_lifetime(0, 1, 0)},
     Expect5 = maps:merge(Expect4, Req5),
-    {ok, Expect5} = api_client_invoice_templates:update(Context, InvoiceTplID, Req5),
+    {ok, Expect5} = capi_client_invoice_templates:update(Context, InvoiceTplID, Req5),
 
     Req6 = #{<<"metadata">> => #{<<"1">> => <<"2">>}},
     Expect6 = maps:merge(Expect5, Req6),
-    {ok, Expect6} = api_client_invoice_templates:update(Context, InvoiceTplID, Req6),
+    {ok, Expect6} = capi_client_invoice_templates:update(Context, InvoiceTplID, Req6),
 
     {save_config, Info}.
 
@@ -665,7 +664,7 @@ update_invoice_template_0_lifetime_test(Config) ->
     } = ?config(saved_config, Config),
     Context = ?config(context, Config),
     Req = #{<<"lifetime">> => get_lifetime(0, 0, 0)},
-    {error, Resp} = api_client_invoice_templates:update(Context, InvoiceTplID, Req),
+    {error, Resp} = capi_client_invoice_templates:update(Context, InvoiceTplID, Req),
     #{
         <<"code">> := <<"invalidRequest">>
     } = jsx:decode(Resp, [return_maps]),
@@ -678,7 +677,7 @@ delete_invoice_template_ok_test(Config) ->
         #{invoice_tpl_id := InvoiceTplID} = Info
     } = ?config(saved_config, Config),
     Context = ?config(context, Config),
-    ok = api_client_invoice_templates:delete(Context, InvoiceTplID),
+    ok = capi_client_invoice_templates:delete(Context, InvoiceTplID),
     {save_config, Info}.
 
 -spec create_invoice_with_template_removed_template_test(config()) -> _.
@@ -687,7 +686,7 @@ create_invoice_with_template_removed_template_test(Config) ->
     {delete_invoice_template_ok_test,
         #{invoice_tpl_id := InvoiceTplID, invoice_tpl_context := TplContext}
     } = ?config(saved_config, Config),
-    {error, _} = api_client_invoice_templates:create_invoice(TplContext, InvoiceTplID, #{}).
+    {error, _} = capi_client_invoice_templates:create_invoice(TplContext, InvoiceTplID, #{}).
 
 -spec create_payment_ok_test(config()) -> _.
 
@@ -727,7 +726,7 @@ get_invoice_by_id_ok_test(Config) ->
         invoice_id := InvoiceID,
         invoice_context := Context
     } = Info} = ?config(saved_config, Config),
-    {ok, _Body} = api_client_invoices:get_invoice_by_id(Context, InvoiceID),
+    {ok, _Body} = capi_client_invoices:get_invoice_by_id(Context, InvoiceID),
     {save_config, Info}.
 
 -spec get_invoice_events_ok_test(config()) -> _.
@@ -746,7 +745,7 @@ get_invoice_events_ok_test(Config) ->
         3000,
         Context
     ),
-    {ok, Events} = api_client_invoices:get_invoice_events(Context, InvoiceID, 10),
+    {ok, Events} = capi_client_invoices:get_invoice_events(Context, InvoiceID, 10),
     [
         #{
             <<"id">> := 1,
@@ -804,7 +803,7 @@ get_payments_ok_test(Config) ->
         invoice_context := Context,
         payment_id := PaymentID
     } = Info} = ?config(saved_config, Config),
-    {ok, [#{<<"id">> := PaymentID}]} = get_payments(InvoiceID, Context),
+    {ok, [#{<<"id">> := PaymentID}]} = capi_client_payments:get_payments(Context, InvoiceID),
     {save_config, Info}.
 
 -spec get_payment_by_id_ok_test(config()) -> _.
@@ -815,7 +814,7 @@ get_payment_by_id_ok_test(Config) ->
         invoice_id := InvoiceID,
         invoice_context := Context
     } = Info} = ?config(saved_config, Config),
-    {ok, _Body} = api_client_payments:get_payment_by_id(Context, InvoiceID, PaymentID),
+    {ok, _Body} = capi_client_payments:get_payment_by_id(Context, InvoiceID, PaymentID),
     {save_config, Info}.
 
 -spec search_invoices_ok_test(config()) -> _.
@@ -841,7 +840,7 @@ search_invoices_ok_test(Config) ->
         {paymentAmount, 10000}
     ],
 
-    {ok, _, _} = api_client_searches:search_invoices(Context, ShopID, Query).
+    {ok, _, _} = capi_client_searches:search_invoices(Context, ShopID, Query).
 
 -spec search_payments_ok_test(config()) -> _.
 
@@ -865,7 +864,7 @@ search_payments_ok_test(Config) ->
         {paymentAmount, 10000}
     ],
 
-    {ok, _, _} = api_client_searches:search_payments(Context, ShopID, Query).
+    {ok, _, _} = capi_client_searches:search_payments(Context, ShopID, Query).
 
 -spec get_payment_conversion_stats_ok_test(config()) -> _.
 
@@ -880,7 +879,7 @@ get_payment_conversion_stats_ok_test(Config) ->
         {split_unit, minute},
         {split_size, 1}
     ],
-    {ok, _Body} = api_client_analytics:get_payment_conversion_stats(Context, ShopID, Query).
+    {ok, _Body} = capi_client_analytics:get_payment_conversion_stats(Context, ShopID, Query).
 
 -spec get_payment_revenue_stats_ok_test(config()) -> _.
 
@@ -895,7 +894,7 @@ get_payment_revenue_stats_ok_test(Config) ->
         {split_unit, minute},
         {split_size, 1}
     ],
-    {ok, _Body} = api_client_analytics:get_payment_revenue_stats(Context, ShopID, Query).
+    {ok, _Body} = capi_client_analytics:get_payment_revenue_stats(Context, ShopID, Query).
 
 -spec get_payment_geo_stats_ok_test(config()) -> _.
 
@@ -910,7 +909,7 @@ get_payment_geo_stats_ok_test(Config) ->
         {split_unit, minute},
         {split_size, 1}
     ],
-    {ok, _Body} = api_client_analytics:get_payment_geo_stats(Context, ShopID, Query).
+    {ok, _Body} = capi_client_analytics:get_payment_geo_stats(Context, ShopID, Query).
 
 -spec get_payment_rate_stats_ok_test(config()) -> _.
 
@@ -925,7 +924,7 @@ get_payment_rate_stats_ok_test(Config) ->
         {split_unit, minute},
         {split_size, 1}
     ],
-    {ok, _Body} = api_client_analytics:get_payment_rate_stats(Context, ShopID, Query).
+    {ok, _Body} = capi_client_analytics:get_payment_rate_stats(Context, ShopID, Query).
 
 
 -spec get_payment_method_stats_ok_test(config()) -> _.
@@ -942,7 +941,7 @@ get_payment_method_stats_ok_test(Config) ->
         {split_size, 1},
         {paymentMethod, <<"bankCard">>}
     ],
-    {ok, _Body} = api_client_analytics:get_payment_method_stats(Context, ShopID, Query).
+    {ok, _Body} = capi_client_analytics:get_payment_method_stats(Context, ShopID, Query).
 
 -spec get_my_party_ok_test(config()) -> _.
 
@@ -991,9 +990,10 @@ get_contract_by_id_ok_test(Config) ->
     {create_contract_ok_test,
         ContractID
     } = ?config(saved_config, Config),
-    #{
+    Context = ?config(context, Config),
+    {ok, #{
         <<"id">> := ContractID
-    } = get_contract_by_id(ContractID, Config),
+    }} = capi_client_contracts:get_contract_by_id(Context, ContractID),
     {save_config, ContractID}.
 
 -spec create_payout_tool_ok_test(config()) -> _.
@@ -1013,9 +1013,10 @@ get_payout_tools_ok_test(Config) ->
     {create_payout_tool_ok_test,
         ContractID
     } = ?config(saved_config, Config),
-    [#{
+    Context = ?config(context, Config),
+    {ok, [#{
         <<"id">> := _PayoutToolID
-    } | _] = get_payout_tools(ContractID, Config),
+    } | _]} = capi_client_payouts:get_payout_tools(Context, ContractID),
     {save_config, ContractID}.
 
 -spec get_contracts_ok_test(config()) -> _.
@@ -1024,9 +1025,11 @@ get_contracts_ok_test(Config) ->
     {get_payout_tools_ok_test,
         ContractID
     } = ?config(saved_config, Config),
+    Context = ?config(context, Config),
+    {ok, Contracts} = capi_client_contracts:get_contracts(Context),
     lists:member(
         ContractID,
-        [C || #{ <<"id">> := C} <- get_contracts(Config)]
+        [C || #{ <<"id">> := C} <- Contracts]
     ) =:= true.
 
 -spec get_claim_by_id_ok_test(config()) -> _.
@@ -1126,11 +1129,12 @@ get_shop_by_id_ok_test(Config) ->
 -spec get_shops_ok_test(config()) -> _.
 
 get_shops_ok_test(Config) ->
-    [
+    Context = ?config(context, Config),
+    {ok, [
         #{
             <<"id">> := ShopID
         }
-    | _] = get_shops(Config),
+    | _]} = capi_client_shops:get_shops(Context),
     {save_config, ShopID}.
 
 
@@ -1201,13 +1205,13 @@ get_account_by_id_ok_test(Config) ->
         <<"currency">> := _
 
     %% @FIXME changin Account ID to string is not ok
-    } = default_get_shop_account_by_id(GuaranteeID, ShopID, Config).
+    } = default_get_shop_account_by_id(GuaranteeID, Config).
 
 -spec create_webhook_error_test(config()) -> _.
 create_webhook_error_test(Config) ->
     Context = ?config(context, Config),
     ShopID = -1, % nonexistent
-    {error, _} = api_client_webhooks:create_webhook(Context, #{
+    {error, _} = capi_client_webhooks:create_webhook(Context, #{
         <<"url">> => <<"http://localhost:8080/TODO">>,
         <<"scope">> => construct_invoices_scope(ShopID)
     }).
@@ -1216,22 +1220,23 @@ create_webhook_error_test(Config) ->
 create_webhook_receive_events_test(Config) ->
     Context = ?config(context, Config),
     % % list is empty?
-    % [] = api_client_webhooks:get_webhooks(Context),
+    % [] = capi_client_webhooks:get_webhooks(Context),
     % create successful?
-    Shop = get_latest(get_shops(Config)),
+    {ok, Shops} = capi_client_shops:get_shops(Context),
+    Shop = get_latest(Shops),
     ShopID = maps:get(<<"id">>, Shop),
     WebhookParams = #{
         <<"url">>   => <<"http://localhost:8080/TODO">>,
         <<"scope">> => construct_invoices_scope(ShopID, ['InvoiceCancelled'])
     },
-    {ok, Webhook = #{<<"id">> := WebhookID}} = api_client_webhooks:create_webhook(Context, WebhookParams),
-    {ok, Webhook} = api_client_webhooks:get_webhook_by_id(Context, WebhookID),
+    {ok, Webhook = #{<<"id">> := WebhookID}} = capi_client_webhooks:create_webhook(Context, WebhookParams),
+    {ok, Webhook} = capi_client_webhooks:get_webhook_by_id(Context, WebhookID),
     % list is not empty then?
-    true = lists:member(Webhook, api_client_webhooks:get_webhooks(Context)),
+    true = lists:member(Webhook, capi_client_webhooks:get_webhooks(Context)),
     % delete succeeded idempotently?
-    ok = api_client_webhooks:delete_webhook_by_id(Context, WebhookID),
-    ok = api_client_webhooks:delete_webhook_by_id(Context, WebhookID),
-    [] = [W || #{<<"id">> := W} <- api_client_webhooks:get_webhooks(Context), W =:= WebhookID],
+    ok = capi_client_webhooks:delete_webhook_by_id(Context, WebhookID),
+    ok = capi_client_webhooks:delete_webhook_by_id(Context, WebhookID),
+    [] = [W || #{<<"id">> := W} <- capi_client_webhooks:get_webhooks(Context), W =:= WebhookID],
     ok.
 
 construct_invoices_scope(ShopID) ->
@@ -1290,7 +1295,7 @@ default_create_invoice(Config) ->
         <<"description">> => ?DEFAULT_DESCRIPTION
     },
     Context = ?config(context, Config),
-    {ok, Body} = api_client_invoices:create_invoice(Context, Req),
+    {ok, Body} = capi_client_invoices:create_invoice(Context, Req),
     Body.
 
 default_create_invoice_tpl(Config) ->
@@ -1304,12 +1309,12 @@ default_create_invoice_tpl(Config) ->
         <<"metadata">> => ?DEFAULT_TPL_META
     },
     Context = ?config(context, Config),
-    {ok, Body} = api_client_invoice_templates:create(Context, Req),
+    {ok, Body} = capi_client_invoice_templates:create(Context, Req),
     Body.
 
 default_create_invoice_with_tpl(InvoiceTplID, Context) ->
     Req = #{},
-    {ok, Body} = api_client_invoice_templates:create_invoice(Context, InvoiceTplID, Req),
+    {ok, Body} = capi_client_invoice_templates:create_invoice(Context, InvoiceTplID, Req),
     Body.
 
 default_invoice_tpl_cost(unlim) ->
@@ -1369,42 +1374,8 @@ default_create_contract(ContractID, Config) ->
 
 create_claim(Config, Changeset) ->
     Context = ?config(context, Config),
-    {ok, Claim} = api_client_claims:create_claim(Context, Changeset),
+    {ok, Claim} = capi_client_claims:create_claim(Context, Changeset),
     Claim.
-
-get_payments(InvoiceID, Context) ->
-    Params = #{
-        binding => #{
-            <<"invoiceID">> => InvoiceID
-        }
-    },
-    {Url, PreparedParams, Opts} = api_client_lib:make_request(Context, Params),
-    Response = swag_client_payments_api:get_payments(Url, PreparedParams, Opts),
-    api_client_lib:handle_response(Response).
-
-get_contract_by_id(ContractID, Config) ->
-    Context = ?config(context, Config),
-    Params = #{
-        binding => #{
-            <<"contractID">> => ContractID
-        }
-    },
-    {Url, PreparedParams, Opts} = api_client_lib:make_request(Context, Params),
-    Response = swag_client_contracts_api:get_contract_by_id(Url, PreparedParams, Opts),
-    handle_response(Response).
-
-get_contracts(Config) ->
-    Context = ?config(context, Config),
-    {Url, PreparedParams, Opts} = api_client_lib:make_request(Context, #{}),
-    Response = swag_client_contracts_api:get_contracts(Url, PreparedParams, Opts),
-    handle_response(Response).
-
-get_shops(Config) ->
-    Context = ?config(context, Config),
-    Params = #{},
-    {Url, PreparedParams, Opts} = api_client_lib:make_request(Context, Params),
-    Response = swag_client_shops_api:get_shops(Url, PreparedParams, Opts),
-    handle_response(Response).
 
 get_latest(Es) ->
     % Assuming the latest element will have highest numeric ID
@@ -1449,18 +1420,7 @@ get_context(Token) ->
     get_context(Token, 10, 5000).
 
 get_context(Token, Retries, Timeout) ->
-    api_client_lib:get_context(?CAPI_URL, Token, Retries, Timeout, ?PROTOCOL).
-
-get_payout_tools(ContractID, Config) ->
-    Context = ?config(context, Config),
-    Params = #{
-        binding => #{
-            <<"contractID">> => ContractID
-        }
-    },
-    {Url, PreparedParams, Opts} = api_client_lib:make_request(Context, Params),
-    Response = swag_client_payouts_api:get_payout_tools(Url, PreparedParams, Opts),
-    handle_response(Response).
+    capi_client_lib:get_context(?CAPI_URL, Token, Retries, Timeout, ?PROTOCOL).
 
 default_tokenize_card(Context, _Config) ->
     Req = #{
@@ -1475,7 +1435,7 @@ default_tokenize_card(Context, _Config) ->
             <<"fingerprint">> => <<"test fingerprint">>
         }
     },
-    api_client_tokens:create_payment_tool_token(Context, Req).
+    capi_client_tokens:create_payment_tool_token(Context, Req).
 
 default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, _Config) ->
     Req = #{
@@ -1486,58 +1446,53 @@ default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, _Co
             <<"email">> => <<"bla@bla.ru">>
         }
     },
-    {ok, Body} = api_client_payments:create_payment(Context, Req, InvoiceID),
+    {ok, Body} = capi_client_payments:create_payment(Context, Req, InvoiceID),
     Body.
 
 default_get_party(Config) ->
     Context = ?config(context, Config),
-    {ok, Body} = api_client_parties:get_my_party(Context),
+    {ok, Body} = capi_client_parties:get_my_party(Context),
     Body.
 
 default_get_claim_by_id(ClaimID, Config) ->
     Context = ?config(context, Config),
-    {ok, Body} = api_client_claims:get_claim_by_id(Context, ClaimID),
+    {ok, Body} = capi_client_claims:get_claim_by_id(Context, ClaimID),
     Body.
 
 default_get_claims_by_status(Status, Config) ->
     Context = ?config(context, Config),
-    {ok, Body} = api_client_claims:get_claims_by_status(Context, Status),
+    {ok, Body} = capi_client_claims:get_claims_by_status(Context, Status),
     Body.
 
 default_suspend_my_party(Config) ->
     Context = ?config(context, Config),
     Context = ?config(context, Config),
-    api_client_parties:suspend_my_party(Context).
+    capi_client_parties:suspend_my_party(Context).
 
 default_activate_my_party(Config) ->
     Context = ?config(context, Config),
-    api_client_parties:activate_my_party(Context).
+    capi_client_parties:activate_my_party(Context).
 
 default_suspend_shop(ShopID, Config) ->
     Context = ?config(context, Config),
-    api_client_shops:suspend_shop(Context, ShopID).
+    capi_client_shops:suspend_shop(Context, ShopID).
 
 default_activate_shop(ShopID, Config) ->
     Context = ?config(context, Config),
-    api_client_shops:activate_shop(Context,ShopID).
+    capi_client_shops:activate_shop(Context,ShopID).
 
 default_get_shop_by_id(ShopID, Config) ->
     Context = ?config(context, Config),
-    Params = #{
-        binding => #{
-            <<"shopID">> => ShopID
-        }
-    },
-    {Url, PreparedParams, Opts} = api_client_lib:make_request(Context, Params),
-    Response = swag_client_shops_api:get_shop_by_id(Url, PreparedParams, Opts),
-    {ok, R} = api_client_lib:handle_response(Response),
+    {ok, R} = capi_client_shops:get_shop_by_id(Context, ShopID),
     R.
 
 default_create_shop(ShopID, CategoryID, Config) ->
+    Context = ?config(context, Config),
     ContractID = generate_contract_id(),
     Claim = default_create_contract(ContractID, Config),
     {ok, _} = default_approve_claim(Claim),
-    #{<<"id">> := PayoutToolID} = lists:last(get_payout_tools(ContractID, Config)),
+    {ok, PayoutTools} = capi_client_payouts:get_payout_tools(Context, ContractID),
+    #{<<"id">> := PayoutToolID} = lists:last(PayoutTools),
     default_create_shop(ShopID, CategoryID, ContractID, PayoutToolID, Config).
 
 
@@ -1569,12 +1524,12 @@ default_create_shop(ShopID, CategoryID, ContractID, PayoutToolID, Config) ->
 
 default_get_categories(Config) ->
     Context = ?config(context, Config),
-    {ok, Body} = api_client_categories:get_categories(Context),
+    {ok, Body} = capi_client_categories:get_categories(Context),
     Body.
 
 default_get_category_by_id(CategoryID, Config) ->
     Context = ?config(context, Config),
-    {ok, Body} = api_client_categories:get_category_by_ref(Context,  CategoryID),
+    {ok, Body} = capi_client_categories:get_category_by_ref(Context,  CategoryID),
     Body.
 
 default_revoke_claim(ClaimID, Config) ->
@@ -1582,32 +1537,28 @@ default_revoke_claim(ClaimID, Config) ->
     {ok, #{
         <<"id">> := ClaimID,
         <<"revision">> := ClaimRevision
-    }} = api_client_claims:get_claim_by_id(Context, ClaimID),
+    }} = capi_client_claims:get_claim_by_id(Context, ClaimID),
     Reason = "me want dat",
-    api_client_claims:revoke_claim_by_id(Context, Reason, ClaimID, ClaimRevision).
+    capi_client_claims:revoke_claim_by_id(Context, Reason, ClaimID, ClaimRevision).
 
 default_fulfill_invoice(InvoiceID, Config) ->
     Context = ?config(context, Config),
     Reason = "me want dat",
-    api_client_invoices:fulfill_invoice(Context,  InvoiceID, Reason).
+    capi_client_invoices:fulfill_invoice(Context,  InvoiceID, Reason).
 
 default_rescind_invoice(InvoiceID, Config) ->
     Context = ?config(context, Config),
     Reason = "me want dat",
-    api_client_invoices:rescind_invoice(Context,  InvoiceID, Reason).
+    capi_client_invoices:rescind_invoice(Context,  InvoiceID, Reason).
 
 get_locations_names(GeoIDs, Lang, Config) ->
     Context = ?config(context, Config),
     PreparedGeo = genlib_string:join($,,[genlib:to_binary(I) || I <- GeoIDs]),
-    Params = #{
-        qs_val => #{
-            <<"geoIDs">> => PreparedGeo,
-            <<"language">> => Lang
-        }
+    Query = #{
+        <<"geoIDs">> => PreparedGeo,
+        <<"language">> => Lang
     },
-    {Url, PreparedParams, Opts} = api_client_lib:make_request(Context, Params),
-    Response = swag_client_geo_api:get_locations_names(Url, PreparedParams, Opts),
-    {ok, R} = api_client_lib:handle_response(Response),
+    {ok, R} = capi_client_geo:get_location_names(Context, Query),
     R.
 
 %% @FIXME thats dirty
@@ -2074,17 +2025,10 @@ get_domain_fixture(Proxies) ->
     ],
     Basic ++ Proxies.
 
-default_get_shop_account_by_id(AccountID, ShopID, Config) ->
+default_get_shop_account_by_id(AccountID, Config) ->
     Context = ?config(context, Config),
-    Params = #{
-        binding => #{
-            <<"accountID">> => AccountID,
-            <<"shopID">> => ShopID
-        }
-    },
-    {Url, PreparedParams, Opts} = api_client_lib:make_request(Context, Params),
-    Response =  swag_client_accounts_api:get_account_by_id(Url, PreparedParams, Opts),
-    handle_response(Response).
+    {ok, Response} = capi_client_accounts:get_account_by_id(Context, AccountID),
+    Response.
 
 get_body(ClientRef) ->
     {ok, Body} = hackney:body(ClientRef),
@@ -2185,14 +2129,10 @@ construct_proxy(ID, Url, Options) ->
         }
     }}.
 
-handle_response(Response) ->
-    {ok, R} = api_client_lib:handle_response(Response),
-    R.
-
 wait_event_w_change(InvoiceID, ChangePattern, TimeLeft, Context) when TimeLeft > 0 ->
     Started = genlib_time:ticks(),
     Limit = 1000,
-    {ok, Events} = api_client_invoices:get_invoice_events(Context, InvoiceID, Limit),
+    {ok, Events} = capi_client_invoices:get_invoice_events(Context, InvoiceID, Limit),
     Filtered = lists:filter(
         fun(#{<<"changes">> := EventChanges}) ->
             is_changes_match_patterns(EventChanges, ChangePattern)

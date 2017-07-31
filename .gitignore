@@ -13,6 +13,7 @@ erl_crash.dump
 
 # generated
 apps/swag_server/*
+apps/swag_client/*
 
 
 # containerization
