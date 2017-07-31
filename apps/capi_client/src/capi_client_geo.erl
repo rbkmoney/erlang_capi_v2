@@ -3,7 +3,7 @@
 -export([get_location_names/2]).
 
 -type context() :: capi_client_lib:context().
--type query_string() :: capi_client_lib:query_string().
+-type query_string() :: map().
 
 -spec get_location_names(context(), query_string()) -> {ok, term()} | {error, term()}.
 get_location_names(Context, Query) ->

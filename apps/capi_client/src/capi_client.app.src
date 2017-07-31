@@ -4,7 +4,7 @@
     {applications, [
         kernel,
         stdlib,
-        swag_server,
+        swag_client,
         genlib
     ]}
 ]}.

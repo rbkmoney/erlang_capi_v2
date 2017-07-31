@@ -7,12 +7,12 @@
 -export([get_payment_method_stats/3]).
 
 -type context() :: capi_client_lib:context().
--type analytics_search_query() :: capi_client_lib:analytics_search_query().
+-type search_query() :: capi_client_lib:search_query().
 
--spec get_payment_conversion_stats(context(), binary(), analytics_search_query()) ->
+-spec get_payment_conversion_stats(context(), binary(), search_query()) ->
     {ok, term()} | {error, term()}.
 get_payment_conversion_stats(Context, ShopID, Query) ->
-    Qs = capi_client_lib:make_analytics_search_query_string(Query),
+    Qs = capi_client_lib:make_search_query_string(Query),
     Params = #{
         binding => #{<<"shopID">> => ShopID},
         qs_val => Qs
@@ -21,9 +21,9 @@ get_payment_conversion_stats(Context, ShopID, Query) ->
     Response = swag_client_analytics_api:get_payment_conversion_stats(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 
--spec get_payment_revenue_stats(context(), binary(), analytics_search_query()) -> {ok, term()} | {error, term()}.
+-spec get_payment_revenue_stats(context(), binary(), search_query()) -> {ok, term()} | {error, term()}.
 get_payment_revenue_stats(Context, ShopID, Query) ->
-    Qs = capi_client_lib:make_analytics_search_query_string(Query),
+    Qs = capi_client_lib:make_search_query_string(Query),
     Params = #{
         binding => #{<<"shopID">> => ShopID},
         qs_val => Qs
@@ -32,9 +32,9 @@ get_payment_revenue_stats(Context, ShopID, Query) ->
     Response = swag_client_analytics_api:get_payment_revenue_stats(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 
--spec get_payment_geo_stats(context(), binary(), analytics_search_query()) -> {ok, term()} | {error, term()}.
+-spec get_payment_geo_stats(context(), binary(), search_query()) -> {ok, term()} | {error, term()}.
 get_payment_geo_stats(Context, ShopID, Query) ->
-    Qs = capi_client_lib:make_analytics_search_query_string(Query),
+    Qs = capi_client_lib:make_search_query_string(Query),
     Params = #{
         binding => #{<<"shopID">> => ShopID},
         qs_val => Qs
@@ -43,9 +43,9 @@ get_payment_geo_stats(Context, ShopID, Query) ->
     Response = swag_client_analytics_api:get_payment_geo_stats(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 
--spec get_payment_rate_stats(context(), binary(), analytics_search_query()) -> {ok, term()} | {error, term()}.
+-spec get_payment_rate_stats(context(), binary(), search_query()) -> {ok, term()} | {error, term()}.
 get_payment_rate_stats(Context, ShopID, Query) ->
-    Qs = capi_client_lib:make_analytics_search_query_string(Query),
+    Qs = capi_client_lib:make_search_query_string(Query),
     Params = #{
         binding => #{<<"shopID">> => ShopID},
         qs_val => Qs
@@ -54,9 +54,9 @@ get_payment_rate_stats(Context, ShopID, Query) ->
     Response = swag_client_analytics_api:get_payment_rate_stats(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 
--spec get_payment_method_stats(context(), binary(), analytics_search_query()) -> {ok, term()} | {error, term()}.
+-spec get_payment_method_stats(context(), binary(), search_query()) -> {ok, term()} | {error, term()}.
 get_payment_method_stats(Context, ShopID, Query) ->
-    Qs = capi_client_lib:make_analytics_search_query_string(Query),
+    Qs = capi_client_lib:make_search_query_string(Query),
     Params = #{
         binding => #{<<"shopID">> => ShopID},
         qs_val => Qs

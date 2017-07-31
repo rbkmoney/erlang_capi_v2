@@ -294,7 +294,7 @@ init_per_suite(Config) ->
         timeout => 5000,
         protocol => ?PROTOCOL
     },
-    {ok, Token} = capi_client_lib:login(Params),
+    {ok, Token} = capi_ct_helper:login(Params),
     Retries = 10,
     Timeout = 5000,
     Context = get_context(Token, Retries, Timeout),

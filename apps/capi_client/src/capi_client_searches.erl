@@ -4,11 +4,11 @@
 -export([search_payments/3]).
 
 -type context() :: capi_client_lib:context().
--type analytics_search_query() :: capi_client_lib:analytics_search_query().
+-type search_query() :: capi_client_lib:search_query().
 
--spec search_invoices(context(), binary(), analytics_search_query()) -> {ok, term(), term()} | {error, term()}.
+-spec search_invoices(context(), binary(), search_query()) -> {ok, term(), term()} | {error, term()}.
 search_invoices(Context, ShopID, Query) ->
-    Qs = capi_client_lib:make_analytics_search_query_string(Query),
+    Qs = capi_client_lib:make_search_query_string(Query),
     Params = #{
         binding => #{<<"shopID">> => ShopID},
         qs_val => Qs
@@ -21,9 +21,9 @@ search_invoices(Context, ShopID, Query) ->
         {error, Error} -> {error, Error}
     end.
 
--spec search_payments(context(), binary(), analytics_search_query()) -> {ok, term(), term()} | {error, term()}.
+-spec search_payments(context(), binary(), search_query()) -> {ok, term(), term()} | {error, term()}.
 search_payments(Context, ShopID, Query) ->
-    Qs = capi_client_lib:make_analytics_search_query_string(Query),
+    Qs = capi_client_lib:make_search_query_string(Query),
     Params = #{
         binding => #{<<"shopID">> => ShopID},
         qs_val => Qs
