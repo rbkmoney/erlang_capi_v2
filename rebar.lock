@@ -16,7 +16,7 @@
  {<<"idna">>,{pkg,<<"idna">>,<<"1.2.0">>},1},
  {<<"jesse">>,
   {git,"git@github.com:rbkmoney/jesse.git",
-       {ref,"9ba37022130e789a40c827690ce95567980d85a1"}},
+       {ref,"39105922d1ce5834383d8e8aa877c60319b9834a"}},
   0},
  {<<"jose">>,{pkg,<<"jose">>,<<"1.7.9">>},0},
  {<<"jsx">>,{pkg,<<"jsx">>,<<"2.8.2">>},0},

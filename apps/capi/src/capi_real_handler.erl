@@ -97,6 +97,7 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
     ContactInfo = genlib_map:get(<<"contactInfo">>, PaymentParams),
     Token = genlib_map:get(<<"paymentToolToken">>, PaymentParams),
     EncodedSession = genlib_map:get(<<"paymentSession">>, PaymentParams),
+    Flow = genlib_map:get(<<"flow">>, PaymentParams),
     UserInfo = get_user_info(Context),
 
     Result = try
@@ -114,7 +115,8 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
                     phone_number = genlib_map:get(<<"phoneNumber">>, ContactInfo),
                     email = genlib_map:get(<<"email">>, ContactInfo)
                 }
-            }
+            },
+            'flow' = encode_flow(Flow)
         },
         service_call(
             invoicing,
@@ -331,6 +333,80 @@ process_request('GetPaymentByID', Req, Context, ReqCtx) ->
                     {ok, {404, [], general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
                     {ok, {404, [], general_error(<<"Invoice not found">>)}}
+            end
+    end;
+
+process_request('CancelPayment', Req, Context, ReqCtx) ->
+    PaymentID = maps:get(paymentID, Req),
+    InvoiceID = maps:get(invoiceID, Req),
+    Params = maps:get('Reason', Req),
+    Reason = maps:get(<<"reason">>, Params),
+    UserInfo = get_user_info(Context),
+
+    Result = service_call(
+        invoicing,
+        'CancelPayment',
+        [UserInfo, InvoiceID, PaymentID, Reason],
+        ReqCtx
+    ),
+    case Result of
+        {ok, _} ->
+            {ok, {202, [], undefined}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvoicePaymentNotFound{} ->
+                    {ok, {404, [], general_error(<<"Payment not found">>)}};
+                #payproc_InvalidPaymentStatus{} ->
+                    {ok, {400, [], logic_error(invalidPaymentStatus, <<"Invalid payment status">>)}};
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                #payproc_InvoiceNotFound{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                #'InvalidRequest'{errors = Errors} ->
+                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                #payproc_InvalidOperation{} ->
+                    {ok, {400, [], logic_error(invalidOperation, <<"Invalid operation">>)}};
+                #payproc_InvalidPartyStatus{} ->
+                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                #payproc_InvalidShopStatus{} ->
+                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
+            end
+    end;
+
+process_request('CapturePayment', Req, Context, ReqCtx) ->
+    PaymentID = maps:get(paymentID, Req),
+    InvoiceID = maps:get(invoiceID, Req),
+    Params = maps:get('Reason', Req),
+    Reason = maps:get(<<"reason">>, Params),
+    UserInfo = get_user_info(Context),
+
+    Result = service_call(
+        invoicing,
+        'CapturePayment',
+        [UserInfo, InvoiceID, PaymentID, Reason],
+        ReqCtx
+    ),
+    case Result of
+        {ok, _} ->
+            {ok, {202, [], undefined}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvoicePaymentNotFound{} ->
+                    {ok, {404, [], general_error(<<"Payment not found">>)}};
+                #payproc_InvalidPaymentStatus{} ->
+                    {ok, {400, [], logic_error(invalidPaymentStatus, <<"Invalid payment status">>)}};
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                #payproc_InvoiceNotFound{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                #'InvalidRequest'{errors = Errors} ->
+                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                #payproc_InvalidOperation{} ->
+                    {ok, {400, [], logic_error(invalidOperation, <<"Invalid operation">>)}};
+                #payproc_InvalidPartyStatus{} ->
+                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                #payproc_InvalidShopStatus{} ->
+                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
             end
     end;
 
@@ -1541,6 +1617,15 @@ encode_legal_entity(#{
 encode_registered_user(#{<<"email">> := Email}) ->
     #domain_RegisteredUser{email = Email}.
 
+encode_flow(#{<<"type">> := <<"PaymentFlowInstant">>}) ->
+    {instant, #payproc_InvoicePaymentParamsFlowInstant{}};
+
+encode_flow(#{<<"type">> := <<"PaymentFlowHold">>} = Entity) ->
+    OnHoldExpiration = maps:get(<<"onHoldExpiration">>, Entity),
+    {hold, #payproc_InvoicePaymentParamsFlowHold{
+        on_hold_expiration = binary_to_existing_atom(OnHoldExpiration, utf8)
+    }}.
+
 make_invoice_and_token(Invoice, PartyID, Context) ->
     #{
         <<"invoice">> => decode_invoice(Invoice),
@@ -1736,7 +1821,8 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
     cost = #domain_Cash{
         amount = Amount,
         currency = Currency
-    }
+    },
+    flow = Flow
 }) ->
 
     genlib_map:compact(maps:merge(#{
@@ -1744,7 +1830,7 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
         <<"invoiceID">> => InvoiceID,
         <<"createdAt">> => CreatedAt,
         % TODO whoops, nothing to get it from yet
-        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
+        <<"flow">> => decode_flow(Flow),
         <<"amount">> => Amount,
         <<"currency">> => decode_currency(Currency),
         <<"contactInfo">> => decode_contact_info(ContactInfo),
@@ -1849,6 +1935,19 @@ decode_stat_payment_tool_details(PaymentTool) ->
 
 decode_stat_payment_status(PaymentStatus) ->
     decode_payment_status(merchstat_to_domain(PaymentStatus)).
+
+decode_flow({instant, _}) ->
+    #{<<"type">> => <<"PaymentFlowInstant">>};
+
+decode_flow({hold, #domain_InvoicePaymentFlowHold{
+    'on_hold_expiration' = OnHoldExpiration,
+    'held_until' = HeldUntil
+}}) ->
+    #{
+        <<"type">> => <<"PaymentFlowHold">>,
+        <<"onHoldExpiration">> => atom_to_binary(OnHoldExpiration, utf8),
+        <<"heldUntil">> => HeldUntil
+    }.
 
 merchstat_to_domain({bank_card, #merchstat_BankCard{
     'token'  = Token,

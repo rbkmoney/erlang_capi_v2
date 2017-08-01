@@ -96,7 +96,7 @@ handle_response(Response) ->
 
 -spec handle_response(integer(), term()) ->
     {ok, term()} | {error, term()}.
-handle_response(204, _) ->
+handle_response(Code, _) when Code =:= 202; Code =:= 204 ->
     {ok, undefined};
 handle_response(Code, Body) when Code div 100 == 2 ->
     %% 2xx HTTP code

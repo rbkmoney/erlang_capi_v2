@@ -38,6 +38,9 @@
     fulfill_invoice_ok_test/1,
     get_payments_ok_test/1,
     get_payment_by_id_ok_test/1,
+    create_payment_hold_ok_test/1,
+    cancel_payment_ok_test/1,
+    capture_payment_ok_test/1,
     %%%%
     create_invoice_template_badard_test/1,
     create_invoice_template_no_shop_test/1,
@@ -148,7 +151,9 @@ all() ->
         {group, shops_management},
         {group, accounts_management},
         {group, webhook_management},
-        {group, geo_ip}
+        {group, geo_ip},
+        {group, cancel_payment},
+        {group, capture_payment}
     ].
 
 -spec groups() -> [
@@ -256,6 +261,18 @@ groups() ->
         ]},
         {geo_ip, [parallel], [
             get_locations_names_ok_test
+        ]},
+        {cancel_payment, [sequence], [
+            create_invoice_ok_test,
+            create_payment_tool_token_ok_test,
+            create_payment_hold_ok_test,
+            cancel_payment_ok_test
+        ]},
+        {capture_payment, [sequence], [
+            create_invoice_ok_test,
+            create_payment_tool_token_ok_test,
+            create_payment_hold_ok_test,
+            capture_payment_ok_test
         ]}
     ].
 %%
@@ -706,6 +723,52 @@ create_payment_ok_test(Config) ->
     ),
     {save_config, Info#{payment_id => PaymentID}}.
 
+-spec create_payment_hold_ok_test(config()) -> _.
+
+create_payment_hold_ok_test(Config) ->
+    {create_payment_tool_token_ok_test, #{
+        session := PaymentSession,
+        payment_tool_token := PaymentToolToken,
+        invoice_id := InvoiceID
+    }} = ?config(saved_config, Config),
+    #{<<"id">> := PaymentID} = default_create_payment_hold(
+        InvoiceID,
+        PaymentSession,
+        PaymentToolToken,
+        Config
+    ),
+    {save_config, #{payment_id => PaymentID, invoice_id => InvoiceID}}.
+
+-spec cancel_payment_ok_test(config()) -> _.
+
+cancel_payment_ok_test(Config) ->
+    {create_payment_hold_ok_test,
+        #{payment_id := PaymentID, invoice_id := InvoiceID}
+    } = ?config(saved_config, Config),
+    wait_payment_status_change(
+        InvoiceID,
+        PaymentID,
+        <<"processed">>,
+        3000,
+        ?config(context, Config)
+    ),
+    ok = default_cancel_payment(InvoiceID, PaymentID, Config).
+
+-spec capture_payment_ok_test(config()) -> _.
+
+capture_payment_ok_test(Config) ->
+    {create_payment_hold_ok_test,
+        #{payment_id := PaymentID, invoice_id := InvoiceID}
+    } = ?config(saved_config, Config),
+    wait_payment_status_change(
+        InvoiceID,
+        PaymentID,
+        <<"processed">>,
+        3000,
+        ?config(context, Config)
+    ),
+    ok = default_capture_payment(InvoiceID, PaymentID, Config).
+
 -spec create_payment_tool_token_ok_test(config()) -> _.
 
 create_payment_tool_token_ok_test(Config) ->
@@ -773,7 +836,7 @@ get_invoice_events_ok_test(Config) ->
             }]
         },
         #{
-            <<"id">> := 4,
+            <<"id">> := 5,
             <<"changes">> := [
                 #{
                     <<"changeType">> := <<"PaymentStatusChanged">>,
@@ -787,7 +850,7 @@ get_invoice_events_ok_test(Config) ->
             ]
         },
         #{
-            <<"id">> := 5,
+            <<"id">> := 6,
             <<"changes">> := [#{
                 <<"changeType">> := <<"InvoiceStatusChanged">>,
                 <<"status">> := <<"fulfilled">>
@@ -1441,7 +1504,20 @@ default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, _Co
     Req = #{
         <<"paymentSession">> => PaymentSession,
         <<"paymentToolToken">> => PaymentToolToken,
-        <<"flow">> => #{<<"type">> => <<"PaymentParamsFlowInstant">>},
+        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
+        <<"contactInfo">> => #{
+            <<"email">> => <<"bla@bla.ru">>
+        }
+    },
+    {ok, Body} = capi_client_payments:create_payment(Context, Req, InvoiceID),
+    Body.
+
+default_create_payment_hold(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
+    Context = ?config(context, Config),
+    Req = #{
+        <<"paymentSession">> => PaymentSession,
+        <<"paymentToolToken">> => PaymentToolToken,
+        <<"flow">> => #{<<"type">> => <<"PaymentFlowHold">>, <<"onHoldExpiration">> => <<"cancel">>},
         <<"contactInfo">> => #{
             <<"email">> => <<"bla@bla.ru">>
         }
@@ -1550,6 +1626,16 @@ default_rescind_invoice(InvoiceID, Config) ->
     Context = ?config(context, Config),
     Reason = "me want dat",
     capi_client_invoices:rescind_invoice(Context,  InvoiceID, Reason).
+
+default_cancel_payment(InvoiceID, PaymentID, Config) ->
+    Context = ?config(context, Config),
+    Reason = "want to cancel",
+    capi_client_payments:cancel_payment(Context, InvoiceID, PaymentID, Reason).
+
+default_capture_payment(InvoiceID, PaymentID, Config) ->
+    Context = ?config(context, Config),
+    Reason = "want to capture",
+    capi_client_payments:capture_payment(Context, InvoiceID, PaymentID, Reason).
 
 get_locations_names(GeoIDs, Lang, Config) ->
     Context = ?config(context, Config),
@@ -1686,7 +1772,8 @@ get_domain_fixture(Proxies) ->
                         )
                     ]}
                 }
-            ]}
+            ]},
+            hold_lifetime = #domain_HoldLifetime{seconds = 1}
         }
     },
     TermSetLive = #domain_TermSet{
@@ -1931,7 +2018,7 @@ get_domain_fixture(Proxies) ->
             data = #domain_Provider{
                 name = <<"Drovider">>,
                 description = <<"I'm out of ideas of what to write here">>,
-                terminal = {value, [?trm(5), ?trm(6)]},
+                terminal = {value, [?trm(5), ?trm(6), ?trm(7)]},
                 proxy = #domain_Proxy{
                     ref = ?prx(1),
                     additional = #{
@@ -1997,6 +2084,38 @@ get_domain_fixture(Proxies) ->
                     <<"override">> => <<"Drominal 1">>
                 },
                 risk_coverage = low
+            }
+        }},
+        {terminal, #domain_TerminalObject{
+            ref = ?trm(7),
+            data = #domain_Terminal{
+                name = <<"Teminal for holds">>,
+                description = <<"Teminal for holds">>,
+                payment_method = ?pmt(bank_card, visa),
+                category = ?cat(?LIVE_CATEGORY_ID),
+                cash_flow = [
+                    ?cfpost(
+                        {provider, settlement},
+                        {merchant, settlement},
+                        ?share(1, 1, payment_amount)
+                    ),
+                    ?cfpost(
+                        {system, settlement},
+                        {provider, settlement},
+                        ?share(16, 1000, payment_amount)
+                    )
+                ],
+                account = ?trmacc(
+                    <<"RUB">>,
+                    maps:get(terminal_3_settlement, Accounts)
+                ),
+                options = #{
+                    <<"override">> => <<"Teminal for holds">>
+                },
+                risk_coverage = low,
+                payment_flow = {hold, #domain_TerminalPaymentFlowHold{
+                    hold_lifetime = #domain_HoldLifetime{seconds = 1}
+                }}
             }
         }},
         {payment_method, #domain_PaymentMethodObject{
@@ -2163,6 +2282,20 @@ get_due_date() ->
     {{Y, M, D}, Time} = calendar:local_time(),
     {ok, DueDate} = rfc3339:format({{Y + 1, M, D}, Time}),
     DueDate.
+
+wait_payment_status_change(InvoiceID, PaymentID, ChangePattern, TimeLeft, Context) when TimeLeft > 0 ->
+    Started = genlib_time:ticks(),
+    case capi_client_payments:get_payment_by_id(Context, InvoiceID, PaymentID) of
+        {ok, #{<<"status">> := ChangePattern}} ->
+            ok;
+        _ ->
+            timer:sleep(200),
+            Now = genlib_time:ticks(),
+            wait_payment_status_change(InvoiceID, PaymentID, ChangePattern, TimeLeft - (Now - Started) div 1000, Context)
+    end;
+
+wait_payment_status_change(InvoiceID, PaymentId, ChangePattern, _, _Context) ->
+    error({event_limit_exceeded, {InvoiceID, PaymentId, ChangePattern}}).
 
 get_lifetime() ->
     get_lifetime(0, 0, 7).
