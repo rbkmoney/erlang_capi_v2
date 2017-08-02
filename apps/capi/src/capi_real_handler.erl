@@ -97,7 +97,7 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
     ContactInfo = genlib_map:get(<<"contactInfo">>, PaymentParams),
     Token = genlib_map:get(<<"paymentToolToken">>, PaymentParams),
     EncodedSession = genlib_map:get(<<"paymentSession">>, PaymentParams),
-    Flow = genlib_map:get(<<"flow">>, PaymentParams),
+    Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
     UserInfo = get_user_info(Context),
 
     Result = try
@@ -1621,7 +1621,7 @@ encode_flow(#{<<"type">> := <<"PaymentFlowInstant">>}) ->
     {instant, #payproc_InvoicePaymentParamsFlowInstant{}};
 
 encode_flow(#{<<"type">> := <<"PaymentFlowHold">>} = Entity) ->
-    OnHoldExpiration = maps:get(<<"onHoldExpiration">>, Entity),
+    OnHoldExpiration = maps:get(<<"onHoldExpiration">>, Entity, <<"cancel">>),
     {hold, #payproc_InvoicePaymentParamsFlowHold{
         on_hold_expiration = binary_to_existing_atom(OnHoldExpiration, utf8)
     }}.

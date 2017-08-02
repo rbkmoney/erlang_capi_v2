@@ -504,8 +504,7 @@ create_payment_ok_w_access_token_test(Config) ->
         InvoiceID,
         PaymentSession,
         PaymentToolToken,
-        Context,
-        Config
+        Context
     ),
     wait_event_w_change(
         InvoiceID,
@@ -718,8 +717,7 @@ create_payment_ok_test(Config) ->
         InvoiceID,
         PaymentSession,
         PaymentToolToken,
-        Context,
-        Config
+        Context
     ),
     {save_config, Info#{payment_id => PaymentID}}.
 
@@ -731,11 +729,13 @@ create_payment_hold_ok_test(Config) ->
         payment_tool_token := PaymentToolToken,
         invoice_id := InvoiceID
     }} = ?config(saved_config, Config),
-    #{<<"id">> := PaymentID} = default_create_payment_hold(
+    Context = ?config(context, Config),
+    #{<<"id">> := PaymentID} = default_create_payment(
         InvoiceID,
         PaymentSession,
         PaymentToolToken,
-        Config
+        Context,
+        hold
     ),
     {save_config, #{payment_id => PaymentID, invoice_id => InvoiceID}}.
 
@@ -745,14 +745,28 @@ cancel_payment_ok_test(Config) ->
     {create_payment_hold_ok_test,
         #{payment_id := PaymentID, invoice_id := InvoiceID}
     } = ?config(saved_config, Config),
-    wait_payment_status_change(
+    Context = ?config(context, Config),
+    wait_event_w_change(
         InvoiceID,
-        PaymentID,
-        <<"processed">>,
+        #{
+            <<"changeType">> => <<"PaymentStatusChanged">>,
+            <<"paymentID">> => PaymentID,
+            <<"status">> => <<"processed">>
+        },
         3000,
-        ?config(context, Config)
+        Context
     ),
-    ok = default_cancel_payment(InvoiceID, PaymentID, Config).
+    ok = default_cancel_payment(InvoiceID, PaymentID, Config),
+    wait_event_w_change(
+        InvoiceID,
+        #{
+            <<"changeType">> => <<"PaymentStatusChanged">>,
+            <<"paymentID">> => PaymentID,
+            <<"status">> => <<"cancelled">>
+        },
+        3000,
+        Context
+    ).
 
 -spec capture_payment_ok_test(config()) -> _.
 
@@ -760,14 +774,28 @@ capture_payment_ok_test(Config) ->
     {create_payment_hold_ok_test,
         #{payment_id := PaymentID, invoice_id := InvoiceID}
     } = ?config(saved_config, Config),
-    wait_payment_status_change(
+    Context = ?config(context, Config),
+    wait_event_w_change(
         InvoiceID,
-        PaymentID,
-        <<"processed">>,
+        #{
+            <<"changeType">> => <<"PaymentStatusChanged">>,
+            <<"paymentID">> => PaymentID,
+            <<"status">> => <<"processed">>
+        },
         3000,
-        ?config(context, Config)
+        Context
     ),
-    ok = default_capture_payment(InvoiceID, PaymentID, Config).
+    ok = default_capture_payment(InvoiceID, PaymentID, Config),
+    wait_event_w_change(
+        InvoiceID,
+        #{
+            <<"changeType">> => <<"PaymentStatusChanged">>,
+            <<"paymentID">> => PaymentID,
+            <<"status">> => <<"captured">>
+        },
+        3000,
+        Context
+    ).
 
 -spec create_payment_tool_token_ok_test(config()) -> _.
 
@@ -811,14 +839,12 @@ get_invoice_events_ok_test(Config) ->
     {ok, Events} = capi_client_invoices:get_invoice_events(Context, InvoiceID, 10),
     [
         #{
-            <<"id">> := 1,
             <<"changes">> := [#{
                 <<"changeType">> := <<"InvoiceCreated">>,
                 <<"invoice">> := #{<<"id">> := InvoiceID}
             }]
         },
         #{
-            <<"id">> := 2,
             <<"changes">> := [#{
                 <<"changeType">> := <<"PaymentStarted">>,
                 <<"payment">> := #{
@@ -828,7 +854,6 @@ get_invoice_events_ok_test(Config) ->
             }]
         },
         #{
-            <<"id">> := 3,
             <<"changes">> := [#{
                 <<"changeType">> := <<"PaymentStatusChanged">>,
                 <<"status">> := <<"processed">>,
@@ -836,7 +861,6 @@ get_invoice_events_ok_test(Config) ->
             }]
         },
         #{
-            <<"id">> := 5,
             <<"changes">> := [
                 #{
                     <<"changeType">> := <<"PaymentStatusChanged">>,
@@ -850,7 +874,6 @@ get_invoice_events_ok_test(Config) ->
             ]
         },
         #{
-            <<"id">> := 6,
             <<"changes">> := [#{
                 <<"changeType">> := <<"InvoiceStatusChanged">>,
                 <<"status">> := <<"fulfilled">>
@@ -1500,24 +1523,20 @@ default_tokenize_card(Context, _Config) ->
     },
     capi_client_tokens:create_payment_tool_token(Context, Req).
 
-default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, _Config) ->
-    Req = #{
-        <<"paymentSession">> => PaymentSession,
-        <<"paymentToolToken">> => PaymentToolToken,
-        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
-        <<"contactInfo">> => #{
-            <<"email">> => <<"bla@bla.ru">>
-        }
-    },
-    {ok, Body} = capi_client_payments:create_payment(Context, Req, InvoiceID),
-    Body.
+default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context) ->
+    default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, instant).
 
-default_create_payment_hold(InvoiceID, PaymentSession, PaymentToolToken, Config) ->
-    Context = ?config(context, Config),
+default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, FlowType) ->
+    Flow = case FlowType of
+        instant ->
+            #{<<"type">> => <<"PaymentFlowInstant">>};
+        hold ->
+            #{<<"type">> => <<"PaymentFlowHold">>, <<"onHoldExpiration">> => <<"cancel">>}
+    end,
     Req = #{
         <<"paymentSession">> => PaymentSession,
         <<"paymentToolToken">> => PaymentToolToken,
-        <<"flow">> => #{<<"type">> => <<"PaymentFlowHold">>, <<"onHoldExpiration">> => <<"cancel">>},
+        <<"flow">> => Flow,
         <<"contactInfo">> => #{
             <<"email">> => <<"bla@bla.ru">>
         }
@@ -2282,20 +2301,6 @@ get_due_date() ->
     {{Y, M, D}, Time} = calendar:local_time(),
     {ok, DueDate} = rfc3339:format({{Y + 1, M, D}, Time}),
     DueDate.
-
-wait_payment_status_change(InvoiceID, PaymentID, ChangePattern, TimeLeft, Context) when TimeLeft > 0 ->
-    Started = genlib_time:ticks(),
-    case capi_client_payments:get_payment_by_id(Context, InvoiceID, PaymentID) of
-        {ok, #{<<"status">> := ChangePattern}} ->
-            ok;
-        _ ->
-            timer:sleep(200),
-            Now = genlib_time:ticks(),
-            wait_payment_status_change(InvoiceID, PaymentID, ChangePattern, TimeLeft - (Now - Started) div 1000, Context)
-    end;
-
-wait_payment_status_change(InvoiceID, PaymentId, ChangePattern, _, _Context) ->
-    error({event_limit_exceeded, {InvoiceID, PaymentId, ChangePattern}}).
 
 get_lifetime() ->
     get_lifetime(0, 0, 7).
