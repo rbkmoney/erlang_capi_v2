@@ -38,6 +38,9 @@
     fulfill_invoice_ok_test/1,
     get_payments_ok_test/1,
     get_payment_by_id_ok_test/1,
+    create_payment_hold_ok_test/1,
+    cancel_payment_ok_test/1,
+    capture_payment_ok_test/1,
     %%%%
     create_invoice_template_badard_test/1,
     create_invoice_template_no_shop_test/1,
@@ -148,7 +151,9 @@ all() ->
         {group, shops_management},
         {group, accounts_management},
         {group, webhook_management},
-        {group, geo_ip}
+        {group, geo_ip},
+        {group, cancel_payment},
+        {group, capture_payment}
     ].
 
 -spec groups() -> [
@@ -256,6 +261,18 @@ groups() ->
         ]},
         {geo_ip, [parallel], [
             get_locations_names_ok_test
+        ]},
+        {cancel_payment, [sequence], [
+            create_invoice_ok_test,
+            create_payment_tool_token_ok_test,
+            create_payment_hold_ok_test,
+            cancel_payment_ok_test
+        ]},
+        {capture_payment, [sequence], [
+            create_invoice_ok_test,
+            create_payment_tool_token_ok_test,
+            create_payment_hold_ok_test,
+            capture_payment_ok_test
         ]}
     ].
 %%
@@ -487,8 +504,7 @@ create_payment_ok_w_access_token_test(Config) ->
         InvoiceID,
         PaymentSession,
         PaymentToolToken,
-        Context,
-        Config
+        Context
     ),
     wait_event_w_change(
         InvoiceID,
@@ -701,10 +717,85 @@ create_payment_ok_test(Config) ->
         InvoiceID,
         PaymentSession,
         PaymentToolToken,
-        Context,
-        Config
+        Context
     ),
     {save_config, Info#{payment_id => PaymentID}}.
+
+-spec create_payment_hold_ok_test(config()) -> _.
+
+create_payment_hold_ok_test(Config) ->
+    {create_payment_tool_token_ok_test, #{
+        session := PaymentSession,
+        payment_tool_token := PaymentToolToken,
+        invoice_id := InvoiceID
+    }} = ?config(saved_config, Config),
+    Context = ?config(context, Config),
+    #{<<"id">> := PaymentID} = default_create_payment(
+        InvoiceID,
+        PaymentSession,
+        PaymentToolToken,
+        Context,
+        hold
+    ),
+    {save_config, #{payment_id => PaymentID, invoice_id => InvoiceID}}.
+
+-spec cancel_payment_ok_test(config()) -> _.
+
+cancel_payment_ok_test(Config) ->
+    {create_payment_hold_ok_test,
+        #{payment_id := PaymentID, invoice_id := InvoiceID}
+    } = ?config(saved_config, Config),
+    Context = ?config(context, Config),
+    wait_event_w_change(
+        InvoiceID,
+        #{
+            <<"changeType">> => <<"PaymentStatusChanged">>,
+            <<"paymentID">> => PaymentID,
+            <<"status">> => <<"processed">>
+        },
+        3000,
+        Context
+    ),
+    ok = default_cancel_payment(InvoiceID, PaymentID, Config),
+    wait_event_w_change(
+        InvoiceID,
+        #{
+            <<"changeType">> => <<"PaymentStatusChanged">>,
+            <<"paymentID">> => PaymentID,
+            <<"status">> => <<"cancelled">>
+        },
+        3000,
+        Context
+    ).
+
+-spec capture_payment_ok_test(config()) -> _.
+
+capture_payment_ok_test(Config) ->
+    {create_payment_hold_ok_test,
+        #{payment_id := PaymentID, invoice_id := InvoiceID}
+    } = ?config(saved_config, Config),
+    Context = ?config(context, Config),
+    wait_event_w_change(
+        InvoiceID,
+        #{
+            <<"changeType">> => <<"PaymentStatusChanged">>,
+            <<"paymentID">> => PaymentID,
+            <<"status">> => <<"processed">>
+        },
+        3000,
+        Context
+    ),
+    ok = default_capture_payment(InvoiceID, PaymentID, Config),
+    wait_event_w_change(
+        InvoiceID,
+        #{
+            <<"changeType">> => <<"PaymentStatusChanged">>,
+            <<"paymentID">> => PaymentID,
+            <<"status">> => <<"captured">>
+        },
+        3000,
+        Context
+    ).
 
 -spec create_payment_tool_token_ok_test(config()) -> _.
 
@@ -748,14 +839,12 @@ get_invoice_events_ok_test(Config) ->
     {ok, Events} = capi_client_invoices:get_invoice_events(Context, InvoiceID, 10),
     [
         #{
-            <<"id">> := 1,
             <<"changes">> := [#{
                 <<"changeType">> := <<"InvoiceCreated">>,
                 <<"invoice">> := #{<<"id">> := InvoiceID}
             }]
         },
         #{
-            <<"id">> := 2,
             <<"changes">> := [#{
                 <<"changeType">> := <<"PaymentStarted">>,
                 <<"payment">> := #{
@@ -765,7 +854,6 @@ get_invoice_events_ok_test(Config) ->
             }]
         },
         #{
-            <<"id">> := 3,
             <<"changes">> := [#{
                 <<"changeType">> := <<"PaymentStatusChanged">>,
                 <<"status">> := <<"processed">>,
@@ -773,7 +861,6 @@ get_invoice_events_ok_test(Config) ->
             }]
         },
         #{
-            <<"id">> := 4,
             <<"changes">> := [
                 #{
                     <<"changeType">> := <<"PaymentStatusChanged">>,
@@ -787,7 +874,6 @@ get_invoice_events_ok_test(Config) ->
             ]
         },
         #{
-            <<"id">> := 5,
             <<"changes">> := [#{
                 <<"changeType">> := <<"InvoiceStatusChanged">>,
                 <<"status">> := <<"fulfilled">>
@@ -1437,11 +1523,20 @@ default_tokenize_card(Context, _Config) ->
     },
     capi_client_tokens:create_payment_tool_token(Context, Req).
 
-default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, _Config) ->
+default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context) ->
+    default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, instant).
+
+default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, FlowType) ->
+    Flow = case FlowType of
+        instant ->
+            #{<<"type">> => <<"PaymentFlowInstant">>};
+        hold ->
+            #{<<"type">> => <<"PaymentFlowHold">>, <<"onHoldExpiration">> => <<"cancel">>}
+    end,
     Req = #{
         <<"paymentSession">> => PaymentSession,
         <<"paymentToolToken">> => PaymentToolToken,
-        <<"flow">> => #{<<"type">> => <<"PaymentParamsFlowInstant">>},
+        <<"flow">> => Flow,
         <<"contactInfo">> => #{
             <<"email">> => <<"bla@bla.ru">>
         }
@@ -1550,6 +1645,16 @@ default_rescind_invoice(InvoiceID, Config) ->
     Context = ?config(context, Config),
     Reason = "me want dat",
     capi_client_invoices:rescind_invoice(Context,  InvoiceID, Reason).
+
+default_cancel_payment(InvoiceID, PaymentID, Config) ->
+    Context = ?config(context, Config),
+    Reason = "want to cancel",
+    capi_client_payments:cancel_payment(Context, InvoiceID, PaymentID, Reason).
+
+default_capture_payment(InvoiceID, PaymentID, Config) ->
+    Context = ?config(context, Config),
+    Reason = "want to capture",
+    capi_client_payments:capture_payment(Context, InvoiceID, PaymentID, Reason).
 
 get_locations_names(GeoIDs, Lang, Config) ->
     Context = ?config(context, Config),
@@ -1686,7 +1791,8 @@ get_domain_fixture(Proxies) ->
                         )
                     ]}
                 }
-            ]}
+            ]},
+            hold_lifetime = #domain_HoldLifetime{seconds = 1}
         }
     },
     TermSetLive = #domain_TermSet{
@@ -1931,7 +2037,7 @@ get_domain_fixture(Proxies) ->
             data = #domain_Provider{
                 name = <<"Drovider">>,
                 description = <<"I'm out of ideas of what to write here">>,
-                terminal = {value, [?trm(5), ?trm(6)]},
+                terminal = {value, [?trm(5), ?trm(6), ?trm(7)]},
                 proxy = #domain_Proxy{
                     ref = ?prx(1),
                     additional = #{
@@ -1997,6 +2103,38 @@ get_domain_fixture(Proxies) ->
                     <<"override">> => <<"Drominal 1">>
                 },
                 risk_coverage = low
+            }
+        }},
+        {terminal, #domain_TerminalObject{
+            ref = ?trm(7),
+            data = #domain_Terminal{
+                name = <<"Teminal for holds">>,
+                description = <<"Teminal for holds">>,
+                payment_method = ?pmt(bank_card, visa),
+                category = ?cat(?LIVE_CATEGORY_ID),
+                cash_flow = [
+                    ?cfpost(
+                        {provider, settlement},
+                        {merchant, settlement},
+                        ?share(1, 1, payment_amount)
+                    ),
+                    ?cfpost(
+                        {system, settlement},
+                        {provider, settlement},
+                        ?share(16, 1000, payment_amount)
+                    )
+                ],
+                account = ?trmacc(
+                    <<"RUB">>,
+                    maps:get(terminal_3_settlement, Accounts)
+                ),
+                options = #{
+                    <<"override">> => <<"Teminal for holds">>
+                },
+                risk_coverage = low,
+                payment_flow = {hold, #domain_TerminalPaymentFlowHold{
+                    hold_lifetime = #domain_HoldLifetime{seconds = 1}
+                }}
             }
         }},
         {payment_method, #domain_PaymentMethodObject{
