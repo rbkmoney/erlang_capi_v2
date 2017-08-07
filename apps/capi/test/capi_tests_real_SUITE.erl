@@ -24,6 +24,7 @@
     create_invoice_badard_test/1,
     create_invoice_no_shop_test/1,
     create_invoice_ok_test/1,
+    create_invoice_w_cart/1,
     create_invoice_access_token_ok_test/1,
     create_payment_ok_test/1,
     create_payment_ok_w_access_token_test/1,
@@ -169,6 +170,7 @@ groups() ->
         {invoice_management, [sequence], [
             create_invoice_badard_test,
             create_invoice_no_shop_test,
+            create_invoice_w_cart,
             create_invoice_ok_test,
             get_invoice_by_id_ok_test,
             rescind_invoice_ok_test
@@ -406,6 +408,48 @@ create_invoice_no_shop_test(Config) ->
     #{
         <<"code">> := <<"invalidShopID">>
     } = jsx:decode(Resp, [return_maps]).
+
+-spec create_invoice_w_cart(config()) -> _.
+
+create_invoice_w_cart(Config) ->
+    ShopID = create_and_activate_shop(Config),
+    Context = ?config(context, Config),
+    Req0 = #{
+        <<"shopID">> => ShopID,
+        <<"amount">> => 100000,
+        <<"currency">> => <<"RUB">>,
+        <<"metadata">> => ?DEFAULT_META,
+        <<"dueDate">> => get_due_date(),
+        <<"product">> => ?DEFAULT_PRODUCT,
+        <<"description">> => ?DEFAULT_DESCRIPTION
+    },
+    Req1 = maps:remove(<<"amount">>, Req0),
+    Cart0 = [],
+    {ok, _} = capi_client_invoices:create_invoice(Context, Req0#{<<"cart">> => Cart0}),
+    {error, Error1} = capi_client_invoices:create_invoice(Context, Req1#{<<"cart">> => Cart0}),
+    #{<<"code">> := <<"invalidInvoiceCost">>} = jsx:decode(Error1, [return_maps]),
+    Cart1 = [
+        #{
+            <<"product">> => ?DEFAULT_PRODUCT,
+            <<"price">> => 1000,
+            <<"quantity">> => 1
+        }
+    ],
+    {error, Error2} = capi_client_invoices:create_invoice(Context, Req0#{<<"cart">> => Cart1}),
+    #{<<"code">> := <<"invalidInvoiceCost">>} = jsx:decode(Error2, [return_maps]),
+    {ok, _} = capi_client_invoices:create_invoice(Context, Req1#{<<"cart">> => Cart1}),
+    Cart2 = [
+        #{
+            <<"product">> => ?DEFAULT_PRODUCT,
+            <<"price">> => 1000,
+            <<"quantity">> => 100,
+            <<"taxMode">> => #{
+                <<"type">> => <<"InvoiceLineTaxVAT">>,
+                <<"rate">> => <<"18%">>
+            }
+        }
+    ],
+    {ok, _} = capi_client_invoices:create_invoice(Context, Req0#{<<"cart">> => Cart2}).
 
 -spec create_invoice_ok_test(config()) -> _.
 
