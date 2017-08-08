@@ -7,6 +7,7 @@
 -include_lib("cp_proto/include/cp_webhooker_thrift.hrl").
 -include_lib("cp_proto/include/cp_user_interaction_thrift.hrl").
 -include_lib("cp_proto/include/cp_geo_ip_thrift.hrl").
+-include_lib("cp_proto/include/cp_reporting_thrift.hrl").
 
 -behaviour(swag_server_logic_handler).
 
@@ -18,6 +19,7 @@
 -define(REALM, <<"external">>).
 
 -define(DEFAULT_INVOICE_META, #{}).
+-define(DEFAULT_URL_LIFETIME, 86400). % seconds
 
 -spec authorize_api_key(swag_server:operation_id(), swag_server:api_key()) ->
     Result :: false | {true, capi_auth:context()}.
@@ -750,6 +752,49 @@ process_request('GetShopByID', Req, Context, ReqCtx) ->
             {ok, {404, [], general_error(<<"Shop not found">>)}}
     end;
 
+process_request('GetReports', Req, Context, ReqCtx) ->
+    PartyID = get_party_id(Context),
+    ReportRequest = #reports_ReportRequest{
+        party_id = PartyID,
+        shop_id = maps:get(shopID, Req),
+        time_range = #reports_ReportTimeRange{
+            from_time = get_time('fromTime', Req),
+            to_time = get_time('toTime', Req)
+        }
+    },
+    ReportTypes = [],
+    Result = service_call(reporting, 'GetReports', [ReportRequest, ReportTypes], ReqCtx),
+    case Result of
+        {ok, Reports} ->
+            Resp = [decode_report(R) || #reports_Report{status = created} = R <- Reports],
+            {ok, {200, [], Resp}};
+        {exception, Exception} ->
+            case Exception of
+                #'InvalidRequest'{errors = Errors} ->
+                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                #reports_DatasetTooBig{limit = Limit} ->
+                    {ok, {400, [], limit_exceeded_error(Limit)}}
+            end
+    end;
+
+process_request('DownloadFile', Req, Context, ReqCtx) ->
+    PartyID = get_party_id(Context),
+    ShopID = maps:get(shopID, Req),
+    ReportID = maps:get(reportID, Req),
+    FileID = maps:get(fileID, Req),
+    Result = service_call(reporting, 'GetReport', [PartyID, ShopID, ReportID], ReqCtx),
+    case Result of
+        {ok, #reports_Report{status = created, files = Files}} ->
+            case lists:keymember(FileID, #reports_FileMeta.file_id, Files) of
+                true ->
+                    generate_presigned_url(FileID, ReqCtx);
+                false ->
+                    {ok, {404, [], general_error(<<"File not found">>)}}
+            end;
+        {exception, #reports_ReportNotFound{}} ->
+            {ok, {404, [], general_error(<<"Report not found">>)}}
+    end;
+
 process_request('GetContracts', _Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
@@ -1131,6 +1176,21 @@ process_request('DeleteWebhookByID', Req, Context, ReqCtx) ->
 
 process_request(_OperationID, _Req, _Context, _ReqCtx) ->
     {error, reply_5xx(501)}.
+
+generate_presigned_url(FileID, ReqCtx) ->
+    ExpiresAt = get_default_url_lifetime(),
+    Result = service_call(reporting, 'GeneratePresignedUrl', [FileID, ExpiresAt], ReqCtx),
+    case Result of
+        {ok, URL} ->
+            {ok, {303, [{<<"Location">>, URL}], undefined}};
+        {exception, Exception} ->
+            case Exception of
+                #'InvalidRequest'{errors = Errors} ->
+                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                #reports_FileNotFound{}->
+                    {ok, {404, [], general_error(<<"File not found">>)}}
+            end
+    end.
 
 validate_event_filter({invoice, #webhooker_InvoiceEventFilter{
     shop_id = ShopID
@@ -2610,6 +2670,36 @@ encode_event_filter(#{
         ])
     }}.
 
+decode_report(#reports_Report{
+    report_id = ReportID,
+    time_range = #reports_ReportTimeRange{
+        from_time = FromTime,
+        to_time = ToTime
+    },
+    created_at = CreatedAt,
+    report_type = Type,
+    files = Files
+}) ->
+    #{
+        <<"id">> => ReportID,
+        <<"createdAt">> => CreatedAt,
+        <<"fromTime">> => FromTime,
+        <<"toTime">> => ToTime,
+        <<"type">> => genlib:to_binary(Type),
+        <<"files">> => [decode_report_file(F) || F <- Files]
+    }.
+
+decode_report_file(#reports_FileMeta{
+    file_id = ID,
+    filename = Filename,
+    signature = #reports_Signature{md5 = MD5, sha256 = SHA256}
+}) ->
+    #{
+        <<"id">> => ID,
+        <<"filename">> => Filename,
+        <<"signatures">> => #{<<"md5">> => MD5, <<"sha256">> => SHA256}
+    }.
+
 -define(invpaid()      , {paid, #webhooker_InvoicePaid{}}).
 -define(invcancelled() , {cancelled, #webhooker_InvoiceCancelled{}}).
 -define(invfulfilled() , {fulfilled, #webhooker_InvoiceFulfilled{}}).
@@ -3085,6 +3175,15 @@ get_prepared_ip(Context) ->
         ip_address := IP
     } = get_peer_info(Context),
     genlib:to_binary(inet:ntoa(IP)).
+
+get_default_url_lifetime() ->
+    Now = erlang:system_time(second),
+    case rfc3339:format(Now + ?DEFAULT_URL_LIFETIME, second) of
+        {ok, Val} when is_binary(Val)->
+            Val;
+        Error ->
+            error(Error)
+    end.
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").

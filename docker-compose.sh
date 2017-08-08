@@ -28,6 +28,8 @@ services:
         condition: service_started
       hooker:
         condition: service_healthy
+      reporter:
+        condition: service_healthy
 
   hellgate:
     image: dr.rbkmoney.com/rbkmoney/hellgate:376afd74896e78d624ee1db9097fa60999399796
@@ -121,7 +123,7 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - PG_DBS=hooker keycloak magista shumway bustermaze
+      - PG_DBS=hooker keycloak magista shumway bustermaze reporter
     entrypoint:
      - /docker-entrypoint.sh
      - postgres
@@ -196,6 +198,27 @@ services:
       - --flyway.password=postgres
       - --flyway.schemas=hook
       - --bm.pooling.url=http://bustermaze:8022/repo
+    depends_on:
+      - pg-db
+
+  reporter:
+    image: dr.rbkmoney.com/rbkmoney/reporter:7b3850590c00ef4614d4c57a765bee54ad474fe6
+    healthcheck:
+      test: "curl -sS -o /dev/null http://localhost:8022/"
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    entrypoint:
+      - java
+      - -jar
+      - /opt/reporter/reporter.jar
+      - --spring.datasource.url=jdbc:postgresql://pg-db:5432/reporter
+      - --spring.datasource.username=postgres
+      - --spring.datasource.password=postgres
+      - --flyway.url=jdbc:postgresql://pg-db:5432/reporter
+      - --flyway.user=postgres
+      - --flyway.password=postgres
+      - --flyway.schemas=rpt
     depends_on:
       - pg-db
 

@@ -258,7 +258,11 @@ get_operation_access('GetCategories'             , _) ->
 get_operation_access('GetCategoryByRef'          , _) ->
     [];
 get_operation_access('GetLocationsNames'         , _) ->
-    [].
+    [];
+get_operation_access('GetReports'                , _) ->
+    [{[party], read}];
+get_operation_access('DownloadFile'              , _) ->
+    [{[party], read}].
 
 -spec get_resource_hierarchy() -> #{atom() => map()}.
 

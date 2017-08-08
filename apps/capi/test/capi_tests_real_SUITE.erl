@@ -5,6 +5,7 @@
 -include_lib("cp_proto/include/cp_domain_config_thrift.hrl").
 -include_lib("cp_proto/include/cp_domain_thrift.hrl").
 -include_lib("cp_proto/include/cp_accounter_thrift.hrl").
+-include_lib("cp_proto/include/cp_reporting_thrift.hrl").
 
 
 -export([all/0]).
@@ -84,7 +85,10 @@
     %%%%
     create_webhook_error_test/1,
     create_webhook_receive_events_test/1,
-    get_locations_names_ok_test/1
+    get_locations_names_ok_test/1,
+    %%%%
+    get_reports/1,
+    download_report_file/1
 ]).
 
 -define(PROTOCOL, ipv4).
@@ -105,6 +109,7 @@
 -define(CAPI_REPOSITORY_URL         , "http://dominant:8022/v1/domain/repository").
 -define(CAPI_CDS_STORAGE_URL        , "http://cds:8022/v1/storage").
 -define(CAPI_MERCHANT_STAT_URL      , "http://magista:8022/stat").
+-define(CAPI_REPORTING_URL          , "http://reporter:8022/reports").
 -define(CAPI_GEO_IP_URL             , "http://columbus:8022/repo").
 -define(CAPI_HOST_NAME              , "capi").
 
@@ -148,7 +153,8 @@ all() ->
         {group, shops_management},
         {group, accounts_management},
         {group, webhook_management},
-        {group, geo_ip}
+        {group, geo_ip},
+        {group, reports}
     ].
 
 -spec groups() -> [
@@ -256,6 +262,11 @@ groups() ->
         ]},
         {geo_ip, [parallel], [
             get_locations_names_ok_test
+        ]},
+        {reports, [sequence], [
+            get_reports
+            % disabled till reporter ready
+            % download_report_file
         ]}
     ].
 %%
@@ -281,6 +292,7 @@ init_per_suite(Config) ->
                 repository         => ?CAPI_REPOSITORY_URL,
                 cds_storage        => ?CAPI_CDS_STORAGE_URL,
                 merchant_stat      => ?CAPI_MERCHANT_STAT_URL,
+                reporting          => ?CAPI_REPORTING_URL,
                 geo_ip_service     => ?CAPI_GEO_IP_URL
             }}
         ]),
@@ -1257,6 +1269,34 @@ get_locations_names_ok_test(Config) ->
         <<"name">> := TestName
     }] = get_locations_names([TestGeoID], <<"ru">>, Config).
 
+-spec get_reports(config()) -> _.
+get_reports(Config) ->
+    Context = ?config(context, Config),
+    {FromTime, ToTime} = get_reports_interval(),
+    {ok, []} = capi_client_reports:get_reports(Context, <<"NO_SUCH_SHOP">>, FromTime, ToTime),
+    {ok, Shops} = capi_client_shops:get_shops(Context),
+    ShopID = maps:get(<<"id">>, get_latest(Shops)),
+    {error, _} = capi_client_reports:get_reports(Context, ShopID, ToTime, FromTime),
+    {ok, []} = capi_client_reports:get_reports(Context, ShopID, FromTime, ToTime).
+
+-spec download_report_file(config()) -> _.
+download_report_file(Config) ->
+    Context = ?config(context, Config),
+    {FromTime, ToTime} = get_reports_interval(),
+    {ok, Shops} = capi_client_shops:get_shops(Context),
+    ShopID = maps:get(<<"id">>, get_latest(Shops)),
+    % generate report for this shop
+    ReportID = default_generate_report(?MERCHANT_ID, ShopID),
+    % here should return some reports
+    {ok, [Report | _]} = capi_client_reports:get_reports(Context, ShopID, FromTime, ToTime),
+    #{
+        <<"id">> := ReportID,
+        <<"files">> := [#{<<"id">> := FileID} | _]
+    } = Report,
+    {ok, {redirect, _URL}} = capi_client_reports:download_file(Context, ShopID, ReportID, FileID),
+    % we can check URL here, but not now.
+    ok.
+
 %% helpers
 call(Method, Path, Body, Headers) ->
     Url = get_url(Path),
@@ -1572,6 +1612,26 @@ default_approve_claim(#{<<"id">> := ClaimID, <<"revision">> := ClaimRevision}) -
         'AcceptClaim',
         [UserInfo, ?MERCHANT_ID, ClaimID, ClaimRevision]
     ).
+
+%% @FIXME dirty call
+default_generate_report(PartyID, ShopID) ->
+    ReqCtx = create_context(),
+    {FromTime, ToTime} = get_reports_interval(),
+    ReportRequest = #reports_ReportRequest{
+        party_id = PartyID,
+        shop_id = ShopID,
+        time_range = #reports_ReportTimeRange{
+            from_time = FromTime,
+            to_time = ToTime
+        }
+    },
+    {ok, ReportID} = call_service(
+        reporting,
+        'GenerateReport',
+        [ReportRequest, provision_of_service],
+        ReqCtx
+    ),
+    ReportID.
 
 generate_contract_id() ->
     ID = genlib:to_binary(rand:uniform(100000000)),
@@ -2173,3 +2233,10 @@ get_lifetime(YY, MM, DD) ->
        <<"months">> => MM,
        <<"days">>   => DD
      }.
+
+get_reports_interval() ->
+    {{Y, M, D}, Time} = calendar:local_time(),
+    {ok, FromTime} = rfc3339:format({{Y - 1, M, D}, Time}),
+    {ok, ToTime} = rfc3339:format({{Y + 1, M, D}, Time}),
+    {FromTime, ToTime}.
+
