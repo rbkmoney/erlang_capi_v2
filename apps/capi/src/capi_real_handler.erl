@@ -61,21 +61,22 @@ handle_request(OperationID, Req, Context) ->
 
 process_request('CreateInvoice', Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
-    Params = encode_invoice_params(PartyID, maps:get('InvoiceParams', Req)),
-    UserInfo = get_user_info(Context),
-    Result = prepare_party(
-       Context,
-       ReqCtx,
-       fun () ->
-           service_call(
-               invoicing,
-               'Create',
-               [UserInfo, Params],
-               ReqCtx
-           )
-       end
-    ),
-    case Result of
+    try
+        Params = encode_invoice_params(PartyID, maps:get('InvoiceParams', Req)),
+        UserInfo = get_user_info(Context),
+        prepare_party(
+           Context,
+           ReqCtx,
+           fun () ->
+               service_call(
+                   invoicing,
+                   'Create',
+                   [UserInfo, Params],
+                   ReqCtx
+               )
+           end
+        )
+    of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             {ok, {201, [], make_invoice_and_token(Invoice, PartyID, Context)}};
         {exception, Exception} ->
@@ -89,6 +90,11 @@ process_request('CreateInvoice', Req, Context, ReqCtx) ->
                 #payproc_InvalidShopStatus{} ->
                     {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
             end
+    catch
+        invoice_cart_empty ->
+            {ok, {400, [], logic_error(invalidInvoiceCart, <<"Invalid invoice cart">>)}};
+        invalid_invoice_cost ->
+            {ok, {400, [], logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)}}
     end;
 
 process_request('CreatePayment', Req, Context, ReqCtx) ->
@@ -1234,14 +1240,42 @@ get_peer_info(#{peer := Peer}) ->
     Peer.
 
 encode_invoice_params(PartyID, InvoiceParams) ->
+    Amount = genlib_map:get(<<"amount">>, InvoiceParams),
+    Currency = genlib_map:get(<<"currency">>, InvoiceParams),
+    Cart = genlib_map:get(<<"cart">>, InvoiceParams),
     #payproc_InvoiceParams{
         party_id = PartyID,
         details  = encode_invoice_details(InvoiceParams),
-        cost     = encode_cash(InvoiceParams),
+        cost     = encode_invoice_cost(Amount, Currency, Cart),
         due      = get_time(<<"dueDate">>, InvoiceParams),
         context  = encode_invoice_context(InvoiceParams),
         shop_id  = genlib_map:get(<<"shopID">>, InvoiceParams)
     }.
+
+encode_invoice_cost(Amount, Currency, Cart) when Amount =/= undefined, Cart =/= undefined ->
+    case get_invoice_cart_amount(Cart) of
+        Amount ->
+            encode_cash(Amount, Currency);
+        _ ->
+            throw(invalid_invoice_cost)
+    end;
+encode_invoice_cost(undefined, Currency, Cart) when Cart =/= undefined ->
+    encode_cash(get_invoice_cart_amount(Cart), Currency);
+encode_invoice_cost(Amount, Currency, undefined) when Amount =/= undefined ->
+    encode_cash(Amount, Currency);
+encode_invoice_cost(_, _, _) ->
+    throw(invalid_invoice_cost).
+
+get_invoice_cart_amount(Cart) ->
+    lists:foldl(
+        fun(Line, Acc) ->
+            P = genlib_map:get(<<"price">>, Line),
+            Q = genlib_map:get(<<"quantity">>, Line),
+            Acc + (P * Q)
+        end,
+        0,
+        Cart
+    ).
 
 encode_invoice_params_with_tpl(InvoiceTplID, InvoiceParams) ->
     #payproc_InvoiceWithTemplateParams{
@@ -1251,21 +1285,54 @@ encode_invoice_params_with_tpl(InvoiceTplID, InvoiceParams) ->
     }.
 
 encode_invoice_details(Params) ->
-    encode_invoice_details(
-        genlib_map:get(<<"product">>, Params),
-        genlib_map:get(<<"description">>, Params)
-    ).
-
-encode_invoice_details(Product, Description) ->
     #domain_InvoiceDetails{
-        product = Product,
-        description = Description
+        product = genlib_map:get(<<"product">>, Params),
+        description = genlib_map:get(<<"description">>, Params),
+        cart = encode_invoice_cart(Params)
     }.
 
+encode_invoice_cart(Params) ->
+    Cart = genlib_map:get(<<"cart">>, Params),
+    Currency = genlib_map:get(<<"currency">>, Params),
+    encode_invoice_cart(Cart, Currency).
+
+encode_invoice_cart(Cart, Currency) when Cart =/= undefined, Cart =/= [], Currency =/= undefined ->
+    #domain_InvoiceCart{
+        lines = [encode_invoice_line(Line, Currency) || Line <- Cart]
+    };
+encode_invoice_cart([], _) ->
+    throw(invoice_cart_empty);
+encode_invoice_cart(undefined, _) ->
+    undefined.
+
+encode_invoice_line(Line, Currency) ->
+    Metadata = case genlib_map:get(<<"taxMode">>, Line) of
+        TaxMode when TaxMode =/= undefined ->
+            TM = encode_invoice_line_tax_mode(TaxMode),
+            #{<<"TaxMode">> => {str, TM}};
+        undefined ->
+            #{}
+    end,
+    Price = encode_cash(genlib_map:get(<<"price">>, Line), Currency),
+    #domain_InvoiceLine{
+        product = genlib_map:get(<<"product">>, Line),
+        quantity = genlib_map:get(<<"quantity">>, Line),
+        price = Price,
+        metadata = Metadata
+    }.
+
+encode_invoice_line_tax_mode(#{<<"type">> := <<"InvoiceLineTaxVAT">>} = TaxMode)  ->
+    genlib_map:get(<<"rate">>, TaxMode).
+
 encode_cash(Params) ->
+    Amount = genlib_map:get(<<"amount">>, Params),
+    Currency = genlib_map:get(<<"currency">>, Params),
+    encode_cash(Amount, Currency).
+
+encode_cash(Amount, Currency) ->
     #domain_Cash{
-        amount = genlib_map:get(<<"amount">>, Params),
-        currency = encode_currency(genlib_map:get(<<"currency">>, Params))
+        amount = Amount,
+        currency = encode_currency(Currency)
     }.
 
 encode_bank_card(#domain_BankCard{
@@ -1294,7 +1361,7 @@ encode_invoice_tpl_create_params(PartyID, Params) ->
 encode_invoice_tpl_update_params(Params, InvoiceTplGetter) ->
     #payproc_InvoiceTemplateUpdateParams{
         invoice_lifetime = encode_optional_invoice_tpl_lifetime(Params),
-        cost             = encode_optional_invoice_tpl_cost(Params),
+        cost             = encode_invoice_tpl_cost(Params),
         context          = encode_optional_context(Params),
         details          = encode_optional_details(Params, InvoiceTplGetter)
     }.
@@ -1302,11 +1369,6 @@ encode_invoice_tpl_update_params(Params, InvoiceTplGetter) ->
 encode_optional_invoice_tpl_lifetime(Params = #{<<"lifetime">> := _}) ->
     encode_lifetime(Params);
 encode_optional_invoice_tpl_lifetime(_) ->
-    undefined.
-
-encode_optional_invoice_tpl_cost(Params = #{<<"cost">> := _}) ->
-    encode_invoice_tpl_cost(Params);
-encode_optional_invoice_tpl_cost(_) ->
     undefined.
 
 encode_optional_invoice_cost(Params = #{<<"amount">> := _, <<"currency">> := _}) ->
@@ -1323,20 +1385,26 @@ encode_optional_context(Params = #{<<"metadata">> := _}) ->
 encode_optional_context(#{}) ->
     undefined.
 
-encode_optional_details(Params = #{<<"product">> := _, <<"description">> := _}, _) ->
-    encode_invoice_details(Params);
+encode_optional_details(#{<<"product">> := P, <<"description">> := D}, _) ->
+    encode_optional_details_(P, D);
 encode_optional_details(#{<<"product">> := Product}, InvoiceTplGetter) ->
     #domain_InvoiceTemplate{
         details = #domain_InvoiceDetails{description = Description}
     } = InvoiceTplGetter(),
-    encode_invoice_details(Product, Description);
+    encode_optional_details_(Product, Description);
 encode_optional_details(#{<<"description">> := Description}, InvoiceTplGetter) ->
     #domain_InvoiceTemplate{
         details = #domain_InvoiceDetails{product = Product}
     } = InvoiceTplGetter(),
-    encode_invoice_details(Product, Description);
+    encode_optional_details_(Product, Description);
 encode_optional_details(_, _) ->
     undefined.
+
+encode_optional_details_(Product, Description) ->
+    #domain_InvoiceDetails{
+        product = Product,
+        description = Description
+    }.
 
 encode_invoice_context(Params) ->
     encode_invoice_context(Params, ?DEFAULT_INVOICE_META).
@@ -1348,9 +1416,10 @@ encode_invoice_context(Params, DefaultMeta) ->
         data = Context
     }.
 
-encode_invoice_tpl_cost(Params) ->
-    Cost = genlib_map:get(<<"cost">>, Params),
-    encode_invoice_tpl_cost(genlib_map:get(<<"invoiceTemplateCostType">>, Cost), Cost).
+encode_invoice_tpl_cost(#{<<"cost">> := Cost}) ->
+    encode_invoice_tpl_cost(genlib_map:get(<<"invoiceTemplateCostType">>, Cost), Cost);
+encode_invoice_tpl_cost(_) ->
+    undefined.
 
 encode_invoice_tpl_cost(<<"InvoiceTemplateCostUnlim">>, _Cost) ->
     {unlim, #domain_InvoiceTemplateCostUnlimited{}};
