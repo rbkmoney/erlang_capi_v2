@@ -64,7 +64,7 @@ process_request('CreateInvoice', Req, Context, ReqCtx) ->
     try
         Params = encode_invoice_params(PartyID, maps:get('InvoiceParams', Req)),
         UserInfo = get_user_info(Context),
-        Result = prepare_party(
+        prepare_party(
            Context,
            ReqCtx,
            fun () ->
@@ -75,25 +75,24 @@ process_request('CreateInvoice', Req, Context, ReqCtx) ->
                    ReqCtx
                )
            end
-        ),
-        case Result of
-            {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-                {ok, {201, [], make_invoice_and_token(Invoice, PartyID, Context)}};
-            {exception, Exception} ->
-                case Exception of
-                    #'InvalidRequest'{errors = Errors} ->
-                        {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-                    #payproc_ShopNotFound{} ->
-                        {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}};
-                    #payproc_InvalidPartyStatus{} ->
-                        {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
-                    #payproc_InvalidShopStatus{} ->
-                        {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
-                end
-        end
+        )
+    of
+        {ok, #'payproc_Invoice'{invoice = Invoice}} ->
+            {ok, {201, [], make_invoice_and_token(Invoice, PartyID, Context)}};
+        {exception, Exception} ->
+            case Exception of
+                #'InvalidRequest'{errors = Errors} ->
+                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                #payproc_ShopNotFound{} ->
+                    {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}};
+                #payproc_InvalidPartyStatus{} ->
+                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                #payproc_InvalidShopStatus{} ->
+                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
+            end
     catch
         invalid_invoice_cost ->
-            {ok, {400, [], logic_error(invalidInvoiceCost, <<"Invalid invoice cost">>)}}
+            {ok, {400, [], logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)}}
     end;
 
 process_request('CreatePayment', Req, Context, ReqCtx) ->
@@ -1251,18 +1250,16 @@ encode_invoice_params(PartyID, InvoiceParams) ->
         shop_id  = genlib_map:get(<<"shopID">>, InvoiceParams)
     }.
 
-encode_invoice_cost(Amount, Currency, [_ | _] = Cart) when Amount =/= undefined ->
+encode_invoice_cost(Amount, Currency, Cart) when Amount =/= undefined, Cart =/= undefined ->
     case get_invoice_cart_amount(Cart) of
         Amount ->
             encode_cash(Amount, Currency);
         _ ->
             throw(invalid_invoice_cost)
     end;
-encode_invoice_cost(undefined, Currency, [_ | _] = Cart) ->
+encode_invoice_cost(undefined, Currency, Cart) when Cart =/= undefined ->
     encode_cash(get_invoice_cart_amount(Cart), Currency);
 encode_invoice_cost(Amount, Currency, undefined) when Amount =/= undefined ->
-    encode_cash(Amount, Currency);
-encode_invoice_cost(Amount, Currency, []) when Amount =/= undefined ->
     encode_cash(Amount, Currency);
 encode_invoice_cost(_, _, _) ->
     throw(invalid_invoice_cost).
@@ -1297,17 +1294,12 @@ encode_invoice_cart(Params) ->
     Currency = genlib_map:get(<<"currency">>, Params),
     encode_invoice_cart(Cart, Currency).
 
-encode_invoice_cart([_ | _] = Cart, Currency) when Currency =/= undefined ->
+encode_invoice_cart(Cart, Currency) when Cart =/= undefined, Currency =/= undefined ->
     #domain_InvoiceCart{
         lines = [encode_invoice_line(Line, Currency) || Line <- Cart]
     };
 encode_invoice_cart(undefined, _) ->
-    undefined;
-encode_invoice_cart([], _) ->
-    undefined;
-encode_invoice_cart(_Cart, undefined) ->
-    % we've got cart, but no currency. we've screwed up!
-    throw(cart_no_currency).
+    undefined.
 
 encode_invoice_line(Line, Currency) ->
     Metadata = case genlib_map:get(<<"taxMode">>, Line) of
