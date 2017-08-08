@@ -424,6 +424,10 @@ create_invoice_w_cart(Config) ->
         <<"description">> => ?DEFAULT_DESCRIPTION
     },
     Req1 = maps:remove(<<"amount">>, Req0),
+    Cart0 = [],
+    {error, Error1} = capi_client_invoices:create_invoice(Context, Req0#{<<"cart">> => Cart0}),
+    {error, Error1} = capi_client_invoices:create_invoice(Context, Req1#{<<"cart">> => Cart0}),
+    #{<<"code">> := <<"invalidInvoiceCart">>} = jsx:decode(Error1, [return_maps]),
     Cart1 = [
         #{
             <<"product">> => ?DEFAULT_PRODUCT,

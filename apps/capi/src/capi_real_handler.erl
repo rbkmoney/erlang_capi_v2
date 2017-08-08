@@ -91,6 +91,8 @@ process_request('CreateInvoice', Req, Context, ReqCtx) ->
                     {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
             end
     catch
+        invoice_cart_empty ->
+            {ok, {400, [], logic_error(invalidInvoiceCart, <<"Invalid invoice cart">>)}};
         invalid_invoice_cost ->
             {ok, {400, [], logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)}}
     end;
@@ -1294,10 +1296,12 @@ encode_invoice_cart(Params) ->
     Currency = genlib_map:get(<<"currency">>, Params),
     encode_invoice_cart(Cart, Currency).
 
-encode_invoice_cart(Cart, Currency) when Cart =/= undefined, Currency =/= undefined ->
+encode_invoice_cart(Cart, Currency) when Cart =/= undefined, Cart =/= [], Currency =/= undefined ->
     #domain_InvoiceCart{
         lines = [encode_invoice_line(Line, Currency) || Line <- Cart]
     };
+encode_invoice_cart([], _) ->
+    throw(invoice_cart_empty);
 encode_invoice_cart(undefined, _) ->
     undefined.
 
