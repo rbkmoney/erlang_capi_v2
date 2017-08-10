@@ -1983,7 +1983,8 @@ decode_invoice(#domain_Invoice{
     due  = DueDate,
     details = #domain_InvoiceDetails{
         product = Product,
-        description = Description
+        description = Description,
+        cart = Cart
     },
     cost = #domain_Cash{
         amount = Amount,
@@ -2001,7 +2002,8 @@ decode_invoice(#domain_Invoice{
         <<"currency">> =>  decode_currency(Currency),
         <<"metadata">> =>  decode_context(RawContext),
         <<"product">> => Product,
-        <<"description">> => Description
+        <<"description">> => Description,
+        <<"cart">> => decode_invoice_cart(Cart)
     }, decode_invoice_status(InvoiceStatus))).
 
 decode_invoice_status({Status, StatusInfo}) ->
@@ -2014,6 +2016,33 @@ decode_invoice_status({Status, StatusInfo}) ->
         <<"status">> => genlib:to_binary(Status),
         <<"reason">> => Reason
     }.
+
+decode_invoice_cart(#domain_InvoiceCart{lines = Lines}) ->
+    [decode_invoice_line(L) || L <- Lines];
+decode_invoice_cart(undefined) ->
+    undefined.
+
+decode_invoice_line(#domain_InvoiceLine{
+    product = Product,
+    quantity = Quantity,
+    price = #domain_Cash{amount = Price},
+    metadata = Metadata
+}) ->
+    genlib_map:compact(#{
+        <<"product">> => Product,
+        <<"quantity">> => Quantity,
+        <<"price">> => Price,
+        <<"cost">> => Price * Quantity,
+        <<"taxMode">> => decode_invoice_line_tax_mode(Metadata)
+    }).
+
+decode_invoice_line_tax_mode(#{<<"TaxMode">> := {str, TM}}) ->
+    #{
+       <<"type">> => <<"InvoiceLineTaxVAT">>,
+       <<"rate">> => TM
+    };
+decode_invoice_line_tax_mode(_) ->
+    undefined.
 
 decode_stat_invoice(#merchstat_StatInvoice{
     id = InvoiceID,
