@@ -467,12 +467,12 @@ invoice_cart_equal([Line1 | C1], [Line2 | C2]) ->
 invoice_cart_equal([], []) ->
     true;
 invoice_cart_equal(_, _) ->
-    fasle.
+    false.
 
 invoice_cart_line_equal(Line1, Line2) ->
-    genlib_map:get(<<"product">>, Line1) == genlib_map:get(<<"product">>, Line2)  andalso
-    genlib_map:get(<<"price">>, Line1) == genlib_map:get(<<"price">>, Line2)  andalso
-    genlib_map:get(<<"quantity">>, Line1) == genlib_map:get(<<"quantity">>, Line2)  andalso
+    genlib_map:get(<<"product">>, Line1) == genlib_map:get(<<"product">>, Line2) andalso
+    genlib_map:get(<<"price">>, Line1) == genlib_map:get(<<"price">>, Line2) andalso
+    genlib_map:get(<<"quantity">>, Line1) == genlib_map:get(<<"quantity">>, Line2) andalso
     genlib_map:get(<<"taxMode">>, Line1) == genlib_map:get(<<"taxMode">>, Line2).
 
 -spec create_invoice_ok_test(config()) -> _.
