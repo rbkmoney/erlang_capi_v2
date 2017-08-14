@@ -264,9 +264,8 @@ groups() ->
             get_locations_names_ok_test
         ]},
         {reports, [sequence], [
-            get_reports
-            % disabled till reporter ready
-            % download_report_file
+            get_reports,
+            download_report_file
         ]}
     ].
 %%
@@ -1277,7 +1276,7 @@ get_reports(Config) ->
     {ok, Shops} = capi_client_shops:get_shops(Context),
     ShopID = maps:get(<<"id">>, get_latest(Shops)),
     {error, _} = capi_client_reports:get_reports(Context, ShopID, ToTime, FromTime),
-    {ok, []} = capi_client_reports:get_reports(Context, ShopID, FromTime, ToTime).
+    {ok, _} = capi_client_reports:get_reports(Context, ShopID, FromTime, ToTime).
 
 -spec download_report_file(config()) -> _.
 download_report_file(Config) ->
@@ -1285,17 +1284,11 @@ download_report_file(Config) ->
     {FromTime, ToTime} = get_reports_interval(),
     {ok, Shops} = capi_client_shops:get_shops(Context),
     ShopID = maps:get(<<"id">>, get_latest(Shops)),
-    % generate report for this shop
     ReportID = default_generate_report(?MERCHANT_ID, ShopID),
-    % here should return some reports
-    {ok, [Report | _]} = capi_client_reports:get_reports(Context, ShopID, FromTime, ToTime),
     #{
-        <<"id">> := ReportID,
         <<"files">> := [#{<<"id">> := FileID} | _]
-    } = Report,
-    {ok, {redirect, _URL}} = capi_client_reports:download_file(Context, ShopID, ReportID, FileID),
-    % we can check URL here, but not now.
-    ok.
+    } = wait_for_report(Context, ShopID, FromTime, ToTime, ReportID),
+    {ok, {redirect, _URL}} = capi_client_reports:download_file(Context, ShopID, ReportID, FileID).
 
 %% helpers
 call(Method, Path, Body, Headers) ->
@@ -2239,4 +2232,24 @@ get_reports_interval() ->
     {ok, FromTime} = rfc3339:format({{Y - 1, M, D}, Time}),
     {ok, ToTime} = rfc3339:format({{Y + 1, M, D}, Time}),
     {FromTime, ToTime}.
+
+wait_for_report(Context, ShopID, FromTime, ToTime, ReportID) ->
+    wait_for_report(Context, ShopID, FromTime, ToTime, ReportID, 10).
+wait_for_report(Context, ShopID, FromTime, ToTime, ReportID, Retries) when Retries > 0->
+    case capi_client_reports:get_reports(Context, ShopID, FromTime, ToTime) of
+        {ok, Reports} ->
+            case [R || #{<<"id">> := ID} = R <- Reports, ID =:= ReportID] of
+                [Report] ->
+                    Report;
+                [] ->
+                    timer:sleep(1000),
+                    wait_for_report(Context, ShopID, FromTime, ToTime, ReportID, Retries - 1)
+            end;
+        _ ->
+            timer:sleep(1000),
+            wait_for_report(Context, ShopID, FromTime, ToTime, ReportID, Retries - 1)
+    end;
+wait_for_report(_, _, _, _, _, 0) ->
+    error(report_not_found).
+
 

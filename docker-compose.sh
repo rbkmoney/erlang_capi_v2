@@ -202,7 +202,7 @@ services:
       - pg-db
 
   reporter:
-    image: dr.rbkmoney.com/rbkmoney/reporter:7b3850590c00ef4614d4c57a765bee54ad474fe6
+    image: dr.rbkmoney.com/rbkmoney/reporter:0f05912d4bb34679caad02d227dd41b35b9ecabd
     healthcheck:
       test: "curl -sS -o /dev/null http://localhost:8022/"
       interval: 5s
@@ -212,6 +212,8 @@ services:
       - java
       - -jar
       - /opt/reporter/reporter.jar
+      - --partyManagement.url=http://hellgate:8022/v1/processing/partymgmt
+      - --magista.url=http://magista:8022/stat
       - --spring.datasource.url=jdbc:postgresql://pg-db:5432/reporter
       - --spring.datasource.username=postgres
       - --spring.datasource.password=postgres
