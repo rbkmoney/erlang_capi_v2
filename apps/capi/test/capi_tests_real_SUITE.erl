@@ -1287,7 +1287,7 @@ download_report_file(Config) ->
     ReportID = default_generate_report(?MERCHANT_ID, ShopID),
     #{
         <<"files">> := [#{<<"id">> := FileID} | _]
-    } = wait_for_report(Context, ShopID, FromTime, ToTime, ReportID),
+    } = wait_report_w_id(Context, ShopID, FromTime, ToTime, ReportID),
     {ok, {redirect, _URL}} = capi_client_reports:download_file(Context, ShopID, ReportID, FileID).
 
 %% helpers
@@ -2233,9 +2233,10 @@ get_reports_interval() ->
     {ok, ToTime} = rfc3339:format({{Y + 1, M, D}, Time}),
     {FromTime, ToTime}.
 
-wait_for_report(Context, ShopID, FromTime, ToTime, ReportID) ->
-    wait_for_report(Context, ShopID, FromTime, ToTime, ReportID, 10).
-wait_for_report(Context, ShopID, FromTime, ToTime, ReportID, Retries) when Retries > 0->
+wait_report_w_id(Context, ShopID, FromTime, ToTime, ReportID) ->
+    wait_report_w_id(Context, ShopID, FromTime, ToTime, ReportID, 10000).
+wait_report_w_id(Context, ShopID, FromTime, ToTime, ReportID, TimeLeft) when TimeLeft > 0->
+    Started = genlib_time:ticks(),
     case capi_client_reports:get_reports(Context, ShopID, FromTime, ToTime) of
         {ok, Reports} ->
             case [R || #{<<"id">> := ID} = R <- Reports, ID =:= ReportID] of
@@ -2243,13 +2244,26 @@ wait_for_report(Context, ShopID, FromTime, ToTime, ReportID, Retries) when Retri
                     Report;
                 [] ->
                     timer:sleep(1000),
-                    wait_for_report(Context, ShopID, FromTime, ToTime, ReportID, Retries - 1)
+                    wait_report_w_id(
+                        Context,
+                        ShopID,
+                        FromTime,
+                        ToTime,
+                        ReportID,
+                        TimeLeft - (genlib_time:ticks() - Started) div 1000
+                    )
             end;
         _ ->
             timer:sleep(1000),
-            wait_for_report(Context, ShopID, FromTime, ToTime, ReportID, Retries - 1)
+            wait_report_w_id(
+                Context,
+                ShopID,
+                FromTime,
+                ToTime,
+                ReportID,
+                TimeLeft - (genlib_time:ticks() - Started) div 1000
+            )
     end;
-wait_for_report(_, _, _, _, _, 0) ->
+wait_report_w_id(_, _, _, _, _, _) ->
     error(report_not_found).
-
 

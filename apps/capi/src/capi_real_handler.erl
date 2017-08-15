@@ -19,7 +19,7 @@
 -define(REALM, <<"external">>).
 
 -define(DEFAULT_INVOICE_META, #{}).
--define(DEFAULT_URL_LIFETIME, 86400). % seconds
+-define(DEFAULT_URL_LIFETIME, 60). % seconds
 
 -spec authorize_api_key(swag_server:operation_id(), swag_server:api_key()) ->
     Result :: false | {true, capi_auth:context()}.
@@ -787,7 +787,7 @@ process_request('DownloadFile', Req, Context, ReqCtx) ->
         {ok, #reports_Report{status = created, files = Files}} ->
             case lists:keymember(FileID, #reports_FileMeta.file_id, Files) of
                 true ->
-                    generate_presigned_url(FileID, ReqCtx);
+                    generate_report_presigned_url(FileID, ReqCtx);
                 false ->
                     {ok, {404, [], general_error(<<"File not found">>)}}
             end;
@@ -1177,7 +1177,7 @@ process_request('DeleteWebhookByID', Req, Context, ReqCtx) ->
 process_request(_OperationID, _Req, _Context, _ReqCtx) ->
     {error, reply_5xx(501)}.
 
-generate_presigned_url(FileID, ReqCtx) ->
+generate_report_presigned_url(FileID, ReqCtx) ->
     ExpiresAt = get_default_url_lifetime(),
     Result = service_call(reporting, 'GeneratePresignedUrl', [FileID, ExpiresAt], ReqCtx),
     case Result of
@@ -3178,7 +3178,8 @@ get_prepared_ip(Context) ->
 
 get_default_url_lifetime() ->
     Now = erlang:system_time(second),
-    case rfc3339:format(Now + ?DEFAULT_URL_LIFETIME, second) of
+    Lifetime = application:get_env(capi, reporter_url_lifetime, ?DEFAULT_URL_LIFETIME),
+    case rfc3339:format(Now + Lifetime, second) of
         {ok, Val} when is_binary(Val)->
             Val;
         Error ->
