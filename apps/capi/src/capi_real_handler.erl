@@ -102,7 +102,7 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
 
     Result = try
-        PaymentTool = decode_bank_card(Token),
+        PaymentTool = encode_payment_tool_token(Token),
         {ClientInfo, PaymentSession} = unwrap_session(EncodedSession),
         Params =  #payproc_InvoicePaymentParams{
             'payer' = #domain_Payer{
@@ -163,11 +163,13 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
 
 process_request('CreatePaymentToolToken', Req, Context, ReqCtx) ->
     Params = maps:get('PaymentToolTokenParams', Req),
-    ClientInfo0 = maps:get(<<"clientInfo">>, Params),
+    ClientInfo = maps:get(<<"clientInfo">>, Params),
     PaymentTool = maps:get(<<"paymentTool">>, Params),
     case PaymentTool of
         #{<<"paymentToolType">> := <<"CardData">>} ->
-            process_card_data(ClientInfo0, PaymentTool, Context, ReqCtx);
+            process_card_data(ClientInfo, PaymentTool, Context, ReqCtx);
+        #{<<"paymentToolType">> := <<"PaymentTerminalData">>} ->
+            process_payment_terminal_data(ClientInfo, PaymentTool, Context);
         _ ->
             {ok, {400, [], logic_error(
                 invalidPaymentTool,
@@ -1328,18 +1330,38 @@ encode_cash(Params) ->
         currency = encode_currency(genlib_map:get(<<"currency">>, Params))
     }.
 
-encode_bank_card(#domain_BankCard{
+encode_payment_tool_token(Token) ->
+    try capi_utils:base64url_to_map(Token) of
+        #{<<"type">> := <<"bank_card">>} = Encoded ->
+            encode_bank_card(Encoded);
+        #{<<"type">> := <<"payment_terminal">>} = Encoded ->
+            encode_payment_terminal(Encoded)
+    catch
+        error:badarg ->
+            erlang:throw(invalid_token)
+    end.
+
+decode_bank_card(#domain_BankCard{
     'token'  = Token,
     'payment_system' = PaymentSystem,
     'bin' = Bin,
     'masked_pan' = MaskedPan
 }) ->
-    base64url:encode(jsx:encode(#{
+    capi_utils:map_to_base64url(#{
+        <<"type">> => <<"bank_card">>,
         <<"token">> => Token,
         <<"payment_system">> => PaymentSystem,
         <<"bin">> => Bin,
         <<"masked_pan">> => MaskedPan
-    })).
+    }).
+
+decode_payment_terminal(#domain_PaymentTerminal{
+    terminal_type = Type
+}) ->
+    capi_utils:map_to_base64url(#{
+        <<"type">> => <<"payment_terminal">>,
+        <<"terminal_type">> => Type
+    }).
 
 encode_invoice_tpl_create_params(PartyID, Params) ->
     #payproc_InvoiceTemplateCreateParams{
@@ -1637,17 +1659,12 @@ make_access_token(Fun, ID, PartyID, Context) ->
     {ok, Token} = Fun(PartyID, ID, AdditionalClaims),
     #{<<"payload">> => Token}.
 
-decode_bank_card(Encoded) ->
-    #{
-        <<"token">> := Token,
-        <<"payment_system">> := PaymentSystem,
-        <<"bin">> := Bin,
-        <<"masked_pan">> := MaskedPan
-    } = try capi_utils:base64url_to_map(Encoded)
-    catch
-        error:badarg ->
-            erlang:throw(invalid_token)
-    end,
+encode_bank_card(#{
+    <<"token">> := Token,
+    <<"payment_system">> := PaymentSystem,
+    <<"bin">> := Bin,
+    <<"masked_pan">> := MaskedPan
+}) ->
     {bank_card, #domain_BankCard{
         'token'  = Token,
         'payment_system' = binary_to_existing_atom(PaymentSystem, utf8),
@@ -1655,11 +1672,16 @@ decode_bank_card(Encoded) ->
         'masked_pan' = MaskedPan
     }}.
 
+encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
+    {payment_terminal, #domain_PaymentTerminal{
+        terminal_type = binary_to_existing_atom(Type, utf8)
+    }}.
+
 wrap_session(ClientInfo, PaymentSession) ->
-    base64url:encode(jsx:encode(#{
+    capi_utils:map_to_base64url(#{
         <<"clientInfo">> => ClientInfo,
         <<"paymentSession">> => PaymentSession
-    })).
+    }).
 
 unwrap_session(Encoded) ->
     #{
@@ -1816,7 +1838,9 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
     }, decode_payment_status(Status))).
 
 decode_payment_tool_token({bank_card, BankCard}) ->
-    encode_bank_card(BankCard).
+    decode_bank_card(BankCard);
+decode_payment_tool_token({payment_terminal, PaymentTerminal}) ->
+    decode_payment_terminal(PaymentTerminal).
 
 decode_payment_tool_details({bank_card, #domain_BankCard{
     'payment_system' = PaymentSystem,
@@ -1826,6 +1850,13 @@ decode_payment_tool_details({bank_card, #domain_BankCard{
         <<"detailsType">> => <<"PaymentToolDetailsCardData">>,
         <<"cardNumberMask">> => decode_masked_pan(MaskedPan),
         <<"paymentSystem">> => genlib:to_binary(PaymentSystem)
+    };
+decode_payment_tool_details({payment_terminal, #domain_PaymentTerminal{
+    terminal_type = Type
+}}) ->
+    #{
+        <<"detailsType">> => <<"PaymentToolDetailsPaymentTerminalData">>,
+        <<"provider">> => genlib:to_binary(Type)
     }.
 
 -define(MASKED_PAN_MAX_LENGTH, 4).
@@ -3138,7 +3169,7 @@ process_card_data(ClientInfo0, PaymentTool, Context, ReqCtx) ->
             session_id = PaymentSession,
             bank_card = BankCard
         }} ->
-            Token = encode_bank_card(BankCard),
+            Token = decode_bank_card(BankCard),
             PreparedIP = get_prepared_ip(Context),
             ClientInfo = ClientInfo0#{<<"ip_address">> => PreparedIP},
 
@@ -3175,6 +3206,23 @@ get_prepared_ip(Context) ->
         ip_address := IP
     } = get_peer_info(Context),
     genlib:to_binary(inet:ntoa(IP)).
+
+process_payment_terminal_data(ClientInfo0, TerminalData, Context) ->
+    PaymentTerminal = #domain_PaymentTerminal{
+        terminal_type = binary_to_existing_atom(
+            genlib_map:get(<<"provider">>, TerminalData),
+            utf8
+        )
+    },
+    Token = decode_payment_terminal(PaymentTerminal),
+    PreparedIP = get_prepared_ip(Context),
+    ClientInfo = ClientInfo0#{<<"ip_address">> => PreparedIP},
+    Session = wrap_session(ClientInfo, <<"">>),
+    Resp = #{
+        <<"token">> => Token,
+        <<"session">> => Session
+    },
+    {ok, {201, [], Resp}}.
 
 get_default_url_lifetime() ->
     Now = erlang:system_time(second),

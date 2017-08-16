@@ -29,6 +29,7 @@
     create_payment_ok_test/1,
     create_payment_ok_w_access_token_test/1,
     create_payment_tool_token_ok_test/1,
+    create_payment_terminal_tool_token/1,
     create_payment_tool_token_w_access_token_ok_test/1,
     get_invoice_by_id_ok_test/1,
     get_invoice_by_id_w_access_token_ok_test/1,
@@ -145,6 +146,7 @@ all() ->
         {group, invoice_management},
         {group, invoice_template_management},
         {group, card_payment},
+        {group, terminal_payment},
         {group, invoice_access_token_management},
         {group, statistics},
         {group, party_management},
@@ -195,6 +197,15 @@ groups() ->
         {card_payment, [sequence], [
             create_invoice_ok_test,
             create_payment_tool_token_ok_test,
+            create_payment_ok_test,
+            get_payments_ok_test,
+            get_payment_by_id_ok_test,
+            fulfill_invoice_ok_test,
+            get_invoice_events_ok_test
+        ]},
+        {terminal_payment, [sequence], [
+            create_invoice_ok_test,
+            create_payment_terminal_tool_token,
             create_payment_ok_test,
             get_payments_ok_test,
             get_payment_by_id_ok_test,
@@ -702,12 +713,20 @@ create_invoice_with_template_removed_template_test(Config) ->
 -spec create_payment_ok_test(config()) -> _.
 
 create_payment_ok_test(Config) ->
-    {create_payment_tool_token_ok_test, #{
+    Info = case ?config(saved_config, Config) of
+        {create_payment_tool_token_ok_test, Inf} ->
+            Inf;
+        {create_payment_terminal_tool_token, Inf} ->
+            Inf;
+        _ ->
+            error(no_config_for_payment)
+    end,
+    #{
         session := PaymentSession,
         payment_tool_token := PaymentToolToken,
         invoice_context := Context,
         invoice_id := InvoiceID
-    } = Info} = ?config(saved_config, Config),
+    } = Info,
     #{<<"id">> := PaymentID} = default_create_payment(
         InvoiceID,
         PaymentSession,
@@ -724,6 +743,19 @@ create_payment_tool_token_ok_test(Config) ->
         invoice_context := Context
     } = Info} = ?config(saved_config, Config),
     {ok, Token, Session} = default_tokenize_card(Context, Config),
+    Info1 = Info#{
+        payment_tool_token => Token,
+        session => Session
+    },
+    {save_config, Info1}.
+
+-spec create_payment_terminal_tool_token(config()) -> _.
+
+create_payment_terminal_tool_token(Config) ->
+    {create_invoice_ok_test, #{
+        invoice_context := Context
+    } = Info} = ?config(saved_config, Config),
+    {ok, Token, Session} = default_tokenize_payment_terminal(Context, Config),
     Info1 = Info#{
         payment_tool_token => Token,
         session => Session
@@ -1470,6 +1502,18 @@ default_tokenize_card(Context, _Config) ->
     },
     capi_client_tokens:create_payment_tool_token(Context, Req).
 
+default_tokenize_payment_terminal(Context, _Config) ->
+    Req = #{
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"PaymentTerminalData">>,
+            <<"provider">> => <<"euroset">>
+        },
+        <<"clientInfo">> => #{
+            <<"fingerprint">> => <<"test fingerprint">>
+        }
+    },
+    capi_client_tokens:create_payment_tool_token(Context, Req).
+
 default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, _Config) ->
     Req = #{
         <<"paymentSession">> => PaymentSession,
@@ -1717,7 +1761,8 @@ get_domain_fixture(Proxies) ->
             categories = {value, ordsets:from_list([?cat(1)])},
             payment_methods = {value, ordsets:from_list([
                 ?pmt(bank_card, visa),
-                ?pmt(bank_card, mastercard)
+                ?pmt(bank_card, mastercard),
+                ?pmt(payment_terminal, euroset)
             ])},
             cash_limit = {decisions, [
                 #domain_CashLimitDecision{
@@ -1752,7 +1797,7 @@ get_domain_fixture(Proxies) ->
             ref = #domain_GlobalsRef{},
             data = #domain_Globals{
                 party_prototype           = #domain_PartyPrototypeRef{id = 42},
-                providers                 = {value, [?prv(1), ?prv(2)]},
+                providers                 = {value, [?prv(1), ?prv(2), ?prv(3)]},
                 system_account_set        = {value, ?sas(1)},
                 external_account_set      = {value, ?eas(1)},
                 default_contract_template = ?tmpl(2),
@@ -2052,6 +2097,50 @@ get_domain_fixture(Proxies) ->
                 risk_coverage = low
             }
         }},
+        {provider, #domain_ProviderObject{
+            ref = #domain_ProviderRef{id = 3},
+            data = #domain_Provider{
+                name = <<"Euroset">>,
+                description = <<"First payment terminal provider">>,
+                terminal = {value, [?trm(7)]},
+                proxy = #domain_Proxy{
+                    ref = ?prx(1),
+                    additional = #{
+                        <<"override">> => <<"drovider">>
+                    }
+                },
+                abs_account = <<"1234567890">>
+            }
+        }},
+        {terminal, #domain_TerminalObject{
+            ref = ?trm(7),
+            data = #domain_Terminal{
+                name = <<"Eurosucks 1">>,
+                description = <<"Eurosucks 1">>,
+                payment_method = ?pmt(payment_terminal, euroset),
+                category = ?cat(?LIVE_CATEGORY_ID),
+                cash_flow = [
+                    ?cfpost(
+                        {provider, settlement},
+                        {merchant, settlement},
+                        ?share(1, 1, payment_amount)
+                    ),
+                    ?cfpost(
+                        {system, settlement},
+                        {provider, settlement},
+                        ?share(16, 1000, payment_amount)
+                    )
+                ],
+                account = ?trmacc(
+                    <<"RUB">>,
+                    maps:get(terminal_3_settlement, Accounts)
+                ),
+                options = #{
+                    <<"override">> => <<"Eurosucks 1">>
+                },
+                risk_coverage = low
+            }
+        }},
         {payment_method, #domain_PaymentMethodObject{
             ref = ?pmt(bank_card, visa),
             data = #domain_PaymentMethodDefinition{
@@ -2064,6 +2153,13 @@ get_domain_fixture(Proxies) ->
             data = #domain_PaymentMethodDefinition{
                 name = <<"Mastercard bank card">>,
                 description = <<"For everything else, there's MasterCard.">>
+            }
+        }},
+        {payment_method, #domain_PaymentMethodObject{
+            ref = ?pmt(payment_terminal, euroset),
+            data = #domain_PaymentMethodDefinition{
+                name = <<"Euroset Terminal">>,
+                description = <<"For old peoples, there's Euroset Terminal.">>
             }
         }},
         {proxy, #domain_ProxyObject{
