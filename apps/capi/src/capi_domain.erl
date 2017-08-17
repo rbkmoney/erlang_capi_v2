@@ -1,13 +1,13 @@
 -module(capi_domain).
 
--include_lib("cp_proto/include/cp_domain_thrift.hrl").
--include_lib("cp_proto/include/cp_domain_config_thrift.hrl").
+-include_lib("dmsl/include/dmsl_domain_thrift.hrl").
+-include_lib("dmsl/include/dmsl_domain_config_thrift.hrl").
 
 -export([get_categories/1]).
 -export([get/2]).
 
 -type context() :: woody_context:ctx().
--type ref() :: cp_domain_thrift:'Reference'().
+-type ref() :: dmsl_domain_thrift:'Reference'().
 -type data() :: _.
 
 -type category() :: #domain_CategoryObject{}.
@@ -52,10 +52,4 @@ get_shapshot(Context) ->
     get_shapshot(head(), Context).
 
 get_shapshot(Reference, Context) ->
-    cp_proto:call_service(
-        repository,
-        'Checkout',
-        [Reference],
-        Context,
-        capi_woody_event_handler
-    ).
+    capi_woody_client:call_service(repository, 'Checkout', [Reference], Context).

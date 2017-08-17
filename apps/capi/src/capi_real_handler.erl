@@ -1,13 +1,13 @@
 -module(capi_real_handler).
 
--include_lib("cp_proto/include/cp_payment_processing_thrift.hrl").
--include_lib("cp_proto/include/cp_domain_thrift.hrl").
--include_lib("cp_proto/include/cp_cds_thrift.hrl").
--include_lib("cp_proto/include/cp_merch_stat_thrift.hrl").
--include_lib("cp_proto/include/cp_webhooker_thrift.hrl").
--include_lib("cp_proto/include/cp_user_interaction_thrift.hrl").
--include_lib("cp_proto/include/cp_geo_ip_thrift.hrl").
--include_lib("cp_proto/include/cp_reporting_thrift.hrl").
+-include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
+-include_lib("dmsl/include/dmsl_domain_thrift.hrl").
+-include_lib("dmsl/include/dmsl_cds_thrift.hrl").
+-include_lib("dmsl/include/dmsl_merch_stat_thrift.hrl").
+-include_lib("dmsl/include/dmsl_webhooker_thrift.hrl").
+-include_lib("dmsl/include/dmsl_user_interaction_thrift.hrl").
+-include_lib("dmsl/include/dmsl_geo_ip_thrift.hrl").
+-include_lib("dmsl/include/dmsl_reporting_thrift.hrl").
 
 -behaviour(swag_server_logic_handler).
 
@@ -1411,7 +1411,7 @@ decode_webhook_id(WebhookID) when is_integer(WebhookID) ->
 %%%
 
 service_call(ServiceName, Function, Args, Context) ->
-    cp_proto:call_service(ServiceName, Function, Args, Context, capi_woody_event_handler).
+    capi_woody_client:call_service(ServiceName, Function, Args, Context).
 
 create_context(#{'X-Request-ID' := RequestID}, AuthContext) ->
     RpcID = #{trace_id := TraceID} = woody_context:new_rpc_id(genlib:to_binary(RequestID)),

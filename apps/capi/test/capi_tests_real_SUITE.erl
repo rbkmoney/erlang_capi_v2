@@ -1,11 +1,11 @@
 -module(capi_tests_real_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
--include_lib("cp_proto/include/cp_payment_processing_thrift.hrl").
--include_lib("cp_proto/include/cp_domain_config_thrift.hrl").
--include_lib("cp_proto/include/cp_domain_thrift.hrl").
--include_lib("cp_proto/include/cp_accounter_thrift.hrl").
--include_lib("cp_proto/include/cp_reporting_thrift.hrl").
+-include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
+-include_lib("dmsl/include/dmsl_domain_config_thrift.hrl").
+-include_lib("dmsl/include/dmsl_domain_thrift.hrl").
+-include_lib("dmsl/include/dmsl_accounter_thrift.hrl").
+-include_lib("dmsl/include/dmsl_reporting_thrift.hrl").
 
 
 -export([all/0]).
@@ -333,7 +333,7 @@ init_per_suite(Config) ->
         capi_ct_helper:start_app(lager) ++
         capi_ct_helper:start_app(cowlib) ++
         capi_ct_helper:start_app(woody) ++
-        capi_ct_helper:start_app(cp_proto, [
+        capi_ct_helper:start_app(capi_woody_client, [
             {service_urls, #{
                 party_management   => ?CAPI_PARTY_MANAGEMENT_URL,
                 accounter          => ?CAPI_ACCOUNTER_URL,
@@ -2423,7 +2423,7 @@ call_service(Service, Function, Args) ->
     call_service(Service, Function, Args, create_context()).
 
 call_service(Service, Function, Args, ReqCtx) ->
-    cp_proto:call_service(Service, Function, Args, ReqCtx, capi_woody_event_handler).
+    capi_woody_client:call_service(Service, Function, Args, ReqCtx).
 
 create_and_activate_shop(Config) ->
     ShopID = generate_shop_id(),

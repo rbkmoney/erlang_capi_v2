@@ -159,7 +159,7 @@ services:
       - .:/code
     environment:
       - CDS_HOST=cds
-      - SCHEMA_DIR=/code/apps/cp_proto/damsel/proto
+      - SCHEMA_DIR=/code/_build/default/lib/dmsl/proto
     command:
       /code/script/cds_test_init
     depends_on:
@@ -273,8 +273,8 @@ networks:
   default:
     driver: bridge
     driver_opts:
-      com.docker.network.enable_ipv6: "true"
-      com.docker.network.bridge.enable_ip_masquerade: "false"
+      com.docker.network.enable_ipv6: \"true\"
+      com.docker.network.bridge.enable_ip_masquerade: \"false\"
 "
 fi)
 EOF
