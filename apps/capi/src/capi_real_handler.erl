@@ -2054,7 +2054,8 @@ decode_stat_invoice(#merchstat_StatInvoice{
     due  = DueDate,
     amount = Amount,
     currency_symbolic_code = Currency,
-    context = RawContext
+    context = RawContext,
+    cart = Cart
 }) ->
     genlib_map:compact(maps:merge(#{
         <<"id">> => InvoiceID,
@@ -2065,7 +2066,8 @@ decode_stat_invoice(#merchstat_StatInvoice{
         <<"currency">> =>  Currency,
         <<"metadata">> =>  decode_context(RawContext),
         <<"product">> => Product,
-        <<"description">> => Description
+        <<"description">> => Description,
+        <<"cart">> => decode_invoice_cart(Cart)
     }, decode_stat_invoice_status(InvoiceStatus))).
 
 decode_stat_invoice_status(Status) ->
