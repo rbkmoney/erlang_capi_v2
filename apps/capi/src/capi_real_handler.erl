@@ -94,7 +94,7 @@ process_request('CreateInvoice', Req, Context, ReqCtx) ->
             end
     catch
         invoice_cart_empty ->
-            {ok, {400, [], logic_error(invalidInvoiceCart, <<"Invalid invoice cart">>)}};
+            {ok, {400, [], logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)}};
         invalid_invoice_cost ->
             {ok, {400, [], logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)}}
     end;
@@ -1358,7 +1358,7 @@ encode_invoice_cart(Params) ->
     Currency = genlib_map:get(<<"currency">>, Params),
     encode_invoice_cart(Cart, Currency).
 
-encode_invoice_cart(Cart, Currency) when Cart =/= undefined, Cart =/= [], Currency =/= undefined ->
+encode_invoice_cart(Cart, Currency) when Cart =/= undefined, Cart =/= [] ->
     #domain_InvoiceCart{
         lines = [encode_invoice_line(Line, Currency) || Line <- Cart]
     };
@@ -1384,6 +1384,8 @@ encode_invoice_line(Line, Currency) ->
     }.
 
 encode_invoice_line_tax_mode(#{<<"type">> := <<"InvoiceLineTaxVAT">>} = TaxMode)  ->
+    %% for more info about taxMode look here:
+    %% https://github.com/rbkmoney/starrys/blob/master/docs/settings.md
     genlib_map:get(<<"rate">>, TaxMode).
 
 encode_cash(Params) ->
@@ -2128,6 +2130,8 @@ decode_invoice_line(#domain_InvoiceLine{
     }).
 
 decode_invoice_line_tax_mode(#{<<"TaxMode">> := {str, TM}}) ->
+    %% for more info about taxMode look here:
+    %% https://github.com/rbkmoney/starrys/blob/master/docs/settings.md
     #{
        <<"type">> => <<"InvoiceLineTaxVAT">>,
        <<"rate">> => TM
