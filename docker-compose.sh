@@ -28,9 +28,11 @@ services:
         condition: service_started
       hooker:
         condition: service_healthy
+      reporter:
+        condition: service_healthy
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:f51c3aa5a5d2e956257a04147470fd99a3c003d0
+    image: dr.rbkmoney.com/rbkmoney/hellgate:a0c7575fbc299964eec094d8bef9530420e2f031
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -121,7 +123,7 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - PG_DBS=hooker keycloak magista shumway bustermaze
+      - PG_DBS=hooker keycloak magista shumway bustermaze reporter
     entrypoint:
      - /docker-entrypoint.sh
      - postgres
@@ -129,7 +131,7 @@ services:
       - ./test/pg-db/init-dbs.sh:/docker-entrypoint-initdb.d/init-dbs.sh
 
   dominant:
-    image: dr.rbkmoney.com/rbkmoney/dominant:f6d260e235a9c4f418166221943f8b277267465f
+    image: dr.rbkmoney.com/rbkmoney/dominant:8156ee2ce513cf070f8bf8581cc631f8be184582
     restart: always
     command: /opt/dominant/bin/dominant foreground
     depends_on:
@@ -196,6 +198,29 @@ services:
       - --flyway.password=postgres
       - --flyway.schemas=hook
       - --bm.pooling.url=http://bustermaze:8022/repo
+    depends_on:
+      - pg-db
+
+  reporter:
+    image: dr.rbkmoney.com/rbkmoney/reporter:0f05912d4bb34679caad02d227dd41b35b9ecabd
+    healthcheck:
+      test: "curl -sS -o /dev/null http://localhost:8022/"
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    entrypoint:
+      - java
+      - -jar
+      - /opt/reporter/reporter.jar
+      - --partyManagement.url=http://hellgate:8022/v1/processing/partymgmt
+      - --magista.url=http://magista:8022/stat
+      - --spring.datasource.url=jdbc:postgresql://pg-db:5432/reporter
+      - --spring.datasource.username=postgres
+      - --spring.datasource.password=postgres
+      - --flyway.url=jdbc:postgresql://pg-db:5432/reporter
+      - --flyway.user=postgres
+      - --flyway.password=postgres
+      - --flyway.schemas=rpt
     depends_on:
       - pg-db
 

@@ -7,6 +7,7 @@
 -include_lib("cp_proto/include/cp_webhooker_thrift.hrl").
 -include_lib("cp_proto/include/cp_user_interaction_thrift.hrl").
 -include_lib("cp_proto/include/cp_geo_ip_thrift.hrl").
+-include_lib("cp_proto/include/cp_reporting_thrift.hrl").
 
 -behaviour(swag_server_logic_handler).
 
@@ -18,6 +19,7 @@
 -define(REALM, <<"external">>).
 
 -define(DEFAULT_INVOICE_META, #{}).
+-define(DEFAULT_URL_LIFETIME, 60). % seconds
 
 -spec authorize_api_key(swag_server:operation_id(), swag_server:api_key()) ->
     Result :: false | {true, capi_auth:context()}.
@@ -106,7 +108,7 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
 
     Result = try
-        PaymentTool = decode_bank_card(Token),
+        PaymentTool = encode_payment_tool_token(Token),
         {ClientInfo, PaymentSession} = unwrap_session(EncodedSession),
         Params =  #payproc_InvoicePaymentParams{
             'payer' = #domain_Payer{
@@ -167,11 +169,13 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
 
 process_request('CreatePaymentToolToken', Req, Context, ReqCtx) ->
     Params = maps:get('PaymentToolTokenParams', Req),
-    ClientInfo0 = maps:get(<<"clientInfo">>, Params),
+    ClientInfo = maps:get(<<"clientInfo">>, Params),
     PaymentTool = maps:get(<<"paymentTool">>, Params),
     case PaymentTool of
         #{<<"paymentToolType">> := <<"CardData">>} ->
-            process_card_data(ClientInfo0, PaymentTool, Context, ReqCtx);
+            process_card_data(ClientInfo, PaymentTool, Context, ReqCtx);
+        #{<<"paymentToolType">> := <<"PaymentTerminalData">>} ->
+            process_payment_terminal_data(ClientInfo, PaymentTool, Context);
         _ ->
             {ok, {400, [], logic_error(
                 invalidPaymentTool,
@@ -756,6 +760,49 @@ process_request('GetShopByID', Req, Context, ReqCtx) ->
             {ok, {404, [], general_error(<<"Shop not found">>)}}
     end;
 
+process_request('GetReports', Req, Context, ReqCtx) ->
+    PartyID = get_party_id(Context),
+    ReportRequest = #reports_ReportRequest{
+        party_id = PartyID,
+        shop_id = maps:get(shopID, Req),
+        time_range = #reports_ReportTimeRange{
+            from_time = get_time('fromTime', Req),
+            to_time = get_time('toTime', Req)
+        }
+    },
+    ReportTypes = [],
+    Result = service_call(reporting, 'GetReports', [ReportRequest, ReportTypes], ReqCtx),
+    case Result of
+        {ok, Reports} ->
+            Resp = [decode_report(R) || #reports_Report{status = created} = R <- Reports],
+            {ok, {200, [], Resp}};
+        {exception, Exception} ->
+            case Exception of
+                #'InvalidRequest'{errors = Errors} ->
+                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                #reports_DatasetTooBig{limit = Limit} ->
+                    {ok, {400, [], limit_exceeded_error(Limit)}}
+            end
+    end;
+
+process_request('DownloadFile', Req, Context, ReqCtx) ->
+    PartyID = get_party_id(Context),
+    ShopID = maps:get(shopID, Req),
+    ReportID = maps:get(reportID, Req),
+    FileID = maps:get(fileID, Req),
+    Result = service_call(reporting, 'GetReport', [PartyID, ShopID, ReportID], ReqCtx),
+    case Result of
+        {ok, #reports_Report{status = created, files = Files}} ->
+            case lists:keymember(FileID, #reports_FileMeta.file_id, Files) of
+                true ->
+                    generate_report_presigned_url(FileID, ReqCtx);
+                false ->
+                    {ok, {404, [], general_error(<<"File not found">>)}}
+            end;
+        {exception, #reports_ReportNotFound{}} ->
+            {ok, {404, [], general_error(<<"Report not found">>)}}
+    end;
+
 process_request('GetContracts', _Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
@@ -1138,6 +1185,21 @@ process_request('DeleteWebhookByID', Req, Context, ReqCtx) ->
 process_request(_OperationID, _Req, _Context, _ReqCtx) ->
     {error, reply_5xx(501)}.
 
+generate_report_presigned_url(FileID, ReqCtx) ->
+    ExpiresAt = get_default_url_lifetime(),
+    Result = service_call(reporting, 'GeneratePresignedUrl', [FileID, ExpiresAt], ReqCtx),
+    case Result of
+        {ok, URL} ->
+            {ok, {303, [{<<"Location">>, URL}], undefined}};
+        {exception, Exception} ->
+            case Exception of
+                #'InvalidRequest'{errors = Errors} ->
+                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                #reports_FileNotFound{}->
+                    {ok, {404, [], general_error(<<"File not found">>)}}
+            end
+    end.
+
 validate_event_filter({invoice, #webhooker_InvoiceEventFilter{
     shop_id = ShopID
 }}, Context, ReqCtx) when ShopID /= undefined ->
@@ -1335,18 +1397,38 @@ encode_cash(Amount, Currency) ->
         currency = encode_currency(Currency)
     }.
 
-encode_bank_card(#domain_BankCard{
+encode_payment_tool_token(Token) ->
+    try capi_utils:base64url_to_map(Token) of
+        #{<<"type">> := <<"bank_card">>} = Encoded ->
+            encode_bank_card(Encoded);
+        #{<<"type">> := <<"payment_terminal">>} = Encoded ->
+            encode_payment_terminal(Encoded)
+    catch
+        error:badarg ->
+            erlang:throw(invalid_token)
+    end.
+
+decode_bank_card(#domain_BankCard{
     'token'  = Token,
     'payment_system' = PaymentSystem,
     'bin' = Bin,
     'masked_pan' = MaskedPan
 }) ->
-    base64url:encode(jsx:encode(#{
+    capi_utils:map_to_base64url(#{
+        <<"type">> => <<"bank_card">>,
         <<"token">> => Token,
         <<"payment_system">> => PaymentSystem,
         <<"bin">> => Bin,
         <<"masked_pan">> => MaskedPan
-    })).
+    }).
+
+decode_payment_terminal(#domain_PaymentTerminal{
+    terminal_type = Type
+}) ->
+    capi_utils:map_to_base64url(#{
+        <<"type">> => <<"payment_terminal">>,
+        <<"terminal_type">> => Type
+    }).
 
 encode_invoice_tpl_create_params(PartyID, Params) ->
     #payproc_InvoiceTemplateCreateParams{
@@ -1646,17 +1728,12 @@ make_access_token(Fun, ID, PartyID, Context) ->
     {ok, Token} = Fun(PartyID, ID, AdditionalClaims),
     #{<<"payload">> => Token}.
 
-decode_bank_card(Encoded) ->
-    #{
-        <<"token">> := Token,
-        <<"payment_system">> := PaymentSystem,
-        <<"bin">> := Bin,
-        <<"masked_pan">> := MaskedPan
-    } = try capi_utils:base64url_to_map(Encoded)
-    catch
-        error:badarg ->
-            erlang:throw(invalid_token)
-    end,
+encode_bank_card(#{
+    <<"token">> := Token,
+    <<"payment_system">> := PaymentSystem,
+    <<"bin">> := Bin,
+    <<"masked_pan">> := MaskedPan
+}) ->
     {bank_card, #domain_BankCard{
         'token'  = Token,
         'payment_system' = binary_to_existing_atom(PaymentSystem, utf8),
@@ -1664,11 +1741,16 @@ decode_bank_card(Encoded) ->
         'masked_pan' = MaskedPan
     }}.
 
+encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
+    {payment_terminal, #domain_PaymentTerminal{
+        terminal_type = binary_to_existing_atom(Type, utf8)
+    }}.
+
 wrap_session(ClientInfo, PaymentSession) ->
-    base64url:encode(jsx:encode(#{
+    capi_utils:map_to_base64url(#{
         <<"clientInfo">> => ClientInfo,
         <<"paymentSession">> => PaymentSession
-    })).
+    }).
 
 unwrap_session(Encoded) ->
     #{
@@ -1825,7 +1907,9 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
     }, decode_payment_status(Status))).
 
 decode_payment_tool_token({bank_card, BankCard}) ->
-    encode_bank_card(BankCard).
+    decode_bank_card(BankCard);
+decode_payment_tool_token({payment_terminal, PaymentTerminal}) ->
+    decode_payment_terminal(PaymentTerminal).
 
 decode_payment_tool_details({bank_card, #domain_BankCard{
     'payment_system' = PaymentSystem,
@@ -1835,6 +1919,13 @@ decode_payment_tool_details({bank_card, #domain_BankCard{
         <<"detailsType">> => <<"PaymentToolDetailsCardData">>,
         <<"cardNumberMask">> => decode_masked_pan(MaskedPan),
         <<"paymentSystem">> => genlib:to_binary(PaymentSystem)
+    };
+decode_payment_tool_details({payment_terminal, #domain_PaymentTerminal{
+    terminal_type = Type
+}}) ->
+    #{
+        <<"detailsType">> => <<"PaymentToolDetailsPaymentTerminalData">>,
+        <<"provider">> => genlib:to_binary(Type)
     }.
 
 -define(MASKED_PAN_MAX_LENGTH, 4).
@@ -2710,6 +2801,36 @@ encode_event_filter(#{
         ])
     }}.
 
+decode_report(#reports_Report{
+    report_id = ReportID,
+    time_range = #reports_ReportTimeRange{
+        from_time = FromTime,
+        to_time = ToTime
+    },
+    created_at = CreatedAt,
+    report_type = Type,
+    files = Files
+}) ->
+    #{
+        <<"id">> => ReportID,
+        <<"createdAt">> => CreatedAt,
+        <<"fromTime">> => FromTime,
+        <<"toTime">> => ToTime,
+        <<"type">> => genlib:to_binary(Type),
+        <<"files">> => [decode_report_file(F) || F <- Files]
+    }.
+
+decode_report_file(#reports_FileMeta{
+    file_id = ID,
+    filename = Filename,
+    signature = #reports_Signature{md5 = MD5, sha256 = SHA256}
+}) ->
+    #{
+        <<"id">> => ID,
+        <<"filename">> => Filename,
+        <<"signatures">> => #{<<"md5">> => MD5, <<"sha256">> => SHA256}
+    }.
+
 -define(invpaid()      , {paid, #webhooker_InvoicePaid{}}).
 -define(invcancelled() , {cancelled, #webhooker_InvoiceCancelled{}}).
 -define(invfulfilled() , {fulfilled, #webhooker_InvoiceFulfilled{}}).
@@ -3148,7 +3269,7 @@ process_card_data(ClientInfo0, PaymentTool, Context, ReqCtx) ->
             session_id = PaymentSession,
             bank_card = BankCard
         }} ->
-            Token = encode_bank_card(BankCard),
+            Token = decode_bank_card(BankCard),
             PreparedIP = get_prepared_ip(Context),
             ClientInfo = ClientInfo0#{<<"ip_address">> => PreparedIP},
 
@@ -3185,6 +3306,33 @@ get_prepared_ip(Context) ->
         ip_address := IP
     } = get_peer_info(Context),
     genlib:to_binary(inet:ntoa(IP)).
+
+process_payment_terminal_data(ClientInfo0, TerminalData, Context) ->
+    PaymentTerminal = #domain_PaymentTerminal{
+        terminal_type = binary_to_existing_atom(
+            genlib_map:get(<<"provider">>, TerminalData),
+            utf8
+        )
+    },
+    Token = decode_payment_terminal(PaymentTerminal),
+    PreparedIP = get_prepared_ip(Context),
+    ClientInfo = ClientInfo0#{<<"ip_address">> => PreparedIP},
+    Session = wrap_session(ClientInfo, <<"">>),
+    Resp = #{
+        <<"token">> => Token,
+        <<"session">> => Session
+    },
+    {ok, {201, [], Resp}}.
+
+get_default_url_lifetime() ->
+    Now = erlang:system_time(second),
+    Lifetime = application:get_env(capi, reporter_url_lifetime, ?DEFAULT_URL_LIFETIME),
+    case rfc3339:format(Now + Lifetime, second) of
+        {ok, Val} when is_binary(Val)->
+            Val;
+        Error ->
+            error(Error)
+    end.
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").

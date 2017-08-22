@@ -90,18 +90,21 @@ make_params(Headers, RequestParams) ->
     {ok, term()} | {error, term()}.
 handle_response(Response) ->
     case Response of
-        {ok, Code, _, Body} -> handle_response(Code, Body);
+        {ok, Code, Headers, Body} -> handle_response(Code, Headers, Body);
         {error, Error}      -> {error, Error}
     end.
 
--spec handle_response(integer(), term()) ->
+-spec handle_response(integer(), list(), term()) ->
     {ok, term()} | {error, term()}.
-handle_response(204, _) ->
+handle_response(204, _, _) ->
     {ok, undefined};
-handle_response(Code, Body) when Code div 100 == 2 ->
+handle_response(303, Headers, _) ->
+    URL = proplists:get_value(<<"Location">>, Headers),
+    {ok, {redirect, URL}};
+handle_response(Code, _, Body) when Code div 100 == 2 ->
     %% 2xx HTTP code
     {ok, decode_body(Body)};
-handle_response(_, Body) ->
+handle_response(_, _, Body) ->
     {error, Body}.
 
 -spec get_context(string(), term(), integer(), integer(), protocol()) ->

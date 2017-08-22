@@ -5,6 +5,7 @@
 -include_lib("cp_proto/include/cp_domain_config_thrift.hrl").
 -include_lib("cp_proto/include/cp_domain_thrift.hrl").
 -include_lib("cp_proto/include/cp_accounter_thrift.hrl").
+-include_lib("cp_proto/include/cp_reporting_thrift.hrl").
 
 
 -export([all/0]).
@@ -29,6 +30,7 @@
     create_payment_ok_test/1,
     create_payment_ok_w_access_token_test/1,
     create_payment_tool_token_ok_test/1,
+    create_payment_terminal_tool_token/1,
     create_payment_tool_token_w_access_token_ok_test/1,
     get_invoice_by_id_ok_test/1,
     get_invoice_by_id_w_access_token_ok_test/1,
@@ -85,7 +87,10 @@
     %%%%
     create_webhook_error_test/1,
     create_webhook_receive_events_test/1,
-    get_locations_names_ok_test/1
+    get_locations_names_ok_test/1,
+    %%%%
+    get_reports/1,
+    download_report_file/1
 ]).
 
 -define(PROTOCOL, ipv4).
@@ -106,6 +111,7 @@
 -define(CAPI_REPOSITORY_URL         , "http://dominant:8022/v1/domain/repository").
 -define(CAPI_CDS_STORAGE_URL        , "http://cds:8022/v1/storage").
 -define(CAPI_MERCHANT_STAT_URL      , "http://magista:8022/stat").
+-define(CAPI_REPORTING_URL          , "http://reporter:8022/reports").
 -define(CAPI_GEO_IP_URL             , "http://columbus:8022/repo").
 -define(CAPI_HOST_NAME              , "capi").
 
@@ -141,6 +147,7 @@ all() ->
         {group, invoice_management},
         {group, invoice_template_management},
         {group, card_payment},
+        {group, terminal_payment},
         {group, invoice_access_token_management},
         {group, statistics},
         {group, party_management},
@@ -149,7 +156,8 @@ all() ->
         {group, shops_management},
         {group, accounts_management},
         {group, webhook_management},
-        {group, geo_ip}
+        {group, geo_ip},
+        {group, reports}
     ].
 
 -spec groups() -> [
@@ -191,6 +199,15 @@ groups() ->
         {card_payment, [sequence], [
             create_invoice_ok_test,
             create_payment_tool_token_ok_test,
+            create_payment_ok_test,
+            get_payments_ok_test,
+            get_payment_by_id_ok_test,
+            fulfill_invoice_ok_test,
+            get_invoice_events_ok_test
+        ]},
+        {terminal_payment, [sequence], [
+            create_invoice_ok_test,
+            create_payment_terminal_tool_token,
             create_payment_ok_test,
             get_payments_ok_test,
             get_payment_by_id_ok_test,
@@ -258,6 +275,10 @@ groups() ->
         ]},
         {geo_ip, [parallel], [
             get_locations_names_ok_test
+        ]},
+        {reports, [sequence], [
+            get_reports,
+            download_report_file
         ]}
     ].
 %%
@@ -283,6 +304,7 @@ init_per_suite(Config) ->
                 repository         => ?CAPI_REPOSITORY_URL,
                 cds_storage        => ?CAPI_CDS_STORAGE_URL,
                 merchant_stat      => ?CAPI_MERCHANT_STAT_URL,
+                reporting          => ?CAPI_REPORTING_URL,
                 geo_ip_service     => ?CAPI_GEO_IP_URL
             }}
         ]),
@@ -759,12 +781,20 @@ create_invoice_with_template_removed_template_test(Config) ->
 -spec create_payment_ok_test(config()) -> _.
 
 create_payment_ok_test(Config) ->
-    {create_payment_tool_token_ok_test, #{
+    Info = case ?config(saved_config, Config) of
+        {create_payment_tool_token_ok_test, Inf} ->
+            Inf;
+        {create_payment_terminal_tool_token, Inf} ->
+            Inf;
+        _ ->
+            error(no_config_for_payment)
+    end,
+    #{
         session := PaymentSession,
         payment_tool_token := PaymentToolToken,
         invoice_context := Context,
         invoice_id := InvoiceID
-    } = Info} = ?config(saved_config, Config),
+    } = Info,
     #{<<"id">> := PaymentID} = default_create_payment(
         InvoiceID,
         PaymentSession,
@@ -781,6 +811,19 @@ create_payment_tool_token_ok_test(Config) ->
         invoice_context := Context
     } = Info} = ?config(saved_config, Config),
     {ok, Token, Session} = default_tokenize_card(Context, Config),
+    Info1 = Info#{
+        payment_tool_token => Token,
+        session => Session
+    },
+    {save_config, Info1}.
+
+-spec create_payment_terminal_tool_token(config()) -> _.
+
+create_payment_terminal_tool_token(Config) ->
+    {create_invoice_ok_test, #{
+        invoice_context := Context
+    } = Info} = ?config(saved_config, Config),
+    {ok, Token, Session} = default_tokenize_payment_terminal(Context, Config),
     Info1 = Info#{
         payment_tool_token => Token,
         session => Session
@@ -1325,6 +1368,28 @@ get_locations_names_ok_test(Config) ->
         <<"name">> := TestName
     }] = get_locations_names([TestGeoID], <<"ru">>, Config).
 
+-spec get_reports(config()) -> _.
+get_reports(Config) ->
+    Context = ?config(context, Config),
+    {FromTime, ToTime} = get_reports_interval(),
+    {ok, []} = capi_client_reports:get_reports(Context, <<"NO_SUCH_SHOP">>, FromTime, ToTime),
+    {ok, Shops} = capi_client_shops:get_shops(Context),
+    ShopID = maps:get(<<"id">>, get_latest(Shops)),
+    {error, _} = capi_client_reports:get_reports(Context, ShopID, ToTime, FromTime),
+    {ok, _} = capi_client_reports:get_reports(Context, ShopID, FromTime, ToTime).
+
+-spec download_report_file(config()) -> _.
+download_report_file(Config) ->
+    Context = ?config(context, Config),
+    {FromTime, ToTime} = get_reports_interval(),
+    {ok, Shops} = capi_client_shops:get_shops(Context),
+    ShopID = maps:get(<<"id">>, get_latest(Shops)),
+    ReportID = default_generate_report(?MERCHANT_ID, ShopID),
+    #{
+        <<"files">> := [#{<<"id">> := FileID} | _]
+    } = wait_report_w_id(Context, ShopID, FromTime, ToTime, ReportID),
+    {ok, {redirect, _URL}} = capi_client_reports:download_file(Context, ShopID, ReportID, FileID).
+
 %% helpers
 call(Method, Path, Body, Headers) ->
     Url = get_url(Path),
@@ -1505,6 +1570,18 @@ default_tokenize_card(Context, _Config) ->
     },
     capi_client_tokens:create_payment_tool_token(Context, Req).
 
+default_tokenize_payment_terminal(Context, _Config) ->
+    Req = #{
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"PaymentTerminalData">>,
+            <<"provider">> => <<"euroset">>
+        },
+        <<"clientInfo">> => #{
+            <<"fingerprint">> => <<"test fingerprint">>
+        }
+    },
+    capi_client_tokens:create_payment_tool_token(Context, Req).
+
 default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, _Config) ->
     Req = #{
         <<"paymentSession">> => PaymentSession,
@@ -1641,6 +1718,26 @@ default_approve_claim(#{<<"id">> := ClaimID, <<"revision">> := ClaimRevision}) -
         [UserInfo, ?MERCHANT_ID, ClaimID, ClaimRevision]
     ).
 
+%% @FIXME dirty call
+default_generate_report(PartyID, ShopID) ->
+    ReqCtx = create_context(),
+    {FromTime, ToTime} = get_reports_interval(),
+    ReportRequest = #reports_ReportRequest{
+        party_id = PartyID,
+        shop_id = ShopID,
+        time_range = #reports_ReportTimeRange{
+            from_time = FromTime,
+            to_time = ToTime
+        }
+    },
+    {ok, ReportID} = call_service(
+        reporting,
+        'GenerateReport',
+        [ReportRequest, provision_of_service],
+        ReqCtx
+    ),
+    ReportID.
+
 generate_contract_id() ->
     ID = genlib:to_binary(rand:uniform(100000000)),
     <<"CONTRACT_", ID/binary>>.
@@ -1732,7 +1829,8 @@ get_domain_fixture(Proxies) ->
             categories = {value, ordsets:from_list([?cat(1)])},
             payment_methods = {value, ordsets:from_list([
                 ?pmt(bank_card, visa),
-                ?pmt(bank_card, mastercard)
+                ?pmt(bank_card, mastercard),
+                ?pmt(payment_terminal, euroset)
             ])},
             cash_limit = {decisions, [
                 #domain_CashLimitDecision{
@@ -1767,7 +1865,7 @@ get_domain_fixture(Proxies) ->
             ref = #domain_GlobalsRef{},
             data = #domain_Globals{
                 party_prototype           = #domain_PartyPrototypeRef{id = 42},
-                providers                 = {value, [?prv(1), ?prv(2)]},
+                providers                 = {value, [?prv(1), ?prv(2), ?prv(3)]},
                 system_account_set        = {value, ?sas(1)},
                 external_account_set      = {value, ?eas(1)},
                 default_contract_template = ?tmpl(2),
@@ -2067,6 +2165,50 @@ get_domain_fixture(Proxies) ->
                 risk_coverage = low
             }
         }},
+        {provider, #domain_ProviderObject{
+            ref = #domain_ProviderRef{id = 3},
+            data = #domain_Provider{
+                name = <<"Euroset">>,
+                description = <<"First payment terminal provider">>,
+                terminal = {value, [?trm(7)]},
+                proxy = #domain_Proxy{
+                    ref = ?prx(1),
+                    additional = #{
+                        <<"override">> => <<"drovider">>
+                    }
+                },
+                abs_account = <<"1234567890">>
+            }
+        }},
+        {terminal, #domain_TerminalObject{
+            ref = ?trm(7),
+            data = #domain_Terminal{
+                name = <<"Eurosucks 1">>,
+                description = <<"Eurosucks 1">>,
+                payment_method = ?pmt(payment_terminal, euroset),
+                category = ?cat(?LIVE_CATEGORY_ID),
+                cash_flow = [
+                    ?cfpost(
+                        {provider, settlement},
+                        {merchant, settlement},
+                        ?share(1, 1, payment_amount)
+                    ),
+                    ?cfpost(
+                        {system, settlement},
+                        {provider, settlement},
+                        ?share(16, 1000, payment_amount)
+                    )
+                ],
+                account = ?trmacc(
+                    <<"RUB">>,
+                    maps:get(terminal_3_settlement, Accounts)
+                ),
+                options = #{
+                    <<"override">> => <<"Eurosucks 1">>
+                },
+                risk_coverage = low
+            }
+        }},
         {payment_method, #domain_PaymentMethodObject{
             ref = ?pmt(bank_card, visa),
             data = #domain_PaymentMethodDefinition{
@@ -2079,6 +2221,13 @@ get_domain_fixture(Proxies) ->
             data = #domain_PaymentMethodDefinition{
                 name = <<"Mastercard bank card">>,
                 description = <<"For everything else, there's MasterCard.">>
+            }
+        }},
+        {payment_method, #domain_PaymentMethodObject{
+            ref = ?pmt(payment_terminal, euroset),
+            data = #domain_PaymentMethodDefinition{
+                name = <<"Euroset Terminal">>,
+                description = <<"For old peoples, there's Euroset Terminal.">>
             }
         }},
         {proxy, #domain_ProxyObject{
@@ -2241,3 +2390,44 @@ get_lifetime(YY, MM, DD) ->
        <<"months">> => MM,
        <<"days">>   => DD
      }.
+
+get_reports_interval() ->
+    {{Y, M, D}, Time} = calendar:local_time(),
+    {ok, FromTime} = rfc3339:format({{Y - 1, M, D}, Time}),
+    {ok, ToTime} = rfc3339:format({{Y + 1, M, D}, Time}),
+    {FromTime, ToTime}.
+
+wait_report_w_id(Context, ShopID, FromTime, ToTime, ReportID) ->
+    wait_report_w_id(Context, ShopID, FromTime, ToTime, ReportID, 10000).
+wait_report_w_id(Context, ShopID, FromTime, ToTime, ReportID, TimeLeft) when TimeLeft > 0->
+    Started = genlib_time:ticks(),
+    case capi_client_reports:get_reports(Context, ShopID, FromTime, ToTime) of
+        {ok, Reports} ->
+            case [R || #{<<"id">> := ID} = R <- Reports, ID =:= ReportID] of
+                [Report] ->
+                    Report;
+                [] ->
+                    timer:sleep(1000),
+                    wait_report_w_id(
+                        Context,
+                        ShopID,
+                        FromTime,
+                        ToTime,
+                        ReportID,
+                        TimeLeft - (genlib_time:ticks() - Started) div 1000
+                    )
+            end;
+        _ ->
+            timer:sleep(1000),
+            wait_report_w_id(
+                Context,
+                ShopID,
+                FromTime,
+                ToTime,
+                ReportID,
+                TimeLeft - (genlib_time:ticks() - Started) div 1000
+            )
+    end;
+wait_report_w_id(_, _, _, _, _, _) ->
+    error(report_not_found).
+
