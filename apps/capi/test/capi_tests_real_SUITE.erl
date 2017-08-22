@@ -25,6 +25,7 @@
     create_invoice_badard_test/1,
     create_invoice_no_shop_test/1,
     create_invoice_ok_test/1,
+    create_invoice_w_cart/1,
     create_invoice_access_token_ok_test/1,
     create_payment_ok_test/1,
     create_payment_ok_w_access_token_test/1,
@@ -177,6 +178,7 @@ groups() ->
         {invoice_management, [sequence], [
             create_invoice_badard_test,
             create_invoice_no_shop_test,
+            create_invoice_w_cart,
             create_invoice_ok_test,
             get_invoice_by_id_ok_test,
             rescind_invoice_ok_test
@@ -428,6 +430,72 @@ create_invoice_no_shop_test(Config) ->
     #{
         <<"code">> := <<"invalidShopID">>
     } = jsx:decode(Resp, [return_maps]).
+
+-spec create_invoice_w_cart(config()) -> _.
+
+create_invoice_w_cart(Config) ->
+    ShopID = create_and_activate_shop(Config),
+    Context = ?config(context, Config),
+    Req0 = #{
+        <<"shopID">> => ShopID,
+        <<"amount">> => 100000,
+        <<"currency">> => <<"RUB">>,
+        <<"metadata">> => ?DEFAULT_META,
+        <<"dueDate">> => get_due_date(),
+        <<"product">> => ?DEFAULT_PRODUCT,
+        <<"description">> => ?DEFAULT_DESCRIPTION
+    },
+    Req1 = maps:remove(<<"amount">>, Req0),
+    Cart0 = [],
+    {error, Error1} = capi_client_invoices:create_invoice(Context, Req0#{<<"cart">> => Cart0}),
+    {error, Error1} = capi_client_invoices:create_invoice(Context, Req1#{<<"cart">> => Cart0}),
+    #{<<"code">> := <<"invalidInvoiceCart">>} = jsx:decode(Error1, [return_maps]),
+    Cart1 = [
+        #{
+            <<"product">> => ?DEFAULT_PRODUCT,
+            <<"price">> => 1000,
+            <<"quantity">> => 1
+        }
+    ],
+    {error, Error2} = capi_client_invoices:create_invoice(Context, Req0#{<<"cart">> => Cart1}),
+    #{<<"code">> := <<"invalidInvoiceCost">>} = jsx:decode(Error2, [return_maps]),
+    {ok, #{<<"invoice">> := #{
+        <<"cart">> := ResultCart1
+    }}} = capi_client_invoices:create_invoice(Context, Req1#{<<"cart">> => Cart1}),
+    true = invoice_cart_equal(ResultCart1, Cart1),
+    Cart2 = [
+        #{
+            <<"product">> => ?DEFAULT_PRODUCT,
+            <<"price">> => 1000,
+            <<"quantity">> => 100,
+            <<"taxMode">> => #{
+                <<"type">> => <<"InvoiceLineTaxVAT">>,
+                <<"rate">> => <<"18%">>
+            }
+        }
+    ],
+    {ok, #{<<"invoice">> := #{
+        <<"cart">> := ResultCart2
+    }}} = capi_client_invoices:create_invoice(Context, Req0#{<<"cart">> => Cart2}),
+    true = invoice_cart_equal(ResultCart2, Cart2).
+
+invoice_cart_equal([Line1 | C1], [Line2 | C2]) ->
+    case invoice_cart_line_equal(Line1, Line2) of
+        true ->
+            invoice_cart_equal(C1, C2);
+        false ->
+            false
+    end;
+invoice_cart_equal([], []) ->
+    true;
+invoice_cart_equal(_, _) ->
+    false.
+
+invoice_cart_line_equal(Line1, Line2) ->
+    genlib_map:get(<<"product">>, Line1) == genlib_map:get(<<"product">>, Line2) andalso
+    genlib_map:get(<<"price">>, Line1) == genlib_map:get(<<"price">>, Line2) andalso
+    genlib_map:get(<<"quantity">>, Line1) == genlib_map:get(<<"quantity">>, Line2) andalso
+    genlib_map:get(<<"taxMode">>, Line1) == genlib_map:get(<<"taxMode">>, Line2).
 
 -spec create_invoice_ok_test(config()) -> _.
 
