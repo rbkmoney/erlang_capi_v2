@@ -45,6 +45,11 @@
     cancel_payment_ok_test/1,
     capture_payment_ok_test/1,
     %%%%
+    create_refund/1,
+    get_refund_by_id/1,
+    get_refunds/1,
+    get_refund_events/1,
+    %%%%
     create_invoice_template_badard_test/1,
     create_invoice_template_no_shop_test/1,
     create_invoice_with_template_invalid_id_test/1,
@@ -151,6 +156,7 @@ all() ->
         {group, invoice_template_management},
         {group, card_payment},
         {group, terminal_payment},
+        {group, refund},
         {group, invoice_access_token_management},
         {group, statistics},
         {group, party_management},
@@ -218,6 +224,12 @@ groups() ->
             get_payment_by_id_ok_test,
             fulfill_invoice_ok_test,
             get_invoice_events_ok_test
+        ]},
+        {refund, [sequence], [
+            create_refund,
+            get_refund_by_id,
+            get_refunds,
+            get_refund_events
         ]},
         % TODO
         % Extremely sensitive stuff, must verify it better.
@@ -1012,6 +1024,62 @@ get_payment_by_id_ok_test(Config) ->
         invoice_context := Context
     } = Info} = ?config(saved_config, Config),
     {ok, _Body} = capi_client_payments:get_payment_by_id(Context, InvoiceID, PaymentID),
+    {save_config, Info}.
+
+-spec create_refund(config()) -> _.
+
+create_refund(Config) ->
+    {create_payment_ok_test, #{
+        invoice_id := InvoiceID,
+        invoice_context := Context,
+        payment_id := PaymentID
+    } = Info} = ?config(saved_config, Config),
+    Reason = <<"CUZ I SAY SO!!!">>,
+    {error, _} = capi_client_payments:create_refund(Context, <<"NOT_INVOICE_ID">>, PaymentID, Reason),
+    {error, _} = capi_client_payments:create_refund(Context, InvoiceID, <<"NOT_PAYMENT_ID">>, Reason),
+    %% TODO add test on pending payment. Or not.
+    {ok, #{<<"id">> := RefundID}} = capi_client_payments:create_refund(Context, InvoiceID, PaymentID, Reason),
+    {save_config, Info#{refund_id => RefundID}}.
+
+-spec get_refund_by_id(config()) -> _.
+
+get_refund_by_id(Config) ->
+    {create_refund, #{
+        invoice_id := InvoiceID,
+        invoice_context := Context,
+        payment_id := PaymentID,
+        refund_id := RefundID
+    } = Info} = ?config(saved_config, Config),
+    {error, _} = capi_client_payments:get_refund_by_id(Context, <<"NOT_INVOICE_ID">>, PaymentID, RefundID),
+    {error, _} = capi_client_payments:get_refund_by_id(Context, InvoiceID, <<"NOT_PAYMENT_ID">>, RefundID),
+    {error, _} = capi_client_payments:get_refund_by_id(Context, InvoiceID, PaymentID, <<"NOT_REFUND_ID">>),
+    {ok, _Refund} = capi_client_payments:get_refund_by_id(Context, InvoiceID, PaymentID, RefundID),
+    {save_config, Info}.
+
+-spec get_refunds(config()) -> _.
+
+get_refunds(Config) ->
+    {get_refund_by_id, #{
+        invoice_id := InvoiceID,
+        invoice_context := Context,
+        payment_id := PaymentID,
+        refund_id := RefundID
+    } = Info} = ?config(saved_config, Config),
+    {error, _} = capi_client_payments:get_refunds(Context, <<"NOT_INVOICE_ID">>, PaymentID),
+    {error, _} = capi_client_payments:get_refunds(Context, InvoiceID, <<"NOT_PAYMENT_ID">>),
+    {ok, [#{<<"id">> := RefundID}]} = capi_client_payments:get_refunds(Context, InvoiceID, PaymentID),
+    {save_config, Info}.
+
+-spec get_refund_events(config()) -> _.
+
+get_refund_events(Config) ->
+    {get_refund_by_id, #{
+        invoice_id := InvoiceID,
+        invoice_context := Context,
+        payment_id := _PaymentID,
+        refund_id := _RefundID
+    } = Info} = ?config(saved_config, Config),
+    {ok, Events} = capi_client_invoices:get_invoice_events(Context, InvoiceID, 5000),
     {save_config, Info}.
 
 -spec search_invoices_ok_test(config()) -> _.
