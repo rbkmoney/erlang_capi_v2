@@ -239,6 +239,10 @@ get_operation_access('GetContracts'              , _) ->
     [{[party], read}];
 get_operation_access('GetContractByID'           , _) ->
     [{[party], read}];
+get_operation_access('GetReports'                , _) ->
+    [{[party], read}];
+get_operation_access('DownloadFile'              , _) ->
+    [{[party], read}];
 get_operation_access('GetWebhooks'               , _) ->
     [{[party], read}];
 get_operation_access('GetWebhookByID'            , _) ->

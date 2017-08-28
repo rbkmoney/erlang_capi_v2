@@ -7,6 +7,7 @@
 -include_lib("cp_proto/include/cp_webhooker_thrift.hrl").
 -include_lib("cp_proto/include/cp_user_interaction_thrift.hrl").
 -include_lib("cp_proto/include/cp_geo_ip_thrift.hrl").
+-include_lib("cp_proto/include/cp_reporting_thrift.hrl").
 
 -behaviour(swag_server_logic_handler).
 
@@ -18,6 +19,7 @@
 -define(REALM, <<"external">>).
 
 -define(DEFAULT_INVOICE_META, #{}).
+-define(DEFAULT_URL_LIFETIME, 60). % seconds
 
 -spec authorize_api_key(swag_server:operation_id(), swag_server:api_key()) ->
     Result :: false | {true, capi_auth:context()}.
@@ -61,21 +63,22 @@ handle_request(OperationID, Req, Context) ->
 
 process_request('CreateInvoice', Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
-    Params = encode_invoice_params(PartyID, maps:get('InvoiceParams', Req)),
-    UserInfo = get_user_info(Context),
-    Result = prepare_party(
-       Context,
-       ReqCtx,
-       fun () ->
-           service_call(
-               invoicing,
-               'Create',
-               [UserInfo, Params],
-               ReqCtx
-           )
-       end
-    ),
-    case Result of
+    try
+        Params = encode_invoice_params(PartyID, maps:get('InvoiceParams', Req)),
+        UserInfo = get_user_info(Context),
+        prepare_party(
+           Context,
+           ReqCtx,
+           fun () ->
+               service_call(
+                   invoicing,
+                   'Create',
+                   [UserInfo, Params],
+                   ReqCtx
+               )
+           end
+        )
+    of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             {ok, {201, [], make_invoice_and_token(Invoice, PartyID, Context)}};
         {exception, Exception} ->
@@ -89,6 +92,11 @@ process_request('CreateInvoice', Req, Context, ReqCtx) ->
                 #payproc_InvalidShopStatus{} ->
                     {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
             end
+    catch
+        invoice_cart_empty ->
+            {ok, {400, [], logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)}};
+        invalid_invoice_cost ->
+            {ok, {400, [], logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)}}
     end;
 
 process_request('CreatePayment', Req, Context, ReqCtx) ->
@@ -101,7 +109,7 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
 
     Result = try
-        PaymentTool = decode_bank_card(Token),
+        PaymentTool = encode_payment_tool_token(Token),
         {ClientInfo, PaymentSession} = unwrap_session(EncodedSession),
         Params =  #payproc_InvoicePaymentParams{
             'payer' = #domain_Payer{
@@ -163,11 +171,13 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
 
 process_request('CreatePaymentToolToken', Req, Context, ReqCtx) ->
     Params = maps:get('PaymentToolTokenParams', Req),
-    ClientInfo0 = maps:get(<<"clientInfo">>, Params),
+    ClientInfo = maps:get(<<"clientInfo">>, Params),
     PaymentTool = maps:get(<<"paymentTool">>, Params),
     case PaymentTool of
         #{<<"paymentToolType">> := <<"CardData">>} ->
-            process_card_data(ClientInfo0, PaymentTool, Context, ReqCtx);
+            process_card_data(ClientInfo, PaymentTool, Context, ReqCtx);
+        #{<<"paymentToolType">> := <<"PaymentTerminalData">>} ->
+            process_payment_terminal_data(ClientInfo, PaymentTool, Context);
         _ ->
             {ok, {400, [], logic_error(
                 invalidPaymentTool,
@@ -828,6 +838,49 @@ process_request('GetShopByID', Req, Context, ReqCtx) ->
             {ok, {404, [], general_error(<<"Shop not found">>)}}
     end;
 
+process_request('GetReports', Req, Context, ReqCtx) ->
+    PartyID = get_party_id(Context),
+    ReportRequest = #reports_ReportRequest{
+        party_id = PartyID,
+        shop_id = maps:get(shopID, Req),
+        time_range = #reports_ReportTimeRange{
+            from_time = get_time('fromTime', Req),
+            to_time = get_time('toTime', Req)
+        }
+    },
+    ReportTypes = [],
+    Result = service_call(reporting, 'GetReports', [ReportRequest, ReportTypes], ReqCtx),
+    case Result of
+        {ok, Reports} ->
+            Resp = [decode_report(R) || #reports_Report{status = created} = R <- Reports],
+            {ok, {200, [], Resp}};
+        {exception, Exception} ->
+            case Exception of
+                #'InvalidRequest'{errors = Errors} ->
+                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                #reports_DatasetTooBig{limit = Limit} ->
+                    {ok, {400, [], limit_exceeded_error(Limit)}}
+            end
+    end;
+
+process_request('DownloadFile', Req, Context, ReqCtx) ->
+    PartyID = get_party_id(Context),
+    ShopID = maps:get(shopID, Req),
+    ReportID = maps:get(reportID, Req),
+    FileID = maps:get(fileID, Req),
+    Result = service_call(reporting, 'GetReport', [PartyID, ShopID, ReportID], ReqCtx),
+    case Result of
+        {ok, #reports_Report{status = created, files = Files}} ->
+            case lists:keymember(FileID, #reports_FileMeta.file_id, Files) of
+                true ->
+                    generate_report_presigned_url(FileID, ReqCtx);
+                false ->
+                    {ok, {404, [], general_error(<<"File not found">>)}}
+            end;
+        {exception, #reports_ReportNotFound{}} ->
+            {ok, {404, [], general_error(<<"Report not found">>)}}
+    end;
+
 process_request('GetContracts', _Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
@@ -1210,6 +1263,21 @@ process_request('DeleteWebhookByID', Req, Context, ReqCtx) ->
 process_request(_OperationID, _Req, _Context, _ReqCtx) ->
     {error, reply_5xx(501)}.
 
+generate_report_presigned_url(FileID, ReqCtx) ->
+    ExpiresAt = get_default_url_lifetime(),
+    Result = service_call(reporting, 'GeneratePresignedUrl', [FileID, ExpiresAt], ReqCtx),
+    case Result of
+        {ok, URL} ->
+            {ok, {303, [{<<"Location">>, URL}], undefined}};
+        {exception, Exception} ->
+            case Exception of
+                #'InvalidRequest'{errors = Errors} ->
+                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                #reports_FileNotFound{}->
+                    {ok, {404, [], general_error(<<"File not found">>)}}
+            end
+    end.
+
 validate_event_filter({invoice, #webhooker_InvoiceEventFilter{
     shop_id = ShopID
 }}, Context, ReqCtx) when ShopID /= undefined ->
@@ -1312,14 +1380,42 @@ get_peer_info(#{peer := Peer}) ->
     Peer.
 
 encode_invoice_params(PartyID, InvoiceParams) ->
+    Amount = genlib_map:get(<<"amount">>, InvoiceParams),
+    Currency = genlib_map:get(<<"currency">>, InvoiceParams),
+    Cart = genlib_map:get(<<"cart">>, InvoiceParams),
     #payproc_InvoiceParams{
         party_id = PartyID,
         details  = encode_invoice_details(InvoiceParams),
-        cost     = encode_cash(InvoiceParams),
+        cost     = encode_invoice_cost(Amount, Currency, Cart),
         due      = get_time(<<"dueDate">>, InvoiceParams),
         context  = encode_invoice_context(InvoiceParams),
         shop_id  = genlib_map:get(<<"shopID">>, InvoiceParams)
     }.
+
+encode_invoice_cost(Amount, Currency, Cart) when Amount =/= undefined, Cart =/= undefined ->
+    case get_invoice_cart_amount(Cart) of
+        Amount ->
+            encode_cash(Amount, Currency);
+        _ ->
+            throw(invalid_invoice_cost)
+    end;
+encode_invoice_cost(undefined, Currency, Cart) when Cart =/= undefined ->
+    encode_cash(get_invoice_cart_amount(Cart), Currency);
+encode_invoice_cost(Amount, Currency, undefined) when Amount =/= undefined ->
+    encode_cash(Amount, Currency);
+encode_invoice_cost(_, _, _) ->
+    throw(invalid_invoice_cost).
+
+get_invoice_cart_amount(Cart) ->
+    lists:foldl(
+        fun(Line, Acc) ->
+            P = genlib_map:get(<<"price">>, Line),
+            Q = genlib_map:get(<<"quantity">>, Line),
+            Acc + (P * Q)
+        end,
+        0,
+        Cart
+    ).
 
 encode_invoice_params_with_tpl(InvoiceTplID, InvoiceParams) ->
     #payproc_InvoiceWithTemplateParams{
@@ -1329,35 +1425,90 @@ encode_invoice_params_with_tpl(InvoiceTplID, InvoiceParams) ->
     }.
 
 encode_invoice_details(Params) ->
-    encode_invoice_details(
-        genlib_map:get(<<"product">>, Params),
-        genlib_map:get(<<"description">>, Params)
-    ).
-
-encode_invoice_details(Product, Description) ->
     #domain_InvoiceDetails{
-        product = Product,
-        description = Description
+        product = genlib_map:get(<<"product">>, Params),
+        description = genlib_map:get(<<"description">>, Params),
+        cart = encode_invoice_cart(Params)
     }.
+
+encode_invoice_cart(Params) ->
+    Cart = genlib_map:get(<<"cart">>, Params),
+    Currency = genlib_map:get(<<"currency">>, Params),
+    encode_invoice_cart(Cart, Currency).
+
+encode_invoice_cart(Cart, Currency) when Cart =/= undefined, Cart =/= [] ->
+    #domain_InvoiceCart{
+        lines = [encode_invoice_line(Line, Currency) || Line <- Cart]
+    };
+encode_invoice_cart([], _) ->
+    throw(invoice_cart_empty);
+encode_invoice_cart(undefined, _) ->
+    undefined.
+
+encode_invoice_line(Line, Currency) ->
+    Metadata = case genlib_map:get(<<"taxMode">>, Line) of
+        TaxMode when TaxMode =/= undefined ->
+            TM = encode_invoice_line_tax_mode(TaxMode),
+            #{<<"TaxMode">> => {str, TM}};
+        undefined ->
+            #{}
+    end,
+    Price = encode_cash(genlib_map:get(<<"price">>, Line), Currency),
+    #domain_InvoiceLine{
+        product = genlib_map:get(<<"product">>, Line),
+        quantity = genlib_map:get(<<"quantity">>, Line),
+        price = Price,
+        metadata = Metadata
+    }.
+
+encode_invoice_line_tax_mode(#{<<"type">> := <<"InvoiceLineTaxVAT">>} = TaxMode)  ->
+    %% for more info about taxMode look here:
+    %% https://github.com/rbkmoney/starrys/blob/master/docs/settings.md
+    genlib_map:get(<<"rate">>, TaxMode).
 
 encode_cash(Params) ->
+    Amount = genlib_map:get(<<"amount">>, Params),
+    Currency = genlib_map:get(<<"currency">>, Params),
+    encode_cash(Amount, Currency).
+
+encode_cash(Amount, Currency) ->
     #domain_Cash{
-        amount = genlib_map:get(<<"amount">>, Params),
-        currency = encode_currency(genlib_map:get(<<"currency">>, Params))
+        amount = Amount,
+        currency = encode_currency(Currency)
     }.
 
-encode_bank_card(#domain_BankCard{
+encode_payment_tool_token(Token) ->
+    try capi_utils:base64url_to_map(Token) of
+        #{<<"type">> := <<"bank_card">>} = Encoded ->
+            encode_bank_card(Encoded);
+        #{<<"type">> := <<"payment_terminal">>} = Encoded ->
+            encode_payment_terminal(Encoded)
+    catch
+        error:badarg ->
+            erlang:throw(invalid_token)
+    end.
+
+decode_bank_card(#domain_BankCard{
     'token'  = Token,
     'payment_system' = PaymentSystem,
     'bin' = Bin,
     'masked_pan' = MaskedPan
 }) ->
-    base64url:encode(jsx:encode(#{
+    capi_utils:map_to_base64url(#{
+        <<"type">> => <<"bank_card">>,
         <<"token">> => Token,
         <<"payment_system">> => PaymentSystem,
         <<"bin">> => Bin,
         <<"masked_pan">> => MaskedPan
-    })).
+    }).
+
+decode_payment_terminal(#domain_PaymentTerminal{
+    terminal_type = Type
+}) ->
+    capi_utils:map_to_base64url(#{
+        <<"type">> => <<"payment_terminal">>,
+        <<"terminal_type">> => Type
+    }).
 
 encode_invoice_tpl_create_params(PartyID, Params) ->
     #payproc_InvoiceTemplateCreateParams{
@@ -1372,7 +1523,7 @@ encode_invoice_tpl_create_params(PartyID, Params) ->
 encode_invoice_tpl_update_params(Params, InvoiceTplGetter) ->
     #payproc_InvoiceTemplateUpdateParams{
         invoice_lifetime = encode_optional_invoice_tpl_lifetime(Params),
-        cost             = encode_optional_invoice_tpl_cost(Params),
+        cost             = encode_invoice_tpl_cost(Params),
         context          = encode_optional_context(Params),
         details          = encode_optional_details(Params, InvoiceTplGetter)
     }.
@@ -1380,11 +1531,6 @@ encode_invoice_tpl_update_params(Params, InvoiceTplGetter) ->
 encode_optional_invoice_tpl_lifetime(Params = #{<<"lifetime">> := _}) ->
     encode_lifetime(Params);
 encode_optional_invoice_tpl_lifetime(_) ->
-    undefined.
-
-encode_optional_invoice_tpl_cost(Params = #{<<"cost">> := _}) ->
-    encode_invoice_tpl_cost(Params);
-encode_optional_invoice_tpl_cost(_) ->
     undefined.
 
 encode_optional_invoice_cost(Params = #{<<"amount">> := _, <<"currency">> := _}) ->
@@ -1401,20 +1547,26 @@ encode_optional_context(Params = #{<<"metadata">> := _}) ->
 encode_optional_context(#{}) ->
     undefined.
 
-encode_optional_details(Params = #{<<"product">> := _, <<"description">> := _}, _) ->
-    encode_invoice_details(Params);
+encode_optional_details(#{<<"product">> := P, <<"description">> := D}, _) ->
+    encode_optional_details_(P, D);
 encode_optional_details(#{<<"product">> := Product}, InvoiceTplGetter) ->
     #domain_InvoiceTemplate{
         details = #domain_InvoiceDetails{description = Description}
     } = InvoiceTplGetter(),
-    encode_invoice_details(Product, Description);
+    encode_optional_details_(Product, Description);
 encode_optional_details(#{<<"description">> := Description}, InvoiceTplGetter) ->
     #domain_InvoiceTemplate{
         details = #domain_InvoiceDetails{product = Product}
     } = InvoiceTplGetter(),
-    encode_invoice_details(Product, Description);
+    encode_optional_details_(Product, Description);
 encode_optional_details(_, _) ->
     undefined.
+
+encode_optional_details_(Product, Description) ->
+    #domain_InvoiceDetails{
+        product = Product,
+        description = Description
+    }.
 
 encode_invoice_context(Params) ->
     encode_invoice_context(Params, ?DEFAULT_INVOICE_META).
@@ -1426,9 +1578,10 @@ encode_invoice_context(Params, DefaultMeta) ->
         data = Context
     }.
 
-encode_invoice_tpl_cost(Params) ->
-    Cost = genlib_map:get(<<"cost">>, Params),
-    encode_invoice_tpl_cost(genlib_map:get(<<"invoiceTemplateCostType">>, Cost), Cost).
+encode_invoice_tpl_cost(#{<<"cost">> := Cost}) ->
+    encode_invoice_tpl_cost(genlib_map:get(<<"invoiceTemplateCostType">>, Cost), Cost);
+encode_invoice_tpl_cost(_) ->
+    undefined.
 
 encode_invoice_tpl_cost(<<"InvoiceTemplateCostUnlim">>, _Cost) ->
     {unlim, #domain_InvoiceTemplateCostUnlimited{}};
@@ -1664,17 +1817,12 @@ make_access_token(Fun, ID, PartyID, Context) ->
     {ok, Token} = Fun(PartyID, ID, AdditionalClaims),
     #{<<"payload">> => Token}.
 
-decode_bank_card(Encoded) ->
-    #{
-        <<"token">> := Token,
-        <<"payment_system">> := PaymentSystem,
-        <<"bin">> := Bin,
-        <<"masked_pan">> := MaskedPan
-    } = try capi_utils:base64url_to_map(Encoded)
-    catch
-        error:badarg ->
-            erlang:throw(invalid_token)
-    end,
+encode_bank_card(#{
+    <<"token">> := Token,
+    <<"payment_system">> := PaymentSystem,
+    <<"bin">> := Bin,
+    <<"masked_pan">> := MaskedPan
+}) ->
     {bank_card, #domain_BankCard{
         'token'  = Token,
         'payment_system' = binary_to_existing_atom(PaymentSystem, utf8),
@@ -1682,11 +1830,16 @@ decode_bank_card(Encoded) ->
         'masked_pan' = MaskedPan
     }}.
 
+encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
+    {payment_terminal, #domain_PaymentTerminal{
+        terminal_type = binary_to_existing_atom(Type, utf8)
+    }}.
+
 wrap_session(ClientInfo, PaymentSession) ->
-    base64url:encode(jsx:encode(#{
+    capi_utils:map_to_base64url(#{
         <<"clientInfo">> => ClientInfo,
         <<"paymentSession">> => PaymentSession
-    })).
+    }).
 
 unwrap_session(Encoded) ->
     #{
@@ -1844,7 +1997,9 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
     }, decode_payment_status(Status))).
 
 decode_payment_tool_token({bank_card, BankCard}) ->
-    encode_bank_card(BankCard).
+    decode_bank_card(BankCard);
+decode_payment_tool_token({payment_terminal, PaymentTerminal}) ->
+    decode_payment_terminal(PaymentTerminal).
 
 decode_payment_tool_details({bank_card, #domain_BankCard{
     'payment_system' = PaymentSystem,
@@ -1854,6 +2009,13 @@ decode_payment_tool_details({bank_card, #domain_BankCard{
         <<"detailsType">> => <<"PaymentToolDetailsCardData">>,
         <<"cardNumberMask">> => decode_masked_pan(MaskedPan),
         <<"paymentSystem">> => genlib:to_binary(PaymentSystem)
+    };
+decode_payment_tool_details({payment_terminal, #domain_PaymentTerminal{
+    terminal_type = Type
+}}) ->
+    #{
+        <<"detailsType">> => <<"PaymentToolDetailsPaymentTerminalData">>,
+        <<"provider">> => genlib:to_binary(Type)
     }.
 
 -define(MASKED_PAN_MAX_LENGTH, 4).
@@ -2017,7 +2179,8 @@ decode_invoice(#domain_Invoice{
     due  = DueDate,
     details = #domain_InvoiceDetails{
         product = Product,
-        description = Description
+        description = Description,
+        cart = Cart
     },
     cost = #domain_Cash{
         amount = Amount,
@@ -2035,7 +2198,8 @@ decode_invoice(#domain_Invoice{
         <<"currency">> =>  decode_currency(Currency),
         <<"metadata">> =>  decode_context(RawContext),
         <<"product">> => Product,
-        <<"description">> => Description
+        <<"description">> => Description,
+        <<"cart">> => decode_invoice_cart(Cart)
     }, decode_invoice_status(InvoiceStatus))).
 
 decode_invoice_status({Status, StatusInfo}) ->
@@ -2049,6 +2213,35 @@ decode_invoice_status({Status, StatusInfo}) ->
         <<"reason">> => Reason
     }.
 
+decode_invoice_cart(#domain_InvoiceCart{lines = Lines}) ->
+    [decode_invoice_line(L) || L <- Lines];
+decode_invoice_cart(undefined) ->
+    undefined.
+
+decode_invoice_line(#domain_InvoiceLine{
+    product = Product,
+    quantity = Quantity,
+    price = #domain_Cash{amount = Price},
+    metadata = Metadata
+}) ->
+    genlib_map:compact(#{
+        <<"product">> => Product,
+        <<"quantity">> => Quantity,
+        <<"price">> => Price,
+        <<"cost">> => Price * Quantity,
+        <<"taxMode">> => decode_invoice_line_tax_mode(Metadata)
+    }).
+
+decode_invoice_line_tax_mode(#{<<"TaxMode">> := {str, TM}}) ->
+    %% for more info about taxMode look here:
+    %% https://github.com/rbkmoney/starrys/blob/master/docs/settings.md
+    #{
+       <<"type">> => <<"InvoiceLineTaxVAT">>,
+       <<"rate">> => TM
+    };
+decode_invoice_line_tax_mode(_) ->
+    undefined.
+
 decode_stat_invoice(#merchstat_StatInvoice{
     id = InvoiceID,
     shop_id = ShopID,
@@ -2059,7 +2252,8 @@ decode_stat_invoice(#merchstat_StatInvoice{
     due  = DueDate,
     amount = Amount,
     currency_symbolic_code = Currency,
-    context = RawContext
+    context = RawContext,
+    cart = Cart
 }) ->
     genlib_map:compact(maps:merge(#{
         <<"id">> => InvoiceID,
@@ -2070,7 +2264,8 @@ decode_stat_invoice(#merchstat_StatInvoice{
         <<"currency">> =>  Currency,
         <<"metadata">> =>  decode_context(RawContext),
         <<"product">> => Product,
-        <<"description">> => Description
+        <<"description">> => Description,
+        <<"cart">> => decode_invoice_cart(Cart)
     }, decode_stat_invoice_status(InvoiceStatus))).
 
 decode_stat_invoice_status(Status) ->
@@ -2713,6 +2908,36 @@ encode_event_filter(#{
         ])
     }}.
 
+decode_report(#reports_Report{
+    report_id = ReportID,
+    time_range = #reports_ReportTimeRange{
+        from_time = FromTime,
+        to_time = ToTime
+    },
+    created_at = CreatedAt,
+    report_type = Type,
+    files = Files
+}) ->
+    #{
+        <<"id">> => ReportID,
+        <<"createdAt">> => CreatedAt,
+        <<"fromTime">> => FromTime,
+        <<"toTime">> => ToTime,
+        <<"type">> => genlib:to_binary(Type),
+        <<"files">> => [decode_report_file(F) || F <- Files]
+    }.
+
+decode_report_file(#reports_FileMeta{
+    file_id = ID,
+    filename = Filename,
+    signature = #reports_Signature{md5 = MD5, sha256 = SHA256}
+}) ->
+    #{
+        <<"id">> => ID,
+        <<"filename">> => Filename,
+        <<"signatures">> => #{<<"md5">> => MD5, <<"sha256">> => SHA256}
+    }.
+
 -define(invpaid()      , {paid, #webhooker_InvoicePaid{}}).
 -define(invcancelled() , {cancelled, #webhooker_InvoiceCancelled{}}).
 -define(invfulfilled() , {fulfilled, #webhooker_InvoiceFulfilled{}}).
@@ -3151,7 +3376,7 @@ process_card_data(ClientInfo0, PaymentTool, Context, ReqCtx) ->
             session_id = PaymentSession,
             bank_card = BankCard
         }} ->
-            Token = encode_bank_card(BankCard),
+            Token = decode_bank_card(BankCard),
             PreparedIP = get_prepared_ip(Context),
             ClientInfo = ClientInfo0#{<<"ip_address">> => PreparedIP},
 
@@ -3188,6 +3413,33 @@ get_prepared_ip(Context) ->
         ip_address := IP
     } = get_peer_info(Context),
     genlib:to_binary(inet:ntoa(IP)).
+
+process_payment_terminal_data(ClientInfo0, TerminalData, Context) ->
+    PaymentTerminal = #domain_PaymentTerminal{
+        terminal_type = binary_to_existing_atom(
+            genlib_map:get(<<"provider">>, TerminalData),
+            utf8
+        )
+    },
+    Token = decode_payment_terminal(PaymentTerminal),
+    PreparedIP = get_prepared_ip(Context),
+    ClientInfo = ClientInfo0#{<<"ip_address">> => PreparedIP},
+    Session = wrap_session(ClientInfo, <<"">>),
+    Resp = #{
+        <<"token">> => Token,
+        <<"session">> => Session
+    },
+    {ok, {201, [], Resp}}.
+
+get_default_url_lifetime() ->
+    Now = erlang:system_time(second),
+    Lifetime = application:get_env(capi, reporter_url_lifetime, ?DEFAULT_URL_LIFETIME),
+    case rfc3339:format(Now + Lifetime, second) of
+        {ok, Val} when is_binary(Val)->
+            Val;
+        Error ->
+            error(Error)
+    end.
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").

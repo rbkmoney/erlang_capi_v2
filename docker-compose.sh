@@ -28,9 +28,11 @@ services:
         condition: service_started
       hooker:
         condition: service_healthy
+      reporter:
+        condition: service_healthy
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:2d9514b8afc06626063d46f3a7be1787bd71e9b8
+    image: dr.rbkmoney.com/rbkmoney/hellgate:dda7326ed72b67da8ec2ddc0bb58b4c4e1a22ee9
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -62,7 +64,7 @@ services:
       retries: 12
 
   magista:
-    image: dr.rbkmoney.com/rbkmoney/magista:f1f3fe4ebd6f1d7da52cbadbe1de3a1368a318e8
+    image: dr.rbkmoney.com/rbkmoney/magista:847f36bd861f67e9545e8934f44d5ac6ecf95c90
     restart: always
     entrypoint:
       - java
@@ -121,7 +123,7 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - PG_DBS=hooker keycloak magista shumway bustermaze
+      - PG_DBS=hooker keycloak magista shumway bustermaze reporter
     entrypoint:
      - /docker-entrypoint.sh
      - postgres
@@ -129,7 +131,7 @@ services:
       - ./test/pg-db/init-dbs.sh:/docker-entrypoint-initdb.d/init-dbs.sh
 
   dominant:
-    image: dr.rbkmoney.com/rbkmoney/dominant:3bb814997cae3737ff83af6df11b4f75602ebf88
+    image: dr.rbkmoney.com/rbkmoney/dominant:f94b10cc6324428f97fe744929864e30156b80d2
     restart: always
     command: /opt/dominant/bin/dominant foreground
     depends_on:
@@ -196,6 +198,29 @@ services:
       - --flyway.password=postgres
       - --flyway.schemas=hook
       - --bm.pooling.url=http://bustermaze:8022/repo
+    depends_on:
+      - pg-db
+
+  reporter:
+    image: dr.rbkmoney.com/rbkmoney/reporter:0f05912d4bb34679caad02d227dd41b35b9ecabd
+    healthcheck:
+      test: "curl -sS -o /dev/null http://localhost:8022/"
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    entrypoint:
+      - java
+      - -jar
+      - /opt/reporter/reporter.jar
+      - --partyManagement.url=http://hellgate:8022/v1/processing/partymgmt
+      - --magista.url=http://magista:8022/stat
+      - --spring.datasource.url=jdbc:postgresql://pg-db:5432/reporter
+      - --spring.datasource.username=postgres
+      - --spring.datasource.password=postgres
+      - --flyway.url=jdbc:postgresql://pg-db:5432/reporter
+      - --flyway.user=postgres
+      - --flyway.password=postgres
+      - --flyway.schemas=rpt
     depends_on:
       - pg-db
 
