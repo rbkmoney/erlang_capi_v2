@@ -471,8 +471,7 @@ create_invoice_w_cart(Config) ->
         #{
             <<"product">> => ?DEFAULT_PRODUCT,
             <<"price">> => 1000,
-            <<"quantity">> => 1,
-            <<"metadata">> => #{}
+            <<"quantity">> => 1
         }
     ],
     {error, Error2} = capi_client_invoices:create_invoice(Context, Req0#{<<"cart">> => Cart1}),
@@ -486,7 +485,7 @@ create_invoice_w_cart(Config) ->
             <<"product">> => ?DEFAULT_PRODUCT,
             <<"price">> => 1000,
             <<"quantity">> => 100,
-            <<"metadata">> => #{
+            <<"taxMode">> => #{
                 <<"type">> => <<"InvoiceLineTaxVAT">>,
                 <<"rate">> => <<"18%">>
             }
