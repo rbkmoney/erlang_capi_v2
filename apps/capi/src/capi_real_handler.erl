@@ -1627,7 +1627,9 @@ encode_shop_modification(#{<<"shopID">> := ShopID} = Modification) ->
             {contract_modification, #payproc_ShopContractModification{
                 contract_id = maps:get(<<"contractID">>, Modification),
                 payout_tool_id = maps:get(<<"payoutToolID">>, Modification)
-            }}
+            }};
+        <<"ShopPayoutToolChange">> ->
+            {payout_tool_modification, maps:get(<<"payoutToolID">>, Modification)}
     end,
     #payproc_ShopModificationUnit{
         id = ShopID,
@@ -2660,6 +2662,12 @@ decode_shop_modification({contract_modification, #payproc_ShopContractModificati
     #{
         <<"shopModificationType">> => <<"ShopContractBinding">>,
         <<"contractID">> => ContractID,
+        <<"payoutToolID">> => PayoutToolID
+    };
+
+decode_shop_modification({payout_tool_modification, PayoutToolID}) ->
+    #{
+        <<"shopModificationType">> => <<"ShopPayoutToolChange">>,
         <<"payoutToolID">> => PayoutToolID
     }.
 
