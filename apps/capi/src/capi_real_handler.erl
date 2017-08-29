@@ -2077,7 +2077,7 @@ decode_stat_payment(#merchstat_StatPayment{
         <<"shopID">> => ShopID,
         <<"createdAt">> => CreatedAt,
         <<"amount">> => Amount,
-        <<"flow">> => decode_flow(Flow),
+        <<"flow">> => decode_stat_payment_flow(Flow),
         <<"fee">> => Fee,
         <<"currency">> => Currency,
         <<"contactInfo">> => genlib_map:compact(#{
@@ -2101,6 +2101,9 @@ decode_stat_payment_tool_details(PaymentTool) ->
 
 decode_stat_payment_status(PaymentStatus) ->
     decode_payment_status(merchstat_to_domain(PaymentStatus)).
+
+decode_stat_payment_flow(Flow) ->
+    decode_flow(merchstat_to_domain(Flow)).
 
 decode_flow({instant, _}) ->
     #{<<"type">> => <<"PaymentFlowInstant">>};
@@ -2170,7 +2173,19 @@ merchstat_to_domain({Status, #merchstat_InvoiceCancelled{details = Details}}) ->
     {Status, #domain_InvoiceCancelled{details = Details}};
 
 merchstat_to_domain({Status, #merchstat_InvoiceFulfilled{details = Details}}) ->
-    {Status, #domain_InvoiceFulfilled{details = Details}}.
+    {Status, #domain_InvoiceFulfilled{details = Details}};
+
+merchstat_to_domain({instant, #merchstat_InvoicePaymentFlowInstant{}}) ->
+    {instant, #domain_InvoicePaymentFlowInstant{}};
+
+merchstat_to_domain({hold, #merchstat_InvoicePaymentFlowHold{
+    on_hold_expiration = OnHoldExpiration,
+    held_until         = HeldUntil
+}}) ->
+    {hold, #domain_InvoicePaymentFlowHold{
+        on_hold_expiration = OnHoldExpiration,
+        held_until         = HeldUntil
+    }}.
 
 decode_invoice(#domain_Invoice{
     id = InvoiceID,
