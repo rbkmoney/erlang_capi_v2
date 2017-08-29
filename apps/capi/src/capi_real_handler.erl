@@ -1705,7 +1705,9 @@ encode_shop_modification(#{<<"shopID">> := ShopID} = Modification) ->
             {contract_modification, #payproc_ShopContractModification{
                 contract_id = maps:get(<<"contractID">>, Modification),
                 payout_tool_id = maps:get(<<"payoutToolID">>, Modification)
-            }}
+            }};
+        <<"ShopPayoutToolChange">> ->
+            {payout_tool_modification, maps:get(<<"payoutToolID">>, Modification)}
     end,
     #payproc_ShopModificationUnit{
         id = ShopID,
@@ -2779,6 +2781,12 @@ decode_shop_modification({contract_modification, #payproc_ShopContractModificati
         <<"shopModificationType">> => <<"ShopContractBinding">>,
         <<"contractID">> => ContractID,
         <<"payoutToolID">> => PayoutToolID
+    };
+
+decode_shop_modification({payout_tool_modification, PayoutToolID}) ->
+    #{
+        <<"shopModificationType">> => <<"ShopPayoutToolChange">>,
+        <<"payoutToolID">> => PayoutToolID
     }.
 
 decode_shop_params(#payproc_ShopParams{
@@ -2840,6 +2848,16 @@ decode_account_state(#payproc_AccountState{
         <<"availableAmount">> => AvailableAmount,
         <<"currency">> => decode_currency(Currency)
     }.
+
+decode_user_interaction({payment_terminal_reciept, #'PaymentTerminalReceipt'{
+    short_payment_id = SPID,
+    due = DueDate
+}}) ->
+    #{
+        <<"interactionType">> => <<"PaymentTerminalReceipt">>,
+        <<"shortPaymentID">> => SPID,
+        <<"dueDate">> => DueDate
+    };
 
 decode_user_interaction({redirect, BrowserRequest}) ->
     #{
