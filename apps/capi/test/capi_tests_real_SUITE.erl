@@ -471,7 +471,8 @@ create_invoice_w_cart(Config) ->
         #{
             <<"product">> => ?DEFAULT_PRODUCT,
             <<"price">> => 1000,
-            <<"quantity">> => 1
+            <<"quantity">> => 1,
+            <<"metadata">> => #{}
         }
     ],
     {error, Error2} = capi_client_invoices:create_invoice(Context, Req0#{<<"cart">> => Cart1}),
@@ -485,7 +486,7 @@ create_invoice_w_cart(Config) ->
             <<"product">> => ?DEFAULT_PRODUCT,
             <<"price">> => 1000,
             <<"quantity">> => 100,
-            <<"taxMode">> => #{
+            <<"metadata">> => #{
                 <<"type">> => <<"InvoiceLineTaxVAT">>,
                 <<"rate">> => <<"18%">>
             }
@@ -2349,7 +2350,7 @@ get_domain_fixture(Proxies) ->
                     <<"override">> => <<"Eurosucks 1">>
                 },
                 risk_coverage = low,
-                payment_flow = {hold, #domain_TerminalPaymentFlowInstant{}}
+                payment_flow = {instant, #domain_TerminalPaymentFlowInstant{}}
             }
         }},
         {payment_method, #domain_PaymentMethodObject{

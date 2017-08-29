@@ -32,7 +32,7 @@ services:
         condition: service_healthy
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:dda7326ed72b67da8ec2ddc0bb58b4c4e1a22ee9
+    image: dr.rbkmoney.com/rbkmoney/hellgate:ea066ad37b2ccf08af7b93ff07d27050e13f4535
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -64,7 +64,7 @@ services:
       retries: 12
 
   magista:
-    image: dr.rbkmoney.com/rbkmoney/magista:847f36bd861f67e9545e8934f44d5ac6ecf95c90
+    image: dr.rbkmoney.com/rbkmoney/magista:9434d7fa53fbdf5f0a2a79df05b590f1a6c77570
     restart: always
     entrypoint:
       - java
