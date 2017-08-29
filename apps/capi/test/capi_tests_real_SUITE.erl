@@ -2349,7 +2349,7 @@ get_domain_fixture(Proxies) ->
                     <<"override">> => <<"Eurosucks 1">>
                 },
                 risk_coverage = low,
-                payment_flow = {hold, #domain_TerminalPaymentFlowInstant{}}
+                payment_flow = {instant, #domain_TerminalPaymentFlowInstant{}}
             }
         }},
         {payment_method, #domain_PaymentMethodObject{
