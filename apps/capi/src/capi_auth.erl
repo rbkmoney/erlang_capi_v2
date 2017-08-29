@@ -187,6 +187,10 @@ get_operation_access('GetPayments'               , #{'invoiceID' := ID}) ->
     [{[{invoices, ID}, payments], read}];
 get_operation_access('GetPaymentByID'            , #{'invoiceID' := ID1, paymentID := ID2}) ->
     [{[{invoices, ID1}, {payments, ID2}], read}];
+get_operation_access('CancelPayment'             , #{'invoiceID' := ID1, paymentID := ID2}) ->
+    [{[{invoices, ID1}, {payments, ID2}], write}];
+get_operation_access('CapturePayment'             , #{'invoiceID' := ID1, paymentID := ID2}) ->
+    [{[{invoices, ID1}, {payments, ID2}], write}];
 get_operation_access('SearchInvoices'            , _) ->
     [{[invoices], read}];
 get_operation_access('SearchPayments'            , _) ->

@@ -49,6 +49,9 @@ handle_function(
 process_payment({captured, #domain_InvoicePaymentCaptured{}}, _, PaymentInfo, _) ->
     {ok, finish(PaymentInfo)};
 
+process_payment({cancelled, #domain_InvoicePaymentCancelled{}}, _, PaymentInfo, _) ->
+    {ok, finish(PaymentInfo)};
+
 process_payment({processed, #domain_InvoicePaymentProcessed{}}, _, PaymentInfo, _) ->
     {ok, finish(PaymentInfo)}.
 
