@@ -2731,6 +2731,16 @@ decode_account_state(#payproc_AccountState{
         <<"currency">> => decode_currency(Currency)
     }.
 
+decode_user_interaction({payment_terminal_reciept, #'PaymentTerminalReceipt'{
+    short_payment_id = SPID,
+    due = DueDate
+}}) ->
+    #{
+        <<"interactionType">> => <<"PaymentTerminalReceipt">>,
+        <<"shortPaymentID">> => SPID,
+        <<"dueDate">> => DueDate
+    };
+
 decode_user_interaction({redirect, BrowserRequest}) ->
     #{
         <<"interactionType">> => <<"Redirect">>,
