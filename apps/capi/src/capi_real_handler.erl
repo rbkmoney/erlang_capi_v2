@@ -374,8 +374,8 @@ process_request('CancelPayment', Req, Context, ReqCtx) ->
                     {ok, {404, [], general_error(<<"Invoice not found">>)}};
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-                #payproc_InvalidOperation{} ->
-                    {ok, {400, [], logic_error(invalidOperation, <<"Invalid operation">>)}};
+                #payproc_OperationNotPermitted{} ->
+                    {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
                 #payproc_InvalidPartyStatus{} ->
                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
@@ -411,8 +411,8 @@ process_request('CapturePayment', Req, Context, ReqCtx) ->
                     {ok, {404, [], general_error(<<"Invoice not found">>)}};
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-                #payproc_InvalidOperation{} ->
-                    {ok, {400, [], logic_error(invalidOperation, <<"Invalid operation">>)}};
+                #payproc_OperationNotPermitted{} ->
+                    {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
                 #payproc_InvalidPartyStatus{} ->
                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
@@ -579,6 +579,8 @@ process_request('CreateRefund', Req, Context, ReqCtx) ->
                     {ok, {404, [], general_error(<<"Payment not found">>)}};
                 #payproc_InvoiceNotFound{} ->
                     {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                #payproc_OperationNotPermitted{} ->
+                    {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
                 #payproc_InvalidPaymentStatus{} ->
                     {ok, {400, [], logic_error(invalidInvoicePaymentStatus, <<"Invalid invoice payment status">>)}};
                 #payproc_InvoicePaymentRefundPending{} ->
@@ -2069,7 +2071,7 @@ decode_refund_change(
 ) ->
     genlib_map:compact(maps:merge(
         #{
-            <<"changeType">> => <<"RefundStarted">>,
+            <<"changeType">> => <<"RefundStatusChanged">>,
             <<"paymentID">> => PaymentID,
             <<"refundID">> => RefundID
         },

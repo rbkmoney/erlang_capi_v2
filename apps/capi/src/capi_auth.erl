@@ -191,6 +191,12 @@ get_operation_access('CancelPayment'             , #{'invoiceID' := ID1, payment
     [{[{invoices, ID1}, {payments, ID2}], write}];
 get_operation_access('CapturePayment'             , #{'invoiceID' := ID1, paymentID := ID2}) ->
     [{[{invoices, ID1}, {payments, ID2}], write}];
+get_operation_access('CreateRefund'               , #{'invoiceID' := ID1, paymentID := ID2}) ->
+    [{[{invoices, ID1}, {payments, ID2}], write}];
+get_operation_access('GetRefunds'                 , #{'invoiceID' := ID1, paymentID := ID2}) ->
+    [{[{invoices, ID1}, {payments, ID2}], read}];
+get_operation_access('GetRefundByID'              , #{'invoiceID' := ID1, paymentID := ID2}) ->
+    [{[{invoices, ID1}, {payments, ID2}], read}];
 get_operation_access('SearchInvoices'            , _) ->
     [{[invoices], read}];
 get_operation_access('SearchPayments'            , _) ->
