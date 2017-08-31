@@ -3,6 +3,7 @@
 -export([create_invoice/2]).
 -export([create_invoice_access_token/2]).
 -export([get_invoice_events/3]).
+-export([get_invoice_events/4]).
 -export([get_invoice_by_id/2]).
 -export([fulfill_invoice/3]).
 -export([rescind_invoice/3]).
@@ -28,6 +29,17 @@ get_invoice_events(Context, InvoiceID, Limit) ->
     Qs = #{
         <<"limit">> => genlib:to_binary(Limit)
     },
+    get_invoice_events_with(Context, InvoiceID, Qs).
+
+-spec get_invoice_events(context(), binary(), integer(), integer()) -> {ok, term()} | {error, term()}.
+get_invoice_events(Context, InvoiceID, EventID, Limit) ->
+    Qs = #{
+        <<"eventID">> => genlib:to_binary(EventID),
+        <<"limit">> => genlib:to_binary(Limit)
+    },
+    get_invoice_events_with(Context, InvoiceID, Qs).
+
+get_invoice_events_with(Context, InvoiceID, Qs) ->
     Params = #{
         binding => #{<<"invoiceID">> => InvoiceID},
         qs_val => Qs

@@ -2489,10 +2489,12 @@ construct_proxy(ID, Url, Options) ->
         }
     }}.
 
-wait_event_w_change(InvoiceID, ChangePattern, TimeLeft, Context) when TimeLeft > 0 ->
+wait_event_w_change(InvoiceID, ChangePattern, TimeLeft, Context) ->
+    wait_event_w_change(InvoiceID, ChangePattern, TimeLeft, 0, Context).
+
+wait_event_w_change(InvoiceID, ChangePattern, TimeLeft, LastEventID, Context) when TimeLeft > 0 ->
     Started = genlib_time:ticks(),
-    Limit = 1000,
-    {ok, Events} = capi_client_invoices:get_invoice_events(Context, InvoiceID, Limit),
+    {ok, Events} = capi_client_invoices:get_invoice_events(Context, InvoiceID, LastEventID, 1),
     Filtered = lists:filter(
         fun(#{<<"changes">> := EventChanges}) ->
             is_changes_match_patterns(EventChanges, ChangePattern)
@@ -2503,13 +2505,15 @@ wait_event_w_change(InvoiceID, ChangePattern, TimeLeft, Context) when TimeLeft >
         [] ->
             timer:sleep(200),
             Now = genlib_time:ticks(),
-            wait_event_w_change(InvoiceID, ChangePattern, TimeLeft - (Now - Started) div 1000, Context);
+            TimeLeftNext = TimeLeft - (Now - Started) div 1000,
+            LastEventIDNext = get_last_event_id(Events, LastEventID),
+            wait_event_w_change(InvoiceID, ChangePattern, TimeLeftNext, LastEventIDNext, Context);
         _ ->
             ok
     end;
 
-wait_event_w_change(InvoiceID, ChangePattern, _, _Context) ->
-    error({event_limit_exceeded, {InvoiceID, ChangePattern}}).
+wait_event_w_change(InvoiceID, ChangePattern, _, LastEventID, _Context) ->
+    error({event_limit_exceeded, {InvoiceID, ChangePattern, LastEventID}}).
 
 is_changes_match_patterns(Changes, Pattern) when is_list(Changes) ->
     lists:any(
@@ -2518,6 +2522,12 @@ is_changes_match_patterns(Changes, Pattern) when is_list(Changes) ->
         end,
         Changes
     ).
+
+get_last_event_id(Events, _) when length(Events) > 0 ->
+    #{<<"id">> := LastEventID} = lists:last(Events),
+    LastEventID;
+get_last_event_id([], LastEventID) ->
+    LastEventID.
 
 get_due_date() ->
     {{Y, M, D}, Time} = calendar:local_time(),
