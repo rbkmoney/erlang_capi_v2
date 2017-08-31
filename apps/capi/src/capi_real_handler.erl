@@ -421,8 +421,6 @@ process_request('CapturePayment', Req, Context, ReqCtx) ->
     end;
 
 process_request('SearchInvoices', Req, Context, ReqCtx) ->
-    Limit = genlib_map:get('limit', Req),
-    Offset = genlib_map:get('offset', Req),
     Query = #{
         <<"merchant_id">> => get_party_id(Context),
         <<"shop_id">> => genlib_map:get('shopID', Req),
@@ -440,37 +438,13 @@ process_request('SearchInvoices', Req, Context, ReqCtx) ->
         <<"payment_amount">> => genlib_map:get('paymentAmount', Req),
         <<"invoice_amount">> => genlib_map:get('invoiceAmount', Req)
     },
-    QueryParams = #{
-        <<"size">> => Limit,
-        <<"from">> => Offset
+    Opts = #{
+        thrift_fun => 'GetInvoices',
+        decode_fun => fun decode_stat_invoice/1
     },
-    Dsl = create_dsl(invoices, Query, QueryParams),
-    Result = service_call(
-        merchant_stat,
-        'GetInvoices',
-        [encode_stat_request(Dsl)],
-        ReqCtx
-    ),
-    case Result of
-        {ok, #merchstat_StatResponse{data = {'invoices', Invoices}, total_count = TotalCount}} ->
-            DecodedInvoices = [decode_stat_invoice(I) || I <- Invoices],
-            Resp = #{
-                <<"result">> => DecodedInvoices,
-                <<"totalCount">> => TotalCount
-            },
-            {ok, {200, [], Resp}};
-        {exception, Exception} ->
-            case Exception of
-                #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-                #merchstat_DatasetTooBig{limit = Limit} ->
-                    {ok, {400, [], limit_exceeded_error(Limit)}}
-            end
-    end;
+    process_search_request(invoices, Query, Req, ReqCtx, Opts);
 
 process_request('SearchPayments', Req, Context, ReqCtx) ->
-    Limit = genlib_map:get('limit', Req),
-    Offset = genlib_map:get('offset', Req),
     Query = #{
         <<"merchant_id">> => get_party_id(Context),
         <<"shop_id">> => genlib_map:get('shopID', Req),
@@ -486,33 +460,27 @@ process_request('SearchPayments', Req, Context, ReqCtx) ->
         <<"payment_pan_mask">> => genlib_map:get('cardNumberMask', Req),
         <<"payment_amount">> => genlib_map:get('paymentAmount', Req)
     },
-    QueryParams = #{
-        <<"size">> => Limit,
-        <<"from">> => Offset
+    Opts = #{
+        thrift_fun => 'GetPayments',
+        decode_fun => fun decode_stat_payment/1
     },
-    Dsl = create_dsl(payments, Query, QueryParams),
-    Result = service_call(
-        merchant_stat,
-        'GetPayments',
-        [encode_stat_request(Dsl)],
-        ReqCtx
-    ),
-    case Result of
-        {ok, #merchstat_StatResponse{data = {'payments', Payments}, total_count = TotalCount}} ->
-            DecodedPayments = [decode_stat_payment(P) || P <- Payments],
-            Resp = #{
-                <<"result">> => DecodedPayments,
-                <<"totalCount">> => TotalCount
-            },
-            {ok, {200, [], Resp}};
-        {exception, Exception} ->
-            case Exception of
-                #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-                #merchstat_DatasetTooBig{limit = Limit} ->
-                    {ok, {400, [], limit_exceeded_error(Limit)}}
-            end
-    end;
+    process_search_request(payments, Query, Req, ReqCtx, Opts);
+
+process_request('SearchPayouts', Req, Context, ReqCtx) ->
+    Query = #{
+        <<"merchant_id">> => get_party_id(Context),
+        <<"shop_id">> => genlib_map:get('shopID', Req),
+        <<"from_time">> => get_time('fromTime', Req),
+        <<"to_time">> => get_time('toTime', Req),
+        <<"payout_status">> => genlib_map:get('payoutStatus', Req),
+        <<"payout_id">> => genlib_map:get('payoutID', Req),
+        <<"payout_type">> => genlib_map:get('payoutType', Req)
+    },
+    Opts = #{
+        thrift_fun => 'GetPayouts',
+        decode_fun => fun decode_stat_payout/1
+    },
+    process_search_request(payouts, Query, Req, ReqCtx, Opts);
 
 process_request('GetPaymentConversionStats', Req, Context, ReqCtx) ->
     process_merchant_stat(payments_conversion_stat, Req, Context, ReqCtx);
@@ -2112,7 +2080,6 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
     },
     flow = Flow
 }) ->
-
     genlib_map:compact(maps:merge(#{
         <<"id">> =>  PaymentID,
         <<"invoiceID">> => InvoiceID,
@@ -2134,12 +2101,15 @@ decode_payment_tool_token({bank_card, BankCard}) ->
 decode_payment_tool_token({payment_terminal, PaymentTerminal}) ->
     decode_payment_terminal(PaymentTerminal).
 
-decode_payment_tool_details({bank_card, #domain_BankCard{
+decode_payment_tool_details({bank_card, BankCard}) ->
+    decode_bank_card_details(<<"PaymentToolDetailsCardData">>, BankCard).
+
+decode_bank_card_details(DetailsType, #domain_BankCard{
     'payment_system' = PaymentSystem,
     'masked_pan' = MaskedPan
-}}) ->
+}) ->
     #{
-        <<"detailsType">> => <<"PaymentToolDetailsCardData">>,
+        <<"detailsType">> => DetailsType,
         <<"cardNumberMask">> => decode_masked_pan(MaskedPan),
         <<"paymentSystem">> => genlib:to_binary(PaymentSystem)
     };
@@ -2185,83 +2155,30 @@ decode_operation_failure({external_failure, #domain_ExternalFailure{
 }}) ->
     logic_error(Code, Description).
 
-decode_stat_payment(#merchstat_StatPayment{
-    id = PaymentID,
-    invoice_id = InvoiceID,
-    shop_id = ShopID,
-    created_at = CreatedAt,
-    status = Status,
-    amount = Amount,
-    flow = Flow,
-    fee = Fee,
-    currency_symbolic_code = Currency,
-    payment_tool = PaymentTool,
-    ip_address = IP,
-    fingerprint = Fingerprint,
-    phone_number = PhoneNumber,
-    email = Email,
-    session_id = PaymentSession,
-    context = RawContext,
-    location_info = Location
-}) ->
-    genlib_map:compact(maps:merge(#{
-        <<"id">> =>  PaymentID,
-        <<"invoiceID">> => InvoiceID,
-        <<"shopID">> => ShopID,
-        <<"createdAt">> => CreatedAt,
-        <<"amount">> => Amount,
-        <<"flow">> => decode_stat_payment_flow(Flow),
-        <<"fee">> => Fee,
-        <<"currency">> => Currency,
-        <<"contactInfo">> => genlib_map:compact(#{
-            <<"phoneNumber">> => PhoneNumber,
-            <<"email">> => Email
-        }),
-        <<"paymentSession">> => PaymentSession,
-        <<"paymentToolToken">> => decode_stat_payment_tool_token(PaymentTool),
-        <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool),
-        <<"ip">> => IP,
-        <<"geoLocationInfo">> => decode_geo_location_info(Location),
-        <<"fingerprint">> => Fingerprint,
-        <<"metadata">> =>  decode_context(RawContext)
-    }, decode_stat_payment_status(Status))).
-
-decode_stat_payment_tool_token(PaymentTool) ->
-    decode_payment_tool_token(merchstat_to_domain(PaymentTool)).
-
-decode_stat_payment_tool_details(PaymentTool) ->
-    decode_payment_tool_details(merchstat_to_domain(PaymentTool)).
-
-decode_stat_payment_status(PaymentStatus) ->
-    decode_payment_status(merchstat_to_domain(PaymentStatus)).
-
-decode_stat_payment_flow(Flow) ->
-    decode_flow(merchstat_to_domain(Flow)).
-
-decode_flow({instant, _}) ->
-    #{<<"type">> => <<"PaymentFlowInstant">>};
-
-decode_flow({hold, #domain_InvoicePaymentFlowHold{
-    'on_hold_expiration' = OnHoldExpiration,
-    'held_until' = HeldUntil
-}}) ->
-    #{
-        <<"type">> => <<"PaymentFlowHold">>,
-        <<"onHoldExpiration">> => atom_to_binary(OnHoldExpiration, utf8),
-        <<"heldUntil">> => HeldUntil
-    }.
-
 merchstat_to_domain({bank_card, #merchstat_BankCard{
-    'token'  = Token,
+    'token' = Token,
     'payment_system' = PaymentSystem,
     'bin' = Bin,
     'masked_pan' = MaskedPan
 }}) ->
     {bank_card, #domain_BankCard{
-        'token'  = Token,
+        'token' = Token,
         'payment_system' = PaymentSystem,
         'bin' = Bin,
         'masked_pan' = MaskedPan
+    }};
+
+merchstat_to_domain({bank_account, #merchstat_BankAccount{
+    account = Account,
+    bank_name = BankName,
+    bank_post_account = BankPostAccount,
+    bank_bik = BankBik
+}}) ->
+    {bank_account, #domain_BankAccount{
+        account = Account,
+        bank_name = BankName,
+        bank_post_account = BankPostAccount,
+        bank_bik = BankBik
     }};
 
 merchstat_to_domain({Status, #merchstat_InvoicePaymentPending{}}) ->
@@ -2596,10 +2513,10 @@ decode_payout_tool_params(Currency, Info) ->
     }.
 
 decode_payout_tool_info({bank_account, BankAccount}) ->
-    #{
-        <<"payoutToolType">> => <<"PayoutToolBankAccount">>,
-        <<"bankAccount">> => decode_bank_account(BankAccount)
-    }.
+    maps:merge(
+        #{<<"detailsType">> => <<"PayoutToolDetailsBankAccountData">>},
+        decode_bank_account(BankAccount)
+    ).
 
 decode_bank_account(#domain_BankAccount{
     account = Account,
@@ -2715,7 +2632,7 @@ is_suspended({suspended, _}) ->
 is_suspended({active, _}) ->
     false.
 
-decode_stat_response(payments_conversion_stat, Response) ->
+decode_stat_info(payments_conversion_stat, Response) ->
     #{
         <<"offset">> => genlib:to_int(maps:get(<<"offset">>, Response)),
         <<"successfulCount">> => genlib:to_int(maps:get(<<"successful_count">>, Response)),
@@ -2723,7 +2640,7 @@ decode_stat_response(payments_conversion_stat, Response) ->
         <<"conversion">> => genlib:to_float(maps:get(<<"conversion">>, Response))
     };
 
-decode_stat_response(payments_geo_stat, Response) ->
+decode_stat_info(payments_geo_stat, Response) ->
     #{
         <<"offset">> => genlib:to_int(maps:get(<<"offset">>, Response)),
         <<"geoID">> => genlib:to_int(maps:get(<<"city_id">>, Response)),
@@ -2732,7 +2649,7 @@ decode_stat_response(payments_geo_stat, Response) ->
         <<"revenue">> => genlib:to_int(maps:get(<<"amount_without_fee">>, Response))
     };
 
-decode_stat_response(payments_turnover, Response) ->
+decode_stat_info(payments_turnover, Response) ->
     #{
         <<"offset">> => genlib:to_int(maps:get(<<"offset">>, Response)),
         <<"currency">> => maps:get(<<"currency_symbolic_code">>, Response),
@@ -2740,12 +2657,12 @@ decode_stat_response(payments_turnover, Response) ->
         <<"revenue">> => genlib:to_int(maps:get(<<"amount_without_fee">>, Response))
     };
 
-decode_stat_response(customers_rate_stat, Response) ->
+decode_stat_info(customers_rate_stat, Response) ->
     #{
         <<"uniqueCount">> => genlib:to_int(maps:get(<<"unic_count">>, Response))
     };
 
-decode_stat_response(payments_pmt_cards_stat, Response) ->
+decode_stat_info(payments_pmt_cards_stat, Response) ->
     #{
         <<"statType">> => <<"PaymentMethodBankCardStat">>, %% @TODO deal with nested responses decoding
         <<"offset">> => genlib:to_int(maps:get(<<"offset">>, Response)),
@@ -2754,6 +2671,117 @@ decode_stat_response(payments_pmt_cards_stat, Response) ->
         <<"profit">> => genlib:to_int(maps:get(<<"amount_with_fee">>, Response)),
         <<"revenue">> =>  genlib:to_int(maps:get(<<"amount_without_fee">>, Response))
     }.
+
+decode_stat_invoice(#merchstat_StatInvoice{
+    id = InvoiceID,
+    shop_id = ShopID,
+    created_at = CreatedAt,
+    status = InvoiceStatus,
+    product = Product,
+    description = Description,
+    due  = DueDate,
+    amount = Amount,
+    currency_symbolic_code = Currency,
+    context = RawContext
+}) ->
+    genlib_map:compact(maps:merge(#{
+        <<"id">> => InvoiceID,
+        <<"shopID">> => ShopID,
+        <<"createdAt">> => CreatedAt,
+        <<"dueDate">> => DueDate,
+        <<"amount">> => Amount,
+        <<"currency">> =>  Currency,
+        <<"metadata">> =>  decode_context(RawContext),
+        <<"product">> => Product,
+        <<"description">> => Description
+    }, decode_stat_invoice_status(InvoiceStatus))).
+
+decode_stat_invoice_status(Status) ->
+    decode_invoice_status(merchstat_to_domain(Status)).
+
+decode_stat_payment(#merchstat_StatPayment{
+    id = PaymentID,
+    invoice_id = InvoiceID,
+    shop_id = ShopID,
+    created_at = CreatedAt,
+    status = Status,
+    amount = Amount,
+    fee = Fee,
+    currency_symbolic_code = Currency,
+    payment_tool = PaymentTool,
+    ip_address = IP,
+    fingerprint = Fingerprint,
+    phone_number = PhoneNumber,
+    email = Email,
+    session_id = PaymentSession,
+    context = RawContext,
+    location_info = Location
+}) ->
+    genlib_map:compact(maps:merge(#{
+        <<"id">> =>  PaymentID,
+        <<"invoiceID">> => InvoiceID,
+        <<"shopID">> => ShopID,
+        <<"createdAt">> => CreatedAt,
+        <<"amount">> => Amount,
+        <<"fee">> => Fee,
+        <<"currency">> => Currency,
+        <<"contactInfo">> => genlib_map:compact(#{
+            <<"phoneNumber">> => PhoneNumber,
+            <<"email">> => Email
+        }),
+        <<"paymentSession">> => PaymentSession,
+        <<"paymentToolToken">> => decode_stat_payment_tool_token(PaymentTool),
+        <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool),
+        <<"ip">> => IP,
+        <<"geoLocationInfo">> => decode_geo_location_info(Location),
+        <<"fingerprint">> => Fingerprint,
+        <<"metadata">> =>  decode_context(RawContext)
+    }, decode_stat_payment_status(Status))).
+
+decode_stat_payment_tool_token(PaymentTool) ->
+    decode_payment_tool_token(merchstat_to_domain(PaymentTool)).
+
+decode_stat_payment_tool_details(PaymentTool) ->
+    decode_payment_tool_details(merchstat_to_domain(PaymentTool)).
+
+decode_stat_payment_status(PaymentStatus) ->
+    decode_payment_status(merchstat_to_domain(PaymentStatus)).
+
+decode_stat_payout(#merchstat_StatPayout{
+    id = PayoutID,
+    shop_id = ShopID,
+    created_at = CreatedAt,
+    status = PayoutStatus,
+    amount = Amount,
+    fee = Fee,
+    currency_symbolic_code = Currency,
+    type = PayoutType
+}) ->
+    genlib_map:compact(maps:merge(#{
+        <<"id">> => PayoutID,
+        <<"shopID">> => ShopID,
+        <<"createdAt">> => CreatedAt,
+        <<"amount">> => Amount,
+        <<"fee">> => Fee,
+        <<"currency">> => Currency,
+        <<"status">> => decode_stat_payout_status(PayoutStatus)
+    }, decode_stat_payout_tool_details(PayoutType))).
+
+decode_stat_payout_status({cancelled, #merchstat_PayoutCancelled{details = Details}}) ->
+    #{
+        <<"status">> => <<"cancelled">>,
+        <<"details">> => genlib:to_binary(Details)
+    };
+decode_stat_payout_status({Status, _}) ->
+    #{
+        <<"status">> => genlib:to_binary(Status)
+    }.
+
+decode_stat_payout_tool_details({bank_card, #merchstat_PayoutCard{card = BankCard}}) ->
+    {bank_card, BankCard1} = merchstat_to_domain({bank_card, BankCard}),
+    decode_bank_card_details(<<"PayoutToolDetailsBankCardData">>, BankCard1);
+decode_stat_payout_tool_details({bank_account, #merchstat_PayoutAccount{account = BankAccount}}) ->
+    decode_payout_tool_info(merchstat_to_domain({bank_account, BankAccount})).
 
 create_dsl(QueryType, QueryBody, QueryParams) when
     is_atom(QueryType),
@@ -3295,14 +3323,48 @@ process_merchant_stat_result(
                 <<"uniqueCount">> => 0
             };
         [StatResponse] ->
-            decode_stat_response(StatType, StatResponse)
+            decode_stat_info(StatType, StatResponse)
     end,
     {ok, {200, [], Resp}};
 
 process_merchant_stat_result(StatType, Result) ->
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
-            Resp = [decode_stat_response(StatType, S) || S <- Stats],
+            Resp = [decode_stat_info(StatType, S) || S <- Stats],
+            {ok, {200, [], Resp}};
+        {exception, Exception} ->
+            case Exception of
+                #'InvalidRequest'{errors = Errors} ->
+                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                #merchstat_DatasetTooBig{limit = Limit} ->
+                    {ok, {400, [], limit_exceeded_error(Limit)}}
+            end
+    end.
+
+process_search_request(QueryType, Query, Req, ReqCtx, Opts = #{thrift_fun := ThriftFun}) ->
+    Limit = genlib_map:get('limit', Req),
+    Offset = genlib_map:get('offset', Req),
+    QueryParams = #{
+        <<"size">> => Limit,
+        <<"from">> => Offset
+    },
+    Dsl = create_dsl(QueryType, Query, QueryParams),
+    Result = service_call(
+        merchant_stat,
+        ThriftFun,
+        [encode_stat_request(Dsl)],
+        ReqCtx
+    ),
+    process_search_request_result(QueryType, Result, Opts).
+
+process_search_request_result(QueryType, Result, #{decode_fun := DecodeFun}) ->
+    case Result of
+        {ok, #merchstat_StatResponse{data = {QueryType, Data}, total_count = TotalCount}} ->
+            DecodedData = [DecodeFun(D) || D <- Data],
+            Resp = #{
+                <<"result">> => DecodedData,
+                <<"totalCount">> => TotalCount
+            },
             {ok, {200, [], Resp}};
         {exception, Exception} ->
             case Exception of

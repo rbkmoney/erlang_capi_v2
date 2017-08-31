@@ -1,6 +1,6 @@
 [submodule "schemes/swag"]
 	path = schemes/swag
-	branch = release
+	branch = epic/payouts-release
 	url = git@github.com:rbkmoney/swag.git
 [submodule "build_utils"]
 	path = build_utils

@@ -70,6 +70,7 @@
     get_payment_geo_stats_ok_test/1,
     get_payment_rate_stats_ok_test/1,
     get_payment_method_stats_ok_test/1,
+    search_payouts_ok_test/1,
     %%%%
     get_my_party_ok_test/1,
     suspend_my_party_idempotent_ok_test/1,
@@ -260,7 +261,8 @@ groups() ->
             get_payment_revenue_stats_ok_test,
             get_payment_geo_stats_ok_test,
             get_payment_rate_stats_ok_test,
-            get_payment_method_stats_ok_test
+            get_payment_method_stats_ok_test,
+            search_payouts_ok_test
         ]},
         {party_management, [sequence], [
             get_my_party_ok_test,
@@ -1160,7 +1162,7 @@ search_invoices_ok_test(Config) ->
         {payerEmail, <<"test@test_rbk.ru">>},
         {payerIP, <<"192.168.0.1">>},
         {payerFingerprint, <<"blablablalbalbal">>},
-        %%{cardNumberMask, <<"2222">>},  %%@FIXME cannot be used until getting the newest api client
+        {cardNumberMask, <<"2222">>},  %%@FIXME cannot be used until getting the newest api client
         {paymentAmount, 10000}
     ],
 
@@ -1185,7 +1187,7 @@ search_payments_ok_test(Config) ->
         {payerEmail, <<"test@test_rbk.ru">>},
         {payerIP, <<"192.168.0.1">>},
         {payerFingerprint, <<"blablablalbalbal">>},
-        %%{cardNumberMask, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
+        {cardNumberMask, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
         {paymentAmount, 10000}
     ],
 
@@ -1267,6 +1269,23 @@ get_payment_method_stats_ok_test(Config) ->
         {paymentMethod, <<"bankCard">>}
     ],
     {ok, _Body} = capi_client_analytics:get_payment_method_stats(Context, ShopID, Query).
+
+
+-spec search_payouts_ok_test(config()) -> _.
+
+search_payouts_ok_test(Config) ->
+    Context = ?config(context, Config),
+    ShopID = ?config(shop_id, Config),
+    Query = [
+        {limit, 2},
+        {offset, 2},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {payoutType, <<"PayoutAccount">>},
+        {payoutStatus, <<"paid">>}
+    ],
+
+    {ok, 0, []} = capi_client_searches:search_payouts(Context, ShopID, Query).
 
 -spec get_my_party_ok_test(config()) -> _.
 
