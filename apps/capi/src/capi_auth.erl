@@ -98,7 +98,7 @@ authorize_operation(OperationID, Req, {{_SubjectID, ACL}, _}) ->
 
 %% TODO
 %% Hardcode for now, should pass it here probably as an argument
--define(DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME, 60 * 60). % 1 hour
+-define(DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME, 259200).
 
 -spec issue_invoice_access_token(PartyID :: binary(), InvoiceID :: binary()) ->
     {ok, capi_authorizer_jwt:token()} | {error, _}.
