@@ -3336,25 +3336,19 @@ collect_events(UserInfo, InvoiceID, Limit, After, ReqCtx) ->
 collect_events(Collected, 0, _After, _Context) ->
     {ok, Collected};
 
-collect_events(Collected0, Left, After, Context) ->
+collect_events(Collected0, Left, After, Context) when Left > 0 ->
     Result = get_events(Left, After, Context),
     case Result of
         {ok, []} ->
             {ok, Collected0};
         {ok, Events} ->
             Filtered = decode_and_filter_events(Events),
-            Collected = Collected0 ++ Filtered,
-            case length(Events) =< Left of
-                true ->
-                    {ok, Collected};
-                false ->
-                    collect_events(
-                        Collected,
-                        Left - length(Filtered),
-                        get_last_event_id(Events),
-                        Context
-                    )
-            end;
+            collect_events(
+                Collected0 ++ Filtered,
+                Left - length(Filtered),
+                get_last_event_id(Events),
+                Context
+            );
         Error ->
             Error
     end.
