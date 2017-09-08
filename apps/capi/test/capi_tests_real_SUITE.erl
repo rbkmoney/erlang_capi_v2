@@ -87,6 +87,7 @@
     get_contracts_ok_test/1,
     create_payout_tool_ok_test/1,
     get_payout_tools_ok_test/1,
+    get_payout_tool_by_id/1,
     %%%%
     create_webhook_error_test/1,
     create_webhook_receive_events_test/1,
@@ -251,6 +252,7 @@ groups() ->
             get_contract_by_id_ok_test,
             create_payout_tool_ok_test,
             get_payout_tools_ok_test,
+            get_payout_tool_by_id,
             get_contracts_ok_test
         ]},
         {claims_management, [sequence], [
@@ -1214,14 +1216,26 @@ get_payout_tools_ok_test(Config) ->
     } = ?config(saved_config, Config),
     Context = ?config(context, Config),
     {ok, [#{
-        <<"id">> := _PayoutToolID
+        <<"id">> := PayoutToolID
     } | _]} = capi_client_payouts:get_payout_tools(Context, ContractID),
+    {save_config, {ContractID, PayoutToolID}}.
+
+-spec get_payout_tool_by_id(config()) -> _.
+
+get_payout_tool_by_id(Config) ->
+    {get_payout_tools_ok_test,
+        {ContractID, PayoutToolID}
+    } = ?config(saved_config, Config),
+    Context = ?config(context, Config),
+    {ok, #{
+        <<"id">> := PayoutToolID
+    }} = capi_client_payouts:get_payout_tool_by_id(Context, ContractID, PayoutToolID),
     {save_config, ContractID}.
 
 -spec get_contracts_ok_test(config()) -> _.
 
 get_contracts_ok_test(Config) ->
-    {get_payout_tools_ok_test,
+    {get_payout_tool_by_id,
         ContractID
     } = ?config(saved_config, Config),
     Context = ?config(context, Config),
