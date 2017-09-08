@@ -32,7 +32,7 @@ services:
         condition: service_healthy
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:f90dea6e781ea6f25e8ee33b150ccb1af7894d95
+    image: dr.rbkmoney.com/rbkmoney/hellgate:68715b8c38b3a4126d855e5312807025a89d4a38
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -131,7 +131,7 @@ services:
       - ./test/pg-db/init-dbs.sh:/docker-entrypoint-initdb.d/init-dbs.sh
 
   dominant:
-    image: dr.rbkmoney.com/rbkmoney/dominant:f94b10cc6324428f97fe744929864e30156b80d2
+    image: dr.rbkmoney.com/rbkmoney/dominant:2564fdbc04aefb6f97d12971f347a349a456dea4
     restart: always
     command: /opt/dominant/bin/dominant foreground
     depends_on:

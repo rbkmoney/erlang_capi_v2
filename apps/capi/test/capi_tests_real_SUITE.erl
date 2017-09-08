@@ -1939,9 +1939,8 @@ get_domain_fixture(Proxies) ->
             {system_settlement       , <<"RUB">>},
             {external_income         , <<"RUB">>},
             {external_outcome        , <<"RUB">>},
-            {terminal_1_settlement   , <<"RUB">>},
-            {terminal_2_settlement   , <<"RUB">>},
-            {terminal_3_settlement   , <<"RUB">>}
+            {provider_2_settlement   , <<"RUB">>},
+            {provider_3_settlement   , <<"RUB">>}
         ]
     ),
     TermSetTest = #domain_TermSet{
@@ -1974,8 +1973,12 @@ get_domain_fixture(Proxies) ->
                     ]}
                 }
             ]},
-            hold_lifetime = {value,
-                #domain_HoldLifetime{seconds = 1}
+            holds = #domain_PaymentHoldsServiceTerms{
+                payment_methods = {value, ordsets:from_list([
+                    ?pmt(bank_card, visa),
+                    ?pmt(bank_card, mastercard)
+                ])},
+                lifetime = {value, #domain_HoldLifetime{seconds = 1}}
             }
         }
     },
@@ -1989,7 +1992,7 @@ get_domain_fixture(Proxies) ->
             ref = #domain_GlobalsRef{},
             data = #domain_Globals{
                 party_prototype           = #domain_PartyPrototypeRef{id = 42},
-                providers                 = {value, [?prv(1), ?prv(2), ?prv(3)]},
+                providers                 = {value, [?prv(2), ?prv(3)]},
                 system_account_set        = {value, ?sas(1)},
                 external_account_set      = {value, ?eas(1)},
                 default_contract_template = ?tmpl(2),
@@ -2115,120 +2118,54 @@ get_domain_fixture(Proxies) ->
             }
         }},
         {provider, #domain_ProviderObject{
-            ref = ?prv(1),
-            data = #domain_Provider{
-                name = <<"Brovider">>,
-                description = <<"A provider but bro">>,
-                terminal = {value, [?trm(1), ?trm(2), ?trm(3)]},
-                proxy = #domain_Proxy{
-                    ref = ?prx(1),
-                    additional = #{
-                        <<"override">> => <<"brovider">>
-                    }
-                },
-                abs_account = <<"1234567890">>
-            }
-        }},
-        {terminal, #domain_TerminalObject{
-            ref = ?trm(1),
-            data = #domain_Terminal{
-                name = <<"Brominal 1">>,
-                description = <<"Brominal 1">>,
-                payment_method = ?pmt(bank_card, visa),
-                category = ?cat(1),
-                cash_flow = [
-                    ?cfpost(
-                        {provider, settlement},
-                        {merchant, settlement},
-                        ?share(1, 1, payment_amount)
-                    ),
-                    ?cfpost(
-                        {system, settlement},
-                        {provider, settlement},
-                        ?share(18, 1000, payment_amount)
-                    )
-                ],
-                account = ?trmacc(
-                    <<"RUB">>,
-                    maps:get(terminal_1_settlement, Accounts)
-                ),
-                options = #{
-                    <<"override">> => <<"Brominal 1">>
-                },
-                risk_coverage = low
-            }
-        }},
-        {terminal, #domain_TerminalObject{
-            ref = ?trm(2),
-            data = #domain_Terminal{
-                name = <<"Brominal 2">>,
-                description = <<"Brominal 2">>,
-                payment_method = ?pmt(bank_card, mastercard),
-                category = ?cat(?LIVE_CATEGORY_ID),
-                cash_flow = [
-                    ?cfpost(
-                        {provider, settlement},
-                        {merchant, settlement},
-                        ?share(1, 1, payment_amount)
-                    ),
-                    ?cfpost(
-                        {system, settlement},
-                        {provider, settlement},
-                        ?share(19, 1000, payment_amount)
-                    )
-                ],
-                account = ?trmacc(
-                    <<"RUB">>,
-                    maps:get(terminal_2_settlement, Accounts)
-                ),
-                options = #{
-                    <<"override">> => <<"Brominal 3">>
-                },
-                risk_coverage = high
-            }
-        }},
-        {terminal, #domain_TerminalObject{
-            ref = ?trm(3),
-            data = #domain_Terminal{
-                name = <<"Brominal 3">>,
-                description = <<"Brominal 3">>,
-                payment_method = ?pmt(bank_card, mastercard),
-                category = ?cat(?LIVE_CATEGORY_ID),
-                cash_flow = [
-                    ?cfpost(
-                        {provider, settlement},
-                        {merchant, settlement},
-                        ?share(1, 1, payment_amount)
-                    ),
-                    ?cfpost(
-                        {system, settlement},
-                        {provider, settlement},
-                        ?share(19, 1000, payment_amount)
-                    )
-                ],
-                account = ?trmacc(
-                    <<"RUB">>,
-                    maps:get(terminal_3_settlement, Accounts)
-                ),
-                options = #{
-                    <<"override">> => <<"Brominal 3">>
-                },
-                risk_coverage = low
-            }
-        }},
-        {provider, #domain_ProviderObject{
             ref = #domain_ProviderRef{id = 2},
             data = #domain_Provider{
                 name = <<"Drovider">>,
                 description = <<"I'm out of ideas of what to write here">>,
-                terminal = {value, [?trm(5), ?trm(6), ?trm(7)]},
+                terminal = {value, [?trm(5)]},
                 proxy = #domain_Proxy{
                     ref = ?prx(1),
                     additional = #{
                         <<"override">> => <<"drovider">>
                     }
                 },
-                abs_account = <<"1234567890">>
+                abs_account = <<"1234567890">>,
+                terms = #domain_PaymentsProvisionTerms{
+                    currencies = {value, ordsets:from_list([
+                        ?cur(<<"RUB">>)
+                    ])},
+                    categories = {value, ordsets:from_list([
+                        ?cat(?LIVE_CATEGORY_ID)
+                    ])},
+                    payment_methods = {value, ordsets:from_list([
+                        ?pmt(bank_card, visa),
+                        ?pmt(bank_card, mastercard)
+                    ])},
+                    cash_limit = {value, #domain_CashRange{
+                        lower = {inclusive, ?cash(    1000, ?cur(<<"RUB">>))},
+                        upper = {exclusive, ?cash(10000000, ?cur(<<"RUB">>))}
+                    }},
+                    cash_flow = {value, [
+                        ?cfpost(
+                            {provider, settlement},
+                            {merchant, settlement},
+                            ?share(1, 1, payment_amount)
+                        ),
+                        ?cfpost(
+                            {system, settlement},
+                            {provider, settlement},
+                            ?share(16, 1000, payment_amount)
+                        )
+                    ]},
+                    holds = #domain_PaymentHoldsProvisionTerms{
+                        lifetime = {value, #domain_HoldLifetime{seconds = 2}}
+                    }
+                },
+                accounts = #{
+                    ?cur(<<"RUB">>) => #domain_ProviderAccount{
+                        settlement = maps:get(provider_2_settlement, Accounts)
+                    }
+                }
             }
         }},
         {terminal, #domain_TerminalObject{
@@ -2236,89 +2173,7 @@ get_domain_fixture(Proxies) ->
             data = #domain_Terminal{
                 name = <<"Drominal 1">>,
                 description = <<"Drominal 1">>,
-                payment_method = ?pmt(bank_card, visa),
-                category = ?cat(?LIVE_CATEGORY_ID),
-                cash_flow = [
-                    ?cfpost(
-                        {provider, settlement},
-                        {merchant, settlement},
-                        ?share(1, 1, payment_amount)
-                    ),
-                    ?cfpost(
-                        {system, settlement},
-                        {provider, settlement},
-                        ?share(16, 1000, payment_amount)
-                    )
-                ],
-                account = ?trmacc(
-                    <<"RUB">>,
-                    maps:get(terminal_3_settlement, Accounts)
-                ),
-                options = #{
-                    <<"override">> => <<"Drominal 1">>
-                },
                 risk_coverage = high
-            }
-        }},
-        {terminal, #domain_TerminalObject{
-            ref = ?trm(6),
-            data = #domain_Terminal{
-                name = <<"Drominal 1">>,
-                description = <<"Drominal 1">>,
-                payment_method = ?pmt(bank_card, visa),
-                category = ?cat(?LIVE_CATEGORY_ID),
-                cash_flow = [
-                    ?cfpost(
-                        {provider, settlement},
-                        {merchant, settlement},
-                        ?share(1, 1, payment_amount)
-                    ),
-                    ?cfpost(
-                        {system, settlement},
-                        {provider, settlement},
-                        ?share(16, 1000, payment_amount)
-                    )
-                ],
-                account = ?trmacc(
-                    <<"RUB">>,
-                    maps:get(terminal_3_settlement, Accounts)
-                ),
-                options = #{
-                    <<"override">> => <<"Drominal 1">>
-                },
-                risk_coverage = low
-            }
-        }},
-        {terminal, #domain_TerminalObject{
-            ref = ?trm(7),
-            data = #domain_Terminal{
-                name = <<"Teminal for holds">>,
-                description = <<"Teminal for holds">>,
-                payment_method = ?pmt(bank_card, visa),
-                category = ?cat(?LIVE_CATEGORY_ID),
-                cash_flow = [
-                    ?cfpost(
-                        {provider, settlement},
-                        {merchant, settlement},
-                        ?share(1, 1, payment_amount)
-                    ),
-                    ?cfpost(
-                        {system, settlement},
-                        {provider, settlement},
-                        ?share(16, 1000, payment_amount)
-                    )
-                ],
-                account = ?trmacc(
-                    <<"RUB">>,
-                    maps:get(terminal_3_settlement, Accounts)
-                ),
-                options = #{
-                    <<"override">> => <<"Teminal for holds">>
-                },
-                risk_coverage = low,
-                payment_flow = {hold, #domain_TerminalPaymentFlowHold{
-                    hold_lifetime = #domain_HoldLifetime{seconds = 1}
-                }}
             }
         }},
         {provider, #domain_ProviderObject{
@@ -2333,7 +2188,39 @@ get_domain_fixture(Proxies) ->
                         <<"override">> => <<"drovider">>
                     }
                 },
-                abs_account = <<"1234567890">>
+                abs_account = <<"1234567890">>,
+                terms = #domain_PaymentsProvisionTerms{
+                    currencies = {value, ordsets:from_list([
+                        ?cur(<<"RUB">>)
+                    ])},
+                    categories = {value, ordsets:from_list([
+                        ?cat(?LIVE_CATEGORY_ID)
+                    ])},
+                    payment_methods = {value, ordsets:from_list([
+                        ?pmt(payment_terminal, euroset)
+                    ])},
+                    cash_limit = {value, #domain_CashRange{
+                        lower = {inclusive, ?cash(    1000, ?cur(<<"RUB">>))},
+                        upper = {exclusive, ?cash(10000000, ?cur(<<"RUB">>))}
+                    }},
+                    cash_flow = {value, [
+                        ?cfpost(
+                            {provider, settlement},
+                            {merchant, settlement},
+                            ?share(1, 1, payment_amount)
+                        ),
+                        ?cfpost(
+                            {system, settlement},
+                            {provider, settlement},
+                            ?share(16, 1000, payment_amount)
+                        )
+                    ]}
+                },
+                accounts = #{
+                    ?cur(<<"RUB">>) => #domain_ProviderAccount{
+                        settlement = maps:get(provider_3_settlement, Accounts)
+                    }
+                }
             }
         }},
         {terminal, #domain_TerminalObject{
@@ -2341,29 +2228,7 @@ get_domain_fixture(Proxies) ->
             data = #domain_Terminal{
                 name = <<"Eurosucks 1">>,
                 description = <<"Eurosucks 1">>,
-                payment_method = ?pmt(payment_terminal, euroset),
-                category = ?cat(?LIVE_CATEGORY_ID),
-                cash_flow = [
-                    ?cfpost(
-                        {provider, settlement},
-                        {merchant, settlement},
-                        ?share(1, 1, payment_amount)
-                    ),
-                    ?cfpost(
-                        {system, settlement},
-                        {provider, settlement},
-                        ?share(199, 10000, payment_amount)
-                    )
-                ],
-                account = ?trmacc(
-                    <<"RUB">>,
-                    maps:get(terminal_3_settlement, Accounts)
-                ),
-                options = #{
-                    <<"override">> => <<"Eurosucks 1">>
-                },
-                risk_coverage = low,
-                payment_flow = {instant, #domain_TerminalPaymentFlowInstant{}}
+                risk_coverage = low
             }
         }},
         {payment_method, #domain_PaymentMethodObject{
@@ -2597,4 +2462,3 @@ wait_report_w_id(Context, ShopID, FromTime, ToTime, ReportID, TimeLeft) when Tim
     end;
 wait_report_w_id(_, _, _, _, _, _) ->
     error(report_not_found).
-
