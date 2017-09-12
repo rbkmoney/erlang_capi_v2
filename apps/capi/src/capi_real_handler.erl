@@ -374,8 +374,8 @@ process_request('CancelPayment', Req, Context, ReqCtx) ->
                     {ok, {404, [], general_error(<<"Invoice not found">>)}};
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-                #payproc_InvalidOperation{} ->
-                    {ok, {400, [], logic_error(invalidOperation, <<"Invalid operation">>)}};
+                #payproc_OperationNotPermitted{} ->
+                    {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
                 #payproc_InvalidPartyStatus{} ->
                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
@@ -411,8 +411,8 @@ process_request('CapturePayment', Req, Context, ReqCtx) ->
                     {ok, {404, [], general_error(<<"Invoice not found">>)}};
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-                #payproc_InvalidOperation{} ->
-                    {ok, {400, [], logic_error(invalidOperation, <<"Invalid operation">>)}};
+                #payproc_OperationNotPermitted{} ->
+                    {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
                 #payproc_InvalidPartyStatus{} ->
                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->

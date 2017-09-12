@@ -32,7 +32,7 @@ services:
         condition: service_healthy
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:f90dea6e781ea6f25e8ee33b150ccb1af7894d95
+    image: dr.rbkmoney.com/rbkmoney/hellgate:d970a2c42686fa01694dbccdfe94a3c3a30872b9
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -52,7 +52,7 @@ services:
       retries: 12
 
   machinegun:
-    image: dr.rbkmoney.com/rbkmoney/machinegun:535d1492b20e0151ba245cbbd3152efc70726c91
+    image: dr.rbkmoney.com/rbkmoney/machinegun:1844dff663c24acdcd32f30ae3ea208f5d05a008
     restart: always
     command: /opt/machinegun/bin/machinegun foreground
     volumes:
@@ -64,7 +64,7 @@ services:
       retries: 12
 
   magista:
-    image: dr.rbkmoney.com/rbkmoney/magista:9434d7fa53fbdf5f0a2a79df05b590f1a6c77570
+    image: dr.rbkmoney.com/rbkmoney/magista:b69eb90a00858477e08fbfef1d563cff3e4eaf2b
     restart: always
     entrypoint:
       - java
@@ -80,7 +80,7 @@ services:
       - bustermaze
 
   bustermaze:
-    image: dr.rbkmoney.com/rbkmoney/bustermaze:52ba5a4c3327221bd082af26ca44cebb827901fb
+    image: dr.rbkmoney.com/rbkmoney/bustermaze:8a787d365605f6de758885c4ec444c015ec39ab4
     restart: always
     entrypoint:
       - java
@@ -100,7 +100,7 @@ services:
       - pg-db
 
   shumway:
-    image: dr.rbkmoney.com/rbkmoney/shumway:38c389c0132887ae3dd24e169e964fba5ab31ca3
+    image: dr.rbkmoney.com/rbkmoney/shumway:7a5f95ee1e8baa42fdee9c08cc0ae96cd7187d55
     restart: always
     entrypoint:
       - java
@@ -131,7 +131,7 @@ services:
       - ./test/pg-db/init-dbs.sh:/docker-entrypoint-initdb.d/init-dbs.sh
 
   dominant:
-    image: dr.rbkmoney.com/rbkmoney/dominant:f94b10cc6324428f97fe744929864e30156b80d2
+    image: dr.rbkmoney.com/rbkmoney/dominant:298cd19296a230a1a0e3f35964703bb10e64f4a3
     restart: always
     command: /opt/dominant/bin/dominant foreground
     depends_on:
@@ -180,7 +180,7 @@ services:
      - postgres
 
   hooker:
-    image: dr.rbkmoney.com/rbkmoney/hooker:6a9074bb00862d5c7960baee7baab2ab36d89f0d
+    image: dr.rbkmoney.com/rbkmoney/hooker:fe3bbe3d975a7852ef0c62b382135a45e5d15064
     healthcheck:
       test: "curl -sS -o /dev/null http://localhost:8022/"
       interval: 5s
