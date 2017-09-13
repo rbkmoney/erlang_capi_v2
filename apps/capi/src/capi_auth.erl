@@ -241,6 +241,8 @@ get_operation_access('GetShops'                  , _) ->
     [{[party], read}];
 get_operation_access('GetPayoutTools'            , _) ->
     [{[party], read}];
+get_operation_access('GetPayoutToolByID'         , _) ->
+    [{[party], read}];
 get_operation_access('GetContracts'              , _) ->
     [{[party], read}];
 get_operation_access('GetContractByID'           , _) ->

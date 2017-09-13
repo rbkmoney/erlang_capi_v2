@@ -92,6 +92,7 @@
     get_contracts_ok_test/1,
     create_payout_tool_ok_test/1,
     get_payout_tools_ok_test/1,
+    get_payout_tool_by_id/1,
     %%%%
     create_webhook_error_test/1,
     create_webhook_receive_events_test/1,
@@ -266,6 +267,7 @@ groups() ->
             get_contract_by_id_ok_test,
             create_payout_tool_ok_test,
             get_payout_tools_ok_test,
+            get_payout_tool_by_id,
             get_contracts_ok_test
         ]},
         {claims_management, [sequence], [
@@ -1314,14 +1316,26 @@ get_payout_tools_ok_test(Config) ->
     } = ?config(saved_config, Config),
     Context = ?config(context, Config),
     {ok, [#{
-        <<"id">> := _PayoutToolID
+        <<"id">> := PayoutToolID
     } | _]} = capi_client_payouts:get_payout_tools(Context, ContractID),
+    {save_config, {ContractID, PayoutToolID}}.
+
+-spec get_payout_tool_by_id(config()) -> _.
+
+get_payout_tool_by_id(Config) ->
+    {get_payout_tools_ok_test,
+        {ContractID, PayoutToolID}
+    } = ?config(saved_config, Config),
+    Context = ?config(context, Config),
+    {ok, #{
+        <<"id">> := PayoutToolID
+    }} = capi_client_payouts:get_payout_tool_by_id(Context, ContractID, PayoutToolID),
     {save_config, ContractID}.
 
 -spec get_contracts_ok_test(config()) -> _.
 
 get_contracts_ok_test(Config) ->
-    {get_payout_tools_ok_test,
+    {get_payout_tool_by_id,
         ContractID
     } = ?config(saved_config, Config),
     Context = ?config(context, Config),
@@ -2025,9 +2039,8 @@ get_domain_fixture(Proxies) ->
             {system_settlement       , <<"RUB">>},
             {external_income         , <<"RUB">>},
             {external_outcome        , <<"RUB">>},
-            {terminal_1_settlement   , <<"RUB">>},
-            {terminal_2_settlement   , <<"RUB">>},
-            {terminal_3_settlement   , <<"RUB">>}
+            {provider_2_settlement   , <<"RUB">>},
+            {provider_3_settlement   , <<"RUB">>}
         ]
     ),
     TermSetTest = #domain_TermSet{
@@ -2216,7 +2229,7 @@ get_domain_fixture(Proxies) ->
             data = #domain_Provider{
                 name = <<"Drovider">>,
                 description = <<"I'm out of ideas of what to write here">>,
-                terminal = {value, [?trm(5), ?trm(6)]},
+                terminal = {value, [?trm(5)]},
                 proxy = #domain_Proxy{
                     ref = ?prx(1),
                     additional = #{
@@ -2263,6 +2276,11 @@ get_domain_fixture(Proxies) ->
                             )
                         ]}
                     }
+                },
+                accounts = #{
+                    ?cur(<<"RUB">>) => #domain_ProviderAccount{
+                        settlement = maps:get(provider_2_settlement, Accounts)
+                    }
                 }
             }
         }},
@@ -2271,23 +2289,7 @@ get_domain_fixture(Proxies) ->
             data = #domain_Terminal{
                 name = <<"Drominal 1">>,
                 description = <<"Drominal 1">>,
-                account = ?trmacc(
-                    <<"RUB">>,
-                    maps:get(terminal_3_settlement, Accounts)
-                ),
                 risk_coverage = high
-            }
-        }},
-        {terminal, #domain_TerminalObject{
-            ref = ?trm(6),
-            data = #domain_Terminal{
-                name = <<"Drominal 1">>,
-                description = <<"Drominal 1">>,
-                account = ?trmacc(
-                    <<"RUB">>,
-                    maps:get(terminal_3_settlement, Accounts)
-                ),
-                risk_coverage = low
             }
         }},
         {provider, #domain_ProviderObject{
@@ -2329,6 +2331,11 @@ get_domain_fixture(Proxies) ->
                             ?share(16, 1000, payment_amount)
                         )
                     ]}
+                },
+                accounts = #{
+                    ?cur(<<"RUB">>) => #domain_ProviderAccount{
+                        settlement = maps:get(provider_3_settlement, Accounts)
+                    }
                 }
             }
         }},
@@ -2337,10 +2344,6 @@ get_domain_fixture(Proxies) ->
             data = #domain_Terminal{
                 name = <<"Eurosucks 1">>,
                 description = <<"Eurosucks 1">>,
-                account = ?trmacc(
-                    <<"RUB">>,
-                    maps:get(terminal_3_settlement, Accounts)
-                ),
                 risk_coverage = low
             }
         }},
@@ -2575,4 +2578,3 @@ wait_report_w_id(Context, ShopID, FromTime, ToTime, ReportID, TimeLeft) when Tim
     end;
 wait_report_w_id(_, _, _, _, _, _) ->
     error(report_not_found).
-
