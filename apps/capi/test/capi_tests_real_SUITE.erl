@@ -683,14 +683,7 @@ create_invoice_template_badard_test(Config) ->
 
 create_invoice_template_no_shop_test(Config) ->
     Context = ?config(context, Config),
-    Req = #{
-        <<"shopID">> => <<"INVALID_SHOP_ID">>,
-        <<"cost">> => default_invoice_tpl_cost(fixed),
-        <<"lifetime">> => get_lifetime(),
-        <<"product">> => ?DEFAULT_TPL_PRODUCT,
-        <<"description">> => ?DEFAULT_TPL_DESCRIPTION,
-        <<"metadata">> => ?DEFAULT_TPL_META
-    },
+    Req = default_invoice_tpl_params(<<"INVALID_SHOP_ID">>),
     {error, Resp} = capi_client_invoice_templates:create(Context, Req),
     #{
         <<"code">> := <<"invalidShopID">>
@@ -712,14 +705,8 @@ create_invoice_with_template_invalid_id_test(Config) ->
 create_invoice_template_0_lifetime_test(Config) ->
     Context = ?config(context, Config),
     ShopID = create_and_activate_shop(Config),
-    Req = #{
-        <<"shopID">> => ShopID,
-        <<"cost">> => default_invoice_tpl_cost(fixed),
-        <<"lifetime">> => get_lifetime(0, 0, 0),
-        <<"product">> => ?DEFAULT_TPL_PRODUCT,
-        <<"description">> => ?DEFAULT_TPL_DESCRIPTION,
-        <<"metadata">> => ?DEFAULT_TPL_META
-    },
+    Params = default_invoice_tpl_params(ShopID),
+    Req = Params#{<<"lifetime">> => get_lifetime(0, 0, 0)},
     {error, Resp} = capi_client_invoice_templates:create(Context, Req),
     #{
         <<"code">> := <<"invalidRequest">>
@@ -779,16 +766,22 @@ update_invoice_template_ok_test(Config) ->
     Context = ?config(context, Config),
     {ok, InvoiceTpl} = capi_client_invoice_templates:get_template_by_id(Context, InvoiceTplID),
 
-    Req0 = #{<<"cost">> => default_invoice_tpl_cost(unlim)},
-    Expect0 = maps:merge(InvoiceTpl, Req0),
-    {ok, Expect0} = capi_client_invoice_templates:update(Context, InvoiceTplID, Req0),
+    DetailsSingleLine = #{
+        <<"templateType">> => <<"InvoiceTemplateSingleLine">>,
+        <<"product">> => ?DEFAULT_PRODUCT,
+        <<"price">> => default_invoice_tpl_line_cost(unlim),
+        <<"taxMode">> => #{
+            <<"type">> => <<"InvoiceLineTaxVAT">>,
+            <<"rate">> => <<"18%">>
+        }
+    },
 
-    Req1 = #{<<"cost">> => default_invoice_tpl_cost(range)},
+    Req1 = #{<<"details">> => DetailsSingleLine},
     Expect1 = maps:merge(InvoiceTpl, Req1),
     {ok, Expect1} = capi_client_invoice_templates:update(Context, InvoiceTplID, Req1),
 
-    Req2 = #{<<"product">> => <<"rubber duck">>},
-    Expect2 = maps:merge(Expect1, Req2),
+    Req2 = #{<<"details">> => DetailsSingleLine#{<<"price">> => default_invoice_tpl_line_cost(range)}},
+    Expect2 = maps:merge(InvoiceTpl, Req2),
     {ok, Expect2} = capi_client_invoice_templates:update(Context, InvoiceTplID, Req2),
 
     Req3 = #{<<"description">> => <<"only best rubber">>},
@@ -796,7 +789,7 @@ update_invoice_template_ok_test(Config) ->
     {ok, Expect3} = capi_client_invoice_templates:update(Context, InvoiceTplID, Req3),
 
     Req4 = #{
-        <<"product">> => <<"degu shampoo">>,
+        <<"details">> => DetailsSingleLine#{<<"product">> => <<"degu shampoo">>},
         <<"description">> => <<"fine soft sand for your pet">>
     },
     Expect4 = maps:merge(Expect3, Req4),
@@ -810,6 +803,23 @@ update_invoice_template_ok_test(Config) ->
     Expect6 = maps:merge(Expect5, Req6),
     {ok, Expect6} = capi_client_invoice_templates:update(Context, InvoiceTplID, Req6),
 
+    Cart1 = [#{
+        <<"product">> => ?DEFAULT_PRODUCT,
+        <<"price">> => 1000,
+        <<"quantity">> => 100,
+        <<"taxMode">> => #{
+            <<"type">> => <<"InvoiceLineTaxVAT">>,
+            <<"rate">> => <<"18%">>
+        }
+    }],
+    Req7 = #{<<"details">> =>  #{
+        <<"templateType">> => <<"InvoiceTemplateMultiLine">>,
+        <<"cart">> => Cart1,
+        <<"currency">> => <<"RUB">>
+    }},
+    {ok, Expect7} = capi_client_invoice_templates:update(Context, InvoiceTplID, Req7),
+    #{<<"details">> := #{<<"cart">> := Cart2}} = Expect7,
+    true = invoice_cart_equal(Cart1, Cart2),
     {save_config, Info}.
 
 -spec update_invoice_template_0_lifetime_test(config()) -> _.
@@ -1722,14 +1732,7 @@ default_create_invoice(ShopID, Config) ->
 
 default_create_invoice_tpl(Config) ->
     ShopID = create_and_activate_shop(Config),
-    Req = #{
-        <<"shopID">> => ShopID,
-        <<"cost">> => default_invoice_tpl_cost(fixed),
-        <<"lifetime">> => get_lifetime(),
-        <<"product">> => ?DEFAULT_TPL_PRODUCT,
-        <<"description">> => ?DEFAULT_TPL_DESCRIPTION,
-        <<"metadata">> => ?DEFAULT_TPL_META
-    },
+    Req = default_invoice_tpl_params(ShopID),
     Context = ?config(context, Config),
     {ok, Body} = capi_client_invoice_templates:create(Context, Req),
     Body.
@@ -1739,19 +1742,36 @@ default_create_invoice_with_tpl(InvoiceTplID, Context) ->
     {ok, Body} = capi_client_invoice_templates:create_invoice(Context, InvoiceTplID, Req),
     Body.
 
-default_invoice_tpl_cost(unlim) ->
+default_invoice_tpl_params(ShopID) ->
     #{
-       <<"invoiceTemplateCostType">> => <<"InvoiceTemplateCostUnlim">>
+        <<"shopID">> => ShopID,
+        <<"lifetime">> => get_lifetime(),
+        <<"description">> => ?DEFAULT_TPL_DESCRIPTION,
+        <<"details">> => #{
+            <<"templateType">> => <<"InvoiceTemplateSingleLine">>,
+            <<"product">> => ?DEFAULT_TPL_PRODUCT,
+            <<"price">> => default_invoice_tpl_line_cost(fixed),
+            <<"taxMode">> => #{
+                <<"type">> => <<"InvoiceLineTaxVAT">>,
+                <<"rate">> => <<"18%">>
+            }
+        },
+        <<"metadata">> => ?DEFAULT_TPL_META
+    }.
+
+default_invoice_tpl_line_cost(unlim) ->
+    #{
+       <<"costType">> => <<"InvoiceTemplateLineCostUnlim">>
     };
-default_invoice_tpl_cost(fixed) ->
+default_invoice_tpl_line_cost(fixed) ->
     #{
-       <<"invoiceTemplateCostType">> => <<"InvoiceTemplateCostFixed">>,
+       <<"costType">> => <<"InvoiceTemplateLineCostFixed">>,
         <<"amount">> => 100000,
         <<"currency">> => <<"RUB">>
     };
-default_invoice_tpl_cost(range) ->
+default_invoice_tpl_line_cost(range) ->
     #{
-        <<"invoiceTemplateCostType">> => <<"InvoiceTemplateCostRange">>,
+        <<"costType">> => <<"InvoiceTemplateLineCostRange">>,
         <<"currency">> => <<"RUB">>,
         <<"range">> => #{
             <<"upperBound">> => 100000,
