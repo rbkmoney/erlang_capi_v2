@@ -354,7 +354,7 @@ init_per_suite(Config) ->
     },
     {ok, Token} = capi_ct_helper:login(Params),
     Retries = 10,
-    Timeout = 5000,
+    Timeout = 60000,
     Context = get_context(Token, Retries, Timeout),
     NewConfig = [{apps, lists:reverse(Apps)}, {context, Context}, {test_sup, SupPid} | Config],
     Proxies = [

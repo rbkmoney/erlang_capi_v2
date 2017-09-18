@@ -141,7 +141,11 @@ get_http_params(Context) ->
 -spec get_hackney_opts(context()) ->
     list().
 get_hackney_opts(Context) ->
-    protocol_to_opt(maps:get(protocol, Context, ipv4)).
+    protocol_to_opt(maps:get(protocol, Context, ipv4)) ++
+    [
+        {connect_timeout, maps:get(timeout, Context, 5000)},
+        {recv_timeout   , maps:get(timeout, Context, 5000)}
+    ].
 
 -spec headers(context()) ->
     list(header()).
