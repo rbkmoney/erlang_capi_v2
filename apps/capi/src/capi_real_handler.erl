@@ -2102,7 +2102,14 @@ decode_payment_tool_token({payment_terminal, PaymentTerminal}) ->
     decode_payment_terminal(PaymentTerminal).
 
 decode_payment_tool_details({bank_card, BankCard}) ->
-    decode_bank_card_details(<<"PaymentToolDetailsCardData">>, BankCard).
+    decode_bank_card_details(<<"PaymentToolDetailsCardData">>, BankCard);
+decode_payment_tool_details({payment_terminal, #domain_PaymentTerminal{
+    terminal_type = Type
+}}) ->
+    #{
+        <<"detailsType">> => <<"PaymentToolDetailsPaymentTerminalData">>,
+        <<"provider">> => genlib:to_binary(Type)
+    }.
 
 decode_bank_card_details(DetailsType, #domain_BankCard{
     'payment_system' = PaymentSystem,
@@ -2112,13 +2119,6 @@ decode_bank_card_details(DetailsType, #domain_BankCard{
         <<"detailsType">> => DetailsType,
         <<"cardNumberMask">> => decode_masked_pan(MaskedPan),
         <<"paymentSystem">> => genlib:to_binary(PaymentSystem)
-    };
-decode_payment_tool_details({payment_terminal, #domain_PaymentTerminal{
-    terminal_type = Type
-}}) ->
-    #{
-        <<"detailsType">> => <<"PaymentToolDetailsPaymentTerminalData">>,
-        <<"provider">> => genlib:to_binary(Type)
     }.
 
 -define(MASKED_PAN_MAX_LENGTH, 4).
@@ -2309,62 +2309,6 @@ decode_invoice_line_tax_mode(#{<<"TaxMode">> := {str, TM}}) ->
     };
 decode_invoice_line_tax_mode(_) ->
     undefined.
-
-decode_stat_invoice(#merchstat_StatInvoice{
-    id = InvoiceID,
-    shop_id = ShopID,
-    created_at = CreatedAt,
-    status = InvoiceStatus,
-    product = Product,
-    description = Description,
-    due  = DueDate,
-    amount = Amount,
-    currency_symbolic_code = Currency,
-    context = RawContext,
-    cart = Cart
-}) ->
-    genlib_map:compact(maps:merge(#{
-        <<"id">> => InvoiceID,
-        <<"shopID">> => ShopID,
-        <<"createdAt">> => CreatedAt,
-        <<"dueDate">> => DueDate,
-        <<"amount">> => Amount,
-        <<"currency">> =>  Currency,
-        <<"metadata">> =>  decode_context(RawContext),
-        <<"product">> => Product,
-        <<"description">> => Description,
-        <<"cart">> => decode_invoice_cart(Cart)
-    }, decode_stat_invoice_status(InvoiceStatus))).
-
-decode_stat_invoice_status(Status) ->
-    decode_invoice_status(merchstat_to_domain(Status)).
-
-decode_refund(#domain_InvoicePaymentRefund{
-    id = ID,
-    status = Status,
-    created_at = CreatedAt,
-    reason = Reason
-}) ->
-    genlib_map:compact(maps:merge(
-        #{
-            <<"id">> => ID,
-            <<"createdAt">> => CreatedAt,
-            <<"reason">> => Reason
-        },
-        decode_refund_status(Status)
-    )).
-
-decode_refund_status({Status, StatusInfo}) ->
-    Error = case StatusInfo of
-        #domain_InvoicePaymentRefundFailed{failure = OperationFailure} ->
-            decode_operation_failure(OperationFailure);
-        _ ->
-            undefined
-    end,
-    #{
-        <<"status">> => genlib:to_binary(Status),
-        <<"error">> => Error
-    }.
 
 decode_invoice_tpl(#domain_InvoiceTemplate{
     id = InvoiceTplID,
@@ -2679,10 +2623,11 @@ decode_stat_invoice(#merchstat_StatInvoice{
     status = InvoiceStatus,
     product = Product,
     description = Description,
-    due  = DueDate,
+    due = DueDate,
     amount = Amount,
     currency_symbolic_code = Currency,
-    context = RawContext
+    context = RawContext,
+    cart = Cart
 }) ->
     genlib_map:compact(maps:merge(#{
         <<"id">> => InvoiceID,
@@ -2693,11 +2638,39 @@ decode_stat_invoice(#merchstat_StatInvoice{
         <<"currency">> =>  Currency,
         <<"metadata">> =>  decode_context(RawContext),
         <<"product">> => Product,
-        <<"description">> => Description
+        <<"description">> => Description,
+        <<"cart">> => decode_invoice_cart(Cart)
     }, decode_stat_invoice_status(InvoiceStatus))).
 
 decode_stat_invoice_status(Status) ->
     decode_invoice_status(merchstat_to_domain(Status)).
+
+decode_refund(#domain_InvoicePaymentRefund{
+    id = ID,
+    status = Status,
+    created_at = CreatedAt,
+    reason = Reason
+}) ->
+    genlib_map:compact(maps:merge(
+        #{
+            <<"id">> => ID,
+            <<"createdAt">> => CreatedAt,
+            <<"reason">> => Reason
+        },
+        decode_refund_status(Status)
+    )).
+
+decode_refund_status({Status, StatusInfo}) ->
+    Error = case StatusInfo of
+        #domain_InvoicePaymentRefundFailed{failure = OperationFailure} ->
+            decode_operation_failure(OperationFailure);
+        _ ->
+            undefined
+    end,
+    #{
+        <<"status">> => genlib:to_binary(Status),
+        <<"error">> => Error
+    }.
 
 decode_stat_payment(#merchstat_StatPayment{
     id = PaymentID,
@@ -2706,6 +2679,7 @@ decode_stat_payment(#merchstat_StatPayment{
     created_at = CreatedAt,
     status = Status,
     amount = Amount,
+    flow = Flow,
     fee = Fee,
     currency_symbolic_code = Currency,
     payment_tool = PaymentTool,
@@ -2723,6 +2697,7 @@ decode_stat_payment(#merchstat_StatPayment{
         <<"shopID">> => ShopID,
         <<"createdAt">> => CreatedAt,
         <<"amount">> => Amount,
+        <<"flow">> => decode_stat_payment_flow(Flow),
         <<"fee">> => Fee,
         <<"currency">> => Currency,
         <<"contactInfo">> => genlib_map:compact(#{
@@ -2735,7 +2710,7 @@ decode_stat_payment(#merchstat_StatPayment{
         <<"ip">> => IP,
         <<"geoLocationInfo">> => decode_geo_location_info(Location),
         <<"fingerprint">> => Fingerprint,
-        <<"metadata">> =>  decode_context(RawContext)
+        <<"metadata">> => decode_context(RawContext)
     }, decode_stat_payment_status(Status))).
 
 decode_stat_payment_tool_token(PaymentTool) ->
@@ -2746,6 +2721,22 @@ decode_stat_payment_tool_details(PaymentTool) ->
 
 decode_stat_payment_status(PaymentStatus) ->
     decode_payment_status(merchstat_to_domain(PaymentStatus)).
+
+decode_stat_payment_flow(Flow) ->
+    decode_flow(merchstat_to_domain(Flow)).
+
+decode_flow({instant, _}) ->
+    #{<<"type">> => <<"PaymentFlowInstant">>};
+
+decode_flow({hold, #domain_InvoicePaymentFlowHold{
+    'on_hold_expiration' = OnHoldExpiration,
+    'held_until' = HeldUntil
+}}) ->
+    #{
+        <<"type">> => <<"PaymentFlowHold">>,
+        <<"onHoldExpiration">> => atom_to_binary(OnHoldExpiration, utf8),
+        <<"heldUntil">> => HeldUntil
+    }.
 
 decode_stat_payout(#merchstat_StatPayout{
     id = PayoutID,
