@@ -554,6 +554,88 @@ process_request('GetLocationsNames', Req, _Context, ReqCtx) ->
             {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
     end;
 
+process_request('CreateRefund', Req, Context, ReqCtx) ->
+    InvoiceID = maps:get(invoiceID, Req),
+    PaymentID = maps:get(paymentID, Req),
+    Params = #payproc_InvoicePaymentRefundParams{
+        reason = genlib_map:get(reason, Req)
+    },
+    UserInfo = get_user_info(Context),
+    Result = service_call(
+        invoicing,
+        'RefundPayment',
+        [UserInfo, InvoiceID, PaymentID, Params],
+        ReqCtx
+    ),
+    case Result of
+        {ok, Refund} ->
+            Resp = decode_refund(Refund),
+            {ok, {201, [], Resp}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                #payproc_InvoicePaymentNotFound{} ->
+                    {ok, {404, [], general_error(<<"Payment not found">>)}};
+                #payproc_InvoiceNotFound{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                #payproc_OperationNotPermitted{} ->
+                    {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
+                #payproc_InvalidPaymentStatus{} ->
+                    {ok, {400, [], logic_error(invalidInvoicePaymentStatus, <<"Invalid invoice payment status">>)}};
+                #payproc_InvoicePaymentRefundPending{} ->
+                    {ok, {400, [], logic_error(invoicePaymentRefundPending, <<"Invoice payment refund pending">>)}}
+            end
+    end;
+
+process_request('GetRefunds', Req, Context, ReqCtx) ->
+    InvoiceID = maps:get(invoiceID, Req),
+    PaymentID = maps:get(paymentID, Req),
+    UserInfo = get_user_info(Context),
+    Result = get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
+    case Result of
+        {ok, #payproc_InvoicePayment{refunds = Refunds}} ->
+            Resp = [decode_refund(R) || R <- Refunds],
+            {ok, {200, [], Resp}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                #payproc_InvoicePaymentNotFound{} ->
+                    {ok, {404, [], general_error(<<"Payment not found">>)}};
+                #payproc_InvoiceNotFound{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+            end
+    end;
+
+process_request('GetRefundByID', Req, Context, ReqCtx) ->
+    InvoiceID = maps:get(invoiceID, Req),
+    PaymentID = maps:get(paymentID, Req),
+    RefundID = maps:get(refundID, Req),
+    UserInfo = get_user_info(Context),
+    Result = service_call(
+        invoicing,
+        'GetPaymentRefund',
+        [UserInfo, InvoiceID, PaymentID, RefundID],
+        ReqCtx
+    ),
+    case Result of
+        {ok, Refund} ->
+            Resp = decode_refund(Refund),
+            {ok, {200, [], Resp}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvoicePaymentRefundNotFound{} ->
+                    {ok, {404, [], general_error(<<"Invoice payment refund not found">>)}};
+                #payproc_InvoicePaymentNotFound{} ->
+                    {ok, {404, [], general_error(<<"Payment not found">>)}};
+                #payproc_InvoiceNotFound{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+            end
+    end;
+
 process_request('CreateInvoiceTemplate', Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
     UserInfo = get_user_info(Context),
@@ -1954,7 +2036,49 @@ decode_payment_change(
         decode_payment_status(Status)
     ));
 
+decode_payment_change(
+    _InvoiceID,
+    PaymentID,
+    {invoice_payment_refund_change, #payproc_InvoicePaymentRefundChange{
+        id = RefundID,
+        payload = Change
+    }}
+) ->
+    decode_refund_change(PaymentID, RefundID, Change);
+
 decode_payment_change(_, _, _) ->
+    undefined.
+
+decode_refund_change(
+    PaymentID,
+    _RefundID,
+    {invoice_payment_refund_created, #payproc_InvoicePaymentRefundCreated{
+        refund = Refund
+    }}
+) ->
+    #{
+        <<"changeType">> => <<"RefundStarted">>,
+        <<"paymentID">> => PaymentID,
+        <<"refund">> => decode_refund(Refund)
+    };
+
+decode_refund_change(
+    PaymentID,
+    RefundID,
+    {invoice_payment_refund_status_changed, #payproc_InvoicePaymentRefundStatusChanged{
+        status = Status
+    }}
+) ->
+    genlib_map:compact(maps:merge(
+        #{
+            <<"changeType">> => <<"RefundStatusChanged">>,
+            <<"paymentID">> => PaymentID,
+            <<"refundID">> => RefundID
+        },
+        decode_refund_status(Status)
+    ));
+
+decode_refund_change(_, _, _) ->
     undefined.
 
 decode_invoice_payment(InvoiceID, #payproc_InvoicePayment{
@@ -2145,6 +2269,9 @@ merchstat_to_domain({Status, #merchstat_InvoicePaymentCaptured{}}) ->
 merchstat_to_domain({Status, #merchstat_InvoicePaymentCancelled{}}) ->
     {Status, #domain_InvoicePaymentCancelled{}};
 
+merchstat_to_domain({Status, #merchstat_InvoicePaymentRefunded{}}) ->
+    {Status, #domain_InvoicePaymentRefunded{}};
+
 merchstat_to_domain({Status, #merchstat_InvoicePaymentFailed{
     failure = {external_failure, #merchstat_ExternalFailure{
         code = Code,
@@ -2287,6 +2414,33 @@ decode_stat_invoice(#merchstat_StatInvoice{
 
 decode_stat_invoice_status(Status) ->
     decode_invoice_status(merchstat_to_domain(Status)).
+
+decode_refund(#domain_InvoicePaymentRefund{
+    id = ID,
+    status = Status,
+    created_at = CreatedAt,
+    reason = Reason
+}) ->
+    genlib_map:compact(maps:merge(
+        #{
+            <<"id">> => ID,
+            <<"createdAt">> => CreatedAt,
+            <<"reason">> => Reason
+        },
+        decode_refund_status(Status)
+    )).
+
+decode_refund_status({Status, StatusInfo}) ->
+    Error = case StatusInfo of
+        #domain_InvoicePaymentRefundFailed{failure = OperationFailure} ->
+            decode_operation_failure(OperationFailure);
+        _ ->
+            undefined
+    end,
+    #{
+        <<"status">> => genlib:to_binary(Status),
+        <<"error">> => Error
+    }.
 
 decode_invoice_tpl(#domain_InvoiceTemplate{
     id = InvoiceTplID,
@@ -2978,6 +3132,7 @@ decode_report_file(#reports_FileMeta{
 -define(pmtprocessed() , {processed, #webhooker_InvoicePaymentProcessed{}}).
 -define(pmtcaptured()  , {captured, #webhooker_InvoicePaymentCaptured{}}).
 -define(pmtcancelled() , {cancelled, #webhooker_InvoicePaymentCancelled{}}).
+-define(pmtrefunded()  , {refunded, #webhooker_InvoicePaymentRefunded{}}).
 -define(pmtfailed()    , {failed, #webhooker_InvoicePaymentFailed{}}).
 
 encode_event_type(invoices, <<"InvoiceCreated">>) ->
@@ -2996,6 +3151,8 @@ encode_event_type(invoices, <<"PaymentCaptured">>) ->
     {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtcaptured()}}};
 encode_event_type(invoices, <<"PaymentCancelled">>) ->
     {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtcancelled()}}};
+encode_event_type(invoices, <<"PaymentRefunded">>) ->
+    {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtrefunded()}}};
 encode_event_type(invoices, <<"PaymentFailed">>) ->
     {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtfailed()}}}.
 
@@ -3045,6 +3202,7 @@ decode_event_type(
         ?pmtprocessed(),
         ?pmtcaptured(),
         ?pmtcancelled(),
+        ?pmtrefunded(),
         ?pmtfailed()
     ]];
 decode_event_type(
@@ -3060,6 +3218,7 @@ decode_invoice_status_event_type(?invfulfilled()) -> <<"InvoiceFulfilled">>.
 decode_payment_status_event_type(?pmtprocessed()) -> <<"PaymentProcessed">>;
 decode_payment_status_event_type(?pmtcaptured())  -> <<"PaymentCaptured">>;
 decode_payment_status_event_type(?pmtcancelled()) -> <<"PaymentCancelled">>;
+decode_payment_status_event_type(?pmtrefunded())  -> <<"PaymentRefunded">>;
 decode_payment_status_event_type(?pmtfailed())    -> <<"PaymentFailed">>.
 
 decode_webhook(#webhooker_Webhook{

@@ -76,8 +76,10 @@ services:
       - --spring.datasource.password=postgres
       - --bm.pooling.url=http://bustermaze:8022/repo
     depends_on:
-      - pg-db
-      - bustermaze
+      pg-db:
+        condition: service_healthy
+      bustermaze:
+        condition: service_started
 
   bustermaze:
     image: dr.rbkmoney.com/rbkmoney/bustermaze:8a787d365605f6de758885c4ec444c015ec39ab4
@@ -96,8 +98,10 @@ services:
       - --flyway.password=postgres
       - --flyway.schemas=bm
     depends_on:
-      - hellgate
-      - pg-db
+      hellgate:
+        condition: service_started
+      pg-db:
+        condition: service_healthy
 
   shumway:
     image: dr.rbkmoney.com/rbkmoney/shumway:7a5f95ee1e8baa42fdee9c08cc0ae96cd7187d55
@@ -116,7 +120,8 @@ services:
       timeout: 2s
       retries: 30
     depends_on:
-      - pg-db
+      pg-db:
+        condition: service_healthy
 
   pg-db:
     image: dr.rbkmoney.com/rbkmoney/postgres:9.6
@@ -129,6 +134,11 @@ services:
      - postgres
     volumes:
       - ./test/pg-db/init-dbs.sh:/docker-entrypoint-initdb.d/init-dbs.sh
+    healthcheck:
+      test: "PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c SELECT"
+      interval: 5s
+      timeout: 2s
+      retries: 30
 
   dominant:
     image: dr.rbkmoney.com/rbkmoney/dominant:298cd19296a230a1a0e3f35964703bb10e64f4a3
@@ -199,7 +209,8 @@ services:
       - --flyway.schemas=hook
       - --bm.pooling.url=http://bustermaze:8022/repo
     depends_on:
-      - pg-db
+      pg-db:
+        condition: service_healthy
 
   reporter:
     image: dr.rbkmoney.com/rbkmoney/reporter:0f05912d4bb34679caad02d227dd41b35b9ecabd
@@ -222,7 +233,8 @@ services:
       - --flyway.password=postgres
       - --flyway.schemas=rpt
     depends_on:
-      - pg-db
+      pg-db:
+        condition: service_healthy
 
   keycloak:
     image: dr.rbkmoney.com/rbkmoney/keycloak:a4c082f48695cb02e0624deb559f9ec0378abdb4
@@ -238,7 +250,8 @@ services:
         POSTGRES_DATABASE: keycloak
         POSTGRES_PORT_5432_TCP_ADDR: pg-db
     depends_on:
-      - pg-db
+      pg-db:
+        condition: service_healthy
 
 networks:
   default:
