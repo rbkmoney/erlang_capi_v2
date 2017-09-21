@@ -32,7 +32,7 @@ services:
         condition: service_healthy
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:c39c7c4cfc7ad0f68eefc116b0c0d91824967a9c
+    image: dr.rbkmoney.com/rbkmoney/hellgate:f732f69da299e93a03c88da244cf51ceed257224
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
