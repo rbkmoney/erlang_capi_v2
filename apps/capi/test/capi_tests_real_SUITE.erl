@@ -619,7 +619,6 @@ create_payment_ok_w_access_token_test(Config) ->
             <<"changeType">> => <<"InvoiceStatusChanged">>,
             <<"status">> => <<"paid">>
         },
-        3000,
         Context
     ),
     {save_config, Info#{
@@ -639,7 +638,6 @@ fulfill_invoice_ok_test(Config) ->
             <<"changeType">> => <<"InvoiceStatusChanged">>,
             <<"status">> => <<"paid">>
         },
-        3000,
         Context
     ),
     ok = default_fulfill_invoice(InvoiceID, Config),
@@ -868,7 +866,6 @@ cancel_payment_ok_test(Config) ->
             <<"paymentID">> => PaymentID,
             <<"status">> => <<"processed">>
         },
-        3000,
         Context
     ),
     ok = default_cancel_payment(InvoiceID, PaymentID, Config),
@@ -879,7 +876,6 @@ cancel_payment_ok_test(Config) ->
             <<"paymentID">> => PaymentID,
             <<"status">> => <<"cancelled">>
         },
-        3000,
         Context
     ).
 
@@ -897,7 +893,6 @@ capture_payment_ok_test(Config) ->
             <<"paymentID">> => PaymentID,
             <<"status">> => <<"processed">>
         },
-        3000,
         Context
     ),
     ok = default_capture_payment(InvoiceID, PaymentID, Config),
@@ -908,7 +903,6 @@ capture_payment_ok_test(Config) ->
             <<"paymentID">> => PaymentID,
             <<"status">> => <<"captured">>
         },
-        3000,
         Context
     ).
 
@@ -961,7 +955,6 @@ get_invoice_events_ok_test(Config) ->
             <<"changeType">> => <<"InvoiceStatusChanged">>,
             <<"status">> => <<"fulfilled">>
         },
-        3000,
         Context
     ),
     {ok, Events} = capi_client_invoices:get_invoice_events(Context, InvoiceID, 10),
@@ -1049,7 +1042,6 @@ create_refund(Config) ->
             <<"paymentID">> => PaymentID,
             <<"status">> => <<"captured">>
         },
-        3000,
         Context
     ),
     {ok, #{<<"id">> := RefundID}} = capi_client_payments:create_refund(Context, InvoiceID, PaymentID, Reason),
@@ -1101,7 +1093,6 @@ get_refund_events(Config) ->
             <<"paymentID">> => PaymentID,
             <<"refund">> => Refund
         },
-        3000,
         Context
     ),
     wait_event_w_change(
@@ -1112,7 +1103,6 @@ get_refund_events(Config) ->
             <<"refundID">> => RefundID,
             <<"status">> => <<"succeeded">>
         },
-        3000,
         Context
     ).
 
@@ -2483,6 +2473,9 @@ construct_proxy(ID, Url, Options) ->
             options     = Options
         }
     }}.
+
+wait_event_w_change(InvoiceID, ChangePattern, Context) ->
+    wait_event_w_change(InvoiceID, ChangePattern, 5000, Context).
 
 wait_event_w_change(InvoiceID, ChangePattern, TimeLeft, Context) ->
     wait_event_w_change(InvoiceID, ChangePattern, TimeLeft, 0, Context).
