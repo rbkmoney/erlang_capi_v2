@@ -432,6 +432,8 @@ process_request('SearchInvoices', Req, Context, ReqCtx) ->
         <<"invoice_status">> => genlib_map:get('invoiceStatus', Req),
         <<"payment_status">> => genlib_map:get('paymentStatus', Req),
         <<"payment_flow">> => genlib_map:get('paymentFlow', Req),
+        <<"payment_method">> => encode_payment_method(genlib_map:get('paymentMethod', Req)),
+        <<"payment_terminal_provider">> => genlib_map:get('paymentTerminalProvider', Req),
         <<"payment_id">> => genlib_map:get('paymentID', Req),
         <<"payment_email">> => genlib_map:get('payerEmail', Req),
         <<"payment_ip">> => genlib_map:get('payerIP', Req),
@@ -479,6 +481,8 @@ process_request('SearchPayments', Req, Context, ReqCtx) ->
         <<"to_time">> => get_time('toTime', Req),
         <<"payment_status">> => genlib_map:get('paymentStatus', Req),
         <<"payment_flow">> => genlib_map:get('paymentFlow', Req),
+        <<"payment_method">> => encode_payment_method(genlib_map:get('paymentMethod', Req)),
+        <<"payment_terminal_provider">> => genlib_map:get('paymentTerminalProvider', Req),
         <<"payment_id">> => genlib_map:get('paymentID', Req),
         <<"payment_email">> => genlib_map:get('payerEmail', Req),
         <<"payment_ip">> => genlib_map:get('payerIP', Req),
@@ -2245,13 +2249,13 @@ decode_flow({hold, #domain_InvoicePaymentFlowHold{
     }.
 
 merchstat_to_domain({bank_card, #merchstat_BankCard{
-    'token'  = Token,
+    'token' = Token,
     'payment_system' = PaymentSystem,
     'bin' = Bin,
     'masked_pan' = MaskedPan
 }}) ->
     {bank_card, #domain_BankCard{
-        'token'  = Token,
+        'token' = Token,
         'payment_system' = PaymentSystem,
         'bin' = Bin,
         'masked_pan' = MaskedPan
@@ -2757,6 +2761,13 @@ create_dsl(QueryType, QueryBody, QueryParams) when
         <<"query">> => Query
     },
     maps:merge(Basic, genlib_map:compact(QueryParams)).
+
+encode_payment_method(<<"bankCard">>) ->
+    <<"bank_card">>;
+encode_payment_method(<<"paymentTerminal">>) ->
+    <<"payment_terminal">>;
+encode_payment_method(undefined) ->
+    undefined.
 
 filter_claims(undefined, Claims) ->
     Claims;
