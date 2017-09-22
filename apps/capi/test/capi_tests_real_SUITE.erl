@@ -1078,7 +1078,6 @@ create_refund(Config) ->
         },
         Context
     ),
-    % insufficient funds
     {ok, #{<<"id">> := RefundID}} = capi_client_payments:create_refund(Context, InvoiceID, PaymentID, <<>>),
     {save_config, Info#{refund_id => RefundID}}.
 
