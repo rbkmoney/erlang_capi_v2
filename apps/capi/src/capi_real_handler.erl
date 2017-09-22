@@ -2762,9 +2762,9 @@ create_dsl(QueryType, QueryBody, QueryParams) when
     },
     maps:merge(Basic, genlib_map:compact(QueryParams)).
 
-encode_payment_method(<<"bankCard">>) ->
+encode_payment_method('bankCard') ->
     <<"bank_card">>;
-encode_payment_method(<<"paymentTerminal">>) ->
+encode_payment_method('paymentTerminal') ->
     <<"payment_terminal">>;
 encode_payment_method(undefined) ->
     undefined.
