@@ -201,6 +201,8 @@ get_operation_access('SearchInvoices'            , _) ->
     [{[invoices], read}];
 get_operation_access('SearchPayments'            , _) ->
     [{[invoices, payments], read}];
+get_operation_access('SearchPayouts'             , _) ->
+    [{[party], read}];
 get_operation_access('CreatePaymentToolToken'    , _) ->
     [{[payment_tool_tokens] , write}];
 get_operation_access('GetPaymentConversionStats' , _) ->

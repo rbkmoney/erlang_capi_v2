@@ -64,7 +64,11 @@ services:
       retries: 12
 
   magista:
+<<<<<<< HEAD
     image: dr.rbkmoney.com/rbkmoney/magista:b69eb90a00858477e08fbfef1d563cff3e4eaf2b
+=======
+    image: dr.rbkmoney.com/rbkmoney/magista:c78b000f25e7055da01816385d0bc8c89774629f
+>>>>>>> tmp 2
     restart: always
     entrypoint:
       - java

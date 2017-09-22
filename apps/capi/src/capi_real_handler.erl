@@ -474,7 +474,7 @@ process_request('SearchPayouts', Req, Context, ReqCtx) ->
         <<"to_time">> => get_time('toTime', Req),
         <<"payout_status">> => genlib_map:get('payoutStatus', Req),
         <<"payout_id">> => genlib_map:get('payoutID', Req),
-        <<"payout_type">> => genlib_map:get('payoutType', Req)
+        <<"payout_type">> => encode_payout_type(genlib_map:get('payoutType', Req))
     },
     Opts = #{
         thrift_fun => 'GetPayouts',
@@ -2773,6 +2773,13 @@ decode_stat_payout_tool_details({bank_card, #merchstat_PayoutCard{card = BankCar
     decode_bank_card_details(<<"PayoutToolDetailsBankCardData">>, BankCard1);
 decode_stat_payout_tool_details({bank_account, #merchstat_PayoutAccount{account = BankAccount}}) ->
     decode_payout_tool_info(merchstat_to_domain({bank_account, BankAccount})).
+
+encode_payout_type('PayoutCard') ->
+    <<"bank_card">>;
+encode_payout_type('PayoutAccount') ->
+    <<"bank_account">>;
+encode_payout_type(undefined) ->
+    undefined.
 
 create_dsl(QueryType, QueryBody, QueryParams) when
     is_atom(QueryType),
