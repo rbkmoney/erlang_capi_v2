@@ -584,7 +584,14 @@ process_request('CreateRefund', Req, Context, ReqCtx) ->
                 #payproc_InvalidPaymentStatus{} ->
                     {ok, {400, [], logic_error(invalidInvoicePaymentStatus, <<"Invalid invoice payment status">>)}};
                 #payproc_InvoicePaymentRefundPending{} ->
-                    {ok, {400, [], logic_error(invoicePaymentRefundPending, <<"Invoice payment refund pending">>)}}
+                    {ok, {400, [], logic_error(invoicePaymentRefundPending, <<"Invoice payment refund pending">>)}};
+                #payproc_InsufficientAccountBalance{} ->
+                    {ok, {400, [], logic_error(
+                        insufficentAccountBalance,
+                        <<"Operation can not be conducted because of insufficient funds on the merchant account">>
+                    )}};
+                #'InvalidRequest'{errors = Errors} ->
+                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
             end
     end;
 
