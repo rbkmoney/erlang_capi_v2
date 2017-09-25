@@ -42,7 +42,7 @@ services:
         condition: service_healthy
 
   cds:
-    image: dr.rbkmoney.com/rbkmoney/cds:8cfd8eb58dbc1091e235fb427b53eb94d2a73b09
+    image: dr.rbkmoney.com/rbkmoney/cds:58ecca32c42a70155c4281257d036c14da2913d7
     restart: always
     command: /opt/cds/bin/cds foreground
     healthcheck:
