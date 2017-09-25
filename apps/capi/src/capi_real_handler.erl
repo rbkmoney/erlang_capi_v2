@@ -2261,6 +2261,11 @@ merchstat_to_domain({bank_card, #merchstat_BankCard{
         'masked_pan' = MaskedPan
     }};
 
+merchstat_to_domain({payment_terminal, #merchstat_PaymentTerminal{
+    terminal_type = Type}}
+) ->
+    {payment_terminal, #domain_PaymentTerminal{terminal_type = Type}};
+
 merchstat_to_domain({Status, #merchstat_InvoicePaymentPending{}}) ->
     {Status, #domain_InvoicePaymentPending{}};
 
