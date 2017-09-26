@@ -36,6 +36,7 @@
     get_invoice_by_id_w_access_token_ok_test/1,
     get_random_invoice_w_access_token_failed_test/1,
     get_invoice_events_ok_test/1,
+    get_invoice_payment_methods/1,
     rescind_invoice_ok_test/1,
     rescind_invoice_w_access_token_failed_test/1,
     fulfill_invoice_ok_test/1,
@@ -216,7 +217,8 @@ groups() ->
             get_payments_ok_test,
             get_payment_by_id_ok_test,
             fulfill_invoice_ok_test,
-            get_invoice_events_ok_test
+            get_invoice_events_ok_test,
+            get_invoice_payment_methods
         ]},
         {terminal_payment, [sequence], [
             create_invoice_ok_test,
@@ -225,7 +227,8 @@ groups() ->
             get_payments_ok_test,
             get_payment_by_id_ok_test,
             fulfill_invoice_ok_test,
-            get_invoice_events_ok_test
+            get_invoice_events_ok_test,
+            get_invoice_payment_methods
         ]},
         {refund, [sequence], [
             create_invoice_ok_test,
@@ -959,7 +962,7 @@ get_invoice_events_ok_test(Config) ->
     {fulfill_invoice_ok_test, #{
         invoice_id := InvoiceID,
         invoice_context := Context
-    }} = ?config(saved_config, Config),
+    } = Info} = ?config(saved_config, Config),
     wait_event_w_change(
         InvoiceID,
         #{
@@ -1011,7 +1014,21 @@ get_invoice_events_ok_test(Config) ->
                 <<"status">> := <<"fulfilled">>
             }]
         }
-    ] = Events.
+    ] = Events,
+    {save_config, Info}.
+
+-spec get_invoice_payment_methods(config()) -> _.
+
+get_invoice_payment_methods(Config) ->
+    {get_invoice_events_ok_test, #{
+        invoice_id := InvoiceID
+    }} = ?config(saved_config, Config),
+    Context = ?config(context, Config),
+    {ok, PaymentMethods} = capi_client_invoices:get_invoice_payment_methods(Context, InvoiceID),
+    [
+        #{<<"method">> := <<"BankCard">>, <<"paymentSystems">> := [<<"mastercard">>,<<"visa">>]},
+        #{<<"method">> := <<"PaymentTerminal">>, <<"providers">> := [<<"euroset">>]}
+    ] = PaymentMethods.
 
 -spec get_payments_ok_test(config()) -> _.
 

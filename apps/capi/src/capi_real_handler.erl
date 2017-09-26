@@ -309,6 +309,26 @@ process_request('GetInvoiceEvents', Req, Context, ReqCtx) ->
             end
     end;
 
+process_request('GetInvoicePaymentMethods', Req, Context, ReqCtx) ->
+    Result = construct_payment_methods(
+        get_user_info(Context),
+        maps:get(invoiceID, Req),
+        ReqCtx
+    ),
+    case Result of
+        {ok, PaymentMethods} when is_list(PaymentMethods) ->
+            {ok, {200, [], PaymentMethods}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                #payproc_InvoiceNotFound{} ->
+                    {ok, {404, [],  general_error(<<"Invoice not found">>)}};
+                #'InvalidRequest'{errors = Errors} ->
+                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
+            end
+    end;
+
 process_request('GetPayments', Req, Context, ReqCtx) ->
     InvoiceID = maps:get(invoiceID, Req),
     UserInfo = get_user_info(Context),
@@ -3551,6 +3571,48 @@ get_events(Limit, After, Context) ->
             EventRange
         ],
         maps:get(request_context, Context)
+    ).
+
+construct_payment_methods(UserInfo, InvoiceID, Context) ->
+    case compute_terms(UserInfo, InvoiceID, Context) of
+        {ok, #domain_TermSet{payments = undefined}} ->
+            {ok, []};
+        {ok, #domain_TermSet{
+            payments = #domain_PaymentsServiceTerms{
+                payment_methods = PaymentMethodRefs
+            }
+        }} ->
+            {ok, decode_payment_methods(PaymentMethodRefs)};
+        Error ->
+            Error
+    end.
+
+decode_payment_methods(undefined) ->
+    [];
+decode_payment_methods({value, PaymentMethodRefs}) ->
+    PaymentMethods = [ID || #domain_PaymentMethodRef{id = ID} <- PaymentMethodRefs],
+    lists:map(
+        fun(Method) ->
+            {_, MethodTerms} = lists:unzip(proplists:lookup_all(Method, PaymentMethods)),
+            decode_payment_method(Method, MethodTerms)
+        end,
+        proplists:get_keys(PaymentMethods)
+    ).
+
+decode_payment_method(bank_card, PaymentSystems) ->
+    #{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems)};
+decode_payment_method(payment_terminal, Providers) ->
+    #{<<"method">> => <<"PaymentTerminal">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}.
+
+compute_terms(UserInfo, InvoiceID, Context) ->
+    service_call(
+        invoicing,
+        'ComputeTerms',
+        [
+            UserInfo,
+            InvoiceID
+        ],
+        Context
     ).
 
 reply_5xx(Code) when Code >= 500 andalso Code < 600 ->
