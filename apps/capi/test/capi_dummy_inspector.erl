@@ -8,13 +8,13 @@
 -export([get_service_spec/0]).
 
 
--include_lib("cp_proto/include/cp_proxy_inspector_thrift.hrl").
+-include_lib("dmsl/include/dmsl_proxy_inspector_thrift.hrl").
 
 -spec get_service_spec() ->
     hg_proto:service_spec().
 
 get_service_spec() ->
-    {"/test/proxy/inspector/dummy", {cp_proxy_inspector_thrift, 'InspectorProxy'}}.
+    {"/test/proxy/inspector/dummy", {dmsl_proxy_inspector_thrift, 'InspectorProxy'}}.
 
 
 -spec handle_function(woody:func(), woody:args(), woody_context:ctx(), #{}) ->

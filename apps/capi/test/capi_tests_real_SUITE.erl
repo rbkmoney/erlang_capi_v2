@@ -1,11 +1,11 @@
 -module(capi_tests_real_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
--include_lib("cp_proto/include/cp_payment_processing_thrift.hrl").
--include_lib("cp_proto/include/cp_domain_config_thrift.hrl").
--include_lib("cp_proto/include/cp_domain_thrift.hrl").
--include_lib("cp_proto/include/cp_accounter_thrift.hrl").
--include_lib("cp_proto/include/cp_reporting_thrift.hrl").
+-include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
+-include_lib("dmsl/include/dmsl_domain_config_thrift.hrl").
+-include_lib("dmsl/include/dmsl_domain_thrift.hrl").
+-include_lib("dmsl/include/dmsl_accounter_thrift.hrl").
+-include_lib("dmsl/include/dmsl_reporting_thrift.hrl").
 
 
 -export([all/0]).
@@ -72,6 +72,7 @@
     get_payment_geo_stats_ok_test/1,
     get_payment_rate_stats_ok_test/1,
     get_payment_method_stats_ok_test/1,
+    search_payouts_ok_test/1,
     %%%%
     get_my_party_ok_test/1,
     suspend_my_party_idempotent_ok_test/1,
@@ -268,7 +269,8 @@ groups() ->
             get_payment_revenue_stats_ok_test,
             get_payment_geo_stats_ok_test,
             get_payment_rate_stats_ok_test,
-            get_payment_method_stats_ok_test
+            get_payment_method_stats_ok_test,
+            search_payouts_ok_test
         ]},
         {party_management, [sequence], [
             get_my_party_ok_test,
@@ -341,7 +343,7 @@ init_per_suite(Config) ->
         capi_ct_helper:start_app(lager) ++
         capi_ct_helper:start_app(cowlib) ++
         capi_ct_helper:start_app(woody) ++
-        capi_ct_helper:start_app(cp_proto, [
+        capi_ct_helper:start_app(capi_woody_client, [
             {service_urls, #{
                 party_management   => ?CAPI_PARTY_MANAGEMENT_URL,
                 accounter          => ?CAPI_ACCOUNTER_URL,
@@ -1223,7 +1225,7 @@ search_payments_ok_test(Config) ->
         {payerEmail, <<"test@test_rbk.ru">>},
         {payerIP, <<"192.168.0.1">>},
         {payerFingerprint, <<"blablablalbalbal">>},
-        %%{cardNumberMask, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
+        %% {cardNumberMask, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
         {paymentAmount, 10000}
     ],
 
@@ -1305,6 +1307,23 @@ get_payment_method_stats_ok_test(Config) ->
         {paymentMethod, <<"bankCard">>}
     ],
     {ok, _Body} = capi_client_analytics:get_payment_method_stats(Context, ShopID, Query).
+
+
+-spec search_payouts_ok_test(config()) -> _.
+
+search_payouts_ok_test(Config) ->
+    Context = ?config(context, Config),
+    ShopID = ?config(shop_id, Config),
+    Query = [
+        {limit, 2},
+        {offset, 2},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {payoutType, <<"PayoutAccount">>},
+        {payoutStatus, <<"paid">>}
+    ],
+
+    {ok, 0, []} = capi_client_searches:search_payouts(Context, ShopID, Query).
 
 -spec get_my_party_ok_test(config()) -> _.
 
@@ -2461,7 +2480,7 @@ call_service(Service, Function, Args) ->
     call_service(Service, Function, Args, create_context()).
 
 call_service(Service, Function, Args, ReqCtx) ->
-    cp_proto:call_service(Service, Function, Args, ReqCtx, capi_woody_event_handler).
+    capi_woody_client:call_service(Service, Function, Args, ReqCtx).
 
 create_and_activate_shop(Config) ->
     ShopID = generate_shop_id(),
