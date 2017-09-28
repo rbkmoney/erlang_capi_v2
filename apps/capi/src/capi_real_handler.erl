@@ -474,7 +474,7 @@ process_request('SearchPayouts', Req, Context, ReqCtx) ->
         <<"to_time">> => get_time('toTime', Req),
         <<"payout_status">> => genlib_map:get('payoutStatus', Req),
         <<"payout_id">> => genlib_map:get('payoutID', Req),
-        <<"payout_type">> => encode_payout_type(genlib_map:get('payoutType', Req))
+        <<"payout_type">> => encode_payout_type(genlib_map:get('payoutToolType', Req))
     },
     Opts = #{
         thrift_fun => 'GetPayouts',
@@ -2102,12 +2102,12 @@ decode_payment_tool_token({payment_terminal, PaymentTerminal}) ->
     decode_payment_terminal(PaymentTerminal).
 
 decode_payment_tool_details({bank_card, BankCard}) ->
-    decode_bank_card_details(<<"PaymentToolDetailsCardData">>, BankCard);
+    decode_bank_card_details(<<"PaymentToolDetailsBankCard">>, BankCard);
 decode_payment_tool_details({payment_terminal, #domain_PaymentTerminal{
     terminal_type = Type
 }}) ->
     #{
-        <<"detailsType">> => <<"PaymentToolDetailsPaymentTerminalData">>,
+        <<"detailsType">> => <<"PaymentToolDetailsPaymentTerminal">>,
         <<"provider">> => genlib:to_binary(Type)
     }.
 
@@ -2156,46 +2156,41 @@ decode_operation_failure({external_failure, #domain_ExternalFailure{
     logic_error(Code, Description).
 
 merchstat_to_domain({bank_card, #merchstat_BankCard{
-    'token' = Token,
+    'token'  = Token,
     'payment_system' = PaymentSystem,
     'bin' = Bin,
     'masked_pan' = MaskedPan
 }}) ->
     {bank_card, #domain_BankCard{
-        'token' = Token,
+        'token'  = Token,
         'payment_system' = PaymentSystem,
         'bin' = Bin,
         'masked_pan' = MaskedPan
     }};
-
-merchstat_to_domain({bank_account, #merchstat_BankAccount{
+merchstat_to_domain({bank_card, #merchstat_PayoutCard{card = BankCard}}) ->
+    merchstat_to_domain({bank_card, BankCard});
+merchstat_to_domain({bank_account, #merchstat_PayoutAccount{account = #merchstat_BankAccount{
     account = Account,
     bank_name = BankName,
     bank_post_account = BankPostAccount,
     bank_bik = BankBik
-}}) ->
+}}}) ->
     {bank_account, #domain_BankAccount{
         account = Account,
         bank_name = BankName,
         bank_post_account = BankPostAccount,
         bank_bik = BankBik
     }};
-
 merchstat_to_domain({Status, #merchstat_InvoicePaymentPending{}}) ->
     {Status, #domain_InvoicePaymentPending{}};
-
 merchstat_to_domain({Status, #merchstat_InvoicePaymentProcessed{}}) ->
     {Status, #domain_InvoicePaymentProcessed{}};
-
 merchstat_to_domain({Status, #merchstat_InvoicePaymentCaptured{}}) ->
     {Status, #domain_InvoicePaymentCaptured{}};
-
 merchstat_to_domain({Status, #merchstat_InvoicePaymentCancelled{}}) ->
     {Status, #domain_InvoicePaymentCancelled{}};
-
 merchstat_to_domain({Status, #merchstat_InvoicePaymentRefunded{}}) ->
     {Status, #domain_InvoicePaymentRefunded{}};
-
 merchstat_to_domain({Status, #merchstat_InvoicePaymentFailed{
     failure = {external_failure, #merchstat_ExternalFailure{
         code = Code,
@@ -2208,29 +2203,22 @@ merchstat_to_domain({Status, #merchstat_InvoicePaymentFailed{
             description = Description
         }}
     }};
-
 merchstat_to_domain({Status, #merchstat_InvoicePaymentFailed{
     failure = {operation_timeout, #merchstat_OperationTimeout{}}
 }}) ->
     {Status, #domain_InvoicePaymentFailed{
         failure = {operation_timeout, #domain_OperationTimeout{}}
     }};
-
 merchstat_to_domain({Status, #merchstat_InvoiceUnpaid{}}) ->
     {Status, #domain_InvoiceUnpaid{}};
-
 merchstat_to_domain({Status, #merchstat_InvoicePaid{}}) ->
     {Status, #domain_InvoicePaid{}};
-
 merchstat_to_domain({Status, #merchstat_InvoiceCancelled{details = Details}}) ->
     {Status, #domain_InvoiceCancelled{details = Details}};
-
 merchstat_to_domain({Status, #merchstat_InvoiceFulfilled{details = Details}}) ->
     {Status, #domain_InvoiceFulfilled{details = Details}};
-
 merchstat_to_domain({instant, #merchstat_InvoicePaymentFlowInstant{}}) ->
     {instant, #domain_InvoicePaymentFlowInstant{}};
-
 merchstat_to_domain({hold, #merchstat_InvoicePaymentFlowHold{
     on_hold_expiration = OnHoldExpiration,
     held_until         = HeldUntil
@@ -2453,12 +2441,12 @@ decode_payout_tool_params(#payproc_PayoutToolParams{
 decode_payout_tool_params(Currency, Info) ->
     #{
         <<"currency">> => decode_currency(Currency),
-        <<"details">> => decode_payout_tool_info(Info)
+        <<"details">> => decode_payout_tool_details(Info)
     }.
 
-decode_payout_tool_info({bank_account, BankAccount}) ->
+decode_bank_account_details(TypeName, BankAccount) ->
     maps:merge(
-        #{<<"detailsType">> => <<"PayoutToolDetailsBankAccountData">>},
+        #{<<"detailsType">> => TypeName},
         decode_bank_account(BankAccount)
     ).
 
@@ -2761,18 +2749,20 @@ decode_stat_payout(#merchstat_StatPayout{
 decode_stat_payout_status({cancelled, #merchstat_PayoutCancelled{details = Details}}) ->
     #{
         <<"status">> => <<"cancelled">>,
-        <<"details">> => genlib:to_binary(Details)
+        <<"cancellationDetails">> => genlib:to_binary(Details)
     };
 decode_stat_payout_status({Status, _}) ->
     #{
         <<"status">> => genlib:to_binary(Status)
     }.
 
-decode_stat_payout_tool_details({bank_card, #merchstat_PayoutCard{card = BankCard}}) ->
-    {bank_card, BankCard1} = merchstat_to_domain({bank_card, BankCard}),
-    decode_bank_card_details(<<"PayoutToolDetailsBankCardData">>, BankCard1);
-decode_stat_payout_tool_details({bank_account, #merchstat_PayoutAccount{account = BankAccount}}) ->
-    decode_payout_tool_info(merchstat_to_domain({bank_account, BankAccount})).
+decode_stat_payout_tool_details(PayoutType) ->
+    decode_payout_tool_details(merchstat_to_domain(PayoutType)).
+
+decode_payout_tool_details({bank_card, BankCard}) ->
+    decode_bank_card_details(<<"PayoutToolDetailsBankCardData">>, BankCard);
+decode_payout_tool_details({bank_account, BankAccount}) ->
+    decode_bank_account_details(<<"PayoutToolDetailsBankAccount">>, BankAccount).
 
 encode_payout_type('PayoutCard') ->
     <<"bank_card">>;
