@@ -175,6 +175,8 @@ get_operation_access('GetInvoiceByID'            , #{'invoiceID' := ID}) ->
     [{[{invoices, ID}], read}];
 get_operation_access('GetInvoiceEvents'          , #{'invoiceID' := ID}) ->
     [{[{invoices, ID}], read}];
+get_operation_access('GetInvoicePaymentMethods'  , #{'invoiceID' := ID}) ->
+    [{[{invoices, ID}], read}];
 get_operation_access('FulfillInvoice'            , #{'invoiceID' := ID}) ->
     [{[{invoices, ID}], write}];
 get_operation_access('RescindInvoice'            , #{'invoiceID' := ID}) ->

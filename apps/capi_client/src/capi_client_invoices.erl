@@ -7,6 +7,7 @@
 -export([get_invoice_by_id/2]).
 -export([fulfill_invoice/3]).
 -export([rescind_invoice/3]).
+-export([get_invoice_payment_methods/2]).
 
 -type context() :: capi_client_lib:context().
 
@@ -80,3 +81,10 @@ rescind_invoice(Context, InvoiceID, Reason) ->
         {ok, _Body} -> ok;
         {error, Error} -> {error, Error}
     end.
+
+-spec get_invoice_payment_methods(context(), binary()) -> {ok, term()} | {error, term()}.
+get_invoice_payment_methods(Context, InvoiceID) ->
+    Params = #{binding => #{<<"invoiceID">> => InvoiceID}},
+    {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
+    Response = swag_client_invoices_api:get_invoice_payment_methods(Url, PreparedParams, Opts),
+    capi_client_lib:handle_response(Response).

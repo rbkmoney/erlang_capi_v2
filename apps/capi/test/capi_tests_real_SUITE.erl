@@ -36,6 +36,7 @@
     get_invoice_by_id_w_access_token_ok_test/1,
     get_random_invoice_w_access_token_failed_test/1,
     get_invoice_events_ok_test/1,
+    get_invoice_payment_methods/1,
     rescind_invoice_ok_test/1,
     rescind_invoice_w_access_token_failed_test/1,
     fulfill_invoice_ok_test/1,
@@ -46,6 +47,7 @@
     capture_payment_ok_test/1,
     %%%%
     create_refund/1,
+    create_refund_fail/1,
     get_refund_by_id/1,
     get_refunds/1,
     get_refund_events/1,
@@ -218,7 +220,8 @@ groups() ->
             get_payments_ok_test,
             get_payment_by_id_ok_test,
             fulfill_invoice_ok_test,
-            get_invoice_events_ok_test
+            get_invoice_events_ok_test,
+            get_invoice_payment_methods
         ]},
         {terminal_payment, [sequence], [
             create_invoice_ok_test,
@@ -227,9 +230,14 @@ groups() ->
             get_payments_ok_test,
             get_payment_by_id_ok_test,
             fulfill_invoice_ok_test,
-            get_invoice_events_ok_test
+            get_invoice_events_ok_test,
+            get_invoice_payment_methods
         ]},
         {refund, [sequence], [
+            create_invoice_ok_test,
+            create_payment_tool_token_ok_test,
+            create_payment_ok_test,
+            create_refund_fail,
             create_invoice_ok_test,
             create_payment_tool_token_ok_test,
             create_payment_ok_test,
@@ -537,14 +545,20 @@ invoice_cart_line_equal(Line1, Line2) ->
 -spec create_invoice_ok_test(config()) -> _.
 
 create_invoice_ok_test(Config) ->
+    Result = case ?config(saved_config, Config) of
+        {_, #{shop_id := ShopIDWas}} ->
+            default_create_invoice(ShopIDWas, Config);
+        _ ->
+            default_create_invoice(Config)
+    end,
     #{
-        <<"invoice">> := #{<<"id">> := InvoiceID},
+        <<"invoice">> := #{<<"id">> := InvoiceID, <<"shopID">> := ShopID},
         <<"invoiceAccessToken">> := #{<<"payload">> := TokenPayload}
-    } = default_create_invoice(Config),
-    Context = get_context(TokenPayload),
+    } = Result,
     {save_config, #{
         invoice_id      => InvoiceID,
-        invoice_context => Context
+        invoice_context => get_context(TokenPayload),
+        shop_id         => ShopID
     }}.
 
 -spec create_invoice_access_token_ok_test(config()) -> _.
@@ -951,7 +965,7 @@ get_invoice_events_ok_test(Config) ->
     {fulfill_invoice_ok_test, #{
         invoice_id := InvoiceID,
         invoice_context := Context
-    }} = ?config(saved_config, Config),
+    } = Info} = ?config(saved_config, Config),
     wait_event_w_change(
         InvoiceID,
         #{
@@ -1003,7 +1017,21 @@ get_invoice_events_ok_test(Config) ->
                 <<"status">> := <<"fulfilled">>
             }]
         }
-    ] = Events.
+    ] = Events,
+    {save_config, Info}.
+
+-spec get_invoice_payment_methods(config()) -> _.
+
+get_invoice_payment_methods(Config) ->
+    {get_invoice_events_ok_test, #{
+        invoice_id := InvoiceID
+    }} = ?config(saved_config, Config),
+    Context = ?config(context, Config),
+    {ok, PaymentMethods} = capi_client_invoices:get_invoice_payment_methods(Context, InvoiceID),
+    [
+        #{<<"method">> := <<"BankCard">>, <<"paymentSystems">> := [<<"mastercard">>,<<"visa">>]},
+        #{<<"method">> := <<"PaymentTerminal">>, <<"providers">> := [<<"euroset">>]}
+    ] = PaymentMethods.
 
 -spec get_payments_ok_test(config()) -> _.
 
@@ -1027,16 +1055,18 @@ get_payment_by_id_ok_test(Config) ->
     {ok, _Body} = capi_client_payments:get_payment_by_id(Context, InvoiceID, PaymentID),
     {save_config, Info}.
 
--spec create_refund(config()) -> _.
+-spec create_refund_fail(config()) -> _.
 
-create_refund(Config) ->
+create_refund_fail(Config) ->
     {create_payment_ok_test, #{
         invoice_id := InvoiceID,
         invoice_context := Context,
         payment_id := PaymentID
     } = Info} = ?config(saved_config, Config),
     Reason = <<"CUZ I SAY SO!!!">>,
+    % invalid invoice id
     {error, _} = capi_client_payments:create_refund(Context, <<"NOT_INVOICE_ID">>, PaymentID, Reason),
+    % invalid payment id
     {error, _} = capi_client_payments:create_refund(Context, InvoiceID, <<"NOT_PAYMENT_ID">>, Reason),
     wait_event_w_change(
         InvoiceID,
@@ -1047,7 +1077,28 @@ create_refund(Config) ->
         },
         Context
     ),
-    {ok, #{<<"id">> := RefundID}} = capi_client_payments:create_refund(Context, InvoiceID, PaymentID, Reason),
+    % insufficient funds
+    {error, _} = capi_client_payments:create_refund(Context, InvoiceID, PaymentID, Reason),
+    {save_config, Info}.
+
+-spec create_refund(config()) -> _.
+
+create_refund(Config) ->
+    {create_payment_ok_test, #{
+        invoice_id := InvoiceID,
+        invoice_context := Context,
+        payment_id := PaymentID
+    } = Info} = ?config(saved_config, Config),
+    wait_event_w_change(
+        InvoiceID,
+        #{
+            <<"changeType">> => <<"PaymentStatusChanged">>,
+            <<"paymentID">> => PaymentID,
+            <<"status">> => <<"captured">>
+        },
+        Context
+    ),
+    {ok, #{<<"id">> := RefundID}} = capi_client_payments:create_refund(Context, InvoiceID, PaymentID, <<>>),
     {save_config, Info#{refund_id => RefundID}}.
 
 -spec get_refund_by_id(config()) -> _.
@@ -1615,6 +1666,9 @@ auth_token(ACL, Expiration) ->
 
 default_create_invoice(Config) ->
     ShopID = create_and_activate_shop(Config),
+    default_create_invoice(ShopID, Config).
+
+default_create_invoice(ShopID, Config) ->
     Req = #{
         <<"shopID">> => ShopID,
         <<"amount">> => 100000,
