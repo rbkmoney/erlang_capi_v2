@@ -2156,13 +2156,13 @@ decode_operation_failure({external_failure, #domain_ExternalFailure{
     logic_error(Code, Description).
 
 merchstat_to_domain({bank_card, #merchstat_BankCard{
-    'token'  = Token,
+    'token' = Token,
     'payment_system' = PaymentSystem,
     'bin' = Bin,
     'masked_pan' = MaskedPan
 }}) ->
     {bank_card, #domain_BankCard{
-        'token'  = Token,
+        'token' = Token,
         'payment_system' = PaymentSystem,
         'bin' = Bin,
         'masked_pan' = MaskedPan

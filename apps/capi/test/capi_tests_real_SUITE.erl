@@ -1162,7 +1162,7 @@ search_invoices_ok_test(Config) ->
         {payerEmail, <<"test@test_rbk.ru">>},
         {payerIP, <<"192.168.0.1">>},
         {payerFingerprint, <<"blablablalbalbal">>},
-        %% {cardNumberMask, <<"2222">>},  %%@FIXME cannot be used until getting the newest api client
+        %%{cardNumberMask, <<"2222">>},  %%@FIXME cannot be used until getting the newest api client
         {paymentAmount, 10000}
     ],
 
