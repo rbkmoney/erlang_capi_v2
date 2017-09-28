@@ -64,7 +64,7 @@ services:
       retries: 12
 
   magista:
-    image: dr.rbkmoney.com/rbkmoney/magista:b69eb90a00858477e08fbfef1d563cff3e4eaf2b
+    image: dr.rbkmoney.com/rbkmoney/magista:c78b000f25e7055da01816385d0bc8c89774629f
     restart: always
     entrypoint:
       - java
@@ -159,7 +159,7 @@ services:
       - .:/code
     environment:
       - CDS_HOST=cds
-      - SCHEMA_DIR=/code/apps/cp_proto/damsel/proto
+      - SCHEMA_DIR=/code/_build/default/lib/dmsl/proto
     command:
       /code/script/cds_test_init
     depends_on:
@@ -253,10 +253,28 @@ services:
       pg-db:
         condition: service_healthy
 
+$(
+# ToDo: fix the config the way it works the same for CI and docker-mac environments
+if [ -z "$BUILD_NUMBER" ]; then
+echo "
+# docker-mac environment
+networks:
+  default:
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 2001::/32
+";
+else
+echo "
+# CI environment
 networks:
   default:
     driver: bridge
     driver_opts:
-      com.docker.network.enable_ipv6: "true"
-      com.docker.network.bridge.enable_ip_masquerade: "false"
+      com.docker.network.enable_ipv6: \"true\"
+      com.docker.network.bridge.enable_ip_masquerade: \"false\"
+"
+fi)
 EOF

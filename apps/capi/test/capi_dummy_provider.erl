@@ -13,11 +13,11 @@
     {Path :: string(), Service :: {module(), atom()}}.
 
 get_service_spec() ->
-    {"/test/proxy/provider/dummy", {cp_proxy_provider_thrift, 'ProviderProxy'}}.
+    {"/test/proxy/provider/dummy", {dmsl_proxy_provider_thrift, 'ProviderProxy'}}.
 
 %%
 
--include_lib("cp_proto/include/cp_proxy_provider_thrift.hrl").
+-include_lib("dmsl/include/dmsl_proxy_provider_thrift.hrl").
 
 -spec handle_function(woody:func(), woody:args(), woody_context:ctx(), #{}) ->
     {ok, term()}.

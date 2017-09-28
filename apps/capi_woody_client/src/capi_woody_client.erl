@@ -1,10 +1,17 @@
--module(cp_proto).
+-module(capi_woody_client).
 
+-export([call_service/4]).
 -export([call_service/5]).
 
 %%
 
 -type service_name() :: atom().
+
+-spec call_service(service_name(), woody:func(), [term()], woody_context:ctx()) ->
+    woody:result().
+
+call_service(ServiceName, Function, Args, Context) ->
+    call_service(ServiceName, Function, Args, Context, capi_woody_event_handler).
 
 -spec call_service(service_name(), woody:func(), [term()], woody_context:ctx(), woody:ev_handler()) ->
     woody:result().
@@ -21,22 +28,22 @@ get_service_url(ServiceName) ->
     maps:get(ServiceName, genlib_app:env(?MODULE, service_urls)).
 
 get_service_modname(invoicing) ->
-    {cp_payment_processing_thrift, 'Invoicing'};
+    {dmsl_payment_processing_thrift, 'Invoicing'};
 get_service_modname(invoice_templating) ->
-    {cp_payment_processing_thrift, 'InvoiceTemplating'};
+    {dmsl_payment_processing_thrift, 'InvoiceTemplating'};
 get_service_modname(cds_storage) ->
-    {cp_cds_thrift, 'Storage'};
+    {dmsl_cds_thrift, 'Storage'};
 get_service_modname(merchant_stat) ->
-    {cp_merch_stat_thrift, 'MerchantStatistics'};
+    {dmsl_merch_stat_thrift, 'MerchantStatistics'};
 get_service_modname(reporting) ->
-    {cp_reporting_thrift, 'Reporting'};
+    {dmsl_reporting_thrift, 'Reporting'};
 get_service_modname(repository) ->
-    {cp_domain_config_thrift, 'Repository'};
+    {dmsl_domain_config_thrift, 'Repository'};
 get_service_modname(accounter) ->
-    {cp_accounter_thrift, 'Accounter'};
+    {dmsl_accounter_thrift, 'Accounter'};
 get_service_modname(geo_ip_service) ->
-    {cp_geo_ip_thrift, 'GeoIpService'};
+    {dmsl_geo_ip_thrift, 'GeoIpService'};
 get_service_modname(webhook_manager) ->
-    {cp_webhooker_thrift, 'WebhookManager'};
+    {dmsl_webhooker_thrift, 'WebhookManager'};
 get_service_modname(party_management) ->
-    {cp_payment_processing_thrift, 'PartyManagement'}.
+    {dmsl_payment_processing_thrift, 'PartyManagement'}.
