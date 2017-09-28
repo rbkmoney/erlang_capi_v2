@@ -135,6 +135,9 @@
 -define(DEFAULT_TPL_PRODUCT     , <<"test_invoice_template_product">>).
 -define(DEFAULT_TPL_DESCRIPTION , <<"test_invoice_template_description">>).
 -define(DEFAULT_TPL_META        , #{<<"invoice_template_dummy_metadata">> => <<"test_value">>}).
+
+-define(DEFAULT_WAIT_EVENT_CHANGE_TIMEOUT, 5000). %% milisec
+
 -behaviour(supervisor).
 
 -spec init([]) ->
@@ -1172,6 +1175,7 @@ search_invoices_ok_test(Config) ->
         {payerIP, <<"192.168.0.0.1">>},
         {paymentStatus, <<"processed">>},
         {paymentFlow, <<"instant">>},
+        {paymentMethod, <<"bankCard">>},
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
         {payerEmail, <<"test@test_rbk.ru">>},
@@ -1197,6 +1201,7 @@ search_payments_ok_test(Config) ->
         {payerIP, <<"192.168.0.0.1">>},
         {paymentStatus, <<"processed">>},
         {paymentFlow, <<"instant">>},
+        {paymentMethod, <<"bankCard">>},
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
         {payerEmail, <<"test@test_rbk.ru">>},
@@ -2529,12 +2534,12 @@ construct_proxy(ID, Url, Options) ->
     }}.
 
 wait_event_w_change(InvoiceID, ChangePattern, Context) ->
-    wait_event_w_change(InvoiceID, ChangePattern, 5000, Context).
+    wait_event_w_change(InvoiceID, ChangePattern, Context, ?DEFAULT_WAIT_EVENT_CHANGE_TIMEOUT).
 
-wait_event_w_change(InvoiceID, ChangePattern, TimeLeft, Context) ->
-    wait_event_w_change(InvoiceID, ChangePattern, TimeLeft, 0, Context).
+wait_event_w_change(InvoiceID, ChangePattern, Context, TimeLeft) ->
+    wait_event_w_change(InvoiceID, ChangePattern, Context, TimeLeft, 0).
 
-wait_event_w_change(InvoiceID, ChangePattern, TimeLeft, LastEventID, Context) when TimeLeft > 0 ->
+wait_event_w_change(InvoiceID, ChangePattern, Context, TimeLeft, LastEventID) when TimeLeft > 0 ->
     Started = genlib_time:ticks(),
     {ok, Events} = capi_client_invoices:get_invoice_events(Context, InvoiceID, LastEventID, 1),
     Filtered = lists:filter(
@@ -2549,12 +2554,12 @@ wait_event_w_change(InvoiceID, ChangePattern, TimeLeft, LastEventID, Context) wh
             Now = genlib_time:ticks(),
             TimeLeftNext = TimeLeft - (Now - Started) div 1000,
             LastEventIDNext = get_last_event_id(Events, LastEventID),
-            wait_event_w_change(InvoiceID, ChangePattern, TimeLeftNext, LastEventIDNext, Context);
+            wait_event_w_change(InvoiceID, ChangePattern, Context, TimeLeftNext, LastEventIDNext);
         _ ->
             ok
     end;
 
-wait_event_w_change(InvoiceID, ChangePattern, _, LastEventID, _Context) ->
+wait_event_w_change(InvoiceID, ChangePattern, _Context, _, LastEventID) ->
     error({event_limit_exceeded, {InvoiceID, ChangePattern, LastEventID}}).
 
 is_changes_match_patterns(Changes, Pattern) when is_list(Changes) ->
