@@ -24,7 +24,7 @@ get_service_spec() ->
 
 handle_function(
     'ProcessPayment',
-    [#prxprv_Context{
+    [#prxprv_PaymentContext{
         session = #prxprv_Session{target = Target, state = State},
         payment_info = PaymentInfo,
         options = _
@@ -36,7 +36,7 @@ handle_function(
 
 handle_function(
     'HandlePaymentCallback',
-    [_Payload, #prxprv_Context{
+    [_Payload, #prxprv_PaymentContext{
         session = #prxprv_Session{target = _Target, state = _State},
         payment_info = PaymentInfo,
         options = _
@@ -59,13 +59,13 @@ process_payment({processed, #domain_InvoicePaymentProcessed{}}, _, PaymentInfo, 
     {ok, finish(PaymentInfo)}.
 
 finish(#prxprv_PaymentInfo{payment = Payment}) ->
-    #prxprv_ProxyResult{
+    #prxprv_PaymentProxyResult{
         intent = {finish, #'FinishIntent'{status = {success, #'Success'{}}}},
         trx    = #domain_TransactionInfo{id = Payment#prxprv_InvoicePayment.id, extra = #{}}
     }.
 
 respond(Response, Result) ->
-    #prxprv_CallbackResult{
+    #prxprv_PaymentCallbackResult{
         response = Response,
         result = Result
     }.

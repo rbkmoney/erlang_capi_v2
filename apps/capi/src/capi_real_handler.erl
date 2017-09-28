@@ -102,28 +102,12 @@ process_request('CreateInvoice', Req, Context, ReqCtx) ->
 process_request('CreatePayment', Req, Context, ReqCtx) ->
     InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('PaymentParams', Req),
-    ContactInfo = genlib_map:get(<<"contactInfo">>, PaymentParams),
-    Token = genlib_map:get(<<"paymentToolToken">>, PaymentParams),
-    EncodedSession = genlib_map:get(<<"paymentSession">>, PaymentParams),
     Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
+    Payer = genlib_map:get(<<"payer">>, PaymentParams),
     UserInfo = get_user_info(Context),
-
     Result = try
-        PaymentTool = encode_payment_tool_token(Token),
-        {ClientInfo, PaymentSession} = unwrap_session(EncodedSession),
         Params =  #payproc_InvoicePaymentParams{
-            'payer' = #domain_Payer{
-                payment_tool = PaymentTool,
-                session_id = PaymentSession,
-                client_info = #domain_ClientInfo{
-                    fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
-                    ip_address = maps:get(<<"ip_address">>, ClientInfo)
-                },
-                contact_info = #domain_ContactInfo{
-                    phone_number = genlib_map:get(<<"phoneNumber">>, ContactInfo),
-                    email = genlib_map:get(<<"email">>, ContactInfo)
-                }
-            },
+            'payer' = encode_payer(Payer),
             'flow' = encode_flow(Flow)
         },
         service_call(
@@ -169,8 +153,8 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
             )}}
     end;
 
-process_request('CreatePaymentToolToken', Req, Context, ReqCtx) ->
-    Params = maps:get('PaymentToolTokenParams', Req),
+process_request('CreatePaymentResource', Req, Context, ReqCtx) ->
+    Params = maps:get('PaymentResourceParams', Req),
     ClientInfo = maps:get(<<"clientInfo">>, Params),
     PaymentTool = maps:get(<<"paymentTool">>, Params),
     case PaymentTool of
@@ -1588,6 +1572,35 @@ encode_cash(Amount, Currency) ->
         currency = encode_currency(Currency)
     }.
 
+encode_payer(#{
+    <<"payerType">> := <<"CustomerPayer">>,
+    <<"customerID">> := ID
+}) ->
+    {customer, #domain_CustomerPayer{customer_id = ID}};
+
+encode_payer(#{
+    <<"payerType">> := <<"PaymentResourcePayer">>,
+    <<"paymentToolToken">> := Token,
+    <<"paymentSession">> := EncodedSession,
+    <<"contactInfo">> := ContactInfo
+}) ->
+    PaymentTool = encode_payment_tool_token(Token),
+    {ClientInfo, PaymentSession} = unwrap_session(EncodedSession),
+    {payment_resource, #domain_PaymentResourcePayer{
+        resource = #domain_DisposablePaymentResource{
+            payment_tool = PaymentTool,
+            payment_session_id = PaymentSession,
+            client_info = #domain_ClientInfo{
+                fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
+                ip_address = maps:get(<<"ip">>, ClientInfo)
+            }
+        },
+        contact_info = #domain_ContactInfo{
+            phone_number = genlib_map:get(<<"phoneNumber">>, ContactInfo),
+            email = genlib_map:get(<<"email">>, ContactInfo)
+        }
+    }}.
+
 encode_payment_tool_token(Token) ->
     try capi_utils:base64url_to_map(Token) of
         #{<<"type">> := <<"bank_card">>} = Encoded ->
@@ -2037,8 +2050,8 @@ decode_payment_change(
     _InvoiceID,
     PaymentID,
     {invoice_payment_session_change, #payproc_InvoicePaymentSessionChange{
-        payload = {invoice_payment_session_interaction_requested,
-            #payproc_InvoicePaymentSessionInteractionRequested{
+        payload = {session_interaction_requested,
+            #payproc_SessionInteractionRequested{
                 interaction = Interaction
             }
         }
@@ -2119,15 +2132,7 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
     id = PaymentID,
     created_at = CreatedAt,
     status = Status,
-    payer = #domain_Payer{
-        payment_tool = PaymentTool,
-        session_id = PaymentSession,
-        contact_info = ContactInfo,
-        client_info = #domain_ClientInfo{
-            ip_address = IP,
-            fingerprint = Fingerprint
-        }
-    },
+    payer = Payer,
     cost = #domain_Cash{
         amount = Amount,
         currency = Currency
@@ -2142,13 +2147,38 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
         <<"flow">> => decode_flow(Flow),
         <<"amount">> => Amount,
         <<"currency">> => decode_currency(Currency),
-        <<"contactInfo">> => decode_contact_info(ContactInfo),
-        <<"paymentSession">> => PaymentSession,
-        <<"paymentToolToken">> => decode_payment_tool_token(PaymentTool),
-        <<"paymentToolDetails">> => decode_payment_tool_details(PaymentTool),
-        <<"ip">> => IP,
-        <<"fingerprint">> => Fingerprint
+        <<"payer">> => decode_payer(Payer)
     }, decode_payment_status(Status))).
+
+decode_payer({customer, #domain_CustomerPayer{
+    customer_id = ID
+}}) ->
+    #{
+        <<"payerType">> => <<"CustomerPayer">>,
+        <<"customerID">> => ID
+    };
+decode_payer({payment_resource, #domain_PaymentResourcePayer{
+    resource = #domain_DisposablePaymentResource{
+        payment_tool = PaymentTool,
+        payment_session_id = PaymentSession,
+        client_info = #domain_ClientInfo{
+            fingerprint = Fingerprint,
+            ip_address = IP
+        }
+    },
+    contact_info = ContactInfo
+}}) ->
+    #{
+        <<"payerType">> => <<"PaymentResourcePayer">>,
+        <<"paymentToolToken">> => decode_payment_tool_token(PaymentTool),
+        <<"paymentSession">> => PaymentSession,
+        <<"paymentToolDetails">> => decode_payment_tool_details(PaymentTool),
+        <<"clientInfo">> => #{
+            <<"ip">> => IP,
+            <<"fingerprint">> => Fingerprint
+        },
+        <<"contactInfo">> => decode_contact_info(ContactInfo)
+    }.
 
 decode_payment_tool_token({bank_card, BankCard}) ->
     decode_bank_card(BankCard);
@@ -2209,6 +2239,89 @@ decode_operation_failure({external_failure, #domain_ExternalFailure{
 }}) ->
     logic_error(Code, Description).
 
+decode_stat_payment(#merchstat_StatPayment{
+    id = PaymentID,
+    invoice_id = InvoiceID,
+    shop_id = ShopID,
+    created_at = CreatedAt,
+    status = Status,
+    amount = Amount,
+    flow = Flow,
+    fee = Fee,
+    currency_symbolic_code = Currency,
+    payer = Payer,
+    context = RawContext,
+    location_info = Location
+}) ->
+    genlib_map:compact(maps:merge(#{
+        <<"id">> =>  PaymentID,
+        <<"invoiceID">> => InvoiceID,
+        <<"shopID">> => ShopID,
+        <<"createdAt">> => CreatedAt,
+        <<"amount">> => Amount,
+        <<"flow">> => decode_stat_payment_flow(Flow),
+        <<"fee">> => Fee,
+        <<"currency">> => Currency,
+        <<"payer">> => decode_stat_payer(Payer),
+        <<"geoLocationInfo">> => decode_geo_location_info(Location),
+        <<"metadata">> =>  decode_context(RawContext)
+    }, decode_stat_payment_status(Status))).
+
+decode_stat_payer({customer, #merchstat_CustomerPayer{
+    customer_id = ID
+}}) ->
+    #{
+        <<"payerType">> => <<"CustomerPayer">>,
+        <<"customerID">> => ID
+    };
+decode_stat_payer({payment_resource, #merchstat_PaymentResourcePayer{
+    payment_tool = PaymentTool,
+    session_id = PaymentSession,
+    fingerprint = Fingerprint,
+    ip_address = IP,
+    phone_number = PhoneNumber,
+    email = Email
+}}) ->
+    #{
+        <<"payerType">> => <<"PaymentResourcePayer">>,
+        <<"paymentToolToken">> => decode_stat_payment_tool_token(PaymentTool),
+        <<"paymentSession">> => PaymentSession,
+        <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool),
+        <<"clientInfo">> => #{
+            <<"ip">> => IP,
+            <<"fingerprint">> => Fingerprint
+        },
+        <<"contactInfo">> => genlib_map:compact(#{
+            <<"phoneNumber">> => PhoneNumber,
+            <<"email">> => Email
+        })
+    }.
+
+decode_stat_payment_tool_token(PaymentTool) ->
+    decode_payment_tool_token(merchstat_to_domain(PaymentTool)).
+
+decode_stat_payment_tool_details(PaymentTool) ->
+    decode_payment_tool_details(merchstat_to_domain(PaymentTool)).
+
+decode_stat_payment_status(PaymentStatus) ->
+    decode_payment_status(merchstat_to_domain(PaymentStatus)).
+
+decode_stat_payment_flow(Flow) ->
+    decode_flow(merchstat_to_domain(Flow)).
+
+decode_flow({instant, _}) ->
+    #{<<"type">> => <<"PaymentFlowInstant">>};
+
+decode_flow({hold, #domain_InvoicePaymentFlowHold{
+    'on_hold_expiration' = OnHoldExpiration,
+    'held_until' = HeldUntil
+}}) ->
+    #{
+        <<"type">> => <<"PaymentFlowHold">>,
+        <<"onHoldExpiration">> => atom_to_binary(OnHoldExpiration, utf8),
+        <<"heldUntil">> => HeldUntil
+    }.
+
 merchstat_to_domain({bank_card, #merchstat_BankCard{
     'token' = Token,
     'payment_system' = PaymentSystem,
@@ -2240,6 +2353,7 @@ merchstat_to_domain({bank_account, #merchstat_PayoutAccount{account = #merchstat
         bank_post_account = BankPostAccount,
         bank_bik = BankBik
     }};
+
 merchstat_to_domain({Status, #merchstat_InvoicePaymentPending{}}) ->
     {Status, #domain_InvoicePaymentPending{}};
 merchstat_to_domain({Status, #merchstat_InvoicePaymentProcessed{}}) ->
@@ -2508,6 +2622,12 @@ decode_bank_account_details(TypeName, BankAccount) ->
         #{<<"detailsType">> => TypeName},
         decode_bank_account(BankAccount)
     ).
+
+decode_payout_tool_info({bank_account, BankAccount}) ->
+    #{
+        <<"type">> => <<"PayoutToolBankAccount">>,
+        <<"bankAccount">> => decode_bank_account(BankAccount)
+    }.
 
 decode_bank_account(#domain_BankAccount{
     account = Account,
@@ -3726,12 +3846,14 @@ process_card_data(ClientInfo0, PaymentTool, Context, ReqCtx) ->
         }} ->
             Token = decode_bank_card(BankCard),
             PreparedIP = get_prepared_ip(Context),
-            ClientInfo = ClientInfo0#{<<"ip_address">> => PreparedIP},
+            ClientInfo = ClientInfo0#{<<"ip">> => PreparedIP},
 
             Session = wrap_session(ClientInfo, PaymentSession),
             Resp = #{
-                <<"token">> => Token,
-                <<"session">> => Session
+                <<"paymentToolToken">> => Token,
+                <<"paymentSession">> => Session,
+                <<"paymentToolDetails">> => decode_payment_tool_details({bank_card, BankCard}),
+                <<"clientInfo">> => ClientInfo
             },
             {ok, {201, [], Resp}};
         {exception, Exception} ->
@@ -3771,11 +3893,13 @@ process_payment_terminal_data(ClientInfo0, TerminalData, Context) ->
     },
     Token = decode_payment_terminal(PaymentTerminal),
     PreparedIP = get_prepared_ip(Context),
-    ClientInfo = ClientInfo0#{<<"ip_address">> => PreparedIP},
+    ClientInfo = ClientInfo0#{<<"ip">> => PreparedIP},
     Session = wrap_session(ClientInfo, <<"">>),
     Resp = #{
-        <<"token">> => Token,
-        <<"session">> => Session
+        <<"paymentToolToken">> => Token,
+        <<"paymentSession">> => Session,
+        <<"paymentToolDetails">> => decode_payment_tool_details({payment_terminal, PaymentTerminal}),
+        <<"clientInfo">> => ClientInfo
     },
     {ok, {201, [], Resp}}.
 

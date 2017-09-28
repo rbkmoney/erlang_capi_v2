@@ -29,9 +29,9 @@
     create_invoice_access_token_ok_test/1,
     create_payment_ok_test/1,
     create_payment_ok_w_access_token_test/1,
-    create_payment_tool_token_ok_test/1,
+    create_payment_resource_ok_test/1,
     create_payment_terminal_tool_token/1,
-    create_payment_tool_token_w_access_token_ok_test/1,
+    create_payment_resource_w_access_token_ok_test/1,
     get_invoice_by_id_ok_test/1,
     get_invoice_by_id_w_access_token_ok_test/1,
     get_random_invoice_w_access_token_failed_test/1,
@@ -218,7 +218,7 @@ groups() ->
         ]},
         {card_payment, [sequence], [
             create_invoice_ok_test,
-            create_payment_tool_token_ok_test,
+            create_payment_resource_ok_test,
             create_payment_ok_test,
             get_payments_ok_test,
             get_payment_by_id_ok_test,
@@ -238,11 +238,11 @@ groups() ->
         ]},
         {refund, [sequence], [
             create_invoice_ok_test,
-            create_payment_tool_token_ok_test,
+            create_payment_resource_ok_test,
             create_payment_ok_test,
             create_refund_fail,
             create_invoice_ok_test,
-            create_payment_tool_token_ok_test,
+            create_payment_resource_ok_test,
             create_payment_ok_test,
             create_refund,
             get_refund_by_id,
@@ -259,7 +259,7 @@ groups() ->
             get_invoice_by_id_w_access_token_ok_test,
             get_random_invoice_w_access_token_failed_test,
             rescind_invoice_w_access_token_failed_test,
-            create_payment_tool_token_w_access_token_ok_test,
+            create_payment_resource_w_access_token_ok_test,
             create_payment_ok_w_access_token_test
         ]},
         {statistics, [sequence], [
@@ -315,13 +315,13 @@ groups() ->
         ]},
         {cancel_payment, [sequence], [
             create_invoice_ok_test,
-            create_payment_tool_token_ok_test,
+            create_payment_resource_ok_test,
             create_payment_hold_ok_test,
             cancel_payment_ok_test
         ]},
         {capture_payment, [sequence], [
             create_invoice_ok_test,
-            create_payment_tool_token_ok_test,
+            create_payment_resource_ok_test,
             create_payment_hold_ok_test,
             capture_payment_ok_test
         ]},
@@ -607,9 +607,9 @@ rescind_invoice_w_access_token_failed_test(Config) ->
     {error, _} = capi_client_invoices:rescind_invoice(Context, InvoiceID, <<"pwnd">>),
     {save_config, Info}.
 
--spec create_payment_tool_token_w_access_token_ok_test(config()) -> _.
+-spec create_payment_resource_w_access_token_ok_test(config()) -> _.
 
-create_payment_tool_token_w_access_token_ok_test(Config) ->
+create_payment_resource_w_access_token_ok_test(Config) ->
     {rescind_invoice_w_access_token_failed_test,
         #{invoice_context := Context} = Info
     } = ?config(saved_config, Config),
@@ -622,7 +622,7 @@ create_payment_tool_token_w_access_token_ok_test(Config) ->
 -spec create_payment_ok_w_access_token_test(config()) -> _.
 
 create_payment_ok_w_access_token_test(Config) ->
-    {create_payment_tool_token_w_access_token_ok_test, Info = #{
+    {create_payment_resource_w_access_token_ok_test, Info = #{
         session         := PaymentSession,
         token           := PaymentToolToken,
         invoice_id      := InvoiceID,
@@ -848,7 +848,7 @@ create_invoice_with_template_removed_template_test(Config) ->
 
 create_payment_ok_test(Config) ->
     Info = case ?config(saved_config, Config) of
-        {create_payment_tool_token_ok_test, Inf} ->
+        {create_payment_resource_ok_test, Inf} ->
             Inf;
         {create_payment_terminal_tool_token, Inf} ->
             Inf;
@@ -872,7 +872,7 @@ create_payment_ok_test(Config) ->
 -spec create_payment_hold_ok_test(config()) -> _.
 
 create_payment_hold_ok_test(Config) ->
-    {create_payment_tool_token_ok_test, #{
+    {create_payment_resource_ok_test, #{
         session := PaymentSession,
         payment_tool_token := PaymentToolToken,
         invoice_id := InvoiceID
@@ -941,9 +941,9 @@ capture_payment_ok_test(Config) ->
         Context
     ).
 
--spec create_payment_tool_token_ok_test(config()) -> _.
+-spec create_payment_resource_ok_test(config()) -> _.
 
-create_payment_tool_token_ok_test(Config) ->
+create_payment_resource_ok_test(Config) ->
     {create_invoice_ok_test, #{
         invoice_context := Context
     } = Info} = ?config(saved_config, Config),
@@ -1857,7 +1857,7 @@ default_tokenize_card(Context, _Config) ->
             <<"fingerprint">> => <<"test fingerprint">>
         }
     },
-    capi_client_tokens:create_payment_tool_token(Context, Req).
+    capi_client_tokens:create_payment_resource(Context, Req).
 
 default_tokenize_payment_terminal(Context, _Config) ->
     Req = #{
@@ -1869,7 +1869,7 @@ default_tokenize_payment_terminal(Context, _Config) ->
             <<"fingerprint">> => <<"test fingerprint">>
         }
     },
-    capi_client_tokens:create_payment_tool_token(Context, Req).
+    capi_client_tokens:create_payment_resource(Context, Req).
 
 default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context) ->
     default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, instant).
@@ -1882,11 +1882,14 @@ default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, Flo
             #{<<"type">> => <<"PaymentFlowHold">>, <<"onHoldExpiration">> => <<"cancel">>}
     end,
     Req = #{
-        <<"paymentSession">> => PaymentSession,
-        <<"paymentToolToken">> => PaymentToolToken,
         <<"flow">> => Flow,
-        <<"contactInfo">> => #{
-            <<"email">> => <<"bla@bla.ru">>
+        <<"payer">> => #{
+            <<"payerType">> => <<"PaymentResourcePayer">>,
+            <<"paymentSession">> => PaymentSession,
+            <<"paymentToolToken">> => PaymentToolToken,
+            <<"contactInfo">> => #{
+                <<"email">> => <<"bla@bla.ru">>
+            }
         }
     },
     {ok, Body} = capi_client_payments:create_payment(Context, Req, InvoiceID),
