@@ -1355,6 +1355,201 @@ process_request('DeleteWebhookByID', Req, Context, ReqCtx) ->
             {ok, {404, [], general_error(<<"Webhook not found">>)}}
     end;
 
+process_request('CreateCustomer', Req, Context, ReqCtx) ->
+    PartyID = get_party_id(Context),
+    Params = encode_customer_params(PartyID, maps:get('customerParams', Req)),
+    Result = prepare_party(
+       Context,
+       ReqCtx,
+       fun () ->
+           service_call(
+               customer_management,
+               'Create',
+               [Params],
+               ReqCtx
+           )
+       end
+    ),
+    case Result of
+        {ok, Customer} ->
+            {ok, {201, [], make_customer_and_token(Customer, PartyID, Context)}};
+        {exception, Exception} ->
+            case Exception of
+                #'InvalidRequest'{errors = Errors} ->
+                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                #payproc_InvalidUser{} ->
+                    {ok, {400, [], logic_error(invalidPartyID, <<"Party not found">>)}};
+                #payproc_ShopNotFound{} ->
+                    {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}};
+                #payproc_InvalidPartyStatus{} ->
+                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                #payproc_InvalidShopStatus{} ->
+                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
+            end
+    end;
+
+process_request('GetCustomerById', Req, Context, ReqCtx) ->
+    CustomerID = maps:get('customerID', Req),
+    Result = get_customer_by_id(ReqCtx, CustomerID),
+    case Result of
+        {ok, Customer} ->
+            {ok, {201, [], decode_customer(Customer)}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}};
+                #payproc_CustomerNotFound{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}}
+            end
+    end;
+
+process_request('DeleteCustomer', Req, Context, ReqCtx) ->
+    CustomerID = maps:get(customerID, Req),
+    Result = service_call(
+        customer_management,
+        'Delete',
+        [CustomerID],
+        ReqCtx
+    ),
+    case Result of
+        {ok, _} ->
+            {ok, {204, [], undefined}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}};
+                #payproc_CustomerNotFound{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}};
+                #payproc_InvalidPartyStatus{} ->
+                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                #payproc_InvalidShopStatus{} ->
+                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
+            end
+    end;
+
+process_request('CreateCustomerAccessToken', Req, Context, ReqCtx) ->
+    PartyID = get_party_id(Context),
+    CustomerID = maps:get(customerID, Req),
+    Result = get_customer_by_id(ReqCtx, CustomerID),
+    case Result of
+        {ok, #payproc_Customer{}} ->
+            Token = make_customer_access_token(CustomerID, PartyID, Context),
+            {ok, {201, [], Token}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}};
+                #payproc_CustomerNotFound{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}}
+            end
+    end;
+
+process_request('CreateBinding', Req, Context, ReqCtx) ->
+    CustomerID = maps:get(customerID, Req),
+    BindingParams = maps:get(bindingParams, Req),
+    Result = try
+        Params =  encode_customer_binding_params(BindingParams),
+        service_call(
+            customer_management,
+            'StartBinding',
+            [CustomerID, Params],
+            ReqCtx
+        )
+    catch
+        throw:Error when Error =:= invalid_token orelse Error =:= invalid_payment_session ->
+            {error, Error}
+    end,
+
+    case Result of
+        {ok, CustomerBinding} ->
+            {ok, {201, [], decode_customer_binding(CustomerBinding)}};
+        {exception, Exception} ->
+            case Exception of
+                #'InvalidRequest'{errors = Errors} ->
+                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                #payproc_InvalidPartyStatus{} ->
+                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                #payproc_InvalidShopStatus{} ->
+                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                #payproc_InvalidPaymentTool{} ->
+                    {ok, {400, [], logic_error(invalidPaymentResource, <<"Invalid payment resource">>)}};
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}};
+                #payproc_CustomerNotFound{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}}
+            end;
+        {error, invalid_token} ->
+            {ok, {400, [], logic_error(
+                invalidPaymentToolToken,
+                <<"Specified payment tool token is invalid">>
+            )}};
+        {error, invalid_payment_session} ->
+            {ok, {400, [], logic_error(
+                invalidPaymentSession,
+                <<"Specified payment session is invalid">>
+            )}}
+    end;
+
+process_request('GetBindings', Req, Context, ReqCtx) ->
+    CustomerID = maps:get(customerID, Req),
+    Result = get_customer_by_id(ReqCtx, CustomerID),
+    case Result of
+        {ok, #payproc_Customer{bindings = Bindings}} ->
+            {ok, {201, [], [decode_customer_binding(B) || B <- Bindings]}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}};
+                #payproc_CustomerNotFound{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}}
+            end
+    end;
+
+process_request('GetBinding', Req, Context, ReqCtx) ->
+    CustomerID = maps:get(customerID, Req),
+    BindingID = maps:get(customerBindingID, Req),
+    Result = get_customer_by_id(ReqCtx, CustomerID),
+    case Result of
+        {ok, #payproc_Customer{bindings = Bindings}} ->
+            case lists:keyfind(BindingID, #payproc_CustomerBinding.id, Bindings) of
+                #payproc_CustomerBinding{} = B ->
+                    {ok, {200, [], decode_customer_binding(B)}};
+                false ->
+                    {ok, {404, [], general_error(<<"Customer binding not found">>)}}
+            end;
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}};
+                #payproc_CustomerNotFound{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}}
+            end
+    end;
+
+process_request('GetCustomerEvents', Req, Context, ReqCtx) ->
+    Result  = collect_events(
+        get_user_info(Context),
+        maps:get(invoiceID, Req),
+        maps:get(limit, Req),
+        genlib_map:get(eventID, Req),
+        ReqCtx
+    ),
+    case Result of
+        {ok, Events} when is_list(Events) ->
+            {ok, {200, [], Events}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                #payproc_InvoiceNotFound{} ->
+                    {ok, {404, [],  general_error(<<"Invoice not found">>)}};
+                #payproc_EventNotFound{} ->
+                    {ok, {404, [], general_error(<<"Event not found">>)}};
+                #'InvalidRequest'{errors = Errors} ->
+                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
+            end
+    end;
+
 process_request(_OperationID, _Req, _Context, _ReqCtx) ->
     {error, reply_5xx(501)}.
 
@@ -1590,15 +1785,9 @@ encode_payer(#{
         resource = #domain_DisposablePaymentResource{
             payment_tool = PaymentTool,
             payment_session_id = PaymentSession,
-            client_info = #domain_ClientInfo{
-                fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
-                ip_address = maps:get(<<"ip">>, ClientInfo)
-            }
+            client_info = encode_client_info(ClientInfo)
         },
-        contact_info = #domain_ContactInfo{
-            phone_number = genlib_map:get(<<"phoneNumber">>, ContactInfo),
-            email = genlib_map:get(<<"email">>, ContactInfo)
-        }
+        contact_info = encode_contact_info(ContactInfo)
     }}.
 
 encode_payment_tool_token(Token) ->
@@ -1633,6 +1822,12 @@ decode_payment_terminal(#domain_PaymentTerminal{
         <<"type">> => <<"payment_terminal">>,
         <<"terminal_type">> => Type
     }).
+
+encode_client_info(ClientInfo) ->
+    #domain_ClientInfo{
+        fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
+        ip_address = maps:get(<<"ip">>, ClientInfo)
+    }
 
 encode_invoice_tpl_create_params(PartyID, Params) ->
     #payproc_InvoiceTemplateCreateParams{
@@ -1927,6 +2122,16 @@ make_invoice_tpl_and_token(InvoiceTpl, PartyID, Context) ->
         )
     }.
 
+make_customer_and_token(Customer, PartyID, Context) ->
+    #{
+        <<"customer">> => decode_customer(Customer),
+        <<"customerAccessToken">> => make_customer_access_token(
+            Customer#payproc_Customer.id,
+            PartyID,
+            Context
+        )
+    }.
+
 make_invoice_access_token(InvoiceID, PartyID, Context) ->
     Fun = fun capi_auth:issue_invoice_access_token/3,
     make_access_token(Fun, InvoiceID, PartyID, Context).
@@ -1934,6 +2139,10 @@ make_invoice_access_token(InvoiceID, PartyID, Context) ->
 make_invoice_tpl_access_token(InvoiceTplID, PartyID, Context) ->
     Fun = fun capi_auth:issue_invoice_template_access_token/3,
     make_access_token(Fun, InvoiceTplID, PartyID, Context).
+
+make_customer_access_token(CustomerID, PartyID, Context) ->
+    Fun = fun capi_auth:issue_customer_access_token/3,
+    make_access_token(Fun, CustomerID, PartyID, Context).
 
 make_access_token(Fun, ID, PartyID, Context) ->
     AdditionalClaims = maps:with(
@@ -1960,6 +2169,41 @@ encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
     {payment_terminal, #domain_PaymentTerminal{
         terminal_type = binary_to_existing_atom(Type, utf8)
     }}.
+
+encode_customer_params(PartyID, Params) ->
+    #payproc_CustomerParams{
+        party_id = PartyID,
+        shop_id = genlib_map:get(<<"shopId">>, Params),
+        contact_info = encode_contact_info(genlib_map:get(<<"contactInfo">>, Params)),
+        % FIXME
+        metadata = encode_customer_metadata(genlib_map:get(<<"metadata">>, Params))
+    }.
+
+encode_contact_info(ContactInfo) ->
+    #domain_ContactInfo{
+        phone_number = genlib_map:get(<<"phoneNumber">>, ContactInfo),
+        email = genlib_map:get(<<"email">>, ContactInfo)
+    }.
+
+encode_customer_metadata(_) ->
+    % FIXME
+    error(not_implemented).
+
+encode_customer_binding_params(#{
+    <<"paymentResource">> := #{
+        <<"paymentToolToken">> := Token,
+        <<"paymentSession">> := EncodedSession
+    }
+}) ->
+    PaymentTool = encode_payment_tool_token(Token),
+    {ClientInfo, PaymentSession} = unwrap_session(EncodedSession),
+    #payproc_CustomerBindingParams{
+        payment_resource = #domain_DisposablePaymentResource{
+            payment_tool = PaymentTool,
+            payment_session_id = PaymentSession,
+            client_info = encode_client_info(ClientInfo)
+        }
+    }.
 
 wrap_session(ClientInfo, PaymentSession) ->
     capi_utils:map_to_base64url(#{
@@ -2158,27 +2402,16 @@ decode_payer({customer, #domain_CustomerPayer{
         <<"customerID">> => ID
     };
 decode_payer({payment_resource, #domain_PaymentResourcePayer{
-    resource = #domain_DisposablePaymentResource{
-        payment_tool = PaymentTool,
-        payment_session_id = PaymentSession,
-        client_info = #domain_ClientInfo{
-            fingerprint = Fingerprint,
-            ip_address = IP
-        }
-    },
+    resource = DisposablePaymentResource,
     contact_info = ContactInfo
 }}) ->
-    #{
-        <<"payerType">> => <<"PaymentResourcePayer">>,
-        <<"paymentToolToken">> => decode_payment_tool_token(PaymentTool),
-        <<"paymentSession">> => PaymentSession,
-        <<"paymentToolDetails">> => decode_payment_tool_details(PaymentTool),
-        <<"clientInfo">> => #{
-            <<"ip">> => IP,
-            <<"fingerprint">> => Fingerprint
+    maps:merge(
+        #{
+            <<"payerType">> => <<"PaymentResourcePayer">>,
+            <<"contactInfo">> => decode_contact_info(ContactInfo)
         },
-        <<"contactInfo">> => decode_contact_info(ContactInfo)
-    }.
+        decode_disposable_payment_resource(DisposablePaymentResource)
+    ).
 
 decode_payment_tool_token({bank_card, BankCard}) ->
     decode_bank_card(BankCard);
@@ -3334,6 +3567,73 @@ decode_report_file(#reports_FileMeta{
         <<"signatures">> => #{<<"md5">> => MD5, <<"sha256">> => SHA256}
     }.
 
+decode_customer(#payproc_Customer{
+    id = ID,
+    shop_id = ShopID,
+    status = Status,
+    contact_info = ContactInfo,
+    metadata = Metadata
+}) ->
+    #{
+        <<"id">> => ID,
+        <<"shopID">> => ShopID,
+        <<"status">> => decode_customer_status(Status),
+        <<"contactInfo">> => decode_contact_info(ContactInfo),
+        <<"metadata">> => decode_customer_metadata(Metadata)
+    }.
+
+decode_customer_status({Status, _}) ->
+    #{
+        <<"status">> => atom_to_binary(Status, utf8)
+    }.
+
+decode_customer_metadata(_) ->
+    % FIXME
+    error(not_implemented).
+
+decode_customer_binding(#payproc_CustomerBinding{
+    id = ID,
+    payment_resource = DisposablePaymentResource,
+    status = Status
+}) ->
+    genlib_map:compact(maps:merge(
+        #{
+            <<"id">> => ID,
+            <<"paymentResource">> => decode_disposable_payment_resource(DisposablePaymentResource)
+        },
+        decode_customer_binding_status(Status)
+    )).
+
+decode_disposable_payment_resource(#domain_DisposablePaymentResource{
+    payment_tool = PaymentTool,
+    payment_session_id = PaymentSession,
+    client_info = #domain_ClientInfo{
+        fingerprint = Fingerprint,
+        ip_address = IP
+    }
+}) ->
+    #{
+        <<"paymentToolToken">> => decode_payment_tool_token(PaymentTool),
+        <<"paymentSession">> => PaymentSession,
+        <<"paymentToolDetails">> => decode_payment_tool_details(PaymentTool),
+        <<"clientInfo">> => #{
+            <<"ip">> => IP,
+            <<"fingerprint">> => Fingerprint
+        }
+    }.
+
+decode_customer_binding_status({Status, StatusInfo}) ->
+    Error = case StatusInfo of
+        #payproc_CustomerBindingFailed{failure = OperationFailure} ->
+            decode_operation_failure(OperationFailure);
+        _ ->
+            undefined
+    end,
+    #{
+        <<"status">> => genlib:to_binary(Status),
+        <<"error">> => Error
+    }.
+
 -define(invpaid()      , {paid, #webhooker_InvoicePaid{}}).
 -define(invcancelled() , {cancelled, #webhooker_InvoiceCancelled{}}).
 -define(invfulfilled() , {fulfilled, #webhooker_InvoiceFulfilled{}}).
@@ -3653,6 +3953,14 @@ get_invoice_by_id(ReqCtx, UserInfo, InvoiceID) ->
         invoicing,
         'Get',
         [UserInfo, InvoiceID],
+        ReqCtx
+    ).
+
+get_customer_by_id(ReqCtx, CustomerID) ->
+    service_call(
+        customer_management,
+        'Get',
+        [CustomerID],
         ReqCtx
     ).
 

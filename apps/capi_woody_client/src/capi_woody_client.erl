@@ -45,5 +45,7 @@ get_service_modname(geo_ip_service) ->
     {dmsl_geo_ip_thrift, 'GeoIpService'};
 get_service_modname(webhook_manager) ->
     {dmsl_webhooker_thrift, 'WebhookManager'};
+get_service_modname(customer_management) ->
+    {dmsl_payment_processing_thrift, 'CustomerManagement'};
 get_service_modname(party_management) ->
     {dmsl_payment_processing_thrift, 'PartyManagement'}.
