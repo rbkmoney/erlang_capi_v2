@@ -1078,10 +1078,13 @@ get_payment_by_id_ok_test(Config) ->
 create_refund_fail(Config) ->
     {create_payment_ok_test, #{
         invoice_id := InvoiceID,
-        invoice_context := Context,
+        invoice_context := InvoiceContext,
         payment_id := PaymentID
     } = Info} = ?config(saved_config, Config),
+    Context = ?config(context, Config),
     Reason = <<"CUZ I SAY SO!!!">>,
+    % Unauthorized
+    {error, _} = capi_client_payments:create_refund(InvoiceContext, InvoiceID, PaymentID, Reason),
     % invalid invoice id
     {error, _} = capi_client_payments:create_refund(Context, <<"NOT_INVOICE_ID">>, PaymentID, Reason),
     % invalid payment id
@@ -1104,9 +1107,9 @@ create_refund_fail(Config) ->
 create_refund(Config) ->
     {create_payment_ok_test, #{
         invoice_id := InvoiceID,
-        invoice_context := Context,
         payment_id := PaymentID
     } = Info} = ?config(saved_config, Config),
+    Context = ?config(context, Config),
     wait_event_w_change(
         InvoiceID,
         #{
@@ -1124,10 +1127,10 @@ create_refund(Config) ->
 get_refund_by_id(Config) ->
     {create_refund, #{
         invoice_id := InvoiceID,
-        invoice_context := Context,
         payment_id := PaymentID,
         refund_id := RefundID
     } = Info} = ?config(saved_config, Config),
+    Context = ?config(context, Config),
     {error, _} = capi_client_payments:get_refund_by_id(Context, <<"NOT_INVOICE_ID">>, PaymentID, RefundID),
     {error, _} = capi_client_payments:get_refund_by_id(Context, InvoiceID, <<"NOT_PAYMENT_ID">>, RefundID),
     {error, _} = capi_client_payments:get_refund_by_id(Context, InvoiceID, PaymentID, <<"NOT_REFUND_ID">>),
@@ -1139,10 +1142,10 @@ get_refund_by_id(Config) ->
 get_refunds(Config) ->
     {get_refund_by_id, #{
         invoice_id := InvoiceID,
-        invoice_context := Context,
         payment_id := PaymentID,
         refund_id := RefundID
     } = Info} = ?config(saved_config, Config),
+    Context = ?config(context, Config),
     {error, _} = capi_client_payments:get_refunds(Context, <<"NOT_INVOICE_ID">>, PaymentID),
     {error, _} = capi_client_payments:get_refunds(Context, InvoiceID, <<"NOT_PAYMENT_ID">>),
     {ok, [#{<<"id">> := RefundID} = Refund]} = capi_client_payments:get_refunds(Context, InvoiceID, PaymentID),
