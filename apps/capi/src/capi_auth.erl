@@ -6,6 +6,8 @@
 -export([issue_invoice_access_token/3]).
 -export([issue_invoice_template_access_token/2]).
 -export([issue_invoice_template_access_token/3]).
+-export([issue_customer_access_token/2]).
+-export([issue_customer_access_token/3]).
 
 -export([get_subject_id/1]).
 -export([get_claims/1]).
@@ -133,6 +135,23 @@ issue_invoice_template_access_token(PartyID, InvoiceTplID, Claims) ->
     ACL = [
         {[party, {invoice_templates, InvoiceTplID}] , read},
         {[party, {invoice_templates, InvoiceTplID}, invoice_template_invoices] , write}
+    ],
+    issue_access_token(PartyID, Claims, ACL, unlimited).
+
+-spec issue_customer_access_token(PartyID :: binary(), CustomerID :: binary()) ->
+    {ok, capi_authorizer_jwt:token()} | {error, _}.
+
+issue_customer_access_token(PartyID, CustomerID) ->
+    issue_customer_access_token(PartyID, CustomerID, #{}).
+
+-spec issue_customer_access_token(PartyID :: binary(), CustomerID :: binary(), claims()) ->
+    {ok, capi_authorizer_jwt:token()} | {error, _}.
+
+issue_customer_access_token(PartyID, CustomerID, Claims) ->
+    ACL = [
+        {[{customers, CustomerID}], read},
+        {[{customers, CustomerID}, bindings], read},
+        {[{customers, CustomerID}, bindings], write}
     ],
     issue_access_token(PartyID, Claims, ACL, unlimited).
 
@@ -275,6 +294,22 @@ get_operation_access('CreateInvoiceWithTemplate' , #{'invoiceTemplateID' := ID})
     [{[party, {invoice_templates, ID}, invoice_template_invoices], write}];
 get_operation_access('GetInvoicePaymentMethodsByTemplateID', #{'invoiceTemplateID' := ID}) ->
     [{[party, {invoice_templates, ID}], read}];
+get_operation_access('CreateCustomer'            , _) ->
+    [{[customers], write}];
+get_operation_access('GetCustomerById'           , #{'customerID' := ID}) ->
+    [{[{customers, ID}], read}];
+get_operation_access('DeleteCustomer'            , #{'customerID' := ID}) ->
+    [{[{customers, ID}], write}];
+get_operation_access('CreateCustomerAccessToken' , #{'customerID' := ID}) ->
+    [{[{customers, ID}], write}];
+get_operation_access('CreateBinding'             , #{'customerID' := ID}) ->
+    [{[{customers, ID}, bindings], write}];
+get_operation_access('GetBindings'               , #{'customerID' := ID}) ->
+    [{[{customers, ID}, bindings], read}];
+get_operation_access('GetBinding'                , #{'customerID' := ID1, 'customerBindingID' := ID2}) ->
+    [{[{customers, ID1}, {bindings, ID2}], read}];
+get_operation_access('GetCustomerEvents'         , #{'customerID' := ID}) ->
+    [{[{customers, ID}], read}];
 get_operation_access('GetCategories'             , _) ->
     [];
 get_operation_access('GetCategoryByRef'          , _) ->
@@ -287,6 +322,7 @@ get_operation_access('GetLocationsNames'         , _) ->
 get_resource_hierarchy() ->
     #{
         party               => #{invoice_templates => #{invoice_template_invoices => #{}}},
+        customers           => #{bindings => #{}},
         invoices            => #{payments => #{}},
         payment_tool_tokens => #{}
     }.

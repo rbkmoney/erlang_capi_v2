@@ -107,7 +107,7 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     Result = try
         Params =  #payproc_InvoicePaymentParams{
-            'payer' = encode_payer(Payer),
+            'payer' = encode_payer_params(Payer),
             'flow' = encode_flow(Flow)
         },
         service_call(
@@ -270,12 +270,21 @@ process_request('RescindInvoice', Req, Context, ReqCtx) ->
     end;
 
 process_request('GetInvoiceEvents', Req, Context, ReqCtx) ->
+    InvoiceID = maps:get(invoiceID, Req),
+    UserInfo = get_user_info(Context),
+    GetterFun = fun(Range) ->
+        service_call(
+            invoicing,
+            'GetEvents',
+            [UserInfo, InvoiceID, Range],
+            ReqCtx
+        )
+    end,
     Result  = collect_events(
-        get_user_info(Context),
-        maps:get(invoiceID, Req),
         maps:get(limit, Req),
         genlib_map:get(eventID, Req),
-        ReqCtx
+        GetterFun,
+        fun decode_invoice_event/1
     ),
     case Result of
         {ok, Events} when is_list(Events) ->
@@ -1388,7 +1397,7 @@ process_request('CreateCustomer', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('GetCustomerById', Req, Context, ReqCtx) ->
+process_request('GetCustomerById', Req, _Context, ReqCtx) ->
     CustomerID = maps:get('customerID', Req),
     Result = get_customer_by_id(ReqCtx, CustomerID),
     case Result of
@@ -1403,7 +1412,7 @@ process_request('GetCustomerById', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('DeleteCustomer', Req, Context, ReqCtx) ->
+process_request('DeleteCustomer', Req, _Context, ReqCtx) ->
     CustomerID = maps:get(customerID, Req),
     Result = service_call(
         customer_management,
@@ -1444,7 +1453,7 @@ process_request('CreateCustomerAccessToken', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('CreateBinding', Req, Context, ReqCtx) ->
+process_request('CreateBinding', Req, _Context, ReqCtx) ->
     CustomerID = maps:get(customerID, Req),
     BindingParams = maps:get(bindingParams, Req),
     Result = try
@@ -1490,7 +1499,7 @@ process_request('CreateBinding', Req, Context, ReqCtx) ->
             )}}
     end;
 
-process_request('GetBindings', Req, Context, ReqCtx) ->
+process_request('GetBindings', Req, _Context, ReqCtx) ->
     CustomerID = maps:get(customerID, Req),
     Result = get_customer_by_id(ReqCtx, CustomerID),
     case Result of
@@ -1505,7 +1514,7 @@ process_request('GetBindings', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('GetBinding', Req, Context, ReqCtx) ->
+process_request('GetBinding', Req, _Context, ReqCtx) ->
     CustomerID = maps:get(customerID, Req),
     BindingID = maps:get(customerBindingID, Req),
     Result = get_customer_by_id(ReqCtx, CustomerID),
@@ -1526,13 +1535,21 @@ process_request('GetBinding', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('GetCustomerEvents', Req, Context, ReqCtx) ->
+process_request('GetCustomerEvents', Req, _Context, ReqCtx) ->
+    CustomerID = maps:get(customerID, Req),
+    GetterFun = fun(Range) ->
+        service_call(
+            customer_management,
+            'GetEvents',
+            [CustomerID, Range],
+            ReqCtx
+        )
+    end,
     Result  = collect_events(
-        get_user_info(Context),
-        maps:get(invoiceID, Req),
         maps:get(limit, Req),
         genlib_map:get(eventID, Req),
-        ReqCtx
+        GetterFun,
+        fun decode_customer_event/1
     ),
     case Result of
         {ok, Events} when is_list(Events) ->
@@ -1767,13 +1784,13 @@ encode_cash(Amount, Currency) ->
         currency = encode_currency(Currency)
     }.
 
-encode_payer(#{
+encode_payer_params(#{
     <<"payerType">> := <<"CustomerPayer">>,
     <<"customerID">> := ID
 }) ->
-    {customer, #domain_CustomerPayer{customer_id = ID}};
+    {customer, #payproc_CustomerPayerParams{customer_id = ID}};
 
-encode_payer(#{
+encode_payer_params(#{
     <<"payerType">> := <<"PaymentResourcePayer">>,
     <<"paymentToolToken">> := Token,
     <<"paymentSession">> := EncodedSession,
@@ -1781,7 +1798,7 @@ encode_payer(#{
 }) ->
     PaymentTool = encode_payment_tool_token(Token),
     {ClientInfo, PaymentSession} = unwrap_session(EncodedSession),
-    {payment_resource, #domain_PaymentResourcePayer{
+    {payment_resource, #payproc_PaymentResourcePayerParams{
         resource = #domain_DisposablePaymentResource{
             payment_tool = PaymentTool,
             payment_session_id = PaymentSession,
@@ -1827,7 +1844,7 @@ encode_client_info(ClientInfo) ->
     #domain_ClientInfo{
         fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
         ip_address = maps:get(<<"ip">>, ClientInfo)
-    }
+    }.
 
 encode_invoice_tpl_create_params(PartyID, Params) ->
     #payproc_InvoiceTemplateCreateParams{
@@ -2185,9 +2202,8 @@ encode_contact_info(ContactInfo) ->
         email = genlib_map:get(<<"email">>, ContactInfo)
     }.
 
-encode_customer_metadata(_) ->
-    % FIXME
-    error(not_implemented).
+encode_customer_metadata(Meta) ->
+    capi_json_marshalling:marshal(Meta).
 
 encode_customer_binding_params(#{
     <<"paymentResource">> := #{
@@ -2222,17 +2238,23 @@ unwrap_session(Encoded) ->
     end,
     {ClientInfo, PaymentSession}.
 
-decode_event(#payproc_Event{
+decode_invoice_event(#payproc_Event{
     id = EventID,
     created_at = CreatedAt,
     payload =  {invoice_changes, InvoiceChanges},
     source =  {invoice_id, InvoiceID} %%@TODO deal with Party source
 }) ->
-    #{
-        <<"id">> => EventID,
-        <<"createdAt">> => CreatedAt,
-        <<"changes">> => decode_invoice_changes(InvoiceID, InvoiceChanges)
-    }.
+    Changes = decode_invoice_changes(InvoiceID, InvoiceChanges),
+    case Changes of
+        [_Something | _] ->
+            {true, #{
+                <<"id">> => EventID,
+                <<"createdAt">> => CreatedAt,
+                <<"changes">> => Changes
+            }};
+        [] ->
+            false
+    end.
 
 decode_invoice_changes(InvoiceID, InvoiceChanges) when is_list(InvoiceChanges) ->
     lists:foldl(
@@ -3567,6 +3589,64 @@ decode_report_file(#reports_FileMeta{
         <<"signatures">> => #{<<"md5">> => MD5, <<"sha256">> => SHA256}
     }.
 
+decode_customer_event(#payproc_Event{
+    id = EventID,
+    created_at = CreatedAt,
+    source =  {customer_id, _},
+    payload =  {customer_changes, CustomerChanges}
+}) ->
+    Changes = decode_customer_changes(CustomerChanges),
+    case Changes of
+        [_Something | _] ->
+            {true, #{
+                <<"id">> => EventID,
+                <<"createdAt">> => CreatedAt,
+                <<"changes">> => Changes
+            }};
+        [] ->
+            false
+    end.
+
+decode_customer_changes(CustomerChanges) when is_list(CustomerChanges) ->
+    lists:filtermap(
+        fun decode_customer_change/1,
+        CustomerChanges
+    ).
+
+decode_customer_change({customer_binding_changed, #payproc_CustomerBindingChanged{
+    id = BindingID,
+    payload = Payload
+}}) ->
+    decode_customer_binding_change(BindingID, Payload);
+decode_customer_change(_) ->
+    false.
+
+decode_customer_binding_change(_, {started, #payproc_CustomerBindingStarted{
+    binding = CustomerBinding
+}}) ->
+    {true, #{
+        <<"changeType">> => <<"CustomerBindingStarted">>,
+        <<"customerBinding">> => decode_customer_binding(CustomerBinding)
+    }};
+decode_customer_binding_change(BindingID, {status_changed, #payproc_CustomerBindingStatusChanged{
+    status = Status
+}}) ->
+    {true, genlib_map:compact(maps:merge(
+        #{
+            <<"changeType">> => <<"CustomerBindingStatusChanged">>,
+            <<"customerBindingID">> => BindingID
+        },
+        decode_customer_binding_status(Status)
+    ))};
+decode_customer_binding_change(BindingID, {interaction_requested, #payproc_CustomerBindingInteractionRequested{
+    interaction = UserInteraction
+}}) ->
+    {true, #{
+        <<"changeType">> => <<"CustomerBindingInteractionRequested">>,
+        <<"customerBindingID">> => BindingID,
+        <<"userInteraction">> => decode_user_interaction(UserInteraction)
+    }}.
+
 decode_customer(#payproc_Customer{
     id = ID,
     shop_id = ShopID,
@@ -3587,9 +3667,8 @@ decode_customer_status({Status, _}) ->
         <<"status">> => atom_to_binary(Status, utf8)
     }.
 
-decode_customer_metadata(_) ->
-    % FIXME
-    error(not_implemented).
+decode_customer_metadata(Meta) ->
+    capi_json_marshalling:unmarshal(Meta).
 
 decode_customer_binding(#payproc_CustomerBinding{
     id = ID,
@@ -4035,45 +4114,32 @@ get_category_by_id(CategoryID, ReqCtx) ->
     CategoryRef = {category, #domain_CategoryRef{id = CategoryID}},
     capi_domain:get(CategoryRef, ReqCtx).
 
-collect_events(UserInfo, InvoiceID, Limit, After, ReqCtx) ->
-    Context = #{
-        invoice_id => InvoiceID,
-        user_info => UserInfo,
-        request_context => ReqCtx
-    },
-    collect_events([], Limit, After, Context).
+collect_events(Limit, After, GetterFun, DecodeFun) ->
+    collect_events([], Limit, After, GetterFun, DecodeFun).
 
-collect_events(Collected, 0, _After, _Context) ->
+collect_events(Collected, 0, _, _, _) ->
     {ok, Collected};
 
-collect_events(Collected0, Left, After, Context) when Left > 0 ->
-    Result = get_events(Left, After, Context),
+collect_events(Collected0, Left, After, GetterFun, DecodeFun) when Left > 0 ->
+    Result = get_events(Left, After, GetterFun),
     case Result of
         {ok, []} ->
             {ok, Collected0};
         {ok, Events} ->
-            Filtered = decode_and_filter_events(Events),
+            Filtered = decode_and_filter_events(DecodeFun, Events),
             collect_events(
                 Collected0 ++ Filtered,
                 Left - length(Filtered),
                 get_last_event_id(Events),
-                Context
+                GetterFun,
+                DecodeFun
             );
         Error ->
             Error
     end.
 
-decode_and_filter_events(Events) ->
-    lists:filtermap(fun decode_if_public_event/1, Events).
-
-decode_if_public_event(Event) ->
-    DecodedEvent = decode_event(Event),
-    case DecodedEvent of
-        #{<<"changes">> := [_Something | _]} ->
-            {true, DecodedEvent};
-        _ ->
-            false
-    end.
+decode_and_filter_events(DecodeFun, Events) ->
+    lists:filtermap(DecodeFun, Events).
 
 get_last_event_id(Events) ->
     #payproc_Event{
@@ -4081,21 +4147,12 @@ get_last_event_id(Events) ->
     } = lists:last(Events),
     ID.
 
-get_events(Limit, After, Context) ->
+get_events(Limit, After, GetterFun) ->
     EventRange = #'payproc_EventRange'{
         limit = Limit,
         'after' = After
     },
-    service_call(
-        invoicing,
-        'GetEvents',
-        [
-            maps:get(user_info, Context),
-            maps:get(invoice_id, Context),
-            EventRange
-        ],
-        maps:get(request_context, Context)
-    ).
+    GetterFun(EventRange).
 
 construct_payment_methods(ServiceName, Args, Context) ->
     case compute_terms(ServiceName, Args, Context) of
