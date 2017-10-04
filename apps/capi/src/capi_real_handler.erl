@@ -311,8 +311,11 @@ process_request('GetInvoiceEvents', Req, Context, ReqCtx) ->
 
 process_request('GetInvoicePaymentMethods', Req, Context, ReqCtx) ->
     Result = construct_payment_methods(
-        get_user_info(Context),
-        maps:get(invoiceID, Req),
+        invoicing,
+        [
+            get_user_info(Context),
+            maps:get(invoiceID, Req)
+        ],
         ReqCtx
     ),
     case Result of
@@ -853,6 +856,33 @@ process_request('CreateInvoiceWithTemplate', Req, Context, ReqCtx) ->
             {ok, {400, [], logic_error(invalidRequest, <<"Amount is required for the currency">>)}};
         throw:{bad_invoice_params, amount_no_currency} ->
             {ok, {400, [], logic_error(invalidRequest, <<"Currency is required for the amount">>)}}
+    end;
+
+process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context, ReqCtx) ->
+    {ok, Timestamp} = rfc3339:format(erlang:system_time()),
+    Result = construct_payment_methods(
+        invoice_templating,
+        [
+            get_user_info(Context),
+            maps:get('invoiceTemplateID', Req),
+            Timestamp
+        ],
+        ReqCtx
+    ),
+    case Result of
+        {ok, PaymentMethods} when is_list(PaymentMethods) ->
+            {ok, {200, [], PaymentMethods}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
+                #payproc_InvoiceTemplateNotFound{} ->
+                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
+                #payproc_InvoiceTemplateRemoved{} ->
+                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
+                #payproc_PartyNotExistsYet{} ->
+                    {ok, {400, [], logic_error(partyNotExistsYet, <<"Party not exists yet">>)}}
+            end
     end;
 
 process_request('ActivateShop', Req, Context, ReqCtx) ->
@@ -3589,8 +3619,8 @@ get_events(Limit, After, Context) ->
         maps:get(request_context, Context)
     ).
 
-construct_payment_methods(UserInfo, InvoiceID, Context) ->
-    case compute_terms(UserInfo, InvoiceID, Context) of
+construct_payment_methods(ServiceName, Args, Context) ->
+    case compute_terms(ServiceName, Args, Context) of
         {ok, #domain_TermSet{payments = undefined}} ->
             {ok, []};
         {ok, #domain_TermSet{
@@ -3620,14 +3650,11 @@ decode_payment_method(bank_card, PaymentSystems) ->
 decode_payment_method(payment_terminal, Providers) ->
     #{<<"method">> => <<"PaymentTerminal">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}.
 
-compute_terms(UserInfo, InvoiceID, Context) ->
+compute_terms(ServiceName, Args, Context) ->
     service_call(
-        invoicing,
+        ServiceName,
         'ComputeTerms',
-        [
-            UserInfo,
-            InvoiceID
-        ],
+        Args,
         Context
     ).
 
