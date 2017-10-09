@@ -271,6 +271,8 @@ get_operation_access('DeleteInvoiceTemplate'     , #{'invoiceTemplateID' := ID})
     [{[party, {invoice_templates, ID}], write}];
 get_operation_access('CreateInvoiceWithTemplate' , #{'invoiceTemplateID' := ID}) ->
     [{[party, {invoice_templates, ID}, invoice_template_invoices], write}];
+get_operation_access('GetInvoicePaymentMethodsByTemplateID', #{'invoiceTemplateID' := ID}) ->
+    [{[party, {invoice_templates, ID}], read}];
 get_operation_access('GetCategories'             , _) ->
     [];
 get_operation_access('GetCategoryByRef'          , _) ->
