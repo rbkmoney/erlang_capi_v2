@@ -2802,7 +2802,7 @@ decode_stat_payout(#merchstat_StatPayout{
         <<"amount">> => Amount,
         <<"fee">> => Fee,
         <<"currency">> => Currency,
-        <<"payoutToolDetails ">> => decode_stat_payout_tool_details(PayoutType)
+        <<"payoutToolDetails">> => decode_stat_payout_tool_details(PayoutType)
     }, decode_stat_payout_status(PayoutStatus))).
 
 decode_stat_payout_status({cancelled, #merchstat_PayoutCancelled{details = Details}}) ->
