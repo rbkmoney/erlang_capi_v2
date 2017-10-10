@@ -191,18 +191,20 @@ get_operation_access('GetPaymentByID'            , #{'invoiceID' := ID1, payment
     [{[{invoices, ID1}, {payments, ID2}], read}];
 get_operation_access('CancelPayment'             , #{'invoiceID' := ID1, paymentID := ID2}) ->
     [{[{invoices, ID1}, {payments, ID2}], write}];
-get_operation_access('CapturePayment'             , #{'invoiceID' := ID1, paymentID := ID2}) ->
+get_operation_access('CapturePayment'            , #{'invoiceID' := ID1, paymentID := ID2}) ->
     [{[{invoices, ID1}, {payments, ID2}], write}];
-get_operation_access('CreateRefund'               , #{'invoiceID' := ID1, paymentID := ID2}) ->
-    [{[{invoices, ID1}, {payments, ID2}], write}];
-get_operation_access('GetRefunds'                 , #{'invoiceID' := ID1, paymentID := ID2}) ->
-    [{[{invoices, ID1}, {payments, ID2}], read}];
-get_operation_access('GetRefundByID'              , #{'invoiceID' := ID1, paymentID := ID2}) ->
-    [{[{invoices, ID1}, {payments, ID2}], read}];
+get_operation_access('CreateRefund'              , _) ->
+    [{[invoices, payments], write}];
+get_operation_access('GetRefunds'                , _) ->
+    [{[invoices, payments], read}];
+get_operation_access('GetRefundByID'             , _) ->
+    [{[invoices, payments], read}];
 get_operation_access('SearchInvoices'            , _) ->
     [{[invoices], read}];
 get_operation_access('SearchPayments'            , _) ->
     [{[invoices, payments], read}];
+get_operation_access('SearchPayouts'             , _) ->
+    [{[party], read}];
 get_operation_access('CreatePaymentToolToken'    , _) ->
     [{[payment_tool_tokens] , write}];
 get_operation_access('GetPaymentConversionStats' , _) ->
