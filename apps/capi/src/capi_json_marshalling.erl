@@ -1,6 +1,6 @@
 -module(capi_json_marshalling).
 
--include_lib("cp_proto/include/cp_json_thrift.hrl").
+-include_lib("dmsl/include/dmsl_json_thrift.hrl").
 
 %% API
 -export([marshal/1]).
@@ -11,7 +11,7 @@
 -type value() :: term().
 
 -spec marshal(value()) ->
-    cp_json_thrift:'Value'() | no_return().
+    dmsl_json_thrift:'Value'() | no_return().
 
 marshal(undefined) ->
     {nl, #json_Null{}};
@@ -36,7 +36,7 @@ marshal(Object) when is_map(Object) ->
 marshal(Array) when is_list(Array) ->
     {arr, lists:map(fun marshal/1, Array)}.
 
--spec unmarshal(cp_json_thrift:'Value'()) ->
+-spec unmarshal(dmsl_json_thrift:'Value'()) ->
     value().
 
 unmarshal({nl, #json_Null{}}) ->

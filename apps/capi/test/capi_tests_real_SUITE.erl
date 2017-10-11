@@ -98,6 +98,15 @@
     get_payout_tools_ok_test/1,
     get_payout_tool_by_id/1,
     %%%%
+    create_customer/1,
+    get_customer/1,
+    create_customer_access_token/1,
+    create_binding/1,
+    get_bindings/1,
+    get_binding/1,
+    get_customer_events/1,
+    delete_customer/1,
+    %%%%
     create_webhook_error_test/1,
     create_webhook_receive_events_test/1,
     get_locations_names_ok_test/1,
@@ -176,6 +185,7 @@ all() ->
         {group, geo_ip},
         {group, cancel_payment},
         {group, capture_payment},
+        % {group, customers},
         {group, reports}
     ].
 
@@ -324,6 +334,16 @@ groups() ->
             create_payment_resource_ok_test,
             create_payment_hold_ok_test,
             capture_payment_ok_test
+        ]},
+        {customers, [sequence], [
+            create_customer,
+            get_customer,
+            create_customer_access_token,
+            create_binding,
+            get_bindings,
+            get_binding,
+            get_customer_events,
+            delete_customer
         ]},
         {reports, [sequence], [
             get_reports,
@@ -1676,6 +1696,83 @@ download_report_file(Config) ->
     } = wait_report_w_id(Context, ShopID, FromTime, ToTime, ReportID),
     {ok, {redirect, _URL}} = capi_client_reports:download_file(Context, ShopID, ReportID, FileID).
 
+-spec create_customer(config()) -> _.
+create_customer(Config) ->
+    Context = ?config(context, Config),
+    ShopID = create_and_activate_shop(Config),
+    {ok, #{<<"id">> := CustomerID}} = default_create_customer(ShopID, Context),
+    {save_config, #{shop_id => ShopID, customer_id => CustomerID}}.
+
+-spec get_customer(config()) -> _.
+get_customer(Config) ->
+    Context = ?config(context, Config),
+    {create_customer,
+        #{customer_id := CustomerID} = C
+    } = ?config(saved_config, Config),
+    {ok, _} = capi_client_customers:get_customer(Context, CustomerID),
+    {saved_config, C}.
+
+-spec create_customer_access_token(config()) -> _.
+create_customer_access_token(Config) ->
+    Context = ?config(context, Config),
+    {get_customer,
+        #{customer_id := CustomerID} = C
+    } = ?config(saved_config, Config),
+    {ok, _} = capi_client_customers:create_customer_access_token(Context, CustomerID),
+    {saved_config, C}.
+
+-spec create_binding(config()) -> _.
+create_binding(Config) ->
+    Context = ?config(context, Config),
+    {create_customer_access_token,
+        #{customer_id := CustomerID} = C
+    } = ?config(saved_config, Config),
+    PaymentSession = <<"PaymentSession">>,
+    PaymentToolToken = <<"PaymentToolToken">>,
+    Query = #{
+        <<"paymentResource">> => #{
+            <<"paymentSession">> => PaymentSession,
+            <<"paymentToolToken">> => PaymentToolToken
+        }
+    },
+    {ok, _} = capi_client_customers:create_binding(Context, CustomerID, Query),
+    {saved_config, C}.
+
+-spec get_bindings(config()) -> _.
+get_bindings(Config) ->
+    Context = ?config(context, Config),
+    {create_binding,
+        #{customer_id := CustomerID} = C
+    } = ?config(saved_config, Config),
+    {ok, _} = capi_client_customers:get_bindings(Context, CustomerID),
+    {saved_config, C}.
+
+-spec get_binding(config()) -> _.
+get_binding(Config) ->
+    Context = ?config(context, Config),
+    {get_bindings,
+        #{customer_id := CustomerID} = C
+    } = ?config(saved_config, Config),
+    {ok, _} = capi_client_customers:get_binding(Context, CustomerID),
+    {saved_config, C}.
+
+-spec get_customer_events(config()) -> _.
+get_customer_events(Config) ->
+    Context = ?config(context, Config),
+    {get_binding,
+        #{customer_id := CustomerID} = C
+    } = ?config(saved_config, Config),
+    {ok, _} = capi_client_customers:get_customer_events(Context, CustomerID),
+    {saved_config, C}.
+
+-spec delete_customer(config()) -> _.
+delete_customer(Config) ->
+    Context = ?config(context, Config),
+    {get_customer_events,
+        #{customer_id := CustomerID}
+    } = ?config(saved_config, Config),
+    {ok, _} = capi_client_customers:delete_customer(Context, CustomerID).
+
 %% helpers
 call(Method, Path, Body, Headers) ->
     Url = get_url(Path),
@@ -2016,6 +2113,14 @@ get_locations_names(GeoIDs, Lang, Config) ->
     },
     {ok, R} = capi_client_geo:get_location_names(Context, Query),
     R.
+
+default_create_customer(ShopID, Context) ->
+    Params = #{
+        <<"shopId">> => ShopID,
+        <<"contactInfo">> => #{<<"email">> => <<"bla@bla.ru">>},
+        <<"metadata">> => #{<<"text">> => [<<"SOMESHIT">>, 42]}
+    },
+    capi_client_customers:create_customer(Context, Params).
 
 %% @FIXME thats dirty
 default_approve_claim(#{<<"id">> := ClaimID, <<"revision">> := ClaimRevision}) ->

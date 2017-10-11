@@ -1315,15 +1315,9 @@ process_request('RevokeClaimByID', Req, Context, ReqCtx) ->
 
 process_request('CreateWebhook', Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
-    Params = maps:get('WebhookParams', Req),
-    EventFilter = encode_event_filter(maps:get(<<"scope">>, Params)),
-    case validate_event_filter(EventFilter, Context, ReqCtx) of
+    WebhookParams = encode_webhook_params(PartyID, maps:get('Webhook', Req)),
+    case validate_webhook_params(WebhookParams, Context, ReqCtx) of
         {ok, _} ->
-            WebhookParams = #webhooker_WebhookParams{
-                party_id     = PartyID,
-                url          = maps:get(<<"url">>, Params),
-                event_filter = EventFilter
-            },
             {ok, Webhook} = service_call(webhook_manager, 'Create', [WebhookParams], ReqCtx),
             Resp = decode_webhook(Webhook),
             {ok, {201, [], Resp}};
@@ -1585,9 +1579,16 @@ generate_report_presigned_url(FileID, ReqCtx) ->
             end
     end.
 
-validate_event_filter({invoice, #webhooker_InvoiceEventFilter{
-    shop_id = ShopID
-}}, Context, ReqCtx) when ShopID /= undefined ->
+validate_webhook_params(#webhooker_WebhookParams{event_filter = EventFilter}, Context, ReqCtx) ->
+    validate_event_filter(EventFilter, Context, ReqCtx).
+
+validate_event_filter({invoice, #webhooker_InvoiceEventFilter{shop_id = ShopID}}, Context, ReqCtx) ->
+    validate_event_filter_shop(ShopID, Context, ReqCtx);
+
+validate_event_filter({customer, #webhooker_CustomerEventFilter{shop_id = ShopID}}, Context, ReqCtx) ->
+    validate_event_filter_shop(ShopID, Context, ReqCtx).
+
+validate_event_filter_shop(ShopID, Context, ReqCtx) when ShopID /= undefined ->
     PartyID = get_party_id(Context),
     UserInfo = get_user_info(Context),
     prepare_party(
@@ -1625,6 +1626,39 @@ encode_webhook_id(WebhookID) ->
 
 decode_webhook_id(WebhookID) when is_integer(WebhookID) ->
     {ok, integer_to_binary(WebhookID)}.
+
+encode_webhook_params(PartyID, #{
+    <<"scope">> := Scope,
+    <<"url">>   := URL
+}) ->
+    #webhooker_WebhookParams{
+        party_id     = PartyID,
+        url          = URL,
+        event_filter = encode_webhook_scope(Scope)
+    }.
+
+encode_webhook_scope(#{
+    <<"topic">>      := <<"InvoicesTopic">>,
+    <<"shopID">>     := ShopID,
+    <<"eventTypes">> := EventTypes
+}) ->
+    {invoice, #webhooker_InvoiceEventFilter{
+        shop_id = ShopID,
+        types   = ordsets:from_list([
+            encode_invoice_event_type(V) || V <- EventTypes
+        ])
+    }};
+encode_webhook_scope(#{
+    <<"topic">>      := <<"CustomersTopic">>,
+    <<"shopID">>     := ShopID,
+    <<"eventTypes">> := EventTypes
+}) ->
+    {customer, #webhooker_CustomerEventFilter{
+        shop_id = ShopID,
+        types   = ordsets:from_list([
+            encode_customer_event_type(V) || V <- EventTypes
+        ])
+    }}.
 
 %%%
 
@@ -2878,12 +2912,6 @@ decode_bank_account_details(TypeName, BankAccount) ->
         decode_bank_account(BankAccount)
     ).
 
-decode_payout_tool_info({bank_account, BankAccount}) ->
-    #{
-        <<"type">> => <<"PayoutToolBankAccount">>,
-        <<"bankAccount">> => decode_bank_account(BankAccount)
-    }.
-
 decode_bank_account(#domain_BankAccount{
     account = Account,
     bank_name = BankName,
@@ -3092,72 +3120,6 @@ decode_refund_status({Status, StatusInfo}) ->
     #{
         <<"status">> => genlib:to_binary(Status),
         <<"error">> => Error
-    }.
-
-decode_stat_payment(#merchstat_StatPayment{
-    id = PaymentID,
-    invoice_id = InvoiceID,
-    shop_id = ShopID,
-    created_at = CreatedAt,
-    status = Status,
-    amount = Amount,
-    flow = Flow,
-    fee = Fee,
-    currency_symbolic_code = Currency,
-    payment_tool = PaymentTool,
-    ip_address = IP,
-    fingerprint = Fingerprint,
-    phone_number = PhoneNumber,
-    email = Email,
-    session_id = PaymentSession,
-    context = RawContext,
-    location_info = Location
-}) ->
-    genlib_map:compact(maps:merge(#{
-        <<"id">> =>  PaymentID,
-        <<"invoiceID">> => InvoiceID,
-        <<"shopID">> => ShopID,
-        <<"createdAt">> => CreatedAt,
-        <<"amount">> => Amount,
-        <<"flow">> => decode_stat_payment_flow(Flow),
-        <<"fee">> => Fee,
-        <<"currency">> => Currency,
-        <<"contactInfo">> => genlib_map:compact(#{
-            <<"phoneNumber">> => PhoneNumber,
-            <<"email">> => Email
-        }),
-        <<"paymentSession">> => PaymentSession,
-        <<"paymentToolToken">> => decode_stat_payment_tool_token(PaymentTool),
-        <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool),
-        <<"ip">> => IP,
-        <<"geoLocationInfo">> => decode_geo_location_info(Location),
-        <<"fingerprint">> => Fingerprint,
-        <<"metadata">> => decode_context(RawContext)
-    }, decode_stat_payment_status(Status))).
-
-decode_stat_payment_tool_token(PaymentTool) ->
-    decode_payment_tool_token(merchstat_to_domain(PaymentTool)).
-
-decode_stat_payment_tool_details(PaymentTool) ->
-    decode_payment_tool_details(merchstat_to_domain(PaymentTool)).
-
-decode_stat_payment_status(PaymentStatus) ->
-    decode_payment_status(merchstat_to_domain(PaymentStatus)).
-
-decode_stat_payment_flow(Flow) ->
-    decode_flow(merchstat_to_domain(Flow)).
-
-decode_flow({instant, _}) ->
-    #{<<"type">> => <<"PaymentFlowInstant">>};
-
-decode_flow({hold, #domain_InvoicePaymentFlowHold{
-    'on_hold_expiration' = OnHoldExpiration,
-    'held_until' = HeldUntil
-}}) ->
-    #{
-        <<"type">> => <<"PaymentFlowHold">>,
-        <<"onHoldExpiration">> => atom_to_binary(OnHoldExpiration, utf8),
-        <<"heldUntil">> => HeldUntil
     }.
 
 decode_stat_payout(#merchstat_StatPayout{
@@ -3547,18 +3509,6 @@ encode_currency(SymbolicCode) ->
         symbolic_code = SymbolicCode
     }.
 
-encode_event_filter(#{
-    <<"topic">>      := <<"InvoicesTopic">>,
-    <<"shopID">>     := ShopID,
-    <<"eventTypes">> := EventTypes
-}) ->
-    {invoice, #webhooker_InvoiceEventFilter{
-        shop_id = ShopID,
-        types   = ordsets:from_list([
-            encode_event_type(invoices, V) || V <- EventTypes
-        ])
-    }}.
-
 decode_report(#reports_Report{
     report_id = ReportID,
     time_range = #reports_ReportTimeRange{
@@ -3723,26 +3673,45 @@ decode_customer_binding_status({Status, StatusInfo}) ->
 -define(pmtrefunded()  , {refunded, #webhooker_InvoicePaymentRefunded{}}).
 -define(pmtfailed()    , {failed, #webhooker_InvoicePaymentFailed{}}).
 
-encode_event_type(invoices, <<"InvoiceCreated">>) ->
+encode_invoice_event_type(<<"InvoiceCreated">>) ->
     {created, #webhooker_InvoiceCreated{}};
-encode_event_type(invoices, <<"InvoicePaid">>) ->
+encode_invoice_event_type(<<"InvoicePaid">>) ->
     {status_changed, #webhooker_InvoiceStatusChanged{value = ?invpaid()}};
-encode_event_type(invoices, <<"InvoiceCancelled">>) ->
+encode_invoice_event_type(<<"InvoiceCancelled">>) ->
     {status_changed, #webhooker_InvoiceStatusChanged{value = ?invcancelled()}};
-encode_event_type(invoices, <<"InvoiceFulfilled">>) ->
+encode_invoice_event_type(<<"InvoiceFulfilled">>) ->
     {status_changed, #webhooker_InvoiceStatusChanged{value = ?invfulfilled()}};
-encode_event_type(invoices, <<"PaymentStarted">>) ->
+encode_invoice_event_type(<<"PaymentStarted">>) ->
     {payment, {created, #webhooker_InvoicePaymentCreated{}}};
-encode_event_type(invoices, <<"PaymentProcessed">>) ->
+encode_invoice_event_type(<<"PaymentProcessed">>) ->
     {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtprocessed()}}};
-encode_event_type(invoices, <<"PaymentCaptured">>) ->
+encode_invoice_event_type(<<"PaymentCaptured">>) ->
     {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtcaptured()}}};
-encode_event_type(invoices, <<"PaymentCancelled">>) ->
+encode_invoice_event_type(<<"PaymentCancelled">>) ->
     {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtcancelled()}}};
-encode_event_type(invoices, <<"PaymentRefunded">>) ->
+encode_invoice_event_type(<<"PaymentRefunded">>) ->
     {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtrefunded()}}};
-encode_event_type(invoices, <<"PaymentFailed">>) ->
+encode_invoice_event_type(<<"PaymentFailed">>) ->
     {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtfailed()}}}.
+
+encode_customer_event_type(<<"CustomerCreated">>) ->
+    {created, #webhooker_CustomerCreated{}};
+encode_customer_event_type(<<"CustomerDeleted">>) ->
+    {deleted, #webhooker_CustomerDeleted{}};
+encode_customer_event_type(<<"CustomerReady">>) ->
+    {ready, #webhooker_CustomerStatusReady{}};
+encode_customer_event_type(<<"CustomerBindingStarted">>) ->
+    {binding,
+        {started, #webhooker_CustomerBindingStarted{}}
+    };
+encode_customer_event_type(<<"CustomerBindingSucceeded">>) ->
+    {binding,
+        {succeeded, #webhooker_CustomerBindingSucceeded{}}
+    };
+encode_customer_event_type(<<"CustomerBindingFailed">>) ->
+    {binding,
+        {failed, #webhooker_CustomerBindingFailed{}}
+    }.
 
 decode_event_filter({invoice, #webhooker_InvoiceEventFilter{
     shop_id = ShopID,
@@ -3752,17 +3721,26 @@ decode_event_filter({invoice, #webhooker_InvoiceEventFilter{
         <<"topic">>      => <<"InvoicesTopic">>,
         <<"shopID">>     => ShopID,
         <<"eventTypes">> => lists:flatmap(
-            fun (V) -> decode_event_type(invoice, V) end, ordsets:to_list(EventTypes)
+            fun (V) -> decode_invoice_event_type(V) end, ordsets:to_list(EventTypes)
+        )
+    });
+decode_event_filter({customer, #webhooker_CustomerEventFilter{
+    shop_id = ShopID,
+    types   = EventTypes
+}}) ->
+    genlib_map:compact(#{
+        <<"topic">>      => <<"CustomersTopic">>,
+        <<"shopID">>     => ShopID,
+        <<"eventTypes">> => lists:flatmap(
+            fun (V) -> decode_customer_event_type(V) end, ordsets:to_list(EventTypes)
         )
     }).
 
-decode_event_type(
-    invoice,
+decode_invoice_event_type(
     {created, #webhooker_InvoiceCreated{}}
 ) ->
     [<<"InvoiceCreated">>];
-decode_event_type(
-    invoice,
+decode_invoice_event_type(
     {status_changed, #webhooker_InvoiceStatusChanged{value = undefined}}
 ) ->
     % TODO seems unmaintainable
@@ -3771,18 +3749,15 @@ decode_event_type(
         ?invcancelled(),
         ?invfulfilled()
     ]];
-decode_event_type(
-    invoice,
+decode_invoice_event_type(
     {status_changed, #webhooker_InvoiceStatusChanged{value = Value}}
 ) ->
     [decode_invoice_status_event_type(Value)];
-decode_event_type(
-    invoice,
+decode_invoice_event_type(
     {payment, {created, #webhooker_InvoicePaymentCreated{}}}
 ) ->
     [<<"PaymentStarted">>];
-decode_event_type(
-    invoice,
+decode_invoice_event_type(
     {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = undefined}}}
 ) ->
     % TODO seems unmaintainable
@@ -3793,8 +3768,7 @@ decode_event_type(
         ?pmtrefunded(),
         ?pmtfailed()
     ]];
-decode_event_type(
-    invoice,
+decode_invoice_event_type(
     {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = Value}}}
 ) ->
     [decode_payment_status_event_type(Value)].
@@ -3808,6 +3782,19 @@ decode_payment_status_event_type(?pmtcaptured())  -> <<"PaymentCaptured">>;
 decode_payment_status_event_type(?pmtcancelled()) -> <<"PaymentCancelled">>;
 decode_payment_status_event_type(?pmtrefunded())  -> <<"PaymentRefunded">>;
 decode_payment_status_event_type(?pmtfailed())    -> <<"PaymentFailed">>.
+
+decode_customer_event_type({created, #webhooker_CustomerCreated{}}) ->
+    <<"CustomerCreated">>;
+decode_customer_event_type({deleted, #webhooker_CustomerDeleted{}}) ->
+    <<"CustomerDeleted">>;
+decode_customer_event_type({ready, #webhooker_CustomerStatusReady{}}) ->
+    <<"CustomerReady">>;
+decode_customer_event_type({binding, {started, #webhooker_CustomerBindingStarted{}}}) ->
+    <<"CustomerBindingStarted">>;
+decode_customer_event_type({binding, {succeeded, #webhooker_CustomerBindingSucceeded{}}}) ->
+    <<"CustomerBindingSucceeded">>;
+decode_customer_event_type({binding, {failed, #webhooker_CustomerBindingFailed{}}}) ->
+    <<"CustomerBindingFailed">>.
 
 decode_webhook(#webhooker_Webhook{
     id           = ID,
