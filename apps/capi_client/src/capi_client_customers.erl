@@ -7,7 +7,8 @@
 -export([create_binding/3]).
 -export([get_bindings/2]).
 -export([get_binding/3]).
--export([get_customer_events/2]).
+-export([get_customer_events/3]).
+-export([get_customer_events/4]).
 
 -type context() :: capi_client_lib:context().
 
@@ -88,12 +89,27 @@ get_binding(Context, CustomerID, BindingID) ->
     Response = swag_client_customers_api:get_binding(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 
--spec get_customer_events(context(), binary()) -> {ok, term()} | {error, term()}.
-get_customer_events(Context, CustomerID) ->
+-spec get_customer_events(context(), binary(), integer()) -> {ok, term()} | {error, term()}.
+get_customer_events(Context, CustomerID, Limit) ->
+    Qs = #{
+        <<"limit">> => genlib:to_binary(Limit)
+    },
+    get_customer_events_with(Context, CustomerID, Qs).
+
+-spec get_customer_events(context(), binary(), integer(), integer()) -> {ok, term()} | {error, term()}.
+get_customer_events(Context, CustomerID, EventID, Limit) ->
+    Qs = #{
+        <<"eventID">> => genlib:to_binary(EventID),
+        <<"limit">> => genlib:to_binary(Limit)
+    },
+    get_customer_events_with(Context, CustomerID, Qs).
+
+get_customer_events_with(Context, CustomerID, Qs) ->
     Params = #{
         binding => #{
             <<"customerID">> => CustomerID
-        }
+        },
+        qs_val => Qs
     },
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
     Response = swag_client_customers_api:get_customer_events(Url, PreparedParams, Opts),

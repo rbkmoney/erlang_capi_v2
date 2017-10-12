@@ -1380,8 +1380,6 @@ process_request('CreateCustomer', Req, Context, ReqCtx) ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-                #payproc_InvalidUser{} ->
-                    {ok, {400, [], logic_error(invalidPartyID, <<"Party not found">>)}};
                 #payproc_ShopNotFound{} ->
                     {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}};
                 #payproc_InvalidPartyStatus{} ->
@@ -1396,11 +1394,9 @@ process_request('GetCustomerById', Req, _Context, ReqCtx) ->
     Result = get_customer_by_id(ReqCtx, CustomerID),
     case Result of
         {ok, Customer} ->
-            {ok, {201, [], decode_customer(Customer)}};
+            {ok, {200, [], decode_customer(Customer)}};
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
                     {ok, {404, [], general_error(<<"Customer not found">>)}}
             end
@@ -1419,8 +1415,6 @@ process_request('DeleteCustomer', Req, _Context, ReqCtx) ->
             {ok, {204, [], undefined}};
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
                     {ok, {404, [], general_error(<<"Customer not found">>)}};
                 #payproc_InvalidPartyStatus{} ->
@@ -1440,8 +1434,6 @@ process_request('CreateCustomerAccessToken', Req, Context, ReqCtx) ->
             {ok, {201, [], Token}};
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
                     {ok, {404, [], general_error(<<"Customer not found">>)}}
             end
@@ -1476,8 +1468,6 @@ process_request('CreateBinding', Req, _Context, ReqCtx) ->
                     {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
                 #payproc_InvalidPaymentTool{} ->
                     {ok, {400, [], logic_error(invalidPaymentResource, <<"Invalid payment resource">>)}};
-                #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
                     {ok, {404, [], general_error(<<"Customer not found">>)}}
             end;
@@ -1498,11 +1488,9 @@ process_request('GetBindings', Req, _Context, ReqCtx) ->
     Result = get_customer_by_id(ReqCtx, CustomerID),
     case Result of
         {ok, #payproc_Customer{bindings = Bindings}} ->
-            {ok, {201, [], [decode_customer_binding(B) || B <- Bindings]}};
+            {ok, {200, [], [decode_customer_binding(B) || B <- Bindings]}};
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
                     {ok, {404, [], general_error(<<"Customer not found">>)}}
             end
@@ -1522,8 +1510,6 @@ process_request('GetBinding', Req, _Context, ReqCtx) ->
             end;
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
                     {ok, {404, [], general_error(<<"Customer not found">>)}}
             end
@@ -1550,10 +1536,8 @@ process_request('GetCustomerEvents', Req, _Context, ReqCtx) ->
             {ok, {200, [], Events}};
         {exception, Exception} ->
             case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
-                #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [],  general_error(<<"Invoice not found">>)}};
+                #payproc_CustomerNotFound{} ->
+                    {ok, {404, [],  general_error(<<"Customer not found">>)}};
                 #payproc_EventNotFound{} ->
                     {ok, {404, [], general_error(<<"Event not found">>)}};
                 #'InvalidRequest'{errors = Errors} ->
@@ -2226,7 +2210,6 @@ encode_customer_params(PartyID, Params) ->
         party_id = PartyID,
         shop_id = genlib_map:get(<<"shopId">>, Params),
         contact_info = encode_contact_info(genlib_map:get(<<"contactInfo">>, Params)),
-        % FIXME
         metadata = encode_customer_metadata(genlib_map:get(<<"metadata">>, Params))
     }.
 

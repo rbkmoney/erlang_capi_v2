@@ -1762,7 +1762,7 @@ get_customer_events(Config) ->
     {get_binding,
         #{customer_id := CustomerID} = C
     } = ?config(saved_config, Config),
-    {ok, _} = capi_client_customers:get_customer_events(Context, CustomerID),
+    {ok, _} = capi_client_customers:get_customer_events(Context, CustomerID, 1),
     {saved_config, C}.
 
 -spec delete_customer(config()) -> _.

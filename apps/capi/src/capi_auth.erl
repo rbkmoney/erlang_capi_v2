@@ -101,6 +101,7 @@ authorize_operation(OperationID, Req, {{_SubjectID, ACL}, _}) ->
 %% TODO
 %% Hardcode for now, should pass it here probably as an argument
 -define(DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME, 259200).
+-define(DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME, 259200).
 
 -spec issue_invoice_access_token(PartyID :: binary(), InvoiceID :: binary()) ->
     {ok, capi_authorizer_jwt:token()} | {error, _}.
@@ -117,7 +118,7 @@ issue_invoice_access_token(PartyID, InvoiceID, Claims) ->
         {[{invoices, InvoiceID}]           , read},
         {[{invoices, InvoiceID}, payments] , read},
         {[{invoices, InvoiceID}, payments] , write},
-        {[payment_tool_tokens]             , write}
+        {[payment_resources]               , write}
     ],
     issue_access_token(PartyID, Claims, ACL, {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME}).
 
@@ -151,9 +152,10 @@ issue_customer_access_token(PartyID, CustomerID, Claims) ->
     ACL = [
         {[{customers, CustomerID}], read},
         {[{customers, CustomerID}, bindings], read},
-        {[{customers, CustomerID}, bindings], write}
+        {[{customers, CustomerID}, bindings], write},
+        {[payment_resources], write}
     ],
-    issue_access_token(PartyID, Claims, ACL, unlimited).
+    issue_access_token(PartyID, Claims, ACL, {lifetime, ?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME}).
 
 -type acl() :: [{capi_acl:scope(), capi_acl:permission()}].
 
@@ -225,7 +227,7 @@ get_operation_access('SearchPayments'            , _) ->
 get_operation_access('SearchPayouts'             , _) ->
     [{[party], read}];
 get_operation_access('CreatePaymentResource'     , _) ->
-    [{[payment_tool_tokens] , write}];
+    [{[payment_resources], write}];
 get_operation_access('GetPaymentConversionStats' , _) ->
     [{[party], read}];
 get_operation_access('GetPaymentRevenueStats'    , _) ->
@@ -324,5 +326,5 @@ get_resource_hierarchy() ->
         party               => #{invoice_templates => #{invoice_template_invoices => #{}}},
         customers           => #{bindings => #{}},
         invoices            => #{payments => #{}},
-        payment_tool_tokens => #{}
+        payment_resources => #{}
     }.
