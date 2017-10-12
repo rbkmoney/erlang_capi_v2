@@ -211,6 +211,11 @@ services:
     depends_on:
       pg-db:
         condition: service_healthy
+    healthcheck:
+      test: "curl http://localhost:8022/"
+      interval: 5s
+      timeout: 1s
+      retries: 12
 
   reporter:
     image: dr.rbkmoney.com/rbkmoney/reporter:0f05912d4bb34679caad02d227dd41b35b9ecabd
