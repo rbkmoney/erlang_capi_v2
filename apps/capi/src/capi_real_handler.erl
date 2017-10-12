@@ -1397,6 +1397,8 @@ process_request('GetCustomerById', Req, _Context, ReqCtx) ->
             {ok, {200, [], decode_customer(Customer)}};
         {exception, Exception} ->
             case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
                     {ok, {404, [], general_error(<<"Customer not found">>)}}
             end
@@ -1415,6 +1417,8 @@ process_request('DeleteCustomer', Req, _Context, ReqCtx) ->
             {ok, {204, [], undefined}};
         {exception, Exception} ->
             case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
                     {ok, {404, [], general_error(<<"Customer not found">>)}};
                 #payproc_InvalidPartyStatus{} ->
@@ -1434,6 +1438,8 @@ process_request('CreateCustomerAccessToken', Req, Context, ReqCtx) ->
             {ok, {201, [], Token}};
         {exception, Exception} ->
             case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
                     {ok, {404, [], general_error(<<"Customer not found">>)}}
             end
@@ -1468,6 +1474,8 @@ process_request('CreateBinding', Req, _Context, ReqCtx) ->
                     {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
                 #payproc_InvalidPaymentTool{} ->
                     {ok, {400, [], logic_error(invalidPaymentResource, <<"Invalid payment resource">>)}};
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
                     {ok, {404, [], general_error(<<"Customer not found">>)}}
             end;
@@ -1491,6 +1499,8 @@ process_request('GetBindings', Req, _Context, ReqCtx) ->
             {ok, {200, [], [decode_customer_binding(B) || B <- Bindings]}};
         {exception, Exception} ->
             case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
                     {ok, {404, [], general_error(<<"Customer not found">>)}}
             end
@@ -1510,6 +1520,8 @@ process_request('GetBinding', Req, _Context, ReqCtx) ->
             end;
         {exception, Exception} ->
             case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
                     {ok, {404, [], general_error(<<"Customer not found">>)}}
             end
@@ -1536,8 +1548,10 @@ process_request('GetCustomerEvents', Req, _Context, ReqCtx) ->
             {ok, {200, [], Events}};
         {exception, Exception} ->
             case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, {404, [], general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
-                    {ok, {404, [],  general_error(<<"Customer not found">>)}};
+                    {ok, {404, [], general_error(<<"Customer not found">>)}};
                 #payproc_EventNotFound{} ->
                     {ok, {404, [], general_error(<<"Event not found">>)}};
                 #'InvalidRequest'{errors = Errors} ->
