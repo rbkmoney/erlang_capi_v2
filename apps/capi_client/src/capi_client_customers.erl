@@ -13,7 +13,7 @@
 
 -spec create_customer(context(), map()) -> {ok, term()} | {error, term()}.
 create_customer(Context, Request) ->
-	Params = #{
+    Params = #{
         body => Request
     },
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
@@ -22,7 +22,7 @@ create_customer(Context, Request) ->
 
 -spec get_customer_by_id(context(), binary()) -> {ok, term()} | {error, term()}.
 get_customer_by_id(Context, CustomerID) ->
-	Params = #{
+    Params = #{
         binding => #{
             <<"customerID">> => CustomerID
         }
@@ -33,7 +33,7 @@ get_customer_by_id(Context, CustomerID) ->
 
 -spec delete_customer(context(), binary()) -> {ok, term()} | {error, term()}.
 delete_customer(Context, CustomerID) ->
-	Params = #{
+    Params = #{
         binding => #{
             <<"customerID">> => CustomerID
         }
@@ -44,7 +44,7 @@ delete_customer(Context, CustomerID) ->
 
 -spec create_customer_access_token(context(), binary()) -> {ok, term()} | {error, term()}.
 create_customer_access_token(Context, CustomerID) ->
-	Params = #{
+    Params = #{
         binding => #{
             <<"customerID">> => CustomerID
         }
@@ -55,7 +55,7 @@ create_customer_access_token(Context, CustomerID) ->
 
 -spec create_binding(context(), binary(), map()) -> {ok, term()} | {error, term()}.
 create_binding(Context, CustomerID, Request) ->
-	Params = #{
+    Params = #{
         binding => #{
             <<"customerID">> => CustomerID
         },
@@ -67,7 +67,7 @@ create_binding(Context, CustomerID, Request) ->
 
 -spec get_bindings(context(), binary()) -> {ok, term()} | {error, term()}.
 get_bindings(Context, CustomerID) ->
-	Params = #{
+    Params = #{
         binding => #{
             <<"customerID">> => CustomerID
         }
@@ -78,7 +78,7 @@ get_bindings(Context, CustomerID) ->
 
 -spec get_binding(context(), binary(), binary()) -> {ok, term()} | {error, term()}.
 get_binding(Context, CustomerID, BindingID) ->
-	Params = #{
+    Params = #{
         binding => #{
             <<"customerID">> => CustomerID,
             <<"customerBindingID">> => BindingID
@@ -90,7 +90,7 @@ get_binding(Context, CustomerID, BindingID) ->
 
 -spec get_customer_events(context(), binary()) -> {ok, term()} | {error, term()}.
 get_customer_events(Context, CustomerID) ->
-	Params = #{
+    Params = #{
         binding => #{
             <<"customerID">> => CustomerID
         }
