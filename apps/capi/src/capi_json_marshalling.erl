@@ -28,7 +28,7 @@ marshal({bin, Binary}) ->
 marshal(Object) when is_map(Object) ->
     {obj, maps:fold(
         fun(K, V, Acc) when is_binary(K)->
-            maps:put({str, K}, marshal(V), Acc)
+            maps:put(K, marshal(V), Acc)
         end,
         #{},
         Object
@@ -52,7 +52,7 @@ unmarshal({str, String}) ->
 unmarshal({bin, Binary}) ->
     {bin, Binary};
 unmarshal({obj, Object}) ->
-    maps:fold(fun({str, K}, V, Acc) -> maps:put(K, unmarshal(V), Acc) end, #{}, Object);
+    maps:fold(fun(K, V, Acc) -> maps:put(K, unmarshal(V), Acc) end, #{}, Object);
 unmarshal({arr, Array}) ->
     lists:map(fun unmarshal/1, Array).
 

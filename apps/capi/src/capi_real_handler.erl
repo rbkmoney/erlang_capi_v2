@@ -1360,7 +1360,7 @@ process_request('DeleteWebhookByID', Req, Context, ReqCtx) ->
 
 process_request('CreateCustomer', Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
-    Params = encode_customer_params(PartyID, maps:get('customerParams', Req)),
+    Params = encode_customer_params(PartyID, maps:get('Customer', Req)),
     Result = prepare_party(
        Context,
        ReqCtx,
@@ -1447,7 +1447,7 @@ process_request('CreateCustomerAccessToken', Req, Context, ReqCtx) ->
 
 process_request('CreateBinding', Req, _Context, ReqCtx) ->
     CustomerID = maps:get(customerID, Req),
-    BindingParams = maps:get(bindingParams, Req),
+    BindingParams = maps:get('CustomerBindingParams', Req),
     Result = try
         Params =  encode_customer_binding_params(BindingParams),
         service_call(
@@ -2222,7 +2222,7 @@ encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
 encode_customer_params(PartyID, Params) ->
     #payproc_CustomerParams{
         party_id = PartyID,
-        shop_id = genlib_map:get(<<"shopId">>, Params),
+        shop_id = genlib_map:get(<<"shopID">>, Params),
         contact_info = encode_contact_info(genlib_map:get(<<"contactInfo">>, Params)),
         metadata = encode_customer_metadata(genlib_map:get(<<"metadata">>, Params))
     }.
@@ -3610,9 +3610,7 @@ decode_customer(#payproc_Customer{
     }.
 
 decode_customer_status({Status, _}) ->
-    #{
-        <<"status">> => atom_to_binary(Status, utf8)
-    }.
+    atom_to_binary(Status, utf8).
 
 decode_customer_metadata(Meta) ->
     capi_json_marshalling:unmarshal(Meta).

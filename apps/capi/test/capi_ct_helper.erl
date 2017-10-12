@@ -38,52 +38,22 @@ start_app(AppName) ->
 start_app(AppName, Env) ->
     genlib_app:start_application_with(AppName, Env).
 
--spec login(map()) ->
+-spec login(term()) ->
     term().
-login(Params) ->
-    #{
-        url      := Url,
-        user     := User,
-        password := Password,
-        retries  := Retries,
-        timeout  := Timeout,
-        protocol := Protocol
-    } = Params,
-
-    Headers = [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>}],
-
-    UsernamePrefix = list_to_binary("username="),
-    PasswordPrefix = list_to_binary("&password="),
-    Postfix        = list_to_binary("&client_id=common-api&grant_type=password"),
-    BinaryName     = list_to_binary(User),
-    BinaryPassword = list_to_binary(Password),
-
-    Body = <<UsernamePrefix/binary, BinaryName/binary,
-             PasswordPrefix/binary, BinaryPassword/binary,
-             Postfix/binary>>,
-
-    Url1 = Url ++ "/auth/realms/external/protocol/openid-connect/token",
-
-    Strategy = genlib_retry:linear(Retries, Timeout),
-    F = fun() -> hackney:request(post, Url1, Headers, Body, protocol_to_opt(Protocol)) end,
-
-    case retry(F, Strategy, idempotent) of
-        {ok, _Code, _RespHeaders, RespBody} ->
-            {ok, maps:get(<<"access_token">>, maps:from_list(jsx:decode(get_body(RespBody))))};
-        {error, Error} ->
-            {error, Error}
-    end.
-
-protocol_to_opt(ipv4) ->
-    [{connect_options, [inet4]}];
-protocol_to_opt(ipv6) ->
-    [{connect_options, [inet6]}].
-
--spec get_body(term()) ->
-    term().
-get_body(ClientRef) ->
-    {ok, Body} = hackney:body(ClientRef),
-    Body.
+login(User) ->
+    ACL = [
+        {[invoices, payments], read},
+        {[invoices, payments], write},
+        {[party], read},
+        {[party], write},
+        {[invoices], read},
+        {[invoices], write},
+        {[customers, bindings], read},
+        {[customers, bindings], write},
+        {[customers], read},
+        {[customers], write}
+    ],
+    capi_authorizer_jwt:issue({{User, capi_acl:from_list(ACL)}, #{<<"email">> => <<"awesome@mail.mail">>}}, unlimited).
 
 -spec retry(fun(), genlib_retry:strategy(), idempotency()) ->
     {ok, pos_integer(), _RespHeaders, _RespBody} | {error, _Reason}.
