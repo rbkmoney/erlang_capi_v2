@@ -14,8 +14,7 @@
 get_webhooks(Context) ->
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, #{}),
     Response = swag_client_webhooks_api:get_webhooks(Url, PreparedParams, Opts),
-    {ok, Webhooks} = capi_client_lib:handle_response(Response),
-    Webhooks.
+    capi_client_lib:handle_response(Response).
 
 -spec create_webhook(context(), webhook_params()) -> {ok, webhook()} | {error, term()}.
 create_webhook(Context, Params) ->
