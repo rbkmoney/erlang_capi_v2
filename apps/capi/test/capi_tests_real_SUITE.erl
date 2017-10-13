@@ -2,13 +2,13 @@
 
 -include_lib("common_test/include/ct.hrl").
 
--include_lib("cp_proto/include/cp_payment_processing_thrift.hrl").
--include_lib("cp_proto/include/cp_accounter_thrift.hrl").
--include_lib("cp_proto/include/cp_cds_thrift.hrl").
--include_lib("cp_proto/include/cp_domain_config_thrift.hrl").
--include_lib("cp_proto/include/cp_webhooker_thrift.hrl").
--include_lib("cp_proto/include/cp_merch_stat_thrift.hrl").
--include_lib("cp_proto/include/cp_reporting_thrift.hrl").
+-include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
+-include_lib("dmsl/include/dmsl_accounter_thrift.hrl").
+-include_lib("dmsl/include/dmsl_cds_thrift.hrl").
+-include_lib("dmsl/include/dmsl_domain_config_thrift.hrl").
+-include_lib("dmsl/include/dmsl_webhooker_thrift.hrl").
+-include_lib("dmsl/include/dmsl_merch_stat_thrift.hrl").
+-include_lib("dmsl/include/dmsl_reporting_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 
 -export([all/0]).
@@ -42,6 +42,7 @@
     create_refund/1,
     get_refund_by_id/1,
     get_refunds/1,
+
     cancel_payment_ok_test/1,
     capture_payment_ok_test/1,
 
@@ -689,7 +690,7 @@ search_payments_ok_test(Config) ->
         {payerEmail, <<"test@test_rbk.ru">>},
         {payerIP, <<"192.168.0.1">>},
         {payerFingerprint, <<"blablablalbalbal">>},
-        %%{cardNumberMask, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
+        %% {cardNumberMask, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
         {paymentAmount, 10000}
     ],
 
@@ -845,7 +846,7 @@ start_dummy_services(SupPid) ->
         end,
         #{},
         service_specs()),
-    capi_ct_helper:start_app(cp_proto, [{service_urls, ServiceURLs}]).
+    capi_ct_helper:start_app(capi_woody_client, [{service_urls, ServiceURLs}]).
 
 start_service_handler(Module, {Name, {ThriftModule, Service}}, SupPid) ->
     Port = get_random_port(),
@@ -871,16 +872,16 @@ get_context(Token, Retries, Timeout) ->
 
 service_specs() ->
     [
-        {invoicing, {cp_payment_processing_thrift, 'Invoicing'}},
-        {invoice_templating, {cp_payment_processing_thrift, 'InvoiceTemplating'}},
-        {accounter, {cp_accounter_thrift, 'Accounter'}},
-        {party_management, {cp_payment_processing_thrift, 'PartyManagement'}},
-        {cds_storage, {cp_cds_thrift, 'Storage'}},
-        {repository, {cp_domain_config_thrift, 'Repository'}},
-        {webhook_manager, {cp_webhooker_thrift, 'WebhookManager'}},
-        {geo_ip_service, {cp_geo_ip_thrift, 'GeoIpService'}},
-        {merchant_stat, {cp_merch_stat_thrift, 'MerchantStatistics'}},
-        {reporting, {cp_reporting_thrift, 'Reporting'}}
+        {invoicing, {dmsl_payment_processing_thrift, 'Invoicing'}},
+        {invoice_templating, {dmsl_payment_processing_thrift, 'InvoiceTemplating'}},
+        {accounter, {dmsl_accounter_thrift, 'Accounter'}},
+        {party_management, {dmsl_payment_processing_thrift, 'PartyManagement'}},
+        {cds_storage, {dmsl_cds_thrift, 'Storage'}},
+        {repository, {dmsl_domain_config_thrift, 'Repository'}},
+        {webhook_manager, {dmsl_webhooker_thrift, 'WebhookManager'}},
+        {geo_ip_service, {dmsl_geo_ip_thrift, 'GeoIpService'}},
+        {merchant_stat, {dmsl_merch_stat_thrift, 'MerchantStatistics'}},
+        {reporting, {dmsl_reporting_thrift, 'Reporting'}}
     ].
 
 get_keysource(Fn, Config) ->

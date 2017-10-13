@@ -203,10 +203,10 @@
     created_at = ?TIMESTAMP,
     currency = #domain_CurrencyRef{symbolic_code = ?RUB},
     payout_tool_info = {bank_account, #domain_BankAccount{
-        account = ?STRING,
+        account = <<"12345678901234567890">>,
         bank_name = ?STRING,
-        bank_post_account = ?STRING,
-        bank_bik = ?STRING
+        bank_post_account = <<"12345678901234567890">>,
+        bank_bik = <<"123456789">>
     }}
 }).
 
