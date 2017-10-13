@@ -29,9 +29,9 @@
     create_invoice_access_token_ok_test/1,
     create_payment_ok_test/1,
     create_payment_ok_w_access_token_test/1,
-    create_payment_tool_token_ok_test/1,
+    create_payment_resource_ok_test/1,
     create_payment_terminal_tool_token/1,
-    create_payment_tool_token_w_access_token_ok_test/1,
+    create_payment_resource_w_access_token_ok_test/1,
     get_invoice_by_id_ok_test/1,
     get_invoice_by_id_w_access_token_ok_test/1,
     get_random_invoice_w_access_token_failed_test/1,
@@ -98,6 +98,15 @@
     get_payout_tools_ok_test/1,
     get_payout_tool_by_id/1,
     %%%%
+    create_customer/1,
+    get_customer/1,
+    create_customer_access_token/1,
+    create_binding/1,
+    get_bindings/1,
+    get_binding/1,
+    get_customer_events/1,
+    delete_customer/1,
+    %%%%
     create_webhook_error_test/1,
     create_webhook_receive_events_test/1,
     get_locations_names_ok_test/1,
@@ -117,6 +126,7 @@
 -define(CAPI_URL                    , "localhost:" ++ integer_to_list(?CAPI_PORT)).
 -define(CAPI_SERVICE_TYPE           , real).
 -define(CAPI_PARTY_MANAGEMENT_URL   , "http://hellgate:8022/v1/processing/partymgmt").
+-define(CAPI_CUSTOMERS_URL          , "http://hellgate:8022/v1/processing/customer_management").
 -define(CAPI_ACCOUNTER_URL          , "http://shumway:8022/accounter").
 -define(CAPI_INVOICING_URL          , "http://hellgate:8022/v1/processing/invoicing").
 -define(CAPI_INVOICE_TEMPLATING_URL , "http://hellgate:8022/v1/processing/invoice_templating").
@@ -176,6 +186,7 @@ all() ->
         {group, geo_ip},
         {group, cancel_payment},
         {group, capture_payment},
+        % {group, customers},
         {group, reports}
     ].
 
@@ -218,7 +229,7 @@ groups() ->
         ]},
         {card_payment, [sequence], [
             create_invoice_ok_test,
-            create_payment_tool_token_ok_test,
+            create_payment_resource_ok_test,
             create_payment_ok_test,
             get_payments_ok_test,
             get_payment_by_id_ok_test,
@@ -238,11 +249,11 @@ groups() ->
         ]},
         {refund, [sequence], [
             create_invoice_ok_test,
-            create_payment_tool_token_ok_test,
+            create_payment_resource_ok_test,
             create_payment_ok_test,
             create_refund_fail,
             create_invoice_ok_test,
-            create_payment_tool_token_ok_test,
+            create_payment_resource_ok_test,
             create_payment_ok_test,
             create_refund,
             get_refund_by_id,
@@ -259,7 +270,7 @@ groups() ->
             get_invoice_by_id_w_access_token_ok_test,
             get_random_invoice_w_access_token_failed_test,
             rescind_invoice_w_access_token_failed_test,
-            create_payment_tool_token_w_access_token_ok_test,
+            create_payment_resource_w_access_token_ok_test,
             create_payment_ok_w_access_token_test
         ]},
         {statistics, [sequence], [
@@ -315,15 +326,25 @@ groups() ->
         ]},
         {cancel_payment, [sequence], [
             create_invoice_ok_test,
-            create_payment_tool_token_ok_test,
+            create_payment_resource_ok_test,
             create_payment_hold_ok_test,
             cancel_payment_ok_test
         ]},
         {capture_payment, [sequence], [
             create_invoice_ok_test,
-            create_payment_tool_token_ok_test,
+            create_payment_resource_ok_test,
             create_payment_hold_ok_test,
             capture_payment_ok_test
+        ]},
+        {customers, [sequence], [
+            create_customer,
+            get_customer,
+            create_customer_access_token,
+            create_binding,
+            get_bindings,
+            get_binding,
+            get_customer_events,
+            delete_customer
         ]},
         {reports, [sequence], [
             get_reports,
@@ -346,6 +367,7 @@ init_per_suite(Config) ->
         capi_ct_helper:start_app(capi_woody_client, [
             {service_urls, #{
                 party_management   => ?CAPI_PARTY_MANAGEMENT_URL,
+                customer_management=> ?CAPI_CUSTOMERS_URL,
                 accounter          => ?CAPI_ACCOUNTER_URL,
                 invoicing          => ?CAPI_INVOICING_URL,
                 invoice_templating => ?CAPI_INVOICE_TEMPLATING_URL,
@@ -357,21 +379,14 @@ init_per_suite(Config) ->
                 geo_ip_service     => ?CAPI_GEO_IP_URL
             }}
         ]),
+    CapiApps = start_capi(Config),
     {ok, SupPid} = supervisor:start_link(?MODULE, []),
     _ = unlink(SupPid),
-    Params = #{
-        url  => ?KEYCLOAK_URL,
-        user => ?KEYCLOAK_USER,
-        password => ?KEYCLOAK_PASSWORD,
-        retries => 10,
-        timeout => 5000,
-        protocol => ?PROTOCOL
-    },
-    {ok, Token} = capi_ct_helper:login(Params),
+    {ok, Token} = capi_ct_helper:login(?MERCHANT_ID),
     Retries = 10,
     Timeout = 60000,
     Context = get_context(Token, Retries, Timeout),
-    NewConfig = [{apps, lists:reverse(Apps)}, {context, Context}, {test_sup, SupPid} | Config],
+    NewConfig = [{capi_apps, CapiApps}, {apps, lists:reverse(Apps)}, {context, Context}, {test_sup, SupPid} | Config],
     Proxies = [
         start_handler(capi_dummy_provider, 1, #{}, NewConfig),
         start_handler(capi_dummy_inspector, 2, #{<<"risk_score">> => <<"high">>}, NewConfig)
@@ -389,38 +404,28 @@ end_per_suite(C) ->
 
 -spec init_per_group(Name :: atom(), config()) -> config().
 
-init_per_group(Group = statistics, Config) ->
-    Apps = start_capi(Group, Config),
+init_per_group(statistics, Config) ->
     ShopID = create_and_activate_shop(Config),
-    [{capi_apps, Apps}, {shop_id, ShopID} | Config];
+    [{shop_id, ShopID} | Config];
 
-init_per_group(Group, Config) ->
-    Apps = start_capi(Group, Config),
-    [{capi_apps, Apps} | Config].
+init_per_group(_Group, Config) ->
+    Config.
 
-start_capi(Group, Config) ->
+start_capi(Config) ->
     capi_ct_helper:start_app(capi, [
         {ip, ?CAPI_IP},
         {port, ?CAPI_PORT},
         {service_type, ?CAPI_SERVICE_TYPE},
         {authorizers, #{
-            jwt => get_authorizer_opts(Group, Config)
+            jwt => get_authorizer_opts(Config)
         }}
     ]).
 
-get_authorizer_opts(authorization, Config) ->
+get_authorizer_opts(Config) ->
     #{
         signee => local,
         keyset => #{
             local    => get_keysource("keys/local/private.pem", Config)
-        }
-    };
-get_authorizer_opts(_, Config) ->
-    #{
-        signee => capi,
-        keyset => #{
-            keycloak => get_keysource("keys/keycloak/public.pem", Config),
-            capi     => get_keysource("keys/local/private.pem", Config)
         }
     }.
 
@@ -430,8 +435,7 @@ get_keysource(Fn, Config) ->
 -spec end_per_group(Name :: atom(), config()) -> config().
 
 end_per_group(_, Config) ->
-    _ = [application:stop(App) || App <- ?config(capi_apps, Config)],
-    lists:keydelete(capi_apps, 1, Config).
+    Config.
 
 %% tests
 
@@ -607,9 +611,9 @@ rescind_invoice_w_access_token_failed_test(Config) ->
     {error, _} = capi_client_invoices:rescind_invoice(Context, InvoiceID, <<"pwnd">>),
     {save_config, Info}.
 
--spec create_payment_tool_token_w_access_token_ok_test(config()) -> _.
+-spec create_payment_resource_w_access_token_ok_test(config()) -> _.
 
-create_payment_tool_token_w_access_token_ok_test(Config) ->
+create_payment_resource_w_access_token_ok_test(Config) ->
     {rescind_invoice_w_access_token_failed_test,
         #{invoice_context := Context} = Info
     } = ?config(saved_config, Config),
@@ -622,7 +626,7 @@ create_payment_tool_token_w_access_token_ok_test(Config) ->
 -spec create_payment_ok_w_access_token_test(config()) -> _.
 
 create_payment_ok_w_access_token_test(Config) ->
-    {create_payment_tool_token_w_access_token_ok_test, Info = #{
+    {create_payment_resource_w_access_token_ok_test, Info = #{
         session         := PaymentSession,
         token           := PaymentToolToken,
         invoice_id      := InvoiceID,
@@ -848,7 +852,7 @@ create_invoice_with_template_removed_template_test(Config) ->
 
 create_payment_ok_test(Config) ->
     Info = case ?config(saved_config, Config) of
-        {create_payment_tool_token_ok_test, Inf} ->
+        {create_payment_resource_ok_test, Inf} ->
             Inf;
         {create_payment_terminal_tool_token, Inf} ->
             Inf;
@@ -872,7 +876,7 @@ create_payment_ok_test(Config) ->
 -spec create_payment_hold_ok_test(config()) -> _.
 
 create_payment_hold_ok_test(Config) ->
-    {create_payment_tool_token_ok_test, #{
+    {create_payment_resource_ok_test, #{
         session := PaymentSession,
         payment_tool_token := PaymentToolToken,
         invoice_id := InvoiceID
@@ -941,9 +945,9 @@ capture_payment_ok_test(Config) ->
         Context
     ).
 
--spec create_payment_tool_token_ok_test(config()) -> _.
+-spec create_payment_resource_ok_test(config()) -> _.
 
-create_payment_tool_token_ok_test(Config) ->
+create_payment_resource_ok_test(Config) ->
     {create_invoice_ok_test, #{
         invoice_context := Context
     } = Info} = ?config(saved_config, Config),
@@ -1676,6 +1680,83 @@ download_report_file(Config) ->
     } = wait_report_w_id(Context, ShopID, FromTime, ToTime, ReportID),
     {ok, {redirect, _URL}} = capi_client_reports:download_file(Context, ShopID, ReportID, FileID).
 
+-spec create_customer(config()) -> _.
+create_customer(Config) ->
+    Context = ?config(context, Config),
+    ShopID = create_and_activate_shop(Config),
+    {ok, #{<<"customer">> := #{<<"id">> := CustomerID}}} = default_create_customer(ShopID, Context),
+    {save_config, #{shop_id => ShopID, customer_id => CustomerID}}.
+
+-spec get_customer(config()) -> _.
+get_customer(Config) ->
+    Context = ?config(context, Config),
+    {create_customer,
+        #{customer_id := CustomerID} = C
+    } = ?config(saved_config, Config),
+    {ok, _} = capi_client_customers:get_customer_by_id(Context, CustomerID),
+    {save_config, C}.
+
+-spec create_customer_access_token(config()) -> _.
+create_customer_access_token(Config) ->
+    Context = ?config(context, Config),
+    {get_customer,
+        #{customer_id := CustomerID} = C
+    } = ?config(saved_config, Config),
+    {ok, _} = capi_client_customers:create_customer_access_token(Context, CustomerID),
+    {save_config, C}.
+
+-spec create_binding(config()) -> _.
+create_binding(Config) ->
+    Context = ?config(context, Config),
+    {create_customer_access_token,
+        #{customer_id := CustomerID} = C
+    } = ?config(saved_config, Config),
+    PaymentSession = <<"PaymentSession">>,
+    PaymentToolToken = <<"PaymentToolToken">>,
+    Query = #{
+        <<"paymentResource">> => #{
+            <<"paymentSession">> => PaymentSession,
+            <<"paymentToolToken">> => PaymentToolToken
+        }
+    },
+    {ok, _} = capi_client_customers:create_binding(Context, CustomerID, Query),
+    {save_config, C}.
+
+-spec get_bindings(config()) -> _.
+get_bindings(Config) ->
+    Context = ?config(context, Config),
+    {create_binding,
+        #{customer_id := CustomerID} = C
+    } = ?config(saved_config, Config),
+    {ok, _} = capi_client_customers:get_bindings(Context, CustomerID),
+    {save_config, C}.
+
+-spec get_binding(config()) -> _.
+get_binding(Config) ->
+    Context = ?config(context, Config),
+    {get_bindings,
+        #{customer_id := CustomerID} = C
+    } = ?config(saved_config, Config),
+    {ok, _} = capi_client_customers:get_binding(Context, CustomerID),
+    {save_config, C}.
+
+-spec get_customer_events(config()) -> _.
+get_customer_events(Config) ->
+    Context = ?config(context, Config),
+    {get_binding,
+        #{customer_id := CustomerID} = C
+    } = ?config(saved_config, Config),
+    {ok, _} = capi_client_customers:get_customer_events(Context, CustomerID, 1),
+    {save_config, C}.
+
+-spec delete_customer(config()) -> _.
+delete_customer(Config) ->
+    Context = ?config(context, Config),
+    {get_customer_events,
+        #{customer_id := CustomerID}
+    } = ?config(saved_config, Config),
+    {ok, _} = capi_client_customers:delete_customer(Context, CustomerID).
+
 %% helpers
 call(Method, Path, Body, Headers) ->
     Url = get_url(Path),
@@ -1857,7 +1938,7 @@ default_tokenize_card(Context, _Config) ->
             <<"fingerprint">> => <<"test fingerprint">>
         }
     },
-    capi_client_tokens:create_payment_tool_token(Context, Req).
+    capi_client_tokens:create_payment_resource(Context, Req).
 
 default_tokenize_payment_terminal(Context, _Config) ->
     Req = #{
@@ -1869,7 +1950,7 @@ default_tokenize_payment_terminal(Context, _Config) ->
             <<"fingerprint">> => <<"test fingerprint">>
         }
     },
-    capi_client_tokens:create_payment_tool_token(Context, Req).
+    capi_client_tokens:create_payment_resource(Context, Req).
 
 default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context) ->
     default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, instant).
@@ -1882,11 +1963,14 @@ default_create_payment(InvoiceID, PaymentSession, PaymentToolToken, Context, Flo
             #{<<"type">> => <<"PaymentFlowHold">>, <<"onHoldExpiration">> => <<"cancel">>}
     end,
     Req = #{
-        <<"paymentSession">> => PaymentSession,
-        <<"paymentToolToken">> => PaymentToolToken,
         <<"flow">> => Flow,
-        <<"contactInfo">> => #{
-            <<"email">> => <<"bla@bla.ru">>
+        <<"payer">> => #{
+            <<"payerType">> => <<"PaymentResourcePayer">>,
+            <<"paymentSession">> => PaymentSession,
+            <<"paymentToolToken">> => PaymentToolToken,
+            <<"contactInfo">> => #{
+                <<"email">> => <<"bla@bla.ru">>
+            }
         }
     },
     {ok, Body} = capi_client_payments:create_payment(Context, Req, InvoiceID),
@@ -2013,6 +2097,14 @@ get_locations_names(GeoIDs, Lang, Config) ->
     },
     {ok, R} = capi_client_geo:get_location_names(Context, Query),
     R.
+
+default_create_customer(ShopID, Context) ->
+    Params = #{
+        <<"shopID">> => ShopID,
+        <<"contactInfo">> => #{<<"email">> => <<"bla@bla.ru">>},
+        <<"metadata">> => #{<<"text">> => [<<"SOMESHIT">>, 42]}
+    },
+    capi_client_customers:create_customer(Context, Params).
 
 %% @FIXME thats dirty
 default_approve_claim(#{<<"id">> := ClaimID, <<"revision">> := ClaimRevision}) ->

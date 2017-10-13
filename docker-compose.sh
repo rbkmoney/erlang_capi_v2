@@ -22,8 +22,6 @@ services:
         condition: service_started
       dominant:
         condition: service_healthy
-      keycloak:
-        condition: service_healthy
       columbus:
         condition: service_started
       hooker:
@@ -32,7 +30,7 @@ services:
         condition: service_healthy
 
   hellgate:
-    image: dr.rbkmoney.com/rbkmoney/hellgate:76357424bca5e75f07535f307976639e535c3570
+    image: dr.rbkmoney.com/rbkmoney/hellgate:fe31dc9f92175feaa58c3d885dfec4e683fddfc6
     restart: always
     command: /opt/hellgate/bin/hellgate foreground
     depends_on:
@@ -128,7 +126,7 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - PG_DBS=hooker keycloak magista shumway bustermaze reporter
+      - PG_DBS=hooker magista shumway bustermaze reporter
     entrypoint:
      - /docker-entrypoint.sh
      - postgres
@@ -211,6 +209,11 @@ services:
     depends_on:
       pg-db:
         condition: service_healthy
+    healthcheck:
+      test: "curl http://localhost:8022/"
+      interval: 5s
+      timeout: 1s
+      retries: 12
 
   reporter:
     image: dr.rbkmoney.com/rbkmoney/reporter:0f05912d4bb34679caad02d227dd41b35b9ecabd
@@ -232,23 +235,6 @@ services:
       - --flyway.user=postgres
       - --flyway.password=postgres
       - --flyway.schemas=rpt
-    depends_on:
-      pg-db:
-        condition: service_healthy
-
-  keycloak:
-    image: dr.rbkmoney.com/rbkmoney/keycloak:a4c082f48695cb02e0624deb559f9ec0378abdb4
-    healthcheck:
-      test: curl --silent --show-error --output /dev/null localhost:8080/auth/realms/external
-      interval: 10s
-      timeout: 1s
-      retries: 15
-    environment:
-        SERVICE_NAME: keycloak
-        POSTGRES_PASSWORD: postgres
-        POSTGRES_USER: postgres
-        POSTGRES_DATABASE: keycloak
-        POSTGRES_PORT_5432_TCP_ADDR: pg-db
     depends_on:
       pg-db:
         condition: service_healthy
