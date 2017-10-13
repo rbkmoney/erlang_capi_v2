@@ -10,7 +10,7 @@
 -type webhook()        :: map().
 -type context()        :: capi_client_lib:context().
 
--spec get_webhooks(context()) -> [webhook()].
+-spec get_webhooks(context()) -> {ok, [webhook()]} | {error, term()}.
 get_webhooks(Context) ->
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, #{}),
     Response = swag_client_webhooks_api:get_webhooks(Url, PreparedParams, Opts),
