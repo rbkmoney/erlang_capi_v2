@@ -117,10 +117,6 @@
 
 -define(PROTOCOL, ipv4).
 
--define(KEYCLOAK_URL, "keycloak:8080").
--define(KEYCLOAK_USER, "demo_merchant").
--define(KEYCLOAK_PASSWORD, "test").
-
 -define(CAPI_IP                     , "::").
 -define(CAPI_PORT                   , 8080).
 -define(CAPI_URL                    , "localhost:" ++ integer_to_list(?CAPI_PORT)).
@@ -186,7 +182,7 @@ all() ->
         {group, geo_ip},
         {group, cancel_payment},
         {group, capture_payment},
-        % {group, customers},
+        {group, customers},
         {group, reports}
     ].
 
@@ -378,15 +374,22 @@ init_per_suite(Config) ->
                 reporting          => ?CAPI_REPORTING_URL,
                 geo_ip_service     => ?CAPI_GEO_IP_URL
             }}
+        ]) ++
+        capi_ct_helper:start_app(capi, [
+            {ip, ?CAPI_IP},
+            {port, ?CAPI_PORT},
+            {service_type, ?CAPI_SERVICE_TYPE},
+            {authorizers, #{
+                jwt => get_authorizer_opts(Config)
+            }}
         ]),
-    CapiApps = start_capi(Config),
     {ok, SupPid} = supervisor:start_link(?MODULE, []),
     _ = unlink(SupPid),
     {ok, Token} = capi_ct_helper:login(?MERCHANT_ID),
     Retries = 10,
     Timeout = 60000,
     Context = get_context(Token, Retries, Timeout),
-    NewConfig = [{capi_apps, CapiApps}, {apps, lists:reverse(Apps)}, {context, Context}, {test_sup, SupPid} | Config],
+    NewConfig = [{apps, lists:reverse(Apps)}, {context, Context}, {test_sup, SupPid} | Config],
     Proxies = [
         start_handler(capi_dummy_provider, 1, #{}, NewConfig),
         start_handler(capi_dummy_inspector, 2, #{<<"risk_score">> => <<"high">>}, NewConfig)
@@ -410,16 +413,6 @@ init_per_group(statistics, Config) ->
 
 init_per_group(_Group, Config) ->
     Config.
-
-start_capi(Config) ->
-    capi_ct_helper:start_app(capi, [
-        {ip, ?CAPI_IP},
-        {port, ?CAPI_PORT},
-        {service_type, ?CAPI_SERVICE_TYPE},
-        {authorizers, #{
-            jwt => get_authorizer_opts(Config)
-        }}
-    ]).
 
 get_authorizer_opts(Config) ->
     #{
@@ -1702,42 +1695,42 @@ create_customer_access_token(Config) ->
     {get_customer,
         #{customer_id := CustomerID} = C
     } = ?config(saved_config, Config),
-    {ok, _} = capi_client_customers:create_customer_access_token(Context, CustomerID),
-    {save_config, C}.
+    {ok, Body} = capi_client_customers:create_customer_access_token(Context, CustomerID),
+    #{<<"payload">> := TokenPayload} = Body,
+    CustomerContext = get_context(TokenPayload),
+    {save_config, C#{customer_context => CustomerContext}}.
 
 -spec create_binding(config()) -> _.
 create_binding(Config) ->
-    Context = ?config(context, Config),
-    {create_customer_access_token,
-        #{customer_id := CustomerID} = C
-    } = ?config(saved_config, Config),
-    PaymentSession = <<"PaymentSession">>,
-    PaymentToolToken = <<"PaymentToolToken">>,
+    {create_customer_access_token, C} = ?config(saved_config, Config),
+    #{
+        customer_id := CustomerID,
+        customer_context := CustomerContext
+    } = C,
+    {ok, PaymentToolToken, PaymentSession} = default_tokenize_card(CustomerContext, Config),
     Query = #{
         <<"paymentResource">> => #{
             <<"paymentSession">> => PaymentSession,
             <<"paymentToolToken">> => PaymentToolToken
         }
     },
-    {ok, _} = capi_client_customers:create_binding(Context, CustomerID, Query),
-    {save_config, C}.
+    {ok, #{<<"id">> := BindingID}} = capi_client_customers:create_binding(CustomerContext, CustomerID, Query),
+    {save_config, C#{customer_binding_id => BindingID}}.
 
 -spec get_bindings(config()) -> _.
 get_bindings(Config) ->
     Context = ?config(context, Config),
-    {create_binding,
-        #{customer_id := CustomerID} = C
-    } = ?config(saved_config, Config),
-    {ok, _} = capi_client_customers:get_bindings(Context, CustomerID),
+    {create_binding, C} = ?config(saved_config, Config),
+    #{customer_id := CustomerID, customer_binding_id := BindingID} = C,
+    {ok, [#{<<"id">> := BindingID}]} = capi_client_customers:get_bindings(Context, CustomerID),
     {save_config, C}.
 
 -spec get_binding(config()) -> _.
 get_binding(Config) ->
     Context = ?config(context, Config),
-    {get_bindings,
-        #{customer_id := CustomerID} = C
-    } = ?config(saved_config, Config),
-    {ok, _} = capi_client_customers:get_binding(Context, CustomerID),
+    {get_bindings,C} = ?config(saved_config, Config),
+    #{customer_id := CustomerID, customer_binding_id := BindingID} = C,
+    {ok, #{<<"id">> := BindingID}} = capi_client_customers:get_binding(Context, CustomerID, BindingID),
     {save_config, C}.
 
 -spec get_customer_events(config()) -> _.
@@ -1746,7 +1739,7 @@ get_customer_events(Config) ->
     {get_binding,
         #{customer_id := CustomerID} = C
     } = ?config(saved_config, Config),
-    {ok, _} = capi_client_customers:get_customer_events(Context, CustomerID, 1),
+    {ok, _} = capi_client_customers:get_customer_events(Context, CustomerID, 100),
     {save_config, C}.
 
 -spec delete_customer(config()) -> _.
