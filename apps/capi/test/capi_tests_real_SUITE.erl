@@ -33,6 +33,7 @@
     get_invoice_template_ok_test/1,
     update_invoice_template_ok_test/1,
     delete_invoice_template_ok_test/1,
+    get_invoice_payment_methods_by_tpl_id_ok_test/1,
 
     get_account_by_id_ok_test/1,
 
@@ -42,7 +43,6 @@
     create_refund/1,
     get_refund_by_id/1,
     get_refunds/1,
-
     cancel_payment_ok_test/1,
     capture_payment_ok_test/1,
 
@@ -122,6 +122,7 @@ all() ->
         get_invoice_template_ok_test,
         update_invoice_template_ok_test,
         delete_invoice_template_ok_test,
+        get_invoice_payment_methods_by_tpl_id_ok_test,
 
         get_account_by_id_ok_test,
 
@@ -333,6 +334,12 @@ update_invoice_template_ok_test(Config) ->
 delete_invoice_template_ok_test(Config) ->
     mock_handle_function(),
     ok = capi_client_invoice_templates:delete(?config(context, Config), ?STRING).
+
+-spec get_invoice_payment_methods_by_tpl_id_ok_test(config()) ->
+    _.
+get_invoice_payment_methods_by_tpl_id_ok_test(Config) ->
+    mock_handle_function({ok, ?TERM_SET}),
+    {ok, _} = capi_client_invoice_templates:get_invoice_payment_methods(?config(context, Config), ?STRING).
 
 -spec get_account_by_id_ok_test(config()) ->
     _.

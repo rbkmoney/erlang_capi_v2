@@ -107,8 +107,8 @@
 
 -define(PAYPROC_PAYMENT, #payproc_InvoicePayment{
     payment = ?PAYMENT,
-    refunds = [],
-    adjustments = []
+    refunds = [?REFUND],
+    adjustments = [?ADJUSTMENT]
 }).
 
 -define(ACCOUNT_STATE, #payproc_AccountState{
