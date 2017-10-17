@@ -3726,8 +3726,9 @@ decode_event_filter({customer, #webhooker_CustomerEventFilter{
     genlib_map:compact(#{
         <<"topic">>      => <<"CustomersTopic">>,
         <<"shopID">>     => ShopID,
-        <<"eventTypes">> => lists:flatmap(
-            fun (V) -> decode_customer_event_type(V) end, ordsets:to_list(EventTypes)
+        <<"eventTypes">> => lists:map(
+            fun decode_customer_event_type/1,
+            ordsets:to_list(EventTypes)
         )
     }).
 
