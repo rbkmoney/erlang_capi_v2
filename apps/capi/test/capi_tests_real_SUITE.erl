@@ -1786,10 +1786,10 @@ default_create_contract(ContractID, Config) ->
             <<"contractModificationType">> => <<"ContractPayoutToolCreation">>,
             <<"payoutToolID">> => generate_payout_tool_id(),
             <<"currency">> => <<"RUB">>,
-            <<"details">> => #{
-                <<"type">> => <<"PayoutToolBankAccount">>,
-                <<"bankAccount">> => BankAccount
-            }
+            <<"details">> => maps:merge(
+                #{<<"detailsType">> => <<"PayoutToolDetailsBankAccount">>},
+                BankAccount
+            )
         }
     ],
     create_claim(Config, Changeset).
@@ -1822,10 +1822,10 @@ default_create_payout_tool(PayoutToolID, ContractID, Config) ->
             <<"contractModificationType">> => <<"ContractPayoutToolCreation">>,
             <<"payoutToolID">> => PayoutToolID,
             <<"currency">> => <<"RUB">>,
-            <<"details">> => #{
-                <<"type">> => <<"PayoutToolBankAccount">>,
-                <<"bankAccount">> => default_bank_account()
-            }
+            <<"details">> => maps:merge(
+                #{<<"detailsType">> => <<"PayoutToolDetailsBankAccount">>},
+                default_bank_account()
+            )
         }
     ],
     create_claim(Config, Changeset).
