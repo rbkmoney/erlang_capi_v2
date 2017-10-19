@@ -2403,12 +2403,12 @@ decode_invoice_tpl_details({product, #domain_InvoiceTemplateProduct{
     price = Price,
     metadata = Metadata
 }}) ->
-    #{
+    genlib_map:compact(#{
         <<"templateType">> => <<"InvoiceTemplateSingleLine">>,
         <<"product">> => Product,
         <<"price">> => decode_invoice_tpl_line_cost(Price),
         <<"taxMode">> => decode_invoice_line_tax_mode(Metadata)
-    }.
+    }).
 
 get_currency_from_cart(#domain_InvoiceCart{lines = [FirstLine | _]}) ->
     #domain_InvoiceLine{price = #domain_Cash{currency = Currency}} = FirstLine,
