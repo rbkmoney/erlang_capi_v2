@@ -837,7 +837,6 @@ start_capi(Config) ->
             jwt => #{
                 signee => capi,
                 keyset => #{
-                    keycloak => get_keysource("keys/keycloak/public.pem", Config),
                     capi     => get_keysource("keys/local/private.pem", Config)
                 }
             }
