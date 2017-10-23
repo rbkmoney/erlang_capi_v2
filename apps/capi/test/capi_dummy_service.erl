@@ -6,5 +6,10 @@
 -spec handle_function(woody:func(), woody:args(), woody_context:ctx(), #{}) ->
     {ok, term()}.
 
-handle_function(_Function, _, _, _) ->
-    error("Need to mock!").
+handle_function(Function, _, _, #{result := Result}) ->
+    case is_function(Result) of
+        true ->
+            Result(Function);
+        _ ->
+            Result
+    end.

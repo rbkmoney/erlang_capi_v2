@@ -1,6 +1,6 @@
 -define(STRING, <<"TEST">>).
 -define(RUB, <<"RUB">>).
--define(BINARY, <<"{}">>).
+-define(JSON, <<"{}">>).
 -define(INTEGER, 10000).
 -define(INTEGER_BINARY, <<"10000">>).
 -define(TIMESTAMP, <<"2016-03-22T06:12:27Z">>).
@@ -19,7 +19,7 @@
 
 -define(CONTENT, #'Content'{
     type = <<"application/json">>,
-    data = ?BINARY
+    data = ?JSON
 }).
 
 -define(LIFETIME_INTERVAL, #domain_LifetimeInterval{

@@ -1,4 +1,4 @@
--module(capi_tests_real_SUITE).
+-module(capi_tests_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
 
@@ -20,6 +20,15 @@
 -export([init/1]).
 
 -export([
+    authorization_positive_lifetime_ok_test/1,
+    authorization_unlimited_lifetime_ok_test/1,
+    authorization_far_future_deadline_ok_test/1,
+    authorization_permission_ok_test/1,
+    authorization_negative_lifetime_error_test/1,
+    authorization_bad_deadline_error_test/1,
+    authorization_error_no_header_test/1,
+    authorization_error_no_permission_test/1,
+
     create_invoice_ok_test/1,
     get_invoice_ok_test/1,
     get_invoice_events_ok_test/1,
@@ -95,8 +104,13 @@
     get_category_by_ref_ok_test/1
 ]).
 
--type test_case_name() :: atom().
--type config() :: [{atom(), any()}].
+-define(CAPI_IP                     , "::").
+-define(CAPI_PORT                   , 8080).
+-define(CAPI_HOST_NAME              , "localhost").
+-define(CAPI_URL                    , ?CAPI_HOST_NAME ++ ":" ++ integer_to_list(?CAPI_PORT)).
+
+-type test_case_name()  :: atom().
+-type config()          :: [{atom(), any()}].
 
 -behaviour(supervisor).
 
@@ -106,9 +120,18 @@ init([]) ->
     {ok, {#{strategy => one_for_all, intensity => 1, period => 1}, []}}.
 
 -spec all() ->
-    _.
+    [test_case_name()].
 all() ->
     [
+        authorization_positive_lifetime_ok_test,
+        authorization_unlimited_lifetime_ok_test,
+        authorization_far_future_deadline_ok_test,
+        authorization_permission_ok_test,
+        authorization_negative_lifetime_error_test,
+        authorization_bad_deadline_error_test,
+        authorization_error_no_header_test,
+        authorization_error_no_permission_test,
+
         create_invoice_ok_test,
         get_invoice_ok_test,
         get_invoice_events_ok_test,
@@ -190,46 +213,98 @@ all() ->
 -spec init_per_suite(config()) ->
     config().
 init_per_suite(Config) ->
-    MainApps =
+    Apps =
         capi_ct_helper:start_app(lager) ++
-        capi_ct_helper:start_app(cowlib) ++
         capi_ct_helper:start_app(woody) ++
         start_capi(Config),
-    {ok, SupPid} = supervisor:start_link(?MODULE, []),
-    _ = unlink(SupPid),
-    ServiceApps = start_dummy_services(SupPid),
-    {ok, Token} = get_token(),
+        {ok, Token} = get_token(),
     Context = get_context(Token, 10, 60000),
-    [
-        {context, Context},
-        {apps, lists:reverse(MainApps ++ ServiceApps)},
-        {test_sup, SupPid}
-    | Config].
+    [{context, Context}, {apps, lists:reverse(Apps)} | Config].
 
 -spec end_per_suite(config()) ->
     _.
 end_per_suite(C) ->
-    exit(?config(test_sup, C), shutdown),
     [application:stop(App) || App <- proplists:get_value(apps, C)],
     ok.
 
 -spec init_per_testcase(test_case_name(), config()) ->
     config().
 init_per_testcase(_Name, C) ->
-    C.
+    {ok, SupPid} = supervisor:start_link(?MODULE, []),
+    _ = unlink(SupPid),
+    [{test_sup, SupPid} | C].
 
 -spec end_per_testcase(test_case_name(), config()) ->
     config().
-end_per_testcase(_Name, _C) ->
-    meck:unload(capi_dummy_service),
+end_per_testcase(_Name, C) ->
+    exit(?config(test_sup, C), shutdown),
     ok.
 
 %%% Tests
 
+-spec authorization_positive_lifetime_ok_test(config()) ->
+    _.
+authorization_positive_lifetime_ok_test(Config) ->
+    start_dummy_service({ok, ?SNAPSHOT}, Config),
+    {ok, Token} = get_token([], {lifetime, 10}),
+    Headers = [auth_header(Token), content_type_header(), req_id_header()],
+    {ok, 200, _RespHeaders, _Body} = call(get, "/v1/processing/categories", #{}, Headers).
+
+-spec authorization_unlimited_lifetime_ok_test(config()) ->
+    _.
+authorization_unlimited_lifetime_ok_test(Config) ->
+    start_dummy_service({ok, ?SNAPSHOT}, Config),
+    {ok, Token} = get_token([], unlimited),
+    Headers = [auth_header(Token), content_type_header(), req_id_header()],
+    {ok, 200, _RespHeaders, _Body} = call(get, "/v1/processing/categories", #{}, Headers).
+
+-spec authorization_far_future_deadline_ok_test(config()) ->
+    _.
+authorization_far_future_deadline_ok_test(Config) ->
+    start_dummy_service({ok, ?SNAPSHOT}, Config),
+    {ok, Token} = get_token([], {deadline, 4102444800}), % 01/01/2100 @ 12:00am (UTC)
+    Headers = [auth_header(Token), content_type_header(), req_id_header()],
+    {ok, 200, _RespHeaders, _Body} = call(get, "/v1/processing/categories", #{}, Headers).
+
+-spec authorization_permission_ok_test(config()) ->
+    _.
+authorization_permission_ok_test(Config) ->
+    start_dummy_service({ok, ?PARTY}, Config),
+    {ok, Token} = get_token([{[party], read}], unlimited),
+    Headers = [auth_header(Token), content_type_header(), req_id_header()],
+    {ok, 200, _RespHeaders, _Body} = call(get, "/v1/processing/me", #{}, Headers).
+
+-spec authorization_negative_lifetime_error_test(config()) ->
+    _.
+authorization_negative_lifetime_error_test(_Config) ->
+    {ok, Token} = get_token([], {lifetime, -10}),
+    Headers = [auth_header(Token), content_type_header(), req_id_header()],
+    {ok, 401, _RespHeaders, _Body} = call(get, "/v1/processing/categories", #{}, Headers).
+
+-spec authorization_bad_deadline_error_test(config()) ->
+    _.
+authorization_bad_deadline_error_test(_Config) ->
+    {ok, Token} = get_token([], {deadline, -10}),
+    Headers = [auth_header(Token), content_type_header(), req_id_header()],
+    {ok, 401, _RespHeaders, _Body} = call(get, "/v1/processing/categories", #{}, Headers).
+
+-spec authorization_error_no_header_test(config()) ->
+    _.
+authorization_error_no_header_test(_Config) ->
+    Headers = [content_type_header(), req_id_header()],
+    {ok, 401, _RespHeaders, _Body} = call(get, "/v1/processing/categories", #{}, Headers).
+
+-spec authorization_error_no_permission_test(config()) ->
+    _.
+authorization_error_no_permission_test(_Config) ->
+    {ok, Token} = get_token([], {lifetime, 10}),
+    Headers = [auth_header(Token), content_type_header(), req_id_header()],
+    {ok, 401, _RespHeaders, _Body} = call(get, "/v1/processing/me", #{}, Headers).
+
 -spec create_invoice_ok_test(config()) ->
     _.
 create_invoice_ok_test(Config) ->
-    mock_handle_function({ok, ?PAYPROC_INVOICE}),
+    start_dummy_service({ok, ?PAYPROC_INVOICE}, Config),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"amount">> => ?INTEGER,
@@ -244,7 +319,7 @@ create_invoice_ok_test(Config) ->
 -spec create_invoice_with_tpl_ok_test(config()) ->
     _.
 create_invoice_with_tpl_ok_test(Config) ->
-    mock_handle_function({ok, ?PAYPROC_INVOICE}),
+    start_dummy_service({ok, ?PAYPROC_INVOICE}, Config),
     Req = #{
         <<"amount">> => ?INTEGER,
         <<"currency">> => ?RUB,
@@ -255,43 +330,43 @@ create_invoice_with_tpl_ok_test(Config) ->
 -spec get_invoice_ok_test(config()) ->
     _.
 get_invoice_ok_test(Config) ->
-    mock_handle_function({ok, ?PAYPROC_INVOICE}),
+    start_dummy_service({ok, ?PAYPROC_INVOICE}, Config),
     {ok, _} = capi_client_invoices:get_invoice_by_id(?config(context, Config), ?STRING).
 
 -spec get_invoice_events_ok_test(config()) ->
     _.
 get_invoice_events_ok_test(Config) ->
-    mock_handle_function({ok, [?EVENT]}),
+    start_dummy_service({ok, [?EVENT]}, Config),
     {ok, _} = capi_client_invoices:get_invoice_events(?config(context, Config), ?STRING, ?INTEGER).
 
 -spec get_invoice_payment_methods_ok_test(config()) ->
     _.
 get_invoice_payment_methods_ok_test(Config) ->
-    mock_handle_function({ok, ?TERM_SET}),
+    start_dummy_service({ok, ?TERM_SET}, Config),
     {ok, _} = capi_client_invoices:get_invoice_payment_methods(?config(context, Config), ?STRING).
 
 -spec create_invoice_access_token_ok_test(config()) ->
     _.
 create_invoice_access_token_ok_test(Config) ->
-    mock_handle_function({ok, ?PAYPROC_INVOICE}),
+    start_dummy_service({ok, ?PAYPROC_INVOICE}, Config),
     {ok, _} = capi_client_invoices:create_invoice_access_token(?config(context, Config), ?STRING).
 
 -spec rescind_invoice_ok_test(config()) ->
     _.
 rescind_invoice_ok_test(Config) ->
-    mock_handle_function(),
+    start_dummy_service({ok, ok}, Config),
     ok = capi_client_invoices:rescind_invoice(?config(context, Config), ?STRING, ?STRING).
 
 -spec fulfill_invoice_ok_test(config()) ->
     _.
 fulfill_invoice_ok_test(Config) ->
-    mock_handle_function(),
+    start_dummy_service({ok, ok}, Config),
     ok = capi_client_invoices:fulfill_invoice(?config(context, Config), ?STRING, ?STRING).
 
 -spec create_invoice_template_ok_test(config()) ->
     _.
 create_invoice_template_ok_test(Config) ->
-    mock_handle_function({ok, ?INVOICE_TPL}),
+    start_dummy_service({ok, ?INVOICE_TPL}, Config),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"cost">> => #{
@@ -309,13 +384,13 @@ create_invoice_template_ok_test(Config) ->
 -spec get_invoice_template_ok_test(config()) ->
     _.
 get_invoice_template_ok_test(Config) ->
-    mock_handle_function({ok, ?INVOICE_TPL}),
+    start_dummy_service({ok, ?INVOICE_TPL}, Config),
     {ok, _} = capi_client_invoice_templates:get_template_by_id(?config(context, Config), ?STRING).
 
 -spec update_invoice_template_ok_test(config()) ->
     _.
 update_invoice_template_ok_test(Config) ->
-    mock_handle_function({ok, ?INVOICE_TPL}),
+    start_dummy_service({ok, ?INVOICE_TPL}, Config),
     Req = #{
         <<"cost">> => #{
             <<"invoiceTemplateCostType">> => <<"InvoiceTemplateCostFixed">>,
@@ -332,40 +407,51 @@ update_invoice_template_ok_test(Config) ->
 -spec delete_invoice_template_ok_test(config()) ->
     _.
 delete_invoice_template_ok_test(Config) ->
-    mock_handle_function(),
+    start_dummy_service({ok, ok}, Config),
     ok = capi_client_invoice_templates:delete(?config(context, Config), ?STRING).
 
 -spec get_invoice_payment_methods_by_tpl_id_ok_test(config()) ->
     _.
 get_invoice_payment_methods_by_tpl_id_ok_test(Config) ->
-    mock_handle_function({ok, ?TERM_SET}),
+    start_dummy_service({ok, ?TERM_SET}, Config),
     {ok, _} = capi_client_invoice_templates:get_invoice_payment_methods(?config(context, Config), ?STRING).
 
 -spec get_account_by_id_ok_test(config()) ->
     _.
 get_account_by_id_ok_test(Config) ->
-    mock_handle_function({ok, ?ACCOUNT_STATE}),
+    start_dummy_service({ok, ?ACCOUNT_STATE}, Config),
     {ok, _} = capi_client_accounts:get_account_by_id(?config(context, Config), ?INTEGER).
 
 -spec create_payment_ok_test(config()) ->
     _.
 create_payment_ok_test(Config) ->
-    mock_handle_function({ok, ?PAYPROC_PAYMENT}),
-    Token = capi_utils:map_to_base64url(#{
-        <<"type">> => <<"bank_card">>,
-        <<"token">> => <<"Token">>,
-        <<"payment_system">> => <<"visa">>,
-        <<"bin">> => <<"Bin">>,
-        <<"masked_pan">> => <<"Test1234">>
-    }),
-    Session = capi_utils:map_to_base64url(#{
-        <<"clientInfo">> => #{
-            <<"fingerprint">> => <<"Fingerprint">>,
-            <<"ip_address">> => <<"127.0.0.1">>
+    PutCardDataResult = #'PutCardDataResult'{
+        bank_card = ?BANK_CARD,
+        session_id = ?STRING
+    },
+    Fun = fun(X) ->
+        case X of
+            'PutCardData' ->
+                {ok, PutCardDataResult};
+            'StartPayment' ->
+                {ok, ?PAYPROC_PAYMENT}
+        end
+    end,
+    start_dummy_service(Fun, Config),
+    Req1 = #{
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"CardData">>,
+            <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
+            <<"cardNumber">> => <<"4111111111111111">>,
+            <<"expDate">> => <<"08/27">>,
+            <<"cvv">> => <<"232">>
         },
-        <<"paymentSession">> => <<"PaymentSession">>
-    }),
-    Req = #{
+        <<"clientInfo">> => #{
+            <<"fingerprint">> => <<"test fingerprint">>
+        }
+    },
+    {ok, Token, Session} = capi_client_tokens:create_payment_tool_token(?config(context, Config), Req1),
+    Req2 = #{
         <<"paymentSession">> => Session,
         <<"paymentToolToken">> => Token,
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
@@ -373,48 +459,48 @@ create_payment_ok_test(Config) ->
             <<"email">> => <<"bla@bla.ru">>
         }
     },
-    {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req, ?STRING).
+    {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
 
 -spec get_payments_ok_test(config()) ->
     _.
 get_payments_ok_test(Config) ->
-    mock_handle_function({ok, ?PAYPROC_INVOICE}),
+    start_dummy_service({ok, ?PAYPROC_INVOICE}, Config),
     {ok, _} = capi_client_payments:get_payments(?config(context, Config), ?STRING).
 
 -spec get_payment_by_id_ok_test(config()) ->
     _.
 get_payment_by_id_ok_test(Config) ->
-    mock_handle_function({ok, ?PAYPROC_PAYMENT}),
+    start_dummy_service({ok, ?PAYPROC_PAYMENT}, Config),
     {ok, _} = capi_client_payments:get_payment_by_id(?config(context, Config), ?STRING, ?STRING).
 
 -spec create_refund(config()) ->
     _.
 create_refund(Config) ->
-    mock_handle_function({ok, ?REFUND}),
+    start_dummy_service({ok, ?REFUND}, Config),
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), ?STRING, ?STRING, <<>>).
 
 -spec get_refund_by_id(config()) ->
     _.
 get_refund_by_id(Config) ->
-    mock_handle_function({ok, ?REFUND}),
+    start_dummy_service({ok, ?REFUND}, Config),
     {ok, _} = capi_client_payments:get_refund_by_id(?config(context, Config), ?STRING, ?STRING, ?STRING).
 
 -spec get_refunds(config()) ->
     _.
 get_refunds(Config) ->
-    mock_handle_function({ok, ?PAYPROC_PAYMENT}),
+    start_dummy_service({ok, ?PAYPROC_PAYMENT}, Config),
     {ok, _} = capi_client_payments:get_refunds(?config(context, Config), ?STRING, ?STRING).
 
 -spec cancel_payment_ok_test(config()) ->
     _.
 cancel_payment_ok_test(Config) ->
-    mock_handle_function(),
+    start_dummy_service({ok, ok}, Config),
     ok = capi_client_payments:cancel_payment(?config(context, Config), ?STRING, ?STRING, ?STRING).
 
 -spec capture_payment_ok_test(config()) ->
     _.
 capture_payment_ok_test(Config) ->
-    mock_handle_function(),
+    start_dummy_service({ok, ok}, Config),
     ok = capi_client_payments:capture_payment(?config(context, Config), ?STRING, ?STRING, ?STRING).
 
 -spec create_payment_tool_token_ok_test(_) ->
@@ -424,7 +510,7 @@ create_payment_tool_token_ok_test(Config) ->
         bank_card = ?BANK_CARD,
         session_id = ?STRING
     },
-    mock_handle_function({ok, PutCardDataResult}),
+    start_dummy_service({ok, PutCardDataResult}, Config),
     Req = #{
         <<"paymentTool">> => #{
             <<"paymentToolType">> => <<"CardData">>,
@@ -442,67 +528,67 @@ create_payment_tool_token_ok_test(Config) ->
 -spec get_my_party_ok_test(config()) ->
     _.
 get_my_party_ok_test(Config) ->
-    mock_handle_function({ok, ?PARTY}),
+    start_dummy_service({ok, ?PARTY}, Config),
     {ok, _} = capi_client_parties:get_my_party(?config(context, Config)).
 
 -spec suspend_my_party_ok_test(config()) ->
     _.
 suspend_my_party_ok_test(Config) ->
-    mock_handle_function(),
+    start_dummy_service({ok, ok}, Config),
     capi_client_parties:suspend_my_party(?config(context, Config)).
 
 -spec activate_my_party_ok_test(config()) ->
     _.
 activate_my_party_ok_test(Config) ->
-    mock_handle_function(),
+    start_dummy_service({ok, ok}, Config),
     capi_client_parties:activate_my_party(?config(context, Config)).
 
 -spec get_shop_by_id_ok_test(config()) ->
     _.
 get_shop_by_id_ok_test(Config) ->
-    mock_handle_function({ok, ?SHOP}),
+    start_dummy_service({ok, ?SHOP}, Config),
     capi_client_shops:get_shop_by_id(?config(context, Config), ?STRING).
 
 -spec get_shops_ok_test(config()) ->
     _.
 get_shops_ok_test(Config) ->
-    mock_handle_function({ok, ?PARTY}),
+    start_dummy_service({ok, ?PARTY}, Config),
     {ok, _} = capi_client_shops:get_shops(?config(context, Config)).
 
 -spec suspend_shop_ok_test(config()) ->
     _.
 suspend_shop_ok_test(Config) ->
-    mock_handle_function(),
+    start_dummy_service({ok, ok}, Config),
     capi_client_shops:suspend_shop(?config(context, Config), ?STRING).
 
 -spec activate_shop_ok_test(config()) ->
     _.
 activate_shop_ok_test(Config) ->
-    mock_handle_function(),
+    start_dummy_service({ok, ok}, Config),
     capi_client_shops:activate_shop(?config(context, Config), ?STRING).
 
 -spec get_claim_by_id_ok_test(config()) ->
     _.
 get_claim_by_id_ok_test(Config) ->
-    mock_handle_function({ok, ?CLAIM}),
+    start_dummy_service({ok, ?CLAIM}, Config),
     {ok, _} = capi_client_claims:get_claim_by_id(?config(context, Config), ?INTEGER).
 
 -spec get_claims_ok_test(config()) ->
     _.
 get_claims_ok_test(Config) ->
-    mock_handle_function({ok, [?CLAIM]}),
+    start_dummy_service({ok, [?CLAIM]}, Config),
     {ok, _} = capi_client_claims:get_claims(?config(context, Config)).
 
 -spec revoke_claim_ok_test(config()) ->
     _.
 revoke_claim_ok_test(Config) ->
-    mock_handle_function(),
+    start_dummy_service({ok, ok}, Config),
     ok = capi_client_claims:revoke_claim_by_id(?config(context, Config), ?STRING, ?INTEGER, ?INTEGER).
 
 -spec create_claim_ok_test(config()) ->
     _.
 create_claim_ok_test(Config) ->
-    mock_handle_function({ok, ?CLAIM}),
+    start_dummy_service({ok, ?CLAIM}, Config),
     Changeset = [
         #{
             <<"partyModificationType">> => <<"ContractModification">>,
@@ -555,47 +641,43 @@ update_claim_by_id_test(_) ->
 -spec get_contract_by_id_ok_test(config()) ->
     _.
 get_contract_by_id_ok_test(Config) ->
-    mock_handle_function({ok, ?CONTRACT}),
+    start_dummy_service({ok, ?CONTRACT}, Config),
     {ok, _} = capi_client_contracts:get_contract_by_id(?config(context, Config), ?STRING).
 
 -spec get_contracts_ok_test(config()) ->
     _.
 get_contracts_ok_test(Config) ->
-    mock_handle_function({ok, ?PARTY}),
+    start_dummy_service({ok, ?PARTY}, Config),
     {ok, _} = capi_client_contracts:get_contracts(?config(context, Config)).
 
 -spec get_contract_adjustments_ok_test(config()) ->
     _.
-get_contract_adjustments_ok_test(_) ->
-    % Access denied
-    % mock_handle_function({ok, ?CONTRACT}),
-    % {ok, _} = capi_client_contracts:get_contract_adjustments(?config(context, Config), ?STRING).
-    ok.
+get_contract_adjustments_ok_test(Config) ->
+    start_dummy_service({ok, ?CONTRACT}, Config),
+    {ok, _} = capi_client_contracts:get_contract_adjustments(?config(context, Config), ?STRING).
 
 -spec get_contract_adjustment_by_id_ok_test(config()) ->
     _.
-get_contract_adjustment_by_id_ok_test(_) ->
-    % Access denied
-    % mock_handle_function({ok, ?CONTRACT}),
-    % {ok, _} = capi_client_contracts:get_contract_adjustment_by_id(?config(context, Config), ?STRING, ?STRING).
-    ok.
+get_contract_adjustment_by_id_ok_test(Config) ->
+    start_dummy_service({ok, ?CONTRACT}, Config),
+    {ok, _} = capi_client_contracts:get_contract_adjustment_by_id(?config(context, Config), ?STRING, ?STRING).
 
 -spec get_payout_tools_ok_test(config()) ->
     _.
 get_payout_tools_ok_test(Config) ->
-    mock_handle_function({ok, ?CONTRACT}),
+    start_dummy_service({ok, ?CONTRACT}, Config),
     {ok, _} = capi_client_payouts:get_payout_tools(?config(context, Config), ?STRING).
 
 -spec get_payout_tool_by_id(config()) ->
     _.
 get_payout_tool_by_id(Config) ->
-    mock_handle_function({ok, ?CONTRACT}),
+    start_dummy_service({ok, ?CONTRACT}, Config),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?STRING).
 
 -spec create_webhook_ok_test(config()) ->
     _.
 create_webhook_ok_test(Config) ->
-    Fun = fun(X, _, _, _) ->
+    Fun = fun(X) ->
         case X of
             'GetShop' ->
                 {ok, ?SHOP};
@@ -603,7 +685,7 @@ create_webhook_ok_test(Config) ->
                 {ok, ?WEBHOOK}
         end
     end,
-    mock_handle_function(func, Fun),
+    start_dummy_service(Fun, Config),
     Req = #{
         <<"url">> => <<"http://localhost:8080/TODO">>,
         <<"scope">> => #{
@@ -617,19 +699,19 @@ create_webhook_ok_test(Config) ->
 -spec get_webhooks(config()) ->
     _.
 get_webhooks(Config) ->
-    mock_handle_function({ok, [?WEBHOOK]}),
+    start_dummy_service({ok, [?WEBHOOK]}, Config),
     {ok, _} = capi_client_webhooks:get_webhooks(?config(context, Config)).
 
 -spec get_webhook_by_id(config()) ->
     _.
 get_webhook_by_id(Config) ->
-    mock_handle_function({ok, ?WEBHOOK}),
+    start_dummy_service({ok, ?WEBHOOK}, Config),
     {ok, _} = capi_client_webhooks:get_webhook_by_id(?config(context, Config), ?INTEGER_BINARY).
 
 -spec delete_webhook_by_id(config()) ->
     _.
 delete_webhook_by_id(Config) ->
-    Fun = fun(X, _, _, _) ->
+    Fun = fun(X) ->
         case X of
             'Get' ->
                 {ok, ?WEBHOOK};
@@ -637,13 +719,13 @@ delete_webhook_by_id(Config) ->
                 {ok, ok}
         end
     end,
-    mock_handle_function(func, Fun),
+    start_dummy_service(Fun, Config),
     ok = capi_client_webhooks:delete_webhook_by_id(?config(context, Config), ?INTEGER_BINARY).
 
 -spec get_locations_names_ok_test(config()) ->
     _.
 get_locations_names_ok_test(Config) ->
-    mock_handle_function({ok, #{123 => ?STRING}}),
+    start_dummy_service({ok, #{123 => ?STRING}}, Config),
     {TestGeoID, _} = {53654, <<"Могадишо"/utf8>>},
     PreparedGeo = genlib_string:join($,,[genlib:to_binary(I) || I <- [TestGeoID]]),
     Query = #{
@@ -655,7 +737,7 @@ get_locations_names_ok_test(Config) ->
 -spec search_invoices_ok_test(config()) ->
     _.
 search_invoices_ok_test(Config) ->
-    mock_handle_function({ok, ?STAT_RESPONSE_INVOICES}),
+    start_dummy_service({ok, ?STAT_RESPONSE_INVOICES}, Config),
     Query = [
         {limit, 2},
         {offset, 2},
@@ -663,7 +745,7 @@ search_invoices_ok_test(Config) ->
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
         {invoiceStatus, <<"fulfilled">>},
         {payerEmail, <<"test@test.ru">>},
-        {payerIP, <<"192.168.0.0.1">>},
+        {payerIP, <<"192.168.0.1">>},
         {paymentStatus, <<"processed">>},
         {paymentFlow, <<"instant">>},
         {paymentMethod, <<"bankCard">>},
@@ -681,7 +763,7 @@ search_invoices_ok_test(Config) ->
 -spec search_payments_ok_test(config()) ->
     _.
 search_payments_ok_test(Config) ->
-    mock_handle_function({ok, ?STAT_RESPONSE_PAYMENTS}),
+    start_dummy_service({ok, ?STAT_RESPONSE_PAYMENTS}, Config),
     Query = [
         {limit, 2},
         {offset, 2},
@@ -711,7 +793,7 @@ search_payouts_ok_test(_) ->
 -spec get_payment_conversion_stats_ok_test(_) ->
     _.
 get_payment_conversion_stats_ok_test(Config) ->
-    mock_handle_function({ok, ?STAT_RESPONSE_RECORDS}),
+    start_dummy_service({ok, ?STAT_RESPONSE_RECORDS}, Config),
     Query = [
         {limit, 2},
         {offset, 2},
@@ -725,7 +807,7 @@ get_payment_conversion_stats_ok_test(Config) ->
 -spec get_payment_revenue_stats_ok_test(config()) ->
     _.
 get_payment_revenue_stats_ok_test(Config) ->
-    mock_handle_function({ok, ?STAT_RESPONSE_RECORDS}),
+    start_dummy_service({ok, ?STAT_RESPONSE_RECORDS}, Config),
     Query = [
         {limit, 2},
         {offset, 2},
@@ -739,7 +821,7 @@ get_payment_revenue_stats_ok_test(Config) ->
 -spec get_payment_geo_stats_ok_test(config()) ->
     _.
 get_payment_geo_stats_ok_test(Config) ->
-    mock_handle_function({ok, ?STAT_RESPONSE_RECORDS}),
+    start_dummy_service({ok, ?STAT_RESPONSE_RECORDS}, Config),
     Query = [
         {limit, 2},
         {offset, 0},
@@ -753,7 +835,7 @@ get_payment_geo_stats_ok_test(Config) ->
 -spec get_payment_rate_stats_ok_test(config()) ->
     _.
 get_payment_rate_stats_ok_test(Config) ->
-    mock_handle_function({ok, ?STAT_RESPONSE_RECORDS}),
+    start_dummy_service({ok, ?STAT_RESPONSE_RECORDS}, Config),
     Query = [
         {limit, 2},
         {offset, 0},
@@ -767,7 +849,7 @@ get_payment_rate_stats_ok_test(Config) ->
 -spec get_payment_method_stats_ok_test(config()) ->
     _.
 get_payment_method_stats_ok_test(Config) ->
-    mock_handle_function({ok, ?STAT_RESPONSE_RECORDS}),
+    start_dummy_service({ok, ?STAT_RESPONSE_RECORDS}, Config),
     Query = [
         {limit, 2},
         {offset, 0},
@@ -782,13 +864,13 @@ get_payment_method_stats_ok_test(Config) ->
 -spec get_reports_ok_test(config()) ->
     _.
 get_reports_ok_test(Config) ->
-    mock_handle_function({ok, [?REPORT]}),
+    start_dummy_service({ok, [?REPORT]}, Config),
     {ok, _} = capi_client_reports:get_reports(?config(context, Config), ?STRING, ?TIMESTAMP, ?TIMESTAMP).
 
 -spec download_report_file_ok_test(_) ->
     _.
 download_report_file_ok_test(Config) ->
-        Fun = fun(X, _, _, _) ->
+    Fun = fun(X) ->
         case X of
             'GetReport' ->
                 {ok, ?REPORT};
@@ -796,20 +878,20 @@ download_report_file_ok_test(Config) ->
                 {ok, ?STRING}
         end
     end,
-    mock_handle_function(func, Fun),
+    start_dummy_service(Fun, Config),
     {ok, _} = capi_client_reports:download_file(?config(context, Config), ?STRING, ?INTEGER, ?STRING).
 
 -spec get_categories_ok_test(config()) ->
     _.
 get_categories_ok_test(Config) ->
-    mock_handle_function({ok, ?SNAPSHOT}),
+    start_dummy_service({ok, ?SNAPSHOT}, Config),
     {ok, _} = capi_client_categories:get_categories(?config(context, Config)).
 
 
 -spec get_category_by_ref_ok_test(config()) ->
     _.
 get_category_by_ref_ok_test(Config) ->
-    mock_handle_function({ok, ?SNAPSHOT}),
+    start_dummy_service({ok, ?SNAPSHOT}, Config),
     {ok, _} = capi_client_categories:get_category_by_ref(?config(context, Config), ?INTEGER).
 
 %%
@@ -824,14 +906,17 @@ get_token() ->
         {[invoices], write},
         {[payment_tool_tokens], write}
     ],
+    get_token(ACL, unlimited).
+
+get_token(ACL, LifeTime) ->
     PartyID = ?STRING,
     Claims = #{?STRING => ?STRING},
-    capi_authorizer_jwt:issue({{PartyID, capi_acl:from_list(ACL)}, Claims}, unlimited).
+    capi_authorizer_jwt:issue({{PartyID, capi_acl:from_list(ACL)}, Claims}, LifeTime).
 
 start_capi(Config) ->
     CapiEnv = [
-        {ip, "::"},
-        {port, 8080},
+        {ip, ?CAPI_IP},
+        {port, ?CAPI_PORT},
         {service_type, real},
         {authorizers, #{
             jwt => #{
@@ -844,39 +929,41 @@ start_capi(Config) ->
     ],
     capi_ct_helper:start_app(capi, CapiEnv).
 
-start_dummy_services(SupPid) ->
-    ServiceURLs = lists:foldl(
-        fun(Spec, Acc) ->
-            Handler = start_service_handler(capi_dummy_service, Spec, SupPid),
-            maps:merge(Handler, Acc)
-        end,
-        #{},
-        service_specs()),
-    capi_ct_helper:start_app(capi_woody_client, [{service_urls, ServiceURLs}]).
-
-start_service_handler(Module, {Name, {ThriftModule, Service}}, SupPid) ->
+start_dummy_service(Result, Config) ->
+    Module = capi_dummy_service,
     Port = get_random_port(),
-    Path = "/dummy",
-    {ok, IP} = inet:parse_address("0.0.0.0"),
+    {ok, IP} = inet:parse_address(?CAPI_IP),
     ChildSpec = woody_server:child_spec(
-        {Name, Module},
+        {dummy, Module},
         #{
             ip => IP,
             port => Port,
             event_handler => capi_woody_event_handler,
-            handlers => [{Path, {{ThriftModule, Service}, {Module, #{}}}}]
+            handlers => [
+                {make_path(Name), {{ThriftModule, Service}, {Module, #{result => Result}}}} ||
+                {Name, {ThriftModule, Service}} <- woody_services()
+            ]
         }
     ),
-    {ok, _} = supervisor:start_child(SupPid, ChildSpec),
-    #{Name => iolist_to_binary(["http://capi:", integer_to_list(Port), Path])}.
+    {ok, _} = supervisor:start_child(?config(test_sup, Config), ChildSpec),
+    ServiceURLs = lists:foldl(
+        fun({Name, _}, Acc) ->
+            Acc#{Name => iolist_to_binary(["http://", ?CAPI_HOST_NAME, ":", integer_to_list(Port), make_path(Name)])}
+        end,
+        #{},
+        woody_services()),
+    capi_ct_helper:start_app(capi_woody_client, [{service_urls, ServiceURLs}]).
+
+make_path(ServiceName) ->
+    "/" ++ atom_to_list(ServiceName).
 
 get_random_port() ->
     rand:uniform(32768) + 32767.
 
 get_context(Token, Retries, Timeout) ->
-    capi_client_lib:get_context("localhost:8080", Token, Retries, Timeout, ipv4).
+    capi_client_lib:get_context(?CAPI_URL, Token, Retries, Timeout, ipv4).
 
-service_specs() ->
+woody_services() ->
     [
         {invoicing, {dmsl_payment_processing_thrift, 'Invoicing'}},
         {invoice_templating, {dmsl_payment_processing_thrift, 'InvoiceTemplating'}},
@@ -893,17 +980,6 @@ service_specs() ->
 get_keysource(Fn, Config) ->
     {pem_file, filename:join(?config(data_dir, Config), Fn)}.
 
-mock_handle_function() ->
-    mock_handle_function({ok, ok}).
-
-mock_handle_function(Response) ->
-    meck:new(capi_dummy_service, [passthrough]),
-    meck:expect(capi_dummy_service, handle_function, 4, Response).
-
-mock_handle_function(func, Function) ->
-    meck:new(capi_dummy_service),
-    meck:expect(capi_dummy_service, handle_function, Function).
-
 get_lifetime() ->
     get_lifetime(0, 0, 7).
 
@@ -913,3 +989,28 @@ get_lifetime(YY, MM, DD) ->
        <<"months">> => MM,
        <<"days">>   => DD
     }.
+
+call(Method, Path, Body, Headers) ->
+    Url = get_url(Path),
+    PreparedBody = jsx:encode(Body),
+    {ok, Code, RespHeaders, ClientRef} = hackney:request(Method, Url, Headers, PreparedBody),
+    {ok, Code, RespHeaders, get_body(ClientRef)}.
+
+auth_header(Token) ->
+    {<<"Authorization">>, <<"Bearer ", Token/binary>>} .
+
+content_type_header() ->
+    {<<"Content-Type">>, <<"application/json; charset=utf-8">>}.
+
+req_id_header() ->
+    req_id_header(genlib:unique()).
+
+req_id_header(ReqID) ->
+    {<<"X-Request-ID">>, genlib:to_binary(ReqID)}.
+
+get_url(Path) ->
+    ?CAPI_URL ++ Path.
+
+get_body(ClientRef) ->
+    {ok, Body} = hackney:body(ClientRef),
+    Body.
