@@ -2104,8 +2104,8 @@ encode_payout_tool_params(#{
         tool_info = encode_payout_tool_info(Details)
     }.
 
-encode_payout_tool_info(#{<<"type">> := <<"PayoutToolBankAccount">>} = Tool) ->
-   {bank_account, encode_bank_account(maps:get(<<"bankAccount">>, Tool))}.
+encode_payout_tool_info(#{<<"detailsType">> := <<"PayoutToolDetailsBankAccount">>} = Tool) ->
+   {bank_account, encode_bank_account(Tool)}.
 
 encode_bank_account(#{
     <<"account">> := Account,
@@ -3155,7 +3155,7 @@ decode_stat_payout_tool_details(PayoutType) ->
     decode_payout_tool_details(merchstat_to_domain(PayoutType)).
 
 decode_payout_tool_details({bank_card, BankCard}) ->
-    decode_bank_card_details(<<"PayoutToolDetailsBankCardData">>, BankCard);
+    decode_bank_card_details(<<"PayoutToolDetailsBankCard">>, BankCard);
 decode_payout_tool_details({bank_account, BankAccount}) ->
     decode_bank_account_details(<<"PayoutToolDetailsBankAccount">>, BankAccount).
 
