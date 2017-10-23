@@ -6,10 +6,5 @@
 -spec handle_function(woody:func(), woody:args(), woody_context:ctx(), #{}) ->
     {ok, term()}.
 
-handle_function(Function, _, _, #{result := Result}) ->
-    case is_function(Result) of
-        true ->
-            Result(Function);
-        _ ->
-            Result
-    end.
+handle_function(FunName, _, _, #{function := Fun}) ->
+    Fun(FunName).
