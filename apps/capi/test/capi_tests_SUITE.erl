@@ -517,13 +517,16 @@ create_payment_ok_test(Config) ->
             <<"fingerprint">> => <<"test fingerprint">>
         }
     },
-    {ok, Token, Session} = capi_client_tokens:create_payment_tool_token(?config(context, Config), Req1),
+    {ok, Token, Session} = capi_client_tokens:create_payment_resource(?config(context, Config), Req1),
     Req2 = #{
-        <<"paymentSession">> => Session,
-        <<"paymentToolToken">> => Token,
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
-        <<"contactInfo">> => #{
-            <<"email">> => <<"bla@bla.ru">>
+        <<"payer">> => #{
+            <<"payerType">> => <<"PaymentResourcePayer">>,
+            <<"paymentSession">> => Session,
+            <<"paymentToolToken">> => Token,
+            <<"contactInfo">> => #{
+                <<"email">> => <<"bla@bla.ru">>
+            }
         }
     },
     {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
@@ -614,7 +617,7 @@ create_payment_tool_token_ok_test(Config) ->
             <<"fingerprint">> => <<"test fingerprint">>
         }
     },
-    {ok, _, _} = capi_client_tokens:create_payment_tool_token(?config(context, Config), Req).
+    {ok, _, _} = capi_client_tokens:create_payment_resource(?config(context, Config), Req).
 
 -spec get_my_party_ok_test(config()) ->
     _.
@@ -744,13 +747,11 @@ create_claim_ok_test(Config) ->
             <<"payoutToolID">> => ?STRING,
             <<"currency">> => ?RUB,
             <<"details">> => #{
-                <<"type">> => <<"PayoutToolBankAccount">>,
-                <<"bankAccount">> => #{
-                    <<"account">> => <<"12345678901234567890">>,
-                    <<"bankName">> => <<"testBankName">>,
-                    <<"bankPostAccount">> => <<"12345678901234567890">>,
-                    <<"bankBik">> => <<"123456789">>
-                }
+                <<"detailsType">> => <<"PayoutToolDetailsBankAccount">>,
+                <<"account">> => <<"12345678901234567890">>,
+                <<"bankName">> => <<"testBankName">>,
+                <<"bankPostAccount">> => <<"12345678901234567890">>,
+                <<"bankBik">> => <<"123456789">>
             }
         }
     ],
@@ -1083,7 +1084,7 @@ get_token() ->
         {[party], write},
         {[invoices], read},
         {[invoices], write},
-        {[payment_tool_tokens], write}
+        {[payment_resources], write}
     ],
     get_token(ACL, unlimited).
 

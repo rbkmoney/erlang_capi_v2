@@ -87,7 +87,7 @@ match_scope_test_() ->
         ?_assertEqual([read]        , match([{invoices, <<"42">>}, {payments, <<"1">>}], ACL)),
         ?_assertEqual([write]       , match([{invoices, <<"43">>}, {payments, <<"1">>}], ACL)),
         ?_assertEqual([read, write] , match([{party, <<"BLARGH">>}], ACL)),
-        ?_assertEqual([]            , match([payment_tool_tokens], ACL))
+        ?_assertEqual([]            , match([payment_resources], ACL))
     ].
 
 new() ->

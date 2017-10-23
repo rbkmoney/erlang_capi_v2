@@ -81,13 +81,27 @@
 
 -define(CONTRACT_INFO, #domain_ContactInfo{
         phone_number = ?STRING,
-        email = ?STRING
+        email = <<"test@test.ru">>
     }).
 
--define(PAYER, #domain_Payer{
+-define(PAYMENT_RESOURCE_PAYER, #domain_PaymentResourcePayer{
+    resource = #domain_DisposablePaymentResource{
+        payment_tool = {bank_card, ?BANK_CARD},
+        payment_session_id = ?STRING,
+        client_info = #domain_ClientInfo{
+            fingerprint = ?STRING,
+            ip_address = ?STRING
+        }
+    },
+    contact_info = ?CONTRACT_INFO
+}).
+
+-define(PAYER, {payment_resource, ?PAYMENT_RESOURCE_PAYER}).
+
+-define(PAYER_DETAILS, #domain_LegacyPayerDetails{
     payment_tool = {bank_card, ?BANK_CARD},
-    session_id   = ?STRING,
-    client_info  = #domain_ClientInfo{
+    session_id = ?STRING,
+    client_info = #domain_ClientInfo{
         fingerprint = ?STRING,
         ip_address = ?STRING
     },
@@ -102,7 +116,8 @@
     payer           = ?PAYER,
     cost            = ?CASH,
     flow            = {instant, #domain_InvoicePaymentFlowInstant{}},
-    context         = ?CONTENT
+    context         = ?CONTENT,
+    payer_details   = ?PAYER_DETAILS
 }).
 
 -define(PAYPROC_PAYMENT, #payproc_InvoicePayment{
@@ -258,13 +273,19 @@
     flow = {instant, #merchstat_InvoicePaymentFlowInstant{}},
     fee = ?INTEGER,
     currency_symbolic_code = ?RUB,
-    payment_tool = {bank_card, #merchstat_BankCard{
-        token = ?STRING,
-        payment_system = visa,
-        bin = ?STRING,
-        masked_pan = <<"TEST1234">>
+    payer = {payment_resource, #merchstat_PaymentResourcePayer{
+            payment_tool = {bank_card, #merchstat_BankCard{
+            token = ?STRING,
+            payment_system = visa,
+            bin = ?STRING,
+            masked_pan = <<"TEST1234">>
+        }},
+        ip_address = ?STRING,
+        fingerprint = ?STRING,
+        phone_number = ?STRING,
+        email = <<"test@test.ru">>,
+        session_id = ?STRING
     }},
-    session_id = ?STRING,
     context = ?CONTENT
 }).
 
