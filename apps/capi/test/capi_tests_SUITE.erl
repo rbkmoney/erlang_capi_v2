@@ -1094,8 +1094,8 @@ get_token(ACL, LifeTime) ->
     capi_authorizer_jwt:issue({{PartyID, capi_acl:from_list(ACL)}, Claims}, LifeTime).
 
 get_dummy_token(Config) ->
-    Pem = filename:join(?config(data_dir, Config), "keys/local/dummy.pem"),
-    JWK = jose_jwk:from_pem_file(Pem),
+    PemFile = get_keysourse("keys/local/dummy.pem", Config),
+    JWK = jose_jwk:from_pem_file(PemFile),
     JWT = jose_jwt:sign(JWK, #{<<"alg">> => <<"RS256">>}, #{}),
     {_Modules, Token} = jose_jws:compact(JWT),
     {ok, Token}.
@@ -1109,7 +1109,7 @@ start_capi(Config) ->
             jwt => #{
                 signee => capi,
                 keyset => #{
-                    capi     => get_keysource("keys/local/private.pem", Config)
+                    capi => {pem_file, get_keysourse("keys/local/private.pem", Config)}
                 }
             }
         }}
@@ -1138,10 +1138,12 @@ mock_services(Services, Config) ->
     {ok, _} = supervisor:start_child(?config(test_sup, Config), ChildSpec),
     ServiceURLs = lists:foldl(
         fun({Service, _}, Acc) ->
-            Acc#{Service => iolist_to_binary(["http://", ?CAPI_HOST_NAME, ":", integer_to_list(Port), make_path(Service)])}
+            URL = iolist_to_binary(["http://", ?CAPI_HOST_NAME, ":", integer_to_list(Port), make_path(Service)]),
+            Acc#{Service => URL}
         end,
         #{},
-        Services),
+        Services
+    ),
     capi_ct_helper:start_app(capi_woody_client, [{service_urls, ServiceURLs}]).
 
 make_path(ServiceName) ->
@@ -1167,8 +1169,8 @@ woody_services() ->
         {reporting, {dmsl_reporting_thrift, 'Reporting'}}
     ].
 
-get_keysource(Fn, Config) ->
-    {pem_file, filename:join(?config(data_dir, Config), Fn)}.
+get_keysourse(Key, Config) ->
+    filename:join(?config(data_dir, Config), Key).
 
 get_lifetime() ->
     get_lifetime(0, 0, 7).
