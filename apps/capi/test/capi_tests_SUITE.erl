@@ -102,7 +102,16 @@
     download_report_file_ok_test/1,
 
     get_categories_ok_test/1,
-    get_category_by_ref_ok_test/1
+    get_category_by_ref_ok_test/1,
+
+    create_customer_ok_test/1,
+    get_customer_ok_test/1,
+    create_customer_access_token_ok_test/1,
+    create_binding_ok_test/1,
+    get_bindings_ok_test/1,
+    get_binding_ok_test/1,
+    get_customer_events_ok_test/1,
+    delete_customer_ok_test/1
 ]).
 
 -define(CAPI_IP                     , "::").
@@ -206,7 +215,16 @@ all() ->
         download_report_file_ok_test,
 
         get_categories_ok_test,
-        get_category_by_ref_ok_test
+        get_category_by_ref_ok_test,
+
+        create_customer_ok_test,
+        get_customer_ok_test,
+        create_customer_access_token_ok_test,
+        create_binding_ok_test,
+        get_bindings_ok_test,
+        get_binding_ok_test,
+        get_customer_events_ok_test,
+        delete_customer_ok_test
     ].
 
 %%
@@ -367,7 +385,7 @@ get_invoice_ok_test(Config) ->
     _.
 get_invoice_events_ok_test(Config) ->
     Fun = fun('GetEvents') ->
-        {ok, [?EVENT]}
+        {ok, [?INVOICE_EVENT]}
     end,
     mock_services([{invoicing, Fun}], Config),
     {ok, _} = capi_client_invoices:get_invoice_events(?config(context, Config), ?STRING, ?INTEGER).
@@ -488,12 +506,8 @@ get_account_by_id_ok_test(Config) ->
 -spec create_payment_ok_test(config()) ->
     _.
 create_payment_ok_test(Config) ->
-    PutCardDataResult = #'PutCardDataResult'{
-        bank_card = ?BANK_CARD,
-        session_id = ?STRING
-    },
     Fun1 = fun('PutCardData') ->
-        {ok, PutCardDataResult}
+        {ok, ?PUT_CARD_DATA_RESULT}
     end,
     Fun2 = fun('StartPayment') ->
         {ok, ?PAYPROC_PAYMENT}
@@ -597,12 +611,8 @@ capture_payment_ok_test(Config) ->
 -spec create_payment_tool_token_ok_test(_) ->
     _.
 create_payment_tool_token_ok_test(Config) ->
-    PutCardDataResult = #'PutCardDataResult'{
-        bank_card = ?BANK_CARD,
-        session_id = ?STRING
-    },
     Fun = fun('PutCardData') ->
-        {ok, PutCardDataResult}
+        {ok, ?PUT_CARD_DATA_RESULT}
     end,
     mock_services([{cds_storage, Fun}], Config),
     Req = #{
@@ -1074,6 +1084,112 @@ get_category_by_ref_ok_test(Config) ->
     mock_services([{repository, Fun}], Config),
     {ok, _} = capi_client_categories:get_category_by_ref(?config(context, Config), ?INTEGER).
 
+-spec create_customer_ok_test(config()) ->
+    _.
+create_customer_ok_test(Config) ->
+    Fun = fun('Create') ->
+        {ok, ?CUSTOMER}
+    end,
+    mock_services([{customer_management, Fun}], Config),
+    Req = #{
+        <<"shopID">> => ?STRING,
+        <<"contactInfo">> => #{<<"email">> => <<"bla@bla.ru">>},
+        <<"metadata">> => #{<<"text">> => [<<"SOMESHIT">>, 42]}
+    },
+    {ok, _} = capi_client_customers:create_customer(?config(context, Config), Req).
+
+-spec get_customer_ok_test(config()) ->
+    _.
+get_customer_ok_test(Config) ->
+    Fun = fun('Get') ->
+        {ok, ?CUSTOMER}
+    end,
+    mock_services([{customer_management, Fun}], Config),
+    {ok, _} = capi_client_customers:get_customer_by_id(?config(context, Config), ?STRING).
+
+-spec create_customer_access_token_ok_test(config()) ->
+    _.
+create_customer_access_token_ok_test(Config) ->
+    Fun = fun('Get') ->
+        {ok, ?CUSTOMER}
+    end,
+    mock_services([{customer_management, Fun}], Config),
+    {ok, _} = capi_client_customers:create_customer_access_token(?config(context, Config), ?STRING).
+
+-spec create_binding_ok_test(config()) ->
+    _.
+create_binding_ok_test(Config) ->
+    Fun1 = fun('PutCardData') ->
+        {ok, ?PUT_CARD_DATA_RESULT}
+    end,
+    Fun2 = fun('StartBinding') ->
+        {ok, ?CUSTOMER_BINDING}
+    end,
+    mock_services(
+        [
+            {cds_storage, Fun1},
+            {customer_management, Fun2}
+        ],
+        Config
+    ),
+    Req1 = #{
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"CardData">>,
+            <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
+            <<"cardNumber">> => <<"4111111111111111">>,
+            <<"expDate">> => <<"08/27">>,
+            <<"cvv">> => <<"232">>
+        },
+        <<"clientInfo">> => #{
+            <<"fingerprint">> => <<"test fingerprint">>
+        }
+    },
+    {ok, Token, Session} = capi_client_tokens:create_payment_resource(?config(context, Config), Req1),
+    Req2 = #{
+        <<"paymentResource">> => #{
+            <<"paymentSession">> => Session,
+            <<"paymentToolToken">> => Token
+        }
+    },
+    {ok, _} = capi_client_customers:create_binding(?config(context, Config), ?STRING, Req2).
+
+
+-spec get_bindings_ok_test(config()) ->
+    _.
+get_bindings_ok_test(Config) ->
+    Fun = fun('Get') ->
+        {ok, ?CUSTOMER}
+    end,
+    mock_services([{customer_management, Fun}], Config),
+    {ok, _} = capi_client_customers:get_bindings(?config(context, Config), ?STRING).
+
+-spec get_binding_ok_test(config()) ->
+    _.
+get_binding_ok_test(Config) ->
+    Fun = fun('Get') ->
+        {ok, ?CUSTOMER}
+    end,
+    mock_services([{customer_management, Fun}], Config),
+    {ok, _} = capi_client_customers:get_binding(?config(context, Config), ?STRING, ?STRING).
+
+-spec get_customer_events_ok_test(config()) ->
+    _.
+get_customer_events_ok_test(Config) ->
+    Fun = fun('GetEvents') ->
+        {ok, []}
+    end,
+    mock_services([{customer_management, Fun}], Config),
+    {ok, _} = capi_client_customers:get_customer_events(?config(context, Config), ?STRING, ?INTEGER).
+
+-spec delete_customer_ok_test(config()) ->
+    _.
+delete_customer_ok_test(Config) ->
+    Fun = fun('Delete') ->
+        {ok, ok}
+    end,
+    mock_services([{customer_management, Fun}], Config),
+    {ok, _} = capi_client_customers:delete_customer(?config(context, Config), ?STRING).
+
 %%
 
 get_token() ->
@@ -1084,7 +1200,11 @@ get_token() ->
         {[party], write},
         {[invoices], read},
         {[invoices], write},
-        {[payment_resources], write}
+        {[payment_resources], write},
+        {[customers], read},
+        {[customers], write},
+        {[customers, bindings], read},
+        {[customers, bindings], write}
     ],
     get_token(ACL, unlimited).
 
@@ -1166,7 +1286,8 @@ woody_services() ->
         {webhook_manager, {dmsl_webhooker_thrift, 'WebhookManager'}},
         {geo_ip_service, {dmsl_geo_ip_thrift, 'GeoIpService'}},
         {merchant_stat, {dmsl_merch_stat_thrift, 'MerchantStatistics'}},
-        {reporting, {dmsl_reporting_thrift, 'Reporting'}}
+        {reporting, {dmsl_reporting_thrift, 'Reporting'}},
+        {customer_management, {dmsl_payment_processing_thrift, 'CustomerManagement'}}
     ].
 
 get_keysourse(Key, Config) ->

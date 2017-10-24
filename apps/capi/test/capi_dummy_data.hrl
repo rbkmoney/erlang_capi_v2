@@ -84,15 +84,17 @@
         email = <<"test@test.ru">>
     }).
 
+-define(DISP_PAYMENT_RESOURCE, #domain_DisposablePaymentResource{
+    payment_tool = {bank_card, ?BANK_CARD},
+    payment_session_id = ?STRING,
+    client_info = #domain_ClientInfo{
+        fingerprint = ?STRING,
+        ip_address = ?STRING
+    }
+}).
+
 -define(PAYMENT_RESOURCE_PAYER, #domain_PaymentResourcePayer{
-    resource = #domain_DisposablePaymentResource{
-        payment_tool = {bank_card, ?BANK_CARD},
-        payment_session_id = ?STRING,
-        client_info = #domain_ClientInfo{
-            fingerprint = ?STRING,
-            ip_address = ?STRING
-        }
-    },
+    resource = ?DISP_PAYMENT_RESOURCE,
     contact_info = ?CONTRACT_INFO
 }).
 
@@ -338,7 +340,7 @@
     }
 }).
 
--define(EVENT, #payproc_Event{
+-define(INVOICE_EVENT, #payproc_Event{
     id = ?INTEGER,
     created_at = ?TIMESTAMP,
     payload =  {invoice_changes,
@@ -354,3 +356,26 @@
 }).
 
 -define(TERM_SET, #domain_TermSet{}).
+
+-define(CUSTOMER, #payproc_Customer{
+    id = ?STRING,
+    owner_id = ?STRING,
+    shop_id = ?STRING,
+    status = {ready, #payproc_CustomerReady{}},
+    created_at = ?TIMESTAMP,
+    bindings = [?CUSTOMER_BINDING],
+    contact_info = ?CONTRACT_INFO,
+    metadata = {obj, #{}}
+}).
+
+-define(CUSTOMER_BINDING, #payproc_CustomerBinding{
+    id = ?STRING,
+    rec_payment_tool_id = ?STRING,
+    payment_resource = ?DISP_PAYMENT_RESOURCE,
+    status = {succeeded, #payproc_CustomerBindingSucceeded{}}
+}).
+
+-define(PUT_CARD_DATA_RESULT, #'PutCardDataResult'{
+    bank_card = ?BANK_CARD,
+    session_id = ?STRING
+}).
