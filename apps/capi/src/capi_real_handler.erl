@@ -2306,8 +2306,9 @@ decode_invoice(#domain_Invoice{
         amount = Amount,
         currency = Currency
     },
+    shop_id = ShopID,
     context = RawContext,
-    shop_id = ShopID
+    template_id = TemplateID
 }) ->
     genlib_map:compact(maps:merge(#{
         <<"id">> => InvoiceID,
@@ -2319,7 +2320,8 @@ decode_invoice(#domain_Invoice{
         <<"metadata">> =>  decode_context(RawContext),
         <<"product">> => Product,
         <<"description">> => Description,
-        <<"cart">> => decode_invoice_cart(Cart)
+        <<"cart">> => decode_invoice_cart(Cart),
+        <<"invoiceTemplateID">> => TemplateID
     }, decode_invoice_status(InvoiceStatus))).
 
 decode_invoice_status({Status, StatusInfo}) ->
