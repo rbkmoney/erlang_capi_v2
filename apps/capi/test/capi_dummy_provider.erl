@@ -9,6 +9,8 @@
 
 %%
 
+-define(REC_TOKEN, <<"rec_token">>).
+
 -spec get_service_spec() ->
     {Path :: string(), Service :: {module(), atom()}}.
 
@@ -24,7 +26,7 @@ get_service_spec() ->
 
 handle_function(
     'ProcessPayment',
-    [#prxprv_Context{
+    [#prxprv_PaymentContext{
         session = #prxprv_Session{target = Target, state = State},
         payment_info = PaymentInfo,
         options = _
@@ -35,8 +37,32 @@ handle_function(
     process_payment(Target, State, PaymentInfo, Opts);
 
 handle_function(
+    'GenerateToken',
+    [#prxprv_RecurrentTokenContext{
+        session = #prxprv_RecurrentTokenSession{state = _State},
+        token_info = TokenInfo,
+        options = _
+    }],
+    _Context,
+    _Opts
+) ->
+    token_finish(TokenInfo, ?REC_TOKEN);
+
+handle_function(
+    'HandleRecurrentTokenCallback',
+    [_Payload, #prxprv_RecurrentTokenContext{
+        session = #prxprv_RecurrentTokenSession{state = _State},
+        token_info = TokenInfo,
+        options = _
+    }],
+    _Context,
+    _Opts
+) ->
+    {ok, token_respond(?REC_TOKEN, token_finish(TokenInfo, ?REC_TOKEN))};
+
+handle_function(
     'HandlePaymentCallback',
-    [_Payload, #prxprv_Context{
+    [_Payload, #prxprv_PaymentContext{
         session = #prxprv_Session{target = _Target, state = _State},
         payment_info = PaymentInfo,
         options = _
@@ -59,13 +85,28 @@ process_payment({processed, #domain_InvoicePaymentProcessed{}}, _, PaymentInfo, 
     {ok, finish(PaymentInfo)}.
 
 finish(#prxprv_PaymentInfo{payment = Payment}) ->
-    #prxprv_ProxyResult{
+    #prxprv_PaymentProxyResult{
         intent = {finish, #'FinishIntent'{status = {success, #'Success'{}}}},
         trx    = #domain_TransactionInfo{id = Payment#prxprv_InvoicePayment.id, extra = #{}}
     }.
 
+token_finish(#prxprv_RecurrentTokenInfo{payment_tool = PaymentTool}, Token) ->
+    #prxprv_RecurrentTokenProxyResult{
+        intent = {finish, #'prxprv_RecurrentTokenFinishIntent'{
+            status = {success, #'prxprv_RecurrentTokenSuccess'{token = Token}}
+        }},
+        token  = Token,
+        trx    = #domain_TransactionInfo{id = PaymentTool#prxprv_RecurrentPaymentTool.id, extra = #{}}
+    }.
+
 respond(Response, Result) ->
-    #prxprv_CallbackResult{
+    #prxprv_PaymentCallbackResult{
         response = Response,
         result = Result
+    }.
+
+token_respond(Response, CallbackResult) ->
+    #prxprv_RecurrentTokenCallbackResult{
+        response   = Response,
+        result     = CallbackResult
     }.

@@ -11,6 +11,14 @@ namespaces:
         event_sink: payproc
         processor:
             url: http://hellgate:8022/v1/stateproc/party
+    customer:
+        event_sink: payproc
+        processor:
+            url: http://hellgate:8022/v1/stateproc/customer
+    recurrent_paytools:
+        event_sink: recurrent_paytools
+        processor:
+            url: http://hellgate:8022/v1/stateproc/recurrent_paytools
     domain-config:
         processor:
             url: http://dominant:8022/v1/stateproc
