@@ -79,7 +79,7 @@
     masked_pan = <<"TEST1234">>
 }).
 
--define(CONTRACT_INFO, #domain_ContactInfo{
+-define(CONTACT_INFO, #domain_ContactInfo{
         phone_number = ?STRING,
         email = <<"test@test.ru">>
     }).
@@ -95,7 +95,7 @@
 
 -define(PAYMENT_RESOURCE_PAYER, #domain_PaymentResourcePayer{
     resource = ?DISP_PAYMENT_RESOURCE,
-    contact_info = ?CONTRACT_INFO
+    contact_info = ?CONTACT_INFO
 }).
 
 -define(PAYER, {payment_resource, ?PAYMENT_RESOURCE_PAYER}).
@@ -107,7 +107,7 @@
         fingerprint = ?STRING,
         ip_address = ?STRING
     },
-    contact_info = ?CONTRACT_INFO
+    contact_info = ?CONTACT_INFO
 }).
 
 -define(PAYMENT, #domain_InvoicePayment{
@@ -364,7 +364,7 @@
     status = {ready, #payproc_CustomerReady{}},
     created_at = ?TIMESTAMP,
     bindings = [?CUSTOMER_BINDING],
-    contact_info = ?CONTRACT_INFO,
+    contact_info = ?CONTACT_INFO,
     metadata = {obj, #{}}
 }).
 

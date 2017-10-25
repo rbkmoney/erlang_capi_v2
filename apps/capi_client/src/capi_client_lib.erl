@@ -11,11 +11,11 @@
 
 -type context() :: #{
     url           := string(),
-    token         := term(),
     retries       := integer(),
     timeout       := integer(),
     event_handler := event_handler(),
-    protocol      := protocol()
+    protocol      := protocol(),
+    headers       := list(header())
 }.
 -export_type([context/0]).
 
@@ -107,21 +107,21 @@ handle_response(Code, _, Body) when Code div 100 == 2 ->
 handle_response(_, _, Body) ->
     {error, Body}.
 
--spec get_context(string(), term(), integer(), integer(), protocol()) ->
+-spec get_context(string(), list(header()), integer(), integer(), protocol()) ->
     context().
-get_context(Url, Token, Retries, Timeout, Protocol) ->
-    get_context(Url, Token, Retries, Timeout, Protocol, default_event_handler()).
+get_context(Url, Headers, Retries, Timeout, Protocol) ->
+    get_context(Url, Headers, Retries, Timeout, Protocol, default_event_handler()).
 
--spec get_context(string(), term(), integer(), integer(), protocol(), event_handler()) ->
+-spec get_context(string(), list(header()), integer(), integer(), protocol(), event_handler()) ->
     context().
-get_context(Url, Token, Retries, Timeout, Protocol, EventHandler) ->
+get_context(Url, Headers, Retries, Timeout, Protocol, EventHandler) ->
     #{
         url           => Url,
-        token         => Token,
         retries       => Retries,
         timeout       => Timeout,
         protocol      => Protocol,
-        event_handler => EventHandler
+        event_handler => EventHandler,
+        headers       => Headers
     }.
 
 -spec default_event_handler() ->
@@ -135,7 +135,7 @@ default_event_handler() ->
     {string(), list()}.
 get_http_params(Context) ->
     Url     = maps:get(url, Context),
-    Headers = headers(Context),
+    Headers = maps:get(headers, Context),
     {Url, Headers}.
 
 -spec get_hackney_opts(context()) ->
@@ -145,33 +145,6 @@ get_hackney_opts(Context) ->
     [
         {connect_timeout, maps:get(timeout, Context, 5000)},
         {recv_timeout   , maps:get(timeout, Context, 5000)}
-    ].
-
--spec headers(context()) ->
-    list(header()).
-headers(Context) ->
-  [
-        x_request_id_header(),
-        auth_header(maps:get(token, Context)) | json_accept_headers()
-  ].
-
--spec x_request_id_header() ->
-    header().
-x_request_id_header() ->
-    {<<"X-Request-ID">>, integer_to_binary(rand:uniform(100000))}.
-
--spec auth_header(term()) ->
-    header().
-auth_header(Token) ->
-    {<<"Authorization">>, <<"Bearer ", Token/binary>>} .
-
--spec json_accept_headers() ->
-    list(header()).
-json_accept_headers() ->
-    [
-        {<<"Accept">>, <<"application/json">>},
-        {<<"Accept-Charset">>, <<"UTF-8">>},
-        {<<"Content-Type">>, <<"application/json; charset=UTF-8">>}
     ].
 
 -spec decode_body(term()) ->

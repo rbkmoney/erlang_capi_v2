@@ -6,5 +6,5 @@
 -spec handle_function(woody:func(), woody:args(), woody_context:ctx(), #{}) ->
     {ok, term()}.
 
-handle_function(FunName, _, _, #{function := Fun}) ->
-    Fun(FunName).
+handle_function(FunName, Args, _, #{function := Fun}) ->
+    Fun(FunName, Args).
