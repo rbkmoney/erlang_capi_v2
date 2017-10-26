@@ -2259,6 +2259,12 @@ get_domain_fixture(Proxies) ->
                 ])},
                 fees = {value, []}
             }
+        },
+        recurrent_paytools = #domain_RecurrentPaytoolsServiceTerms{
+            payment_methods = {value, ordsets:from_list([
+                ?pmt(bank_card, visa),
+                ?pmt(bank_card, mastercard)
+            ])}
         }
     },
     TermSetLive = #domain_TermSet{
@@ -2409,7 +2415,7 @@ get_domain_fixture(Proxies) ->
                     }
                 },
                 abs_account = <<"1234567890">>,
-                terms = #domain_PaymentsProvisionTerms{
+                payment_terms = #domain_PaymentsProvisionTerms{
                     currencies = {value, ordsets:from_list([
                         ?cur(<<"RUB">>)
                     ])},
@@ -2453,6 +2459,16 @@ get_domain_fixture(Proxies) ->
                     ?cur(<<"RUB">>) => #domain_ProviderAccount{
                         settlement = maps:get(provider_2_settlement, Accounts)
                     }
+                },
+                recurrent_paytool_terms = #domain_RecurrentPaytoolsProvisionTerms{
+                    categories = {value, ordsets:from_list([
+                        ?cat(?LIVE_CATEGORY_ID)
+                    ])},
+                    payment_methods = {value, ordsets:from_list([
+                        ?pmt(bank_card, visa),
+                        ?pmt(bank_card, mastercard)
+                    ])},
+                    cash_value = {value, ?cash(1000, ?cur(<<"RUB">>))}
                 }
             }
         }},
@@ -2477,7 +2493,7 @@ get_domain_fixture(Proxies) ->
                     }
                 },
                 abs_account = <<"1234567890">>,
-                terms = #domain_PaymentsProvisionTerms{
+                payment_terms = #domain_PaymentsProvisionTerms{
                     currencies = {value, ordsets:from_list([
                         ?cur(<<"RUB">>)
                     ])},
@@ -2508,6 +2524,16 @@ get_domain_fixture(Proxies) ->
                     ?cur(<<"RUB">>) => #domain_ProviderAccount{
                         settlement = maps:get(provider_3_settlement, Accounts)
                     }
+                },
+                recurrent_paytool_terms = #domain_RecurrentPaytoolsProvisionTerms{
+                    categories = {value, ordsets:from_list([
+                        ?cat(?LIVE_CATEGORY_ID)
+                    ])},
+                    payment_methods = {value, ordsets:from_list([
+                        ?pmt(bank_card, visa),
+                        ?pmt(bank_card, mastercard)
+                    ])},
+                    cash_value = {value, ?cash(1000, ?cur(<<"RUB">>))}
                 }
             }
         }},
