@@ -150,23 +150,23 @@ get_hackney_opts(Context) ->
 -spec headers(context()) ->
     list(header()).
 headers(Context) ->
-    lists:merge([
-        x_request_id_header(),
-        auth_header(maps:get(token, Context)),
-        json_accept_headers()
-    ]).
+    RequiredHeaders = [x_request_id_header() | json_accept_headers()],
+    case maps:get(token, Context) of
+        <<>> ->
+            RequiredHeaders;
+        Token ->
+            [auth_header(Token) | RequiredHeaders]
+    end.
 
 -spec x_request_id_header() ->
-    list(header()).
+    header().
 x_request_id_header() ->
-    [{<<"X-Request-ID">>, integer_to_binary(rand:uniform(100000))}].
+    {<<"X-Request-ID">>, integer_to_binary(rand:uniform(100000))}.
 
 -spec auth_header(term()) ->
-    list(header()).
-auth_header(<<>>) ->
-    [];
+    header().
 auth_header(Token) ->
-    [{<<"Authorization">>, <<"Bearer ", Token/binary>>}].
+    {<<"Authorization">>, <<"Bearer ", Token/binary>>}.
 
 -spec json_accept_headers() ->
     list(header()).
