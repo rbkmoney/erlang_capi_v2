@@ -252,8 +252,7 @@ init_per_suite(Config) ->
         capi_ct_helper:start_app(woody) ++
         start_capi(Config),
     {ok, Token} = get_token(),
-    Headers = [auth_header(Token), content_type_header(), req_id_header()],
-    Context = get_context(Headers, 10, 60000),
+    Context = get_context(Token, 10, 60000),
     [{context, Context}, {apps, lists:reverse(Apps)} | Config].
 
 -spec end_per_suite(config()) ->
@@ -282,8 +281,7 @@ end_per_testcase(_Name, C) ->
 authorization_positive_lifetime_ok_test(Config) ->
     mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
     {ok, Token} = get_token([], {lifetime, 10}),
-    Headers = [auth_header(Token), content_type_header(), req_id_header()],
-    NewContext = maps:update(headers, Headers, ?config(context, Config)),
+    NewContext = maps:update(token, Token, ?config(context, Config)),
     {ok, _} = capi_client_categories:get_categories(NewContext).
 
 -spec authorization_unlimited_lifetime_ok_test(config()) ->
@@ -291,8 +289,7 @@ authorization_positive_lifetime_ok_test(Config) ->
 authorization_unlimited_lifetime_ok_test(Config) ->
     mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
     {ok, Token} = get_token([], unlimited),
-    Headers = [auth_header(Token), content_type_header(), req_id_header()],
-    NewContext = maps:update(headers, Headers, ?config(context, Config)),
+    NewContext = maps:update(token, Token, ?config(context, Config)),
     {ok, _} = capi_client_categories:get_categories(NewContext).
 
 -spec authorization_far_future_deadline_ok_test(config()) ->
@@ -300,8 +297,7 @@ authorization_unlimited_lifetime_ok_test(Config) ->
 authorization_far_future_deadline_ok_test(Config) ->
     mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
     {ok, Token} = get_token([], {deadline, 4102444800}), % 01/01/2100 @ 12:00am (UTC)
-    Headers = [auth_header(Token), content_type_header(), req_id_header()],
-    NewContext = maps:update(headers, Headers, ?config(context, Config)),
+    NewContext = maps:update(token, Token, ?config(context, Config)),
     {ok, _} = capi_client_categories:get_categories(NewContext).
 
 -spec authorization_permission_ok_test(config()) ->
@@ -309,48 +305,42 @@ authorization_far_future_deadline_ok_test(Config) ->
 authorization_permission_ok_test(Config) ->
     mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
     {ok, Token} = get_token([{[party], read}], unlimited),
-    Headers = [auth_header(Token), content_type_header(), req_id_header()],
-    NewContext = maps:update(headers, Headers, ?config(context, Config)),
+    NewContext = maps:update(token, Token, ?config(context, Config)),
     {ok, _} = capi_client_parties:get_my_party(NewContext).
 
 -spec authorization_negative_lifetime_error_test(config()) ->
     _.
 authorization_negative_lifetime_error_test(Config) ->
     {ok, Token} = get_token([], {lifetime, -10}),
-    Headers = [auth_header(Token), content_type_header(), req_id_header()],
-    NewContext = maps:update(headers, Headers, ?config(context, Config)),
-    {error, _} = capi_client_categories:get_categories(NewContext).
+    NewContext = maps:update(token, Token, ?config(context, Config)),
+    {error, {401, _}} = capi_client_categories:get_categories(NewContext).
 
 -spec authorization_bad_deadline_error_test(config()) ->
     _.
 authorization_bad_deadline_error_test(Config) ->
     {ok, Token} = get_token([], {deadline, -10}),
-    Headers = [auth_header(Token), content_type_header(), req_id_header()],
-    NewContext = maps:update(headers, Headers, ?config(context, Config)),
-    {error, _} = capi_client_categories:get_categories(NewContext).
+    NewContext = maps:update(token, Token, ?config(context, Config)),
+    {error, {401, _}} = capi_client_categories:get_categories(NewContext).
 
 -spec authorization_error_no_header_test(config()) ->
     _.
 authorization_error_no_header_test(Config) ->
-    Headers = [content_type_header(), req_id_header()],
-    NewContext = maps:update(headers, Headers, ?config(context, Config)),
-    {error, _} = capi_client_categories:get_categories(NewContext).
+    NewContext = maps:update(token, <<>>, ?config(context, Config)),
+    {error, {401, _}} = capi_client_categories:get_categories(NewContext).
 
 -spec authorization_error_no_permission_test(config()) ->
     _.
 authorization_error_no_permission_test(Config) ->
     {ok, Token} = get_token([], {lifetime, 10}),
-    Headers = [auth_header(Token), content_type_header(), req_id_header()],
-    NewContext = maps:update(headers, Headers, ?config(context, Config)),
-    {error, _} = capi_client_parties:get_my_party(NewContext).
+    NewContext = maps:update(token, Token, ?config(context, Config)),
+    {error, {401, _}} = capi_client_parties:get_my_party(NewContext).
 
 -spec authorization_bad_token_error_test(config()) ->
     _.
 authorization_bad_token_error_test(Config) ->
     {ok, Token} = get_dummy_token(Config),
-    Headers = [auth_header(Token), content_type_header(), req_id_header()],
-    NewContext = maps:update(headers, Headers, ?config(context, Config)),
-    {error, _} = capi_client_categories:get_categories(NewContext).
+    NewContext = maps:update(token, Token, ?config(context, Config)),
+    {error, {401, _}} = capi_client_categories:get_categories(NewContext).
 
 -spec create_invoice_ok_test(config()) ->
     _.
@@ -1018,9 +1008,9 @@ get_dummy_token(Config) ->
             }
         }
     },
-    BadPemFile = get_keysourse("keys/local/dummy.pem", Config),
+    BadPemFile = get_keysource("keys/local/dummy.pem", Config),
     BadJWK = jose_jwk:from_pem_file(BadPemFile),
-    GoodPemFile = get_keysourse("keys/local/private.pem", Config),
+    GoodPemFile = get_keysource("keys/local/private.pem", Config),
     GoodJWK = jose_jwk:from_pem_file(GoodPemFile),
     JWKPublic = jose_jwk:to_public(GoodJWK),
     {_Module, PublicKey} = JWKPublic#jose_jwk.kty,
@@ -1039,7 +1029,7 @@ start_capi(Config) ->
             jwt => #{
                 signee => capi,
                 keyset => #{
-                    capi => {pem_file, get_keysourse("keys/local/private.pem", Config)}
+                    capi => {pem_file, get_keysource("keys/local/private.pem", Config)}
                 }
             }
         }}
@@ -1082,8 +1072,8 @@ make_path(ServiceName) ->
 get_random_port() ->
     rand:uniform(32768) + 32767.
 
-get_context(Headers, Retries, Timeout) ->
-    capi_client_lib:get_context(?CAPI_URL, Headers, Retries, Timeout, ipv4).
+get_context(Token, Retries, Timeout) ->
+    capi_client_lib:get_context(?CAPI_URL, Token, Retries, Timeout, ipv4).
 
 woody_services() ->
     [
@@ -1100,7 +1090,7 @@ woody_services() ->
         {customer_management, {dmsl_payment_processing_thrift, 'CustomerManagement'}}
     ].
 
-get_keysourse(Key, Config) ->
+get_keysource(Key, Config) ->
     filename:join(?config(data_dir, Config), Key).
 
 get_lifetime() ->
@@ -1112,18 +1102,6 @@ get_lifetime(YY, MM, DD) ->
        <<"months">> => MM,
        <<"days">>   => DD
     }.
-
-auth_header(Token) ->
-    {<<"Authorization">>, <<"Bearer ", Token/binary>>}.
-
-content_type_header() ->
-    {<<"Content-Type">>, <<"application/json; charset=utf-8">>}.
-
-req_id_header() ->
-    req_id_header(genlib:unique()).
-
-req_id_header(ReqID) ->
-    {<<"X-Request-ID">>, genlib:to_binary(ReqID)}.
 
 unique_id() ->
     <<ID:64>> = snowflake:new(),
