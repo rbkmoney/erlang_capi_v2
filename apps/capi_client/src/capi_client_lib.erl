@@ -157,12 +157,12 @@ headers(Context) ->
     ]).
 
 -spec x_request_id_header() ->
-    header().
+    list(header()).
 x_request_id_header() ->
     [{<<"X-Request-ID">>, integer_to_binary(rand:uniform(100000))}].
 
 -spec auth_header(term()) ->
-    header().
+    list(header()).
 auth_header(<<>>) ->
     [];
 auth_header(Token) ->
