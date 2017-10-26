@@ -62,10 +62,17 @@
     payments = []
 }).
 
+-define(INVOICE_LINE, #domain_InvoiceLine{
+    product = ?STRING,
+    quantity = ?INTEGER,
+    price = ?CASH,
+    metadata = #{?STRING => {obj, #{}}}
+}).
+
 -define(INVOICE_TPL, #domain_InvoiceTemplate{
     id          = ?STRING,
-    details     = ?DETAILS,
-    cost        = ?TPL_CASH,
+    details     = {cart, #domain_InvoiceCart{lines = [?INVOICE_LINE]}},
+    product     = ?STRING,
     context     = ?CONTENT,
     shop_id     = ?STRING,
     owner_id    = ?STRING,

@@ -413,9 +413,15 @@ create_invoice_template_ok_test(Config) ->
     mock_services([{invoice_templating, fun('Create', _) -> {ok, ?INVOICE_TPL} end}], Config),
     Req = #{
         <<"shopID">> => ?STRING,
-        <<"cost">> => #{
-            <<"invoiceTemplateCostType">> => <<"InvoiceTemplateCostFixed">>,
-            <<"amount">> => ?INTEGER,
+        <<"details">> => #{
+            <<"templateType">> => <<"InvoiceTemplateMultiLine">>,
+            <<"cart">> =>
+                [#{
+                    <<"product">> => ?STRING,
+                    <<"quantity">> => ?INTEGER,
+                    <<"price">> => ?INTEGER,
+                    <<"taxMode">> => #{<<"type">> => <<"InvoiceLineTaxVAT">>, <<"rate">> => <<"0%">>}
+                }],
             <<"currency">> => ?RUB
         },
         <<"lifetime">> => get_lifetime(),
