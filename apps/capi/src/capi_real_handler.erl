@@ -1884,18 +1884,30 @@ encode_invoice_tpl_create_params(PartyID, Params) ->
     #payproc_InvoiceTemplateCreateParams{
         party_id         = PartyID,
         shop_id          = genlib_map:get(<<"shopID">>, Params),
-        details          = encode_invoice_details(Params),
         invoice_lifetime = encode_lifetime(Params),
-        cost             = encode_invoice_tpl_cost(Params),
+        product          = genlib_map:get(<<"product">>, Params),
+        description      = genlib_map:get(<<"description">>, Params),
+        details          = encode_invoice_tpl_details(Params),
         context          = encode_invoice_context(Params)
     }.
 
 encode_invoice_tpl_update_params(Params, InvoiceTplGetter) ->
     #payproc_InvoiceTemplateUpdateParams{
         invoice_lifetime = encode_optional_invoice_tpl_lifetime(Params),
-        cost             = encode_invoice_tpl_cost(Params),
+        product          = genlib_map:get(<<"product">>, Params),
+        description      = genlib_map:get(<<"description">>, Params),
         context          = encode_optional_context(Params),
         details          = encode_optional_details(Params, InvoiceTplGetter)
+    }.
+
+encode_invoice_tpl_details(Params) ->
+    {product, encode_invoice_tpl_singleline(Params)}.
+
+encode_invoice_tpl_singleline(Params) ->
+    #domain_InvoiceTemplateProduct{
+        product = genlib_map:get(<<"product">>, Params),
+        price = encode_invoice_tpl_cost(Params),
+        metadata = #{}
     }.
 
 encode_optional_invoice_tpl_lifetime(Params = #{<<"lifetime">> := _}) ->
@@ -1917,26 +1929,29 @@ encode_optional_context(Params = #{<<"metadata">> := _}) ->
 encode_optional_context(#{}) ->
     undefined.
 
-encode_optional_details(#{<<"product">> := P, <<"description">> := D}, _) ->
-    encode_optional_details_(P, D);
+encode_optional_details(#{<<"product">> := P, <<"cost">> := _C} = Params, _) ->
+    Price = encode_invoice_tpl_cost(Params),
+    encode_optional_details_(P, Price);
 encode_optional_details(#{<<"product">> := Product}, InvoiceTplGetter) ->
     #domain_InvoiceTemplate{
-        details = #domain_InvoiceDetails{description = Description}
+        details = {product, #domain_InvoiceTemplateProduct{price = Price}}
     } = InvoiceTplGetter(),
-    encode_optional_details_(Product, Description);
-encode_optional_details(#{<<"description">> := Description}, InvoiceTplGetter) ->
+    encode_optional_details_(Product, Price);
+encode_optional_details(#{<<"cost">> := _C} = Params, InvoiceTplGetter) ->
+    Price = encode_invoice_tpl_cost(Params),
     #domain_InvoiceTemplate{
-        details = #domain_InvoiceDetails{product = Product}
+        product = Product
     } = InvoiceTplGetter(),
-    encode_optional_details_(Product, Description);
+    encode_optional_details_(Product, Price);
 encode_optional_details(_, _) ->
     undefined.
 
-encode_optional_details_(Product, Description) ->
-    #domain_InvoiceDetails{
+encode_optional_details_(Product, Price) ->
+    {product, #domain_InvoiceTemplateProduct{
         product = Product,
-        description = Description
-    }.
+        price = Price,
+        metadata = #{}
+    }}.
 
 encode_invoice_context(Params) ->
     encode_invoice_context(Params, ?DEFAULT_INVOICE_META).
@@ -2762,16 +2777,16 @@ decode_invoice_line_tax_mode(_) ->
 decode_invoice_tpl(#domain_InvoiceTemplate{
     id = InvoiceTplID,
     shop_id = ShopID,
-    details = #domain_InvoiceDetails{
-        product = Product,
-        description = Description
-    },
+    description = Description,
     invoice_lifetime = #domain_LifetimeInterval{
         days = DD,
         months = MM,
         years = YY
     },
-    cost = Cost,
+    details = {product, #domain_InvoiceTemplateProduct{
+        product = Product,
+        price = Cost
+    }},
     context = RawContext
 }) ->
     genlib_map:compact(#{
