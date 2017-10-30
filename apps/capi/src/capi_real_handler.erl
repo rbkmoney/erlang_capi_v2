@@ -19,6 +19,7 @@
 -define(REALM, <<"external">>).
 
 -define(DEFAULT_INVOICE_META, #{}).
+-define(DEFAULT_INVOICE_TPL_META, #{}).
 -define(DEFAULT_URL_LIFETIME, 60). % seconds
 
 -spec authorize_api_key(swag_server:operation_id(), swag_server:api_key()) ->
@@ -1900,14 +1901,14 @@ encode_invoice_tpl_update_params(Params, InvoiceTplGetter) ->
         details          = encode_optional_details(Params, InvoiceTplGetter)
     }.
 
-encode_invoice_tpl_details(Params) ->
-    {product, encode_invoice_tpl_singleline(Params)}.
+encode_invoice_tpl_details(#{<<"product">> := Product, <<"cost">> := Cost}) ->
+    {product, encode_invoice_tpl_product(Product, Cost)}.
 
-encode_invoice_tpl_singleline(Params) ->
+encode_invoice_tpl_product(Product, Cost) ->
     #domain_InvoiceTemplateProduct{
-        product = genlib_map:get(<<"product">>, Params),
-        price = encode_invoice_tpl_cost(Params),
-        metadata = #{}
+        product = Product,
+        price = encode_invoice_tpl_cost(Cost),
+        metadata = ?DEFAULT_INVOICE_TPL_META
     }.
 
 encode_optional_invoice_tpl_lifetime(Params = #{<<"lifetime">> := _}) ->
@@ -1929,29 +1930,24 @@ encode_optional_context(Params = #{<<"metadata">> := _}) ->
 encode_optional_context(#{}) ->
     undefined.
 
-encode_optional_details(#{<<"product">> := P, <<"cost">> := _C} = Params, _) ->
-    Price = encode_invoice_tpl_cost(Params),
-    encode_optional_details_(P, Price);
+encode_optional_details(#{<<"product">> := Product, <<"cost">> := Cost}, _) ->
+    {product, encode_invoice_tpl_product(Product, Cost)};
+encode_optional_details(#{<<"cost">> := Cost}, InvoiceTplGetter) ->
+    #domain_InvoiceTemplate{
+        product = Product
+    } = InvoiceTplGetter(),
+    {product, encode_invoice_tpl_product(Product, Cost)};
 encode_optional_details(#{<<"product">> := Product}, InvoiceTplGetter) ->
     #domain_InvoiceTemplate{
         details = {product, #domain_InvoiceTemplateProduct{price = Price}}
     } = InvoiceTplGetter(),
-    encode_optional_details_(Product, Price);
-encode_optional_details(#{<<"cost">> := _C} = Params, InvoiceTplGetter) ->
-    Price = encode_invoice_tpl_cost(Params),
-    #domain_InvoiceTemplate{
-        product = Product
-    } = InvoiceTplGetter(),
-    encode_optional_details_(Product, Price);
-encode_optional_details(_, _) ->
-    undefined.
-
-encode_optional_details_(Product, Price) ->
     {product, #domain_InvoiceTemplateProduct{
         product = Product,
         price = Price,
-        metadata = #{}
-    }}.
+        metadata = ?DEFAULT_INVOICE_TPL_META
+    }};
+encode_optional_details(_, _) ->
+    undefined.
 
 encode_invoice_context(Params) ->
     encode_invoice_context(Params, ?DEFAULT_INVOICE_META).
@@ -1963,8 +1959,8 @@ encode_invoice_context(Params, DefaultMeta) ->
         data = Context
     }.
 
-encode_invoice_tpl_cost(#{<<"cost">> := Cost}) ->
-    encode_invoice_tpl_cost(genlib_map:get(<<"invoiceTemplateCostType">>, Cost), Cost);
+encode_invoice_tpl_cost(#{<<"invoiceTemplateCostType">> := CostType} = Cost) ->
+    encode_invoice_tpl_cost(CostType, Cost);
 encode_invoice_tpl_cost(_) ->
     undefined.
 
@@ -2777,6 +2773,7 @@ decode_invoice_line_tax_mode(_) ->
 decode_invoice_tpl(#domain_InvoiceTemplate{
     id = InvoiceTplID,
     shop_id = ShopID,
+    product = Product,
     description = Description,
     invoice_lifetime = #domain_LifetimeInterval{
         days = DD,
