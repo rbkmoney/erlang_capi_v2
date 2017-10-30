@@ -16,6 +16,8 @@
 -export([groups/0]).
 -export([init_per_suite/1]).
 -export([end_per_suite/1]).
+-export([init_per_group/2]).
+-export([end_per_group/2]).
 -export([init_per_testcase/2]).
 -export([end_per_testcase/2]).
 
@@ -136,78 +138,13 @@ init([]) ->
     [test_case_name()].
 all() ->
     [
-        {group, operations_by_invoice_access_token},
+        {group, operations_by_base_api_token},
+        {group, operations_by_invoice_access_token_after_invoice_creation},
+        {group, operations_by_invoice_access_token_after_token_creation},
         {group, operations_by_invoice_template_access_token},
-        {group, operations_by_customer_access_token},
-
-        authorization_positive_lifetime_ok_test,
-        authorization_unlimited_lifetime_ok_test,
-        authorization_far_future_deadline_ok_test,
-        authorization_permission_ok_test,
-        authorization_negative_lifetime_error_test,
-        authorization_bad_deadline_error_test,
-        authorization_error_no_header_test,
-        authorization_error_no_permission_test,
-        authorization_bad_token_error_test,
-
-        rescind_invoice_ok_test,
-        fulfill_invoice_ok_test,
-        create_refund,
-        get_refund_by_id,
-        get_refunds,
-
-        update_invoice_template_ok_test,
-        delete_invoice_template_ok_test,
-
-        get_account_by_id_ok_test,
-
-        get_my_party_ok_test,
-        suspend_my_party_ok_test,
-        activate_my_party_ok_test,
-
-        get_shop_by_id_ok_test,
-        get_shops_ok_test,
-        activate_shop_ok_test,
-        suspend_shop_ok_test,
-
-        get_claim_by_id_ok_test,
-        get_claims_ok_test,
-        revoke_claim_ok_test,
-        create_claim_ok_test,
-        update_claim_by_id_test,
-
-        get_contract_by_id_ok_test,
-        get_contracts_ok_test,
-        get_contract_adjustments_ok_test,
-        get_contract_adjustment_by_id_ok_test,
-
-        get_payout_tools_ok_test,
-        get_payout_tool_by_id,
-
-        create_webhook_ok_test,
-        get_webhooks,
-        get_webhook_by_id,
-        delete_webhook_by_id,
-
-        get_locations_names_ok_test,
-
-        search_invoices_ok_test,
-        search_payments_ok_test,
-        search_payouts_ok_test,
-
-        get_payment_conversion_stats_ok_test,
-        get_payment_revenue_stats_ok_test,
-        get_payment_geo_stats_ok_test,
-        get_payment_rate_stats_ok_test,
-        get_payment_method_stats_ok_test,
-
-        get_reports_ok_test,
-        download_report_file_ok_test,
-
-        get_categories_ok_test,
-        get_category_by_ref_ok_test,
-
-        delete_customer_ok_test
+        {group, operations_by_customer_access_token_after_customer_creation},
+        {group, operations_by_customer_access_token_after_token_creation},
+        {group, authorization}
     ].
 
 invoice_access_token_tests() ->
@@ -236,21 +173,90 @@ customer_access_token_tests() ->
     [{group_name(), list(), [test_case_name()]}].
 groups() ->
     [
-        {operations_by_invoice_access_token, [sequence],
-            [create_invoice_ok_test | invoice_access_token_tests()] ++
-            [create_invoice_access_token_ok_test | invoice_access_token_tests()]
+        {operations_by_base_api_token, [sequence],
+            [
+                create_invoice_ok_test,
+                create_invoice_access_token_ok_test,
+                create_invoice_template_ok_test,
+                create_customer_ok_test,
+                create_customer_access_token_ok_test,
+                rescind_invoice_ok_test,
+                fulfill_invoice_ok_test,
+                create_refund,
+                get_refund_by_id,
+                get_refunds,
+                update_invoice_template_ok_test,
+                delete_invoice_template_ok_test,
+                get_account_by_id_ok_test,
+                get_my_party_ok_test,
+                suspend_my_party_ok_test,
+                activate_my_party_ok_test,
+                get_shop_by_id_ok_test,
+                get_shops_ok_test,
+                activate_shop_ok_test,
+                suspend_shop_ok_test,
+                get_claim_by_id_ok_test,
+                get_claims_ok_test,
+                revoke_claim_ok_test,
+                create_claim_ok_test,
+                update_claim_by_id_test,
+                get_contract_by_id_ok_test,
+                get_contracts_ok_test,
+                get_contract_adjustments_ok_test,
+                get_contract_adjustment_by_id_ok_test,
+                get_payout_tools_ok_test,
+                get_payout_tool_by_id,
+                create_webhook_ok_test,
+                get_webhooks,
+                get_webhook_by_id,
+                delete_webhook_by_id,
+                get_locations_names_ok_test,
+                search_invoices_ok_test,
+                search_payments_ok_test,
+                search_payouts_ok_test,
+                get_payment_conversion_stats_ok_test,
+                get_payment_revenue_stats_ok_test,
+                get_payment_geo_stats_ok_test,
+                get_payment_rate_stats_ok_test,
+                get_payment_method_stats_ok_test,
+                get_reports_ok_test,
+                download_report_file_ok_test,
+                get_categories_ok_test,
+                get_category_by_ref_ok_test,
+                delete_customer_ok_test
+            ]
+        },
+        {operations_by_invoice_access_token_after_invoice_creation, [sequence],
+            invoice_access_token_tests()
+        },
+        {operations_by_invoice_access_token_after_token_creation, [sequence],
+            invoice_access_token_tests()
         },
         {operations_by_invoice_template_access_token, [sequence],
             [
-                create_invoice_template_ok_test,
                 create_invoice_with_tpl_ok_test,
                 get_invoice_template_ok_test,
                 get_invoice_payment_methods_by_tpl_id_ok_test
             ]
         },
-        {operations_by_customer_access_token, [sequence],
-            [create_customer_ok_test | customer_access_token_tests()] ++
-            [create_customer_access_token_ok_test | customer_access_token_tests()]
+        {operations_by_customer_access_token_after_customer_creation, [sequence],
+            customer_access_token_tests()
+        },
+        {operations_by_customer_access_token_after_token_creation, [sequence],
+            customer_access_token_tests()
+        },
+        {authorization, [sequence],
+            [
+                authorization_positive_lifetime_ok_test,
+                authorization_unlimited_lifetime_ok_test,
+                authorization_far_future_deadline_ok_test,
+                authorization_permission_ok_test,
+                authorization_negative_lifetime_error_test,
+                authorization_bad_deadline_error_test,
+                authorization_error_no_header_test,
+                authorization_error_no_permission_test,
+                authorization_bad_token_error_test
+            ]
         }
     ].
 
@@ -264,6 +270,102 @@ init_per_suite(Config) ->
         capi_ct_helper:start_app(lager) ++
         capi_ct_helper:start_app(woody) ++
         start_capi(Config),
+    [{apps, lists:reverse(Apps)} | Config].
+
+-spec end_per_suite(config()) ->
+    _.
+end_per_suite(C) ->
+    [application:stop(App) || App <- proplists:get_value(apps, C)],
+    ok.
+
+-spec init_per_group(group_name(), config()) ->
+    config().
+init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config) ->
+    NewConfig = init_per_testcase(undefined, Config),
+    {ok, Token} = get_token([{[invoices], write}], unlimited),
+    mock_services([{invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end}], NewConfig),
+    Req = #{
+        <<"shopID">> => ?STRING,
+        <<"amount">> => ?INTEGER,
+        <<"currency">> => ?RUB,
+        <<"metadata">> => #{<<"invoice_dummy_metadata">> => <<"test_value">>},
+        <<"dueDate">> => ?TIMESTAMP,
+        <<"product">> => <<"test_product">>,
+        <<"description">> => <<"test_invoice_description">>
+    },
+    {ok,
+        #{
+            <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
+        }
+    } = capi_client_invoices:create_invoice(get_context(Token, 10, 60000), Req),
+    end_per_testcase(undefined, NewConfig),
+    [{context, get_context(InvAccToken, 10, 60000)} | NewConfig];
+
+init_per_group(operations_by_invoice_access_token_after_token_creation, Config) ->
+    NewConfig = init_per_testcase(undefined, Config),
+    {ok, Token} = get_token([{[invoices], write}], unlimited),
+    mock_services([{invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}], NewConfig),
+    {ok, #{<<"payload">> := InvAccToken}
+    } = capi_client_invoices:create_invoice_access_token(get_context(Token, 10, 60000), ?STRING),
+    end_per_testcase(undefined, NewConfig),
+    [{context, get_context(InvAccToken, 10, 60000)} | NewConfig];
+
+init_per_group(operations_by_invoice_template_access_token, Config) ->
+    NewConfig = init_per_testcase(undefined, Config),
+    {ok, Token} = get_token([{[party], write}], unlimited),
+    mock_services([{invoice_templating, fun('Create', _) -> {ok, ?INVOICE_TPL} end}], NewConfig),
+    Req = #{
+        <<"shopID">> => ?STRING,
+        <<"details">> => #{
+            <<"templateType">> => <<"InvoiceTemplateMultiLine">>,
+            <<"cart">> =>
+                [#{
+                    <<"product">> => ?STRING,
+                    <<"quantity">> => ?INTEGER,
+                    <<"price">> => ?INTEGER,
+                    <<"taxMode">> => #{<<"type">> => <<"InvoiceLineTaxVAT">>, <<"rate">> => <<"0%">>}
+                }],
+            <<"currency">> => ?RUB
+        },
+        <<"lifetime">> => get_lifetime(),
+        <<"product">> => <<"test_invoice_template_product">>,
+        <<"description">> => <<"test_invoice_template_description">>,
+        <<"metadata">> => #{<<"invoice_template_dummy_metadata">> => <<"test_value">>}
+    },
+    {ok, #{
+            <<"invoiceTemplateAccessToken">> := #{<<"payload">> := InvTemplAccToken}
+        }
+    } = capi_client_invoice_templates:create(get_context(Token, 10, 60000), Req),
+    end_per_testcase(undefined, NewConfig),
+    [{context, get_context(InvTemplAccToken, 10, 60000)} | NewConfig];
+
+init_per_group(operations_by_customer_access_token_after_customer_creation, Config) ->
+    NewConfig = init_per_testcase(undefined, Config),
+    {ok, Token} = get_token([{[customers], write}], unlimited),
+    mock_services([{customer_management, fun('Create', _) -> {ok, ?CUSTOMER} end}], NewConfig),
+    Req = #{
+        <<"shopID">> => ?STRING,
+        <<"contactInfo">> => #{<<"email">> => <<"bla@bla.ru">>},
+        <<"metadata">> => #{<<"text">> => [<<"SOMESHIT">>, 42]}
+    },
+    {ok, #{
+            <<"customerAccessToken">> := #{<<"payload">> := CustAccToken}
+        }
+    } = capi_client_customers:create_customer(get_context(Token, 10, 60000), Req),
+    end_per_testcase(undefined, NewConfig),
+    [{context, get_context(CustAccToken, 10, 60000)} | NewConfig];
+
+init_per_group(operations_by_customer_access_token_after_token_creation, Config) ->
+    NewConfig = init_per_testcase(undefined, Config),
+    {ok, Token} = get_token([{[customers], write}], unlimited),
+    mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], NewConfig),
+    {ok,
+        #{<<"payload">> := CustAccToken}
+    } = capi_client_customers:create_customer_access_token(get_context(Token, 10, 60000), ?STRING),
+    end_per_testcase(undefined, NewConfig),
+    [{context, get_context(CustAccToken, 10, 60000)} | NewConfig];
+
+init_per_group(operations_by_base_api_token, Config) ->
     BasePermissions = [
         {[invoices], write},
         {[invoices], read},
@@ -275,12 +377,14 @@ init_per_suite(Config) ->
     ],
     {ok, Token} = get_token(BasePermissions, unlimited),
     Context = get_context(Token, 10, 60000),
-    [{apps, lists:reverse(Apps)}, {context, Context} | Config].
+    [{context, Context} | Config];
 
--spec end_per_suite(config()) ->
+init_per_group(_, Config) ->
+    Config.
+
+-spec end_per_group(group_name(), config()) ->
     _.
-end_per_suite(C) ->
-    [application:stop(App) || App <- proplists:get_value(apps, C)],
+end_per_group(_Group, _C) ->
     ok.
 
 -spec init_per_testcase(test_case_name(), config()) ->
@@ -353,8 +457,8 @@ authorization_error_no_permission_test(_Config) ->
 -spec authorization_bad_token_error_test(config()) ->
     _.
 authorization_bad_token_error_test(Config) ->
-    {ok, Token} = get_dummy_token(Config),
-    {error, {401, _}} = capi_client_categories:get_categories(get_context(Token, 10, 60000)).
+    {ok, Token} = get_dummy_token([{[party], read}], Config),
+    {error, {401, _}} = capi_client_parties:get_my_party(get_context(Token, 10, 60000)).
 
 -spec create_invoice_ok_test(config()) ->
     _.
@@ -369,62 +473,45 @@ create_invoice_ok_test(Config) ->
         <<"product">> => <<"test_product">>,
         <<"description">> => <<"test_invoice_description">>
     },
-    {ok,
-        #{
-            <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
-        }
-    } = capi_client_invoices:create_invoice(?config(context, Config), Req),
-    NewConfig = proplists:delete(context, Config),
-    {save_config, [{context, get_context(InvAccToken, 10, 60000)} | NewConfig]}.
+    {ok, _} = capi_client_invoices:create_invoice(?config(context, Config), Req).
 
 -spec create_invoice_with_tpl_ok_test(config()) ->
     _.
 create_invoice_with_tpl_ok_test(Config) ->
-    {_, NewConfig} = ?config(saved_config, Config),
     mock_services([{invoicing, fun('CreateWithTemplate', _) -> {ok, ?PAYPROC_INVOICE} end}], Config),
     Req = #{
         <<"amount">> => ?INTEGER,
         <<"currency">> => ?RUB,
         <<"metadata">> => #{<<"invoice_dummy_metadata">> => <<"test_value">>}
     },
-    {ok, _} = capi_client_invoice_templates:create_invoice(?config(context, NewConfig), ?STRING, Req),
-    {save_config, NewConfig}.
+    {ok, _} = capi_client_invoice_templates:create_invoice(?config(context, Config), ?STRING, Req).
 
 -spec get_invoice_ok_test(config()) ->
     _.
 get_invoice_ok_test(Config) ->
-    {_, NewConfig} = ?config(saved_config, Config),
     mock_services([{invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}], Config),
-    {ok, _} = capi_client_invoices:get_invoice_by_id(?config(context, NewConfig), ?STRING),
-    {save_config, NewConfig}.
+    {ok, _} = capi_client_invoices:get_invoice_by_id(?config(context, Config), ?STRING).
 
 -spec get_invoice_events_ok_test(config()) ->
     _.
 get_invoice_events_ok_test(Config) ->
-    {_, NewConfig} = ?config(saved_config, Config),
     mock_services([{invoicing, fun('GetEvents', _) -> {ok, [?INVOICE_EVENT]} end}], Config),
     Limit = 10,
-    {ok, Events1} = capi_client_invoices:get_invoice_events(?config(context, NewConfig), ?STRING, Limit),
-    {ok, Events2} = capi_client_invoices:get_invoice_events(?config(context, NewConfig), ?STRING, 10, Limit),
-    true = ((length(Events1) =< Limit) andalso (length(Events2) =< Limit)),
-    {save_config, NewConfig}.
+    {ok, Events1} = capi_client_invoices:get_invoice_events(?config(context, Config), ?STRING, Limit),
+    {ok, Events2} = capi_client_invoices:get_invoice_events(?config(context, Config), ?STRING, 10, Limit),
+    true = ((length(Events1) =< Limit) andalso (length(Events2) =< Limit)).
 
 -spec get_invoice_payment_methods_ok_test(config()) ->
     _.
 get_invoice_payment_methods_ok_test(Config) ->
-    {_, NewConfig} = ?config(saved_config, Config),
     mock_services([{invoicing, fun('ComputeTerms', _) -> {ok, ?TERM_SET} end}], Config),
-    {ok, _} = capi_client_invoices:get_invoice_payment_methods(?config(context, NewConfig), ?STRING),
-    {save_config, NewConfig}.
+    {ok, _} = capi_client_invoices:get_invoice_payment_methods(?config(context, Config), ?STRING).
 
 -spec create_invoice_access_token_ok_test(config()) ->
     _.
 create_invoice_access_token_ok_test(Config) ->
     mock_services([{invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}], Config),
-    {ok, #{<<"payload">> := InvAccToken}
-    } = capi_client_invoices:create_invoice_access_token(?config(context, Config), ?STRING),
-    NewConfig = proplists:delete(context, Config),
-    {save_config, [{context, get_context(InvAccToken, 10, 60000)} | NewConfig]}.
+    {ok, _} = capi_client_invoices:create_invoice_access_token(?config(context, Config), ?STRING).
 
 -spec rescind_invoice_ok_test(config()) ->
     _.
@@ -460,20 +547,13 @@ create_invoice_template_ok_test(Config) ->
         <<"description">> => <<"test_invoice_template_description">>,
         <<"metadata">> => #{<<"invoice_template_dummy_metadata">> => <<"test_value">>}
     },
-    {ok, #{
-            <<"invoiceTemplateAccessToken">> := #{<<"payload">> := InvTemplAccToken}
-        }
-    } = capi_client_invoice_templates:create(?config(context, Config), Req),
-    NewConfig = proplists:delete(context, Config),
-    {save_config, [{context, get_context(InvTemplAccToken, 10, 60000)} | NewConfig]}.
+    {ok, _} = capi_client_invoice_templates:create(?config(context, Config), Req).
 
 -spec get_invoice_template_ok_test(config()) ->
     _.
 get_invoice_template_ok_test(Config) ->
-    {_, NewConfig} = ?config(saved_config, Config),
     mock_services([{invoice_templating, fun('Get', _) -> {ok, ?INVOICE_TPL} end}], Config),
-    {ok, _} = capi_client_invoice_templates:get_template_by_id(?config(context, NewConfig), ?STRING),
-    {save_config, NewConfig}.
+    {ok, _} = capi_client_invoice_templates:get_template_by_id(?config(context, Config), ?STRING).
 
 -spec update_invoice_template_ok_test(config()) ->
     _.
@@ -501,10 +581,8 @@ delete_invoice_template_ok_test(Config) ->
 -spec get_invoice_payment_methods_by_tpl_id_ok_test(config()) ->
     _.
 get_invoice_payment_methods_by_tpl_id_ok_test(Config) ->
-    {_, NewConfig} = ?config(saved_config, Config),
     mock_services([{'invoice_templating', fun('ComputeTerms', _) -> {ok, ?TERM_SET} end}], Config),
-    {ok, _} = capi_client_invoice_templates:get_invoice_payment_methods(?config(context, NewConfig), ?STRING),
-    {save_config, NewConfig}.
+    {ok, _} = capi_client_invoice_templates:get_invoice_payment_methods(?config(context, Config), ?STRING).
 
 -spec get_account_by_id_ok_test(config()) ->
     _.
@@ -515,7 +593,6 @@ get_account_by_id_ok_test(Config) ->
 -spec create_payment_ok_test(config()) ->
     _.
 create_payment_ok_test(Config) ->
-    {_, NewConfig} = ?config(saved_config, Config),
     mock_services(
         [
             {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
@@ -535,7 +612,7 @@ create_payment_ok_test(Config) ->
             <<"fingerprint">> => <<"test fingerprint">>
         }
     },
-    {ok, Token, Session} = capi_client_tokens:create_payment_resource(?config(context, NewConfig), Req1),
+    {ok, Token, Session} = capi_client_tokens:create_payment_resource(?config(context, Config), Req1),
     Req2 = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"payer">> => #{
@@ -547,24 +624,19 @@ create_payment_ok_test(Config) ->
             }
         }
     },
-    {ok, _} = capi_client_payments:create_payment(?config(context, NewConfig), Req2, ?STRING),
-    {save_config, NewConfig}.
+    {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
 
 -spec get_payments_ok_test(config()) ->
     _.
 get_payments_ok_test(Config) ->
-    {_, NewConfig} = ?config(saved_config, Config),
     mock_services([{invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}], Config),
-    {ok, _} = capi_client_payments:get_payments(?config(context, NewConfig), ?STRING),
-    {save_config, NewConfig}.
+    {ok, _} = capi_client_payments:get_payments(?config(context, Config), ?STRING).
 
 -spec get_payment_by_id_ok_test(config()) ->
     _.
 get_payment_by_id_ok_test(Config) ->
-    {_, NewConfig} = ?config(saved_config, Config),
     mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
-    {ok, _} = capi_client_payments:get_payment_by_id(?config(context, NewConfig), ?STRING, ?STRING),
-    {save_config, NewConfig}.
+    {ok, _} = capi_client_payments:get_payment_by_id(?config(context, Config), ?STRING, ?STRING).
 
 -spec create_refund(config()) ->
     _.
@@ -587,23 +659,18 @@ get_refunds(Config) ->
 -spec cancel_payment_ok_test(config()) ->
     _.
 cancel_payment_ok_test(Config) ->
-    {_, NewConfig} = ?config(saved_config, Config),
     mock_services([{invoicing, fun('CancelPayment', _) -> {ok, ok} end}], Config),
-    ok = capi_client_payments:cancel_payment(?config(context, NewConfig), ?STRING, ?STRING, ?STRING),
-    {save_config, NewConfig}.
+    ok = capi_client_payments:cancel_payment(?config(context, Config), ?STRING, ?STRING, ?STRING).
 
 -spec capture_payment_ok_test(config()) ->
     _.
 capture_payment_ok_test(Config) ->
-    {_, NewConfig} = ?config(saved_config, Config),
     mock_services([{invoicing, fun('CapturePayment', _) -> {ok, ok} end}], Config),
-    ok = capi_client_payments:capture_payment(?config(context, NewConfig), ?STRING, ?STRING, ?STRING),
-    {save_config, NewConfig}.
+    ok = capi_client_payments:capture_payment(?config(context, Config), ?STRING, ?STRING, ?STRING).
 
 -spec create_payment_tool_token_ok_test(_) ->
     _.
 create_payment_tool_token_ok_test(Config) ->
-    {_, NewConfig} = ?config(saved_config, Config),
     mock_services([{cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end}], Config),
     Req = #{
         <<"paymentTool">> => #{
@@ -617,8 +684,7 @@ create_payment_tool_token_ok_test(Config) ->
             <<"fingerprint">> => <<"test fingerprint">>
         }
     },
-    {ok, _, _} = capi_client_tokens:create_payment_resource(?config(context, NewConfig), Req),
-    {save_config, NewConfig}.
+    {ok, _, _} = capi_client_tokens:create_payment_resource(?config(context, Config), Req).
 
 -spec get_my_party_ok_test(config()) ->
     _.
@@ -975,35 +1041,23 @@ create_customer_ok_test(Config) ->
         <<"contactInfo">> => #{<<"email">> => <<"bla@bla.ru">>},
         <<"metadata">> => #{<<"text">> => [<<"SOMESHIT">>, 42]}
     },
-    {ok, #{
-            <<"customerAccessToken">> := #{<<"payload">> := CustAccToken}
-        }
-    } = capi_client_customers:create_customer(?config(context, Config), Req),
-    NewConfig = proplists:delete(context, Config),
-    {save_config, [{context, get_context(CustAccToken, 10, 60000)} | NewConfig]}.
+    {ok, _} = capi_client_customers:create_customer(?config(context, Config), Req).
 
 -spec get_customer_ok_test(config()) ->
     _.
 get_customer_ok_test(Config) ->
-    {_, NewConfig} = ?config(saved_config, Config),
     mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], Config),
-    {ok, _} = capi_client_customers:get_customer_by_id(?config(context, NewConfig), ?STRING),
-    {save_config, NewConfig}.
+    {ok, _} = capi_client_customers:get_customer_by_id(?config(context, Config), ?STRING).
 
 -spec create_customer_access_token_ok_test(config()) ->
     _.
 create_customer_access_token_ok_test(Config) ->
     mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], Config),
-    {ok,
-        #{<<"payload">> := CustAccToken}
-    } = capi_client_customers:create_customer_access_token(?config(context, Config), ?STRING),
-    NewConfig = proplists:delete(context, Config),
-    {save_config, [{context, get_context(CustAccToken, 10, 60000)} | NewConfig]}.
+    {ok, _} = capi_client_customers:create_customer_access_token(?config(context, Config), ?STRING).
 
 -spec create_binding_ok_test(config()) ->
     _.
 create_binding_ok_test(Config) ->
-    {_, NewConfig} = ?config(saved_config, Config),
     mock_services(
         [
             {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
@@ -1023,40 +1077,33 @@ create_binding_ok_test(Config) ->
             <<"fingerprint">> => <<"test fingerprint">>
         }
     },
-    {ok, Token, Session} = capi_client_tokens:create_payment_resource(?config(context, NewConfig), Req1),
+    {ok, Token, Session} = capi_client_tokens:create_payment_resource(?config(context, Config), Req1),
     Req2 = #{
         <<"paymentResource">> => #{
             <<"paymentSession">> => Session,
             <<"paymentToolToken">> => Token
         }
     },
-    {ok, _} = capi_client_customers:create_binding(?config(context, NewConfig), ?STRING, Req2),
-    {save_config, NewConfig}.
+    {ok, _} = capi_client_customers:create_binding(?config(context, Config), ?STRING, Req2).
 
 
 -spec get_bindings_ok_test(config()) ->
     _.
 get_bindings_ok_test(Config) ->
-    {_, NewConfig} = ?config(saved_config, Config),
     mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], Config),
-    {ok, _} = capi_client_customers:get_bindings(?config(context, NewConfig), ?STRING),
-    {save_config, NewConfig}.
+    {ok, _} = capi_client_customers:get_bindings(?config(context, Config), ?STRING).
 
 -spec get_binding_ok_test(config()) ->
     _.
 get_binding_ok_test(Config) ->
-    {_, NewConfig} = ?config(saved_config, Config),
     mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], Config),
-    {ok, _} = capi_client_customers:get_binding(?config(context, NewConfig), ?STRING, ?STRING),
-    {save_config, NewConfig}.
+    {ok, _} = capi_client_customers:get_binding(?config(context, Config), ?STRING, ?STRING).
 
 -spec get_customer_events_ok_test(config()) ->
     _.
 get_customer_events_ok_test(Config) ->
-    {_, NewConfig} = ?config(saved_config, Config),
     mock_services([{customer_management, fun('GetEvents', _) -> {ok, []} end}], Config),
-    {ok, _} = capi_client_customers:get_customer_events(?config(context, NewConfig), ?STRING, 10),
-    {save_config, NewConfig}.
+    {ok, _} = capi_client_customers:get_customer_events(?config(context, Config), ?STRING, 10).
 
 -spec delete_customer_ok_test(config()) ->
     _.
@@ -1071,14 +1118,14 @@ get_token(ACL, LifeTime) ->
     Claims = #{?STRING => ?STRING},
     capi_authorizer_jwt:issue({{PartyID, capi_acl:from_list(ACL)}, Claims}, LifeTime).
 
-get_dummy_token(Config) ->
+get_dummy_token(ACL, Config) ->
     Claims = #{
         <<"jti">> => unique_id(),
         <<"sub">> => ?STRING,
         <<"exp">> => 0,
         <<"resource_access">> => #{
             <<"common-api">> => #{
-                <<"roles">> => capi_acl:encode(capi_acl:from_list([]))
+                <<"roles">> => capi_acl:encode(capi_acl:from_list(ACL))
             }
         }
     },
