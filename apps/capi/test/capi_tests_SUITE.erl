@@ -281,9 +281,9 @@ end_per_suite(C) ->
 -spec init_per_group(group_name(), config()) ->
     config().
 init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config) ->
-    NewConfig = init_per_testcase(undefined, Config),
+    MockServiceSup = start_mocked_service_sup(),
     {ok, Token} = get_token([{[invoices], write}], unlimited),
-    mock_services([{invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end}], NewConfig),
+    mock_services([{invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end}], MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"amount">> => ?INTEGER,
@@ -298,22 +298,22 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
             <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
         }
     } = capi_client_invoices:create_invoice(get_context(Token, 10, 60000), Req),
-    end_per_testcase(undefined, NewConfig),
-    [{context, get_context(InvAccToken, 10, 60000)} | NewConfig];
+    stop_mocked_service_sup(MockServiceSup),
+    [{context, get_context(InvAccToken, 10, 60000)} | Config];
 
 init_per_group(operations_by_invoice_access_token_after_token_creation, Config) ->
-    NewConfig = init_per_testcase(undefined, Config),
+    MockServiceSup = start_mocked_service_sup(),
     {ok, Token} = get_token([{[invoices], write}], unlimited),
-    mock_services([{invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}], NewConfig),
+    mock_services([{invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}], MockServiceSup),
     {ok, #{<<"payload">> := InvAccToken}
     } = capi_client_invoices:create_invoice_access_token(get_context(Token, 10, 60000), ?STRING),
-    end_per_testcase(undefined, NewConfig),
-    [{context, get_context(InvAccToken, 10, 60000)} | NewConfig];
+    stop_mocked_service_sup(MockServiceSup),
+    [{context, get_context(InvAccToken, 10, 60000)} | Config];
 
 init_per_group(operations_by_invoice_template_access_token, Config) ->
-    NewConfig = init_per_testcase(undefined, Config),
+    MockServiceSup = start_mocked_service_sup(),
     {ok, Token} = get_token([{[party], write}], unlimited),
-    mock_services([{invoice_templating, fun('Create', _) -> {ok, ?INVOICE_TPL} end}], NewConfig),
+    mock_services([{invoice_templating, fun('Create', _) -> {ok, ?INVOICE_TPL} end}], MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"details">> => #{
@@ -336,13 +336,13 @@ init_per_group(operations_by_invoice_template_access_token, Config) ->
             <<"invoiceTemplateAccessToken">> := #{<<"payload">> := InvTemplAccToken}
         }
     } = capi_client_invoice_templates:create(get_context(Token, 10, 60000), Req),
-    end_per_testcase(undefined, NewConfig),
-    [{context, get_context(InvTemplAccToken, 10, 60000)} | NewConfig];
+    stop_mocked_service_sup(MockServiceSup),
+    [{context, get_context(InvTemplAccToken, 10, 60000)} | Config];
 
 init_per_group(operations_by_customer_access_token_after_customer_creation, Config) ->
-    NewConfig = init_per_testcase(undefined, Config),
+    MockServiceSup = start_mocked_service_sup(),
     {ok, Token} = get_token([{[customers], write}], unlimited),
-    mock_services([{customer_management, fun('Create', _) -> {ok, ?CUSTOMER} end}], NewConfig),
+    mock_services([{customer_management, fun('Create', _) -> {ok, ?CUSTOMER} end}], MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"contactInfo">> => #{<<"email">> => <<"bla@bla.ru">>},
@@ -352,18 +352,18 @@ init_per_group(operations_by_customer_access_token_after_customer_creation, Conf
             <<"customerAccessToken">> := #{<<"payload">> := CustAccToken}
         }
     } = capi_client_customers:create_customer(get_context(Token, 10, 60000), Req),
-    end_per_testcase(undefined, NewConfig),
-    [{context, get_context(CustAccToken, 10, 60000)} | NewConfig];
+    stop_mocked_service_sup(MockServiceSup),
+    [{context, get_context(CustAccToken, 10, 60000)} | Config];
 
 init_per_group(operations_by_customer_access_token_after_token_creation, Config) ->
-    NewConfig = init_per_testcase(undefined, Config),
+    MockServiceSup = start_mocked_service_sup(),
     {ok, Token} = get_token([{[customers], write}], unlimited),
-    mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], NewConfig),
+    mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], MockServiceSup),
     {ok,
         #{<<"payload">> := CustAccToken}
     } = capi_client_customers:create_customer_access_token(get_context(Token, 10, 60000), ?STRING),
-    end_per_testcase(undefined, NewConfig),
-    [{context, get_context(CustAccToken, 10, 60000)} | NewConfig];
+    stop_mocked_service_sup(MockServiceSup),
+    [{context, get_context(CustAccToken, 10, 60000)}| Config];
 
 init_per_group(operations_by_base_api_token, Config) ->
     BasePermissions = [
@@ -390,14 +390,12 @@ end_per_group(_Group, _C) ->
 -spec init_per_testcase(test_case_name(), config()) ->
     config().
 init_per_testcase(_Name, C) ->
-    {ok, SupPid} = supervisor:start_link(?MODULE, []),
-    _ = unlink(SupPid),
-    [{test_sup, SupPid} | C].
+    [{test_sup, start_mocked_service_sup()} | C].
 
 -spec end_per_testcase(test_case_name(), config()) ->
     config().
 end_per_testcase(_Name, C) ->
-    exit(?config(test_sup, C), shutdown),
+    stop_mocked_service_sup(?config(test_sup, C)),
     ok.
 
 %%% Tests
@@ -1157,7 +1155,18 @@ start_capi(Config) ->
     ],
     capi_ct_helper:start_app(capi, CapiEnv).
 
-mock_services(Services, Config) ->
+start_mocked_service_sup() ->
+    {ok, SupPid} = supervisor:start_link(?MODULE, []),
+    _ = unlink(SupPid),
+    SupPid.
+
+stop_mocked_service_sup(SupPid) ->
+    exit(SupPid, shutdown).
+
+mock_services(Services, SupPid) when is_pid(SupPid) ->
+    mock_services(Services, [{test_sup, SupPid}]);
+
+mock_services(Services, Config) when is_list(Config) ->
     Module = capi_dummy_service,
     Port = get_random_port(),
     {ok, IP} = inet:parse_address(?CAPI_IP),
