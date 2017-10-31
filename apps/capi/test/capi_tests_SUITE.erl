@@ -316,18 +316,12 @@ init_per_group(operations_by_invoice_template_access_token, Config) ->
     mock_services([{invoice_templating, fun('Create', _) -> {ok, ?INVOICE_TPL} end}], MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
-        <<"details">> => #{
-            <<"templateType">> => <<"InvoiceTemplateMultiLine">>,
-            <<"cart">> =>
-                [#{
-                    <<"product">> => ?STRING,
-                    <<"quantity">> => ?INTEGER,
-                    <<"price">> => ?INTEGER,
-                    <<"taxMode">> => #{<<"type">> => <<"InvoiceLineTaxVAT">>, <<"rate">> => <<"0%">>}
-                }],
-            <<"currency">> => ?RUB
-        },
         <<"lifetime">> => get_lifetime(),
+        <<"cost">> => #{
+            <<"invoiceTemplateCostType">> => <<"InvoiceTemplateCostFixed">>,
+            <<"currency">> => ?RUB,
+            <<"amount">> => ?INTEGER
+        },
         <<"product">> => <<"test_invoice_template_product">>,
         <<"description">> => <<"test_invoice_template_description">>,
         <<"metadata">> => #{<<"invoice_template_dummy_metadata">> => <<"test_value">>}
@@ -529,18 +523,12 @@ create_invoice_template_ok_test(Config) ->
     mock_services([{invoice_templating, fun('Create', _) -> {ok, ?INVOICE_TPL} end}], Config),
     Req = #{
         <<"shopID">> => ?STRING,
-        <<"details">> => #{
-            <<"templateType">> => <<"InvoiceTemplateMultiLine">>,
-            <<"cart">> =>
-                [#{
-                    <<"product">> => ?STRING,
-                    <<"quantity">> => ?INTEGER,
-                    <<"price">> => ?INTEGER,
-                    <<"taxMode">> => #{<<"type">> => <<"InvoiceLineTaxVAT">>, <<"rate">> => <<"0%">>}
-                }],
-            <<"currency">> => ?RUB
-        },
         <<"lifetime">> => get_lifetime(),
+        <<"cost">> => #{
+            <<"invoiceTemplateCostType">> => <<"InvoiceTemplateCostFixed">>,
+            <<"currency">> => ?RUB,
+            <<"amount">> => ?INTEGER
+        },
         <<"product">> => <<"test_invoice_template_product">>,
         <<"description">> => <<"test_invoice_template_description">>,
         <<"metadata">> => #{<<"invoice_template_dummy_metadata">> => <<"test_value">>}

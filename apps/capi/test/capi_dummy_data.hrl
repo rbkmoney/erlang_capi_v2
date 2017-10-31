@@ -71,7 +71,11 @@
 
 -define(INVOICE_TPL, #domain_InvoiceTemplate{
     id          = ?STRING,
-    details     = {cart, #domain_InvoiceCart{lines = [?INVOICE_LINE]}},
+    details     = {product, #domain_InvoiceTemplateProduct{
+        product = ?STRING,
+        price = ?TPL_CASH,
+        metadata = #{?STRING => {obj, #{}}}
+    }},
     product     = ?STRING,
     context     = ?CONTENT,
     shop_id     = ?STRING,
