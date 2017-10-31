@@ -104,8 +104,8 @@ handle_response(303, Headers, _) ->
 handle_response(Code, _, Body) when Code div 100 == 2 ->
     %% 2xx HTTP code
     {ok, decode_body(Body)};
-handle_response(_, _, Body) ->
-    {error, Body}.
+handle_response(Code, _, Body) ->
+    {error, {Code, Body}}.
 
 -spec get_context(string(), term(), integer(), integer(), protocol()) ->
     context().
@@ -150,10 +150,13 @@ get_hackney_opts(Context) ->
 -spec headers(context()) ->
     list(header()).
 headers(Context) ->
-  [
-        x_request_id_header(),
-        auth_header(maps:get(token, Context)) | json_accept_headers()
-  ].
+    RequiredHeaders = [x_request_id_header() | json_accept_headers()],
+    case maps:get(token, Context) of
+        <<>> ->
+            RequiredHeaders;
+        Token ->
+            [auth_header(Token) | RequiredHeaders]
+    end.
 
 -spec x_request_id_header() ->
     header().
@@ -163,7 +166,7 @@ x_request_id_header() ->
 -spec auth_header(term()) ->
     header().
 auth_header(Token) ->
-    {<<"Authorization">>, <<"Bearer ", Token/binary>>} .
+    {<<"Authorization">>, <<"Bearer ", Token/binary>>}.
 
 -spec json_accept_headers() ->
     list(header()).
