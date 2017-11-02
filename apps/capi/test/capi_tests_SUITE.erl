@@ -1004,7 +1004,10 @@ get_reports_ok_test(Config) ->
     _.
 download_report_file_ok_test(Config) ->
     mock_services([{reporting, fun('GetReport', _) -> {ok, ?REPORT}; ('GeneratePresignedUrl', _) -> {ok, ?STRING} end}], Config),
-    {ok, _} = capi_client_reports:download_file(?config(context, Config), ?STRING, ?INTEGER, ?STRING).
+    {ok, #{
+        <<"url">>       := _,
+        <<"expiresAt">> := _
+    }} = capi_client_reports:issue_download_url(?config(context, Config), ?STRING, ?INTEGER, ?STRING).
 
 -spec get_categories_ok_test(config()) ->
     _.
