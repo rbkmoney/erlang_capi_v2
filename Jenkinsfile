@@ -52,7 +52,7 @@ build('capi', 'docker-host', finalHook) {
     }
 
     try {
-      if (env.BRANCH_NAME == 'master' || env.BRANCH_NAME.startsWith('epic')) {
+      if (env.BRANCH_NAME == 'master' || env.BRANCH_NAME.startsWith('epic') || env.BRANCH_NAME.startsWith('v')) {
         runStage('push image') {
           sh "make push_image"
         }
