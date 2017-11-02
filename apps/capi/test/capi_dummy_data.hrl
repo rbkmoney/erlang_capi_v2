@@ -181,7 +181,7 @@
 -define(SHOP, #domain_Shop{
     id = ?STRING,
     created_at = ?TIMESTAMP,
-    blocking = ?BLOCKING, 
+    blocking = ?BLOCKING,
     suspension = ?SUSPENTION,
     details = #domain_ShopDetails{name = ?STRING},
     location = {url, ?STRING},
@@ -251,7 +251,7 @@
 }).
 
 -define (STAT_RESPONSE(Data), #merchstat_StatResponse{
-    data = Data, 
+    data = Data,
     total_count = ?INTEGER}
 ).
 
@@ -312,7 +312,6 @@
     <<"amount_with_fee">> => ?INTEGER_BINARY,
     <<"amount_without_fee">> => ?INTEGER_BINARY,
     <<"unic_count">> => ?INTEGER_BINARY,
-    <<"total_count">> => ?INTEGER_BINARY,
     <<"payment_system">> => <<"visa">>
 }).
 
@@ -342,9 +341,9 @@
     domain = #{
         {category, #domain_CategoryRef{id = ?INTEGER}} =>
         {category, #domain_CategoryObject{
-            ref = #domain_CategoryRef{id = ?INTEGER}, 
+            ref = #domain_CategoryRef{id = ?INTEGER},
             data = #domain_Category{
-                name = ?STRING, 
+                name = ?STRING,
                 description = ?STRING
             }
         }}
@@ -363,7 +362,7 @@
             {invoice_status_changed, #payproc_InvoiceStatusChanged{status = ?INVOICE_STATUS(fulfilled)}}
         ]
     },
-    source =  {invoice_id, ?STRING} 
+    source =  {invoice_id, ?STRING}
 }).
 
 -define(TERM_SET, #domain_TermSet{}).

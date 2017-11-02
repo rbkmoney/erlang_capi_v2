@@ -970,7 +970,7 @@ process_request('GetReports', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('DownloadFile', Req, Context, ReqCtx) ->
+process_request('IssueDownloadURL', Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
     ShopID = maps:get(shopID, Req),
     ReportID = maps:get(reportID, Req),
@@ -1570,12 +1570,12 @@ generate_report_presigned_url(FileID, ReqCtx) ->
     Result = service_call(reporting, 'GeneratePresignedUrl', [FileID, ExpiresAt], ReqCtx),
     case Result of
         {ok, URL} ->
-            {ok, {303, [{<<"Location">>, URL}], undefined}};
+            {ok, {201, [], decode_temporary_url(URL, ExpiresAt)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-                #reports_FileNotFound{}->
+                #reports_FileNotFound{} ->
                     {ok, {404, [], general_error(<<"File not found">>)}}
             end
     end.
@@ -3821,6 +3821,12 @@ decode_webhook(#webhooker_Webhook{
         <<"scope">>     => decode_event_filter(EventFilter),
         <<"url">>       => URL,
         <<"publicKey">> => PubKey
+    }.
+
+decode_temporary_url(URL, ExpiresAt) ->
+    #{
+        <<"url">>       => URL,
+        <<"expiresAt">> => ExpiresAt
     }.
 
 encode_stat_request(Dsl) when is_map(Dsl) ->

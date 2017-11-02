@@ -1,7 +1,7 @@
 -module(capi_client_reports).
 
 -export([get_reports/4]).
--export([download_file/4]).
+-export([issue_download_url/4]).
 
 -type context() :: capi_client_lib:context().
 
@@ -20,8 +20,8 @@ get_reports(Context, ShopID, FromTime, ToTime) ->
     Response = swag_client_reports_api:get_reports(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 
--spec download_file(context(), binary(), binary(), binary()) -> {ok, redirect} | {error, term()}.
-download_file(Context, ShopID, ReportID, FileID) ->
+-spec issue_download_url(context(), binary(), binary(), binary()) -> {ok, map()} | {error, term()}.
+issue_download_url(Context, ShopID, ReportID, FileID) ->
     Params = #{
         binding => #{
             <<"shopID">> => ShopID,
@@ -30,6 +30,6 @@ download_file(Context, ShopID, ReportID, FileID) ->
         }
     },
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
-    Response = swag_client_reports_api:download_file(Url, PreparedParams, Opts),
+    Response = swag_client_reports_api:issue_download_url(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 

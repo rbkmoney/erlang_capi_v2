@@ -278,7 +278,7 @@ get_operation_access('GetContractAdjustmentByID' , _) ->
     [{[party], read}];
 get_operation_access('GetReports'                , _) ->
     [{[party], read}];
-get_operation_access('DownloadFile'              , _) ->
+get_operation_access('IssueDownloadURL'          , _) ->
     [{[party], read}];
 get_operation_access('GetWebhooks'               , _) ->
     [{[party], read}];
