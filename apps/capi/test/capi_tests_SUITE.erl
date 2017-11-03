@@ -524,7 +524,7 @@ fulfill_invoice_ok_test(Config) ->
     _.
 create_invoice_template_ok_test(Config) ->
     mock_services([{invoice_templating, fun('Create', _) -> {ok, ?INVOICE_TPL} end}], Config),
-    Req0 = #{
+    Req = #{
         <<"shopID">> => ?STRING,
         <<"lifetime">> => get_lifetime(),
         <<"description">> => <<"test_invoice_template_description">>,
@@ -539,7 +539,28 @@ create_invoice_template_ok_test(Config) ->
             <<"amount">> => ?INTEGER
         }
     },
-    {ok, _} = capi_client_invoice_templates:create(?config(context, Config), Req0#{<<"details">> => Details0}).
+    {ok, _} = capi_client_invoice_templates:create(?config(context, Config), Req#{<<"details">> => Details0}),
+    Details1 = #{
+        <<"templateType">> => <<"InvoiceTemplateMultiLine">>,
+        <<"currency">> => ?RUB,
+        <<"cart">> => [
+            #{
+                <<"product">> => ?STRING,
+                <<"price">> => ?INTEGER,
+                <<"quantity">> => ?INTEGER
+            },
+            #{
+                <<"product">> => ?STRING,
+                <<"price">> => ?INTEGER,
+                <<"quantity">> => ?INTEGER,
+                <<"taxMode">> => #{
+                    <<"type">> => <<"InvoiceLineTaxVAT">>,
+                    <<"rate">> => <<"18%">>
+                }
+            }
+        ]
+    },
+    {ok, _} = capi_client_invoice_templates:create(?config(context, Config), Req#{<<"details">> => Details1}).
 
 -spec get_invoice_template_ok_test(config()) ->
     _.
@@ -552,19 +573,31 @@ get_invoice_template_ok_test(Config) ->
 update_invoice_template_ok_test(Config) ->
     mock_services([{invoice_templating, fun('Update', _) -> {ok, ?INVOICE_TPL} end}], Config),
     Req = #{
-        <<"details">> => #{
-            <<"templateType">> => <<"InvoiceTemplateSingleLine">>,
-            <<"product">> => <<"test_invoice_template_product">>,
-            <<"price">> => #{
-                <<"costType">> => <<"InvoiceTemplateLineCostFixed">>,
-                <<"currency">> => ?RUB,
-                <<"amount">> => ?INTEGER
-            }
-        },
         <<"lifetime">> => get_lifetime(),
         <<"metadata">> => #{<<"invoice_template_dummy_metadata">> => <<"test_value">>}
     },
-    {ok, _} = capi_client_invoice_templates:update(?config(context, Config), ?STRING, Req).
+    Details0 = #{
+        <<"templateType">> => <<"InvoiceTemplateSingleLine">>,
+        <<"product">> => <<"test_invoice_template_product">>,
+        <<"price">> => #{
+            <<"costType">> => <<"InvoiceTemplateLineCostFixed">>,
+            <<"currency">> => ?RUB,
+            <<"amount">> => ?INTEGER
+        }
+    },
+    {ok, _} = capi_client_invoice_templates:update(?config(context, Config), ?STRING, Req#{<<"details">> => Details0}),
+    Details1 = #{
+        <<"templateType">> => <<"InvoiceTemplateMultiLine">>,
+        <<"currency">> => ?RUB,
+        <<"cart">> => [
+            #{
+                <<"product">> => ?STRING,
+                <<"price">> => ?INTEGER,
+                <<"quantity">> => ?INTEGER
+            }
+        ]
+    },
+    {ok, _} = capi_client_invoice_templates:update(?config(context, Config), ?STRING, Req#{<<"details">> => Details1}).
 
 -spec delete_invoice_template_ok_test(config()) ->
     _.
