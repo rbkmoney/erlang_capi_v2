@@ -20,7 +20,7 @@ build('capi', 'docker-host', finalHook) {
   }
 
   pipeDefault() {
-    if (env.BRANCH_NAME != 'master') {
+    if !((env.BRANCH_NAME == 'master') || env.BRANCH_NAME.matches('^v\\d+')) {
       runStage('compile') {
         withGithubPrivkey {
           sh 'make wc_compile'
@@ -52,7 +52,7 @@ build('capi', 'docker-host', finalHook) {
     }
 
     try {
-      if (env.BRANCH_NAME == 'master' || env.BRANCH_NAME.startsWith('epic') || env.BRANCH_NAME.startsWith('v')) {
+      if (env.BRANCH_NAME == 'master' || env.BRANCH_NAME.startsWith('epic') || env.BRANCH_NAME.matches('^v\\d+')) {
         runStage('push image') {
           sh "make push_image"
         }
