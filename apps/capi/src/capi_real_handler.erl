@@ -19,7 +19,7 @@
 -define(REALM, <<"external">>).
 
 -define(DEFAULT_INVOICE_META, #{}).
--define(DEFAULT_INVOICE_TPL_META, #{}).
+-define(DEFAULT_INVOICE_LINE_META, #{}).
 -define(DEFAULT_URL_LIFETIME, 60). % seconds
 
 -spec authorize_api_key(swag_server:operation_id(), swag_server:api_key()) ->
@@ -1802,7 +1802,7 @@ encode_invoice_line_meta(Line) ->
             TM = encode_invoice_line_tax_mode(TaxMode),
             #{<<"TaxMode">> => {str, TM}};
         undefined ->
-            ?DEFAULT_INVOICE_TPL_META
+            ?DEFAULT_INVOICE_LINE_META
     end.
 
 encode_invoice_line_tax_mode(#{<<"type">> := <<"InvoiceLineTaxVAT">>} = TaxMode)  ->
