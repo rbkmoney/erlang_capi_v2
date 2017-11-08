@@ -2506,7 +2506,7 @@ decode_bank_card_details(DetailsType, #domain_BankCard{
 
 -define(MASKED_PAN_MAX_LENGTH, 4).
 
-decode_masked_pan(MaskedPan) ->
+decode_masked_pan(MaskedPan) when byte_size(MaskedPan) >= ?MASKED_PAN_MAX_LENGTH ->
     binary:part(MaskedPan, {byte_size(MaskedPan), -?MASKED_PAN_MAX_LENGTH}).
 
 decode_contact_info(#domain_ContactInfo{
