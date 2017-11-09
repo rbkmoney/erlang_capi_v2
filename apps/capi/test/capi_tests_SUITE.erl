@@ -598,7 +598,10 @@ create_payment_ok_test(Config) ->
             <<"fingerprint">> => <<"test fingerprint">>
         }
     },
-    {ok, Token, Session} = capi_client_tokens:create_payment_resource(?config(context, Config), Req1),
+    {ok, #{
+        <<"paymentToolToken">> := Token,
+        <<"paymentSession">> := Session
+    }} = capi_client_tokens:create_payment_resource(?config(context, Config), Req1),
     Req2 = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"payer">> => #{
@@ -657,20 +660,53 @@ capture_payment_ok_test(Config) ->
 -spec create_payment_tool_token_ok_test(_) ->
     _.
 create_payment_tool_token_ok_test(Config) ->
-    mock_services([{cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end}], Config),
-    Req = #{
-        <<"paymentTool">> => #{
-            <<"paymentToolType">> => <<"CardData">>,
-            <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
-            <<"cardNumber">> => <<"4111111111111111">>,
-            <<"expDate">> => <<"08/27">>,
-            <<"cvv">> => <<"232">>
-        },
-        <<"clientInfo">> => #{
-            <<"fingerprint">> => <<"test fingerprint">>
-        }
+    mock_services([
+        {cds_storage, fun
+            ('PutCardData', [#'CardData'{pan = <<"411111", _:6/binary, Mask:4/binary>>}]) ->
+                {ok, #'PutCardDataResult'{
+                    bank_card = #domain_BankCard{
+                        token = ?STRING,
+                        payment_system = visa,
+                        bin = <<"411111">>,
+                        masked_pan = Mask
+                    },
+                    session_id = ?STRING
+                }};
+            ('PutCardData', [#'CardData'{pan = <<"22001111", _:6/binary, Mask:2/binary>>}]) ->
+                {ok, #'PutCardDataResult'{
+                    bank_card = #domain_BankCard{
+                        token = ?STRING,
+                        payment_system = nspkmir,
+                        bin = <<"22001111">>,
+                        masked_pan = Mask
+                    },
+                    session_id = ?STRING
+                }}
+        end}
+    ], Config),
+    PaymentTool = #{
+        <<"paymentToolType">> => <<"CardData">>,
+        <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
+        <<"expDate">> => <<"08/27">>,
+        <<"cvv">> => <<"232">>
     },
-    {ok, _, _} = capi_client_tokens:create_payment_resource(?config(context, Config), Req).
+    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
+    {ok, #{<<"paymentToolDetails">> := #{
+        <<"detailsType">> := <<"PaymentToolDetailsBankCard">>,
+        <<"paymentSystem">> := <<"visa">>,
+        <<"cardNumberMask">> := <<"1111">>
+    }}} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
+        <<"paymentTool">> => PaymentTool#{<<"cardNumber">> => <<"4111111111111111">>},
+        <<"clientInfo">> => ClientInfo
+    }),
+    {ok, #{<<"paymentToolDetails">> := #{
+        <<"detailsType">> := <<"PaymentToolDetailsBankCard">>,
+        <<"paymentSystem">> := <<"nspkmir">>,
+        <<"cardNumberMask">> := <<"11">>
+    }}} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
+        <<"paymentTool">> => PaymentTool#{<<"cardNumber">> => <<"2200111111111111">>},
+        <<"clientInfo">> => ClientInfo
+    }).
 
 -spec get_my_party_ok_test(config()) ->
     _.
@@ -1063,7 +1099,10 @@ create_binding_ok_test(Config) ->
             <<"fingerprint">> => <<"test fingerprint">>
         }
     },
-    {ok, Token, Session} = capi_client_tokens:create_payment_resource(?config(context, Config), Req1),
+    {ok, #{
+        <<"paymentToolToken">> := Token,
+        <<"paymentSession">> := Session
+    }} = capi_client_tokens:create_payment_resource(?config(context, Config), Req1),
     Req2 = #{
         <<"paymentResource">> => #{
             <<"paymentSession">> => Session,
