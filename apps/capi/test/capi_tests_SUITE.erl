@@ -24,6 +24,10 @@
 -export([init/1]).
 
 -export([
+    woody_unexpected_test/1,
+    woody_unavailable_test/1,
+    woody_unknown_test/1,
+
     authorization_positive_lifetime_ok_test/1,
     authorization_unlimited_lifetime_ok_test/1,
     authorization_far_future_deadline_ok_test/1,
@@ -138,6 +142,7 @@ init([]) ->
     [test_case_name()].
 all() ->
     [
+        {group, woody_errors},
         {group, operations_by_base_api_token},
         {group, operations_by_invoice_access_token_after_invoice_creation},
         {group, operations_by_invoice_access_token_after_token_creation},
@@ -173,7 +178,14 @@ customer_access_token_tests() ->
     [{group_name(), list(), [test_case_name()]}].
 groups() ->
     [
-        {operations_by_base_api_token, [sequence],
+        {woody_errors, [],
+            [
+                woody_unexpected_test,
+                woody_unavailable_test,
+                woody_unknown_test
+            ]
+        },
+        {operations_by_base_api_token, [],
             [
                 create_invoice_ok_test,
                 create_invoice_access_token_ok_test,
@@ -226,26 +238,26 @@ groups() ->
                 delete_customer_ok_test
             ]
         },
-        {operations_by_invoice_access_token_after_invoice_creation, [sequence],
+        {operations_by_invoice_access_token_after_invoice_creation, [],
             invoice_access_token_tests()
         },
-        {operations_by_invoice_access_token_after_token_creation, [sequence],
+        {operations_by_invoice_access_token_after_token_creation, [],
             invoice_access_token_tests()
         },
-        {operations_by_invoice_template_access_token, [sequence],
+        {operations_by_invoice_template_access_token, [],
             [
                 create_invoice_with_tpl_ok_test,
                 get_invoice_template_ok_test,
                 get_invoice_payment_methods_by_tpl_id_ok_test
             ]
         },
-        {operations_by_customer_access_token_after_customer_creation, [sequence],
+        {operations_by_customer_access_token_after_customer_creation, [],
             customer_access_token_tests()
         },
-        {operations_by_customer_access_token_after_token_creation, [sequence],
+        {operations_by_customer_access_token_after_token_creation, [],
             customer_access_token_tests()
         },
-        {authorization, [sequence],
+        {authorization, [],
             [
                 authorization_positive_lifetime_ok_test,
                 authorization_unlimited_lifetime_ok_test,
@@ -362,7 +374,10 @@ init_per_group(operations_by_customer_access_token_after_token_creation, Config)
     stop_mocked_service_sup(MockServiceSup),
     [{context, get_context(CustAccToken, 10, 60000)}| Config];
 
-init_per_group(operations_by_base_api_token, Config) ->
+init_per_group(GroupName, Config) when
+    GroupName == operations_by_base_api_token;
+    GroupName == woody_errors
+->
     BasePermissions = [
         {[invoices], write},
         {[invoices], read},
@@ -374,10 +389,7 @@ init_per_group(operations_by_base_api_token, Config) ->
     ],
     {ok, Token} = get_token(BasePermissions, unlimited),
     Context = get_context(Token, 10, 60000),
-    [{context, Context} | Config];
-
-init_per_group(_, Config) ->
-    Config.
+    [{context, Context} | Config].
 
 -spec end_per_group(group_name(), config()) ->
     _.
@@ -396,6 +408,29 @@ end_per_testcase(_Name, C) ->
     ok.
 
 %%% Tests
+
+-spec woody_unexpected_test(config()) ->
+    _.
+
+woody_unexpected_test(Config) ->
+    _ = mock_services([{party_management, fun('Get', _) -> {ok, "spanish inquisition"} end}], Config),
+    {error, {500, _}} = capi_client_parties:get_my_party(?config(context, Config)).
+
+-spec woody_unavailable_test(config()) ->
+    _.
+
+woody_unavailable_test(Config) ->
+    _ = capi_ct_helper:start_app(capi_woody_client, [{service_urls, #{
+        party_management => <<"http://spanish.inquision/v1/partymgmt">>
+    }}]),
+    {error, {503, _}} = capi_client_parties:get_my_party(?config(context, Config)).
+
+-spec woody_unknown_test(config()) ->
+    _.
+
+woody_unknown_test(Config) ->
+    _ = mock_services([{party_management, fun('Get', _) -> timer:sleep(60000) end}], Config),
+    {error, {504, _}} = capi_client_parties:get_my_party(?config(context, Config)).
 
 -spec authorization_positive_lifetime_ok_test(config()) ->
     _.
