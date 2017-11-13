@@ -389,7 +389,10 @@ init_per_group(GroupName, Config) when
     ],
     {ok, Token} = get_token(BasePermissions, unlimited),
     Context = get_context(Token, 10, 60000),
-    [{context, Context} | Config].
+    [{context, Context} | Config];
+
+init_per_group(_, Config) ->
+    Config.
 
 -spec end_per_group(group_name(), config()) ->
     _.
