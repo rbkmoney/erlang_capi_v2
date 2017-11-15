@@ -2206,11 +2206,8 @@ make_customer_access_token(CustomerID, PartyID, Context) ->
     Fun = fun capi_auth:issue_customer_access_token/3,
     make_access_token(Fun, CustomerID, PartyID, Context).
 
-make_access_token(Fun, ID, PartyID, Context) ->
-    AdditionalClaims = maps:with(
-        [<<"name">>, <<"email">>],
-        capi_auth:get_claims(get_auth_context(Context))
-    ),
+make_access_token(Fun, ID, PartyID, _Context) ->
+    AdditionalClaims = #{},
     {ok, Token} = Fun(PartyID, ID, AdditionalClaims),
     #{<<"payload">> => Token}.
 
