@@ -309,18 +309,18 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
         #{
             <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
         }
-    } = capi_client_invoices:create_invoice(get_context(Token, 10, 60000), Req),
+    } = capi_client_invoices:create_invoice(get_context(Token), Req),
     stop_mocked_service_sup(MockServiceSup),
-    [{context, get_context(InvAccToken, 10, 60000)} | Config];
+    [{context, get_context(InvAccToken)} | Config];
 
 init_per_group(operations_by_invoice_access_token_after_token_creation, Config) ->
     MockServiceSup = start_mocked_service_sup(),
     {ok, Token} = get_token([{[invoices], write}], unlimited),
     mock_services([{invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}], MockServiceSup),
     {ok, #{<<"payload">> := InvAccToken}
-    } = capi_client_invoices:create_invoice_access_token(get_context(Token, 10, 60000), ?STRING),
+    } = capi_client_invoices:create_invoice_access_token(get_context(Token), ?STRING),
     stop_mocked_service_sup(MockServiceSup),
-    [{context, get_context(InvAccToken, 10, 60000)} | Config];
+    [{context, get_context(InvAccToken)} | Config];
 
 init_per_group(operations_by_invoice_template_access_token, Config) ->
     MockServiceSup = start_mocked_service_sup(),
@@ -344,9 +344,9 @@ init_per_group(operations_by_invoice_template_access_token, Config) ->
     {ok, #{
             <<"invoiceTemplateAccessToken">> := #{<<"payload">> := InvTemplAccToken}
         }
-    } = capi_client_invoice_templates:create(get_context(Token, 10, 60000), Req),
+    } = capi_client_invoice_templates:create(get_context(Token), Req),
     stop_mocked_service_sup(MockServiceSup),
-    [{context, get_context(InvTemplAccToken, 10, 60000)} | Config];
+    [{context, get_context(InvTemplAccToken)} | Config];
 
 init_per_group(operations_by_customer_access_token_after_customer_creation, Config) ->
     MockServiceSup = start_mocked_service_sup(),
@@ -360,9 +360,9 @@ init_per_group(operations_by_customer_access_token_after_customer_creation, Conf
     {ok, #{
             <<"customerAccessToken">> := #{<<"payload">> := CustAccToken}
         }
-    } = capi_client_customers:create_customer(get_context(Token, 10, 60000), Req),
+    } = capi_client_customers:create_customer(get_context(Token), Req),
     stop_mocked_service_sup(MockServiceSup),
-    [{context, get_context(CustAccToken, 10, 60000)} | Config];
+    [{context, get_context(CustAccToken)} | Config];
 
 init_per_group(operations_by_customer_access_token_after_token_creation, Config) ->
     MockServiceSup = start_mocked_service_sup(),
@@ -370,9 +370,9 @@ init_per_group(operations_by_customer_access_token_after_token_creation, Config)
     mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], MockServiceSup),
     {ok,
         #{<<"payload">> := CustAccToken}
-    } = capi_client_customers:create_customer_access_token(get_context(Token, 10, 60000), ?STRING),
+    } = capi_client_customers:create_customer_access_token(get_context(Token), ?STRING),
     stop_mocked_service_sup(MockServiceSup),
-    [{context, get_context(CustAccToken, 10, 60000)}| Config];
+    [{context, get_context(CustAccToken)}| Config];
 
 init_per_group(GroupName, Config) when
     GroupName == operations_by_base_api_token;
@@ -388,7 +388,7 @@ init_per_group(GroupName, Config) when
         {[customers], write}
     ],
     {ok, Token} = get_token(BasePermissions, unlimited),
-    Context = get_context(Token, 10, 60000),
+    Context = get_context(Token),
     [{context, Context} | Config];
 
 init_per_group(_, Config) ->
@@ -440,58 +440,58 @@ woody_unknown_test(Config) ->
 authorization_positive_lifetime_ok_test(Config) ->
     mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
     {ok, Token} = get_token([], {lifetime, 10}),
-    {ok, _} = capi_client_categories:get_categories(get_context(Token, 10, 60000)).
+    {ok, _} = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_unlimited_lifetime_ok_test(config()) ->
     _.
 authorization_unlimited_lifetime_ok_test(Config) ->
     mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
     {ok, Token} = get_token([], unlimited),
-    {ok, _} = capi_client_categories:get_categories(get_context(Token, 10, 60000)).
+    {ok, _} = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_far_future_deadline_ok_test(config()) ->
     _.
 authorization_far_future_deadline_ok_test(Config) ->
     mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
     {ok, Token} = get_token([], {deadline, 4102444800}), % 01/01/2100 @ 12:00am (UTC)
-    {ok, _} = capi_client_categories:get_categories(get_context(Token, 10, 60000)).
+    {ok, _} = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_permission_ok_test(config()) ->
     _.
 authorization_permission_ok_test(Config) ->
     mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
     {ok, Token} = get_token([{[party], read}], unlimited),
-    {ok, _} = capi_client_parties:get_my_party(get_context(Token, 10, 60000)).
+    {ok, _} = capi_client_parties:get_my_party(get_context(Token)).
 
 -spec authorization_negative_lifetime_error_test(config()) ->
     _.
 authorization_negative_lifetime_error_test(_Config) ->
     {ok, Token} = get_token([], {lifetime, -10}),
-    {error, {401, _}} = capi_client_categories:get_categories(get_context(Token, 10, 60000)).
+    {error, {401, _}} = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_bad_deadline_error_test(config()) ->
     _.
 authorization_bad_deadline_error_test(_Config) ->
     {ok, Token} = get_token([], {deadline, -10}),
-    {error, {401, _}} = capi_client_categories:get_categories(get_context(Token, 10, 60000)).
+    {error, {401, _}} = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_error_no_header_test(config()) ->
     _.
 authorization_error_no_header_test(_Config) ->
     Token = <<>>,
-    {error, {401, _}} = capi_client_categories:get_categories(get_context(Token, 10, 60000)).
+    {error, {401, _}} = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_error_no_permission_test(config()) ->
     _.
 authorization_error_no_permission_test(_Config) ->
     {ok, Token} = get_token([], {lifetime, 10}),
-    {error, {401, _}} = capi_client_parties:get_my_party(get_context(Token, 10, 60000)).
+    {error, {401, _}} = capi_client_parties:get_my_party(get_context(Token)).
 
 -spec authorization_bad_token_error_test(config()) ->
     _.
 authorization_bad_token_error_test(Config) ->
     {ok, Token} = get_dummy_token([{[party], read}], Config),
-    {error, {401, _}} = capi_client_parties:get_my_party(get_context(Token, 10, 60000)).
+    {error, {401, _}} = capi_client_parties:get_my_party(get_context(Token)).
 
 -spec create_invoice_ok_test(config()) ->
     _.
@@ -1308,8 +1308,8 @@ make_path(ServiceName) ->
 get_random_port() ->
     rand:uniform(32768) + 32767.
 
-get_context(Token, Retries, Timeout) ->
-    capi_client_lib:get_context(?CAPI_URL, Token, Retries, Timeout, ipv4).
+get_context(Token) ->
+    capi_client_lib:get_context(?CAPI_URL, Token, 10000, ipv4).
 
 woody_services() ->
     [
