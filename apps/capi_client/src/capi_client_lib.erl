@@ -1,7 +1,7 @@
 -module(capi_client_lib).
 
+-export([get_context/4]).
 -export([get_context/5]).
--export([get_context/6]).
 
 -export([handle_response/1]).
 -export([make_request/2]).
@@ -12,7 +12,6 @@
 -type context() :: #{
     url           := string(),
     token         := term(),
-    retries       := integer(),
     timeout       := integer(),
     event_handler := event_handler(),
     protocol      := protocol()
@@ -107,18 +106,17 @@ handle_response(Code, _, Body) when Code div 100 == 2 ->
 handle_response(Code, _, Body) ->
     {error, {Code, Body}}.
 
--spec get_context(string(), term(), integer(), integer(), protocol()) ->
+-spec get_context(string(), term(), integer(), protocol()) ->
     context().
-get_context(Url, Token, Retries, Timeout, Protocol) ->
-    get_context(Url, Token, Retries, Timeout, Protocol, default_event_handler()).
+get_context(Url, Token, Timeout, Protocol) ->
+    get_context(Url, Token, Timeout, Protocol, default_event_handler()).
 
--spec get_context(string(), term(), integer(), integer(), protocol(), event_handler()) ->
+-spec get_context(string(), term(), integer(), protocol(), event_handler()) ->
     context().
-get_context(Url, Token, Retries, Timeout, Protocol, EventHandler) ->
+get_context(Url, Token, Timeout, Protocol, EventHandler) ->
     #{
         url           => Url,
         token         => Token,
-        retries       => Retries,
         timeout       => Timeout,
         protocol      => Protocol,
         event_handler => EventHandler
