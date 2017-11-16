@@ -51,7 +51,7 @@ handle_request(OperationID, Req, Context) ->
         end
     catch
         error:{woody_error, {Source, Class, Details}} ->
-            process_woody_error(OperationID, Source, Class, Details)
+            process_woody_error(Source, Class, Details)
     end.
 
 -spec process_request(
@@ -1559,10 +1559,7 @@ process_request('GetCustomerEvents', Req, _Context, ReqCtx) ->
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
             end
-    end;
-
-process_request(_OperationID, _Req, _Context, _ReqCtx) ->
-    {error, reply_5xx(501)}.
+    end.
 
 generate_report_presigned_url(FileID, ReqCtx) ->
     ExpiresAt = get_default_url_lifetime(),
@@ -3993,14 +3990,12 @@ format_request_errors([]) ->
 format_request_errors(Errors) ->
     genlib_string:join(<<"\n">>, Errors).
 
-process_woody_error(_, external, resource_unavailable, _Details) ->
-    {error, reply_5xx(503)};
-
-process_woody_error(_, external, result_unexpected, _Details) ->
+process_woody_error(_Source, result_unexpected, _Details) ->
     {error, reply_5xx(500)};
-
-process_woody_error(_, external, result_unknown, _Details) ->
-    {error, reply_5xx(500)}.
+process_woody_error(_Source, resource_unavailable, _Details) ->
+    {error, reply_5xx(503)};
+process_woody_error(_Source, result_unknown, _Details) ->
+    {error, reply_5xx(504)}.
 
 prepare_party(Context, ReqCtx, ServiceCall) ->
     Result0 = ServiceCall(),
@@ -4221,6 +4216,10 @@ process_card_data(ClientInfo0, PaymentTool, Context, ReqCtx) ->
                 #'InvalidCardData'{} ->
                     {ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}};
                 #'KeyringLocked'{} ->
+                    % TODO
+                    % It's better for the cds to signal woody-level unavailability when the
+                    % keyring is locked, isn't it? It could always mention keyring lock as a
+                    % reason in a woody error definition.
                     {error, reply_5xx(503)}
             end
     end.
