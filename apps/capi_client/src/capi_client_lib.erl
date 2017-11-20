@@ -1,7 +1,7 @@
 -module(capi_client_lib).
 
+-export([get_context/4]).
 -export([get_context/5]).
--export([get_context/6]).
 
 -export([handle_response/1]).
 -export([make_request/2]).
@@ -12,7 +12,6 @@
 -type context() :: #{
     url           := string(),
     token         := term(),
-    retries       := integer(),
     timeout       := integer(),
     event_handler := event_handler(),
     protocol      := protocol()
@@ -104,21 +103,20 @@ handle_response(303, Headers, _) ->
 handle_response(Code, _, Body) when Code div 100 == 2 ->
     %% 2xx HTTP code
     {ok, decode_body(Body)};
-handle_response(_, _, Body) ->
-    {error, Body}.
+handle_response(Code, _, Body) ->
+    {error, {Code, Body}}.
 
--spec get_context(string(), term(), integer(), integer(), protocol()) ->
+-spec get_context(string(), term(), integer(), protocol()) ->
     context().
-get_context(Url, Token, Retries, Timeout, Protocol) ->
-    get_context(Url, Token, Retries, Timeout, Protocol, default_event_handler()).
+get_context(Url, Token, Timeout, Protocol) ->
+    get_context(Url, Token, Timeout, Protocol, default_event_handler()).
 
--spec get_context(string(), term(), integer(), integer(), protocol(), event_handler()) ->
+-spec get_context(string(), term(), integer(), protocol(), event_handler()) ->
     context().
-get_context(Url, Token, Retries, Timeout, Protocol, EventHandler) ->
+get_context(Url, Token, Timeout, Protocol, EventHandler) ->
     #{
         url           => Url,
         token         => Token,
-        retries       => Retries,
         timeout       => Timeout,
         protocol      => Protocol,
         event_handler => EventHandler
@@ -150,10 +148,13 @@ get_hackney_opts(Context) ->
 -spec headers(context()) ->
     list(header()).
 headers(Context) ->
-  [
-        x_request_id_header(),
-        auth_header(maps:get(token, Context)) | json_accept_headers()
-  ].
+    RequiredHeaders = [x_request_id_header() | json_accept_headers()],
+    case maps:get(token, Context) of
+        <<>> ->
+            RequiredHeaders;
+        Token ->
+            [auth_header(Token) | RequiredHeaders]
+    end.
 
 -spec x_request_id_header() ->
     header().
@@ -163,7 +164,7 @@ x_request_id_header() ->
 -spec auth_header(term()) ->
     header().
 auth_header(Token) ->
-    {<<"Authorization">>, <<"Bearer ", Token/binary>>} .
+    {<<"Authorization">>, <<"Bearer ", Token/binary>>}.
 
 -spec json_accept_headers() ->
     list(header()).
