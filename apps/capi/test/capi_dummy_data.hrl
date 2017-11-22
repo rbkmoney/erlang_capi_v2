@@ -111,16 +111,6 @@
 
 -define(PAYER, {payment_resource, ?PAYMENT_RESOURCE_PAYER}).
 
--define(PAYER_DETAILS, #domain_LegacyPayerDetails{
-    payment_tool = {bank_card, ?BANK_CARD},
-    session_id = ?STRING,
-    client_info = #domain_ClientInfo{
-        fingerprint = ?STRING,
-        ip_address = ?STRING
-    },
-    contact_info = ?CONTACT_INFO
-}).
-
 -define(PAYMENT, #domain_InvoicePayment{
     id              = ?STRING,
     created_at      = ?TIMESTAMP,
@@ -129,8 +119,7 @@
     payer           = ?PAYER,
     cost            = ?CASH,
     flow            = {instant, #domain_InvoicePaymentFlowInstant{}},
-    context         = ?CONTENT,
-    payer_details   = ?PAYER_DETAILS
+    context         = ?CONTENT
 }).
 
 -define(PAYPROC_PAYMENT, #payproc_InvoicePayment{
@@ -181,7 +170,7 @@
 -define(SHOP, #domain_Shop{
     id = ?STRING,
     created_at = ?TIMESTAMP,
-    blocking = ?BLOCKING, 
+    blocking = ?BLOCKING,
     suspension = ?SUSPENTION,
     details = #domain_ShopDetails{name = ?STRING},
     location = {url, ?STRING},
@@ -251,7 +240,7 @@
 }).
 
 -define (STAT_RESPONSE(Data), #merchstat_StatResponse{
-    data = Data, 
+    data = Data,
     total_count = ?INTEGER}
 ).
 
@@ -342,9 +331,9 @@
     domain = #{
         {category, #domain_CategoryRef{id = ?INTEGER}} =>
         {category, #domain_CategoryObject{
-            ref = #domain_CategoryRef{id = ?INTEGER}, 
+            ref = #domain_CategoryRef{id = ?INTEGER},
             data = #domain_Category{
-                name = ?STRING, 
+                name = ?STRING,
                 description = ?STRING
             }
         }}
@@ -363,7 +352,7 @@
             {invoice_status_changed, #payproc_InvoiceStatusChanged{status = ?INVOICE_STATUS(fulfilled)}}
         ]
     },
-    source =  {invoice_id, ?STRING} 
+    source =  {invoice_id, ?STRING}
 }).
 
 -define(TERM_SET, #domain_TermSet{}).
