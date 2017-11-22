@@ -127,6 +127,8 @@
 -define(CAPI_HOST_NAME              , "localhost").
 -define(CAPI_URL                    , ?CAPI_HOST_NAME ++ ":" ++ integer_to_list(?CAPI_PORT)).
 
+-define(badresp(Code), {error, {invalid_response_code, Code}}).
+
 -type test_case_name()  :: atom().
 -type config()          :: [{atom(), any()}].
 -type group_name()      :: atom().
@@ -414,7 +416,7 @@ end_per_testcase(_Name, C) ->
 
 woody_unexpected_test(Config) ->
     _ = mock_services([{party_management, fun('Get', _) -> {ok, "spanish inquisition"} end}], Config),
-    {error, {500, _}} = capi_client_parties:get_my_party(?config(context, Config)).
+    ?badresp(500) = capi_client_parties:get_my_party(?config(context, Config)).
 
 -spec woody_unavailable_test(config()) ->
     _.
@@ -423,14 +425,14 @@ woody_unavailable_test(Config) ->
     _ = capi_ct_helper:start_app(capi_woody_client, [{service_urls, #{
         party_management => <<"http://spanish.inquision/v1/partymgmt">>
     }}]),
-    {error, {503, _}} = capi_client_parties:get_my_party(?config(context, Config)).
+    ?badresp(503) = capi_client_parties:get_my_party(?config(context, Config)).
 
 -spec woody_unknown_test(config()) ->
     _.
 
 woody_unknown_test(Config) ->
     _ = mock_services([{party_management, fun('Get', _) -> timer:sleep(60000) end}], Config),
-    {error, {504, _}} = capi_client_parties:get_my_party(?config(context, Config)).
+    ?badresp(504) = capi_client_parties:get_my_party(?config(context, Config)).
 
 -spec authorization_positive_lifetime_ok_test(config()) ->
     _.
@@ -464,31 +466,31 @@ authorization_permission_ok_test(Config) ->
     _.
 authorization_negative_lifetime_error_test(_Config) ->
     {ok, Token} = get_token([], {lifetime, -10}),
-    {error, {401, _}} = capi_client_categories:get_categories(get_context(Token)).
+    ?badresp(401) = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_bad_deadline_error_test(config()) ->
     _.
 authorization_bad_deadline_error_test(_Config) ->
     {ok, Token} = get_token([], {deadline, -10}),
-    {error, {401, _}} = capi_client_categories:get_categories(get_context(Token)).
+    ?badresp(401) = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_error_no_header_test(config()) ->
     _.
 authorization_error_no_header_test(_Config) ->
     Token = <<>>,
-    {error, {401, _}} = capi_client_categories:get_categories(get_context(Token)).
+    ?badresp(401) = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_error_no_permission_test(config()) ->
     _.
 authorization_error_no_permission_test(_Config) ->
     {ok, Token} = get_token([], {lifetime, 10}),
-    {error, {401, _}} = capi_client_parties:get_my_party(get_context(Token)).
+    ?badresp(401) = capi_client_parties:get_my_party(get_context(Token)).
 
 -spec authorization_bad_token_error_test(config()) ->
     _.
 authorization_bad_token_error_test(Config) ->
     {ok, Token} = get_dummy_token([{[party], read}], Config),
-    {error, {401, _}} = capi_client_parties:get_my_party(get_context(Token)).
+    ?badresp(401) = capi_client_parties:get_my_party(get_context(Token)).
 
 -spec create_invoice_ok_test(config()) ->
     _.
