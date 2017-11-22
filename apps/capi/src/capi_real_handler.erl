@@ -1387,7 +1387,9 @@ process_request('CreateCustomer', Req, Context, ReqCtx) ->
                 #payproc_InvalidPartyStatus{} ->
                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
+                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                #payproc_OperationNotPermitted{} ->
+                    {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}}
             end
     end;
 
@@ -1476,6 +1478,8 @@ process_request('CreateBinding', Req, _Context, ReqCtx) ->
                     {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
                 #payproc_InvalidPaymentTool{} ->
                     {ok, {400, [], logic_error(invalidPaymentResource, <<"Invalid payment resource">>)}};
+                #payproc_OperationNotPermitted{} ->
+                    {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
                 #payproc_InvalidUser{} ->
                     {ok, {404, [], general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
