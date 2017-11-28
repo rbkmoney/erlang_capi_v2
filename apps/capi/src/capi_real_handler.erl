@@ -495,7 +495,7 @@ process_request('SearchPayouts', Req, Context, ReqCtx) ->
         <<"shop_id">> => genlib_map:get('shopID', Req),
         <<"from_time">> => get_time('fromTime', Req),
         <<"to_time">> => get_time('toTime', Req),
-        <<"payout_status">> => [<<"paid">>, <<"confirmed">>],
+        <<"payout_statuses">> => [<<"paid">>, <<"confirmed">>],
         <<"payout_id">> => genlib_map:get('payoutID', Req),
         <<"payout_type">> => encode_payout_type(genlib_map:get('payoutToolType', Req))
     },
