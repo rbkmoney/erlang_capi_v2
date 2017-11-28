@@ -362,8 +362,8 @@
     }
 }).
 
--define(INVOICE_EVENT, #payproc_Event{
-    id = ?INTEGER,
+-define(INVOICE_EVENT(ID), #payproc_Event{
+    id = ID,
     created_at = ?TIMESTAMP,
     payload =  {invoice_changes,
         [
@@ -372,6 +372,23 @@
             {invoice_status_changed, #payproc_InvoiceStatusChanged{status = ?INVOICE_STATUS(paid)}},
             {invoice_status_changed, #payproc_InvoiceStatusChanged{status = ?INVOICE_STATUS(cancelled)}},
             {invoice_status_changed, #payproc_InvoiceStatusChanged{status = ?INVOICE_STATUS(fulfilled)}}
+        ]
+    },
+    source =  {invoice_id, ?STRING}
+}).
+
+-define(INVOICE_EVENT_PRIVATE(ID), #payproc_Event{
+    id = ID,
+    created_at = ?TIMESTAMP,
+    payload =  {invoice_changes,
+        [
+            {invoice_payment_change, #payproc_InvoicePaymentChange{
+                id = <<"1">>,
+                payload = {invoice_payment_session_change, #payproc_InvoicePaymentSessionChange{
+                    target = {processed, #domain_InvoicePaymentProcessed{}},
+                    payload = {session_started, #payproc_SessionStarted{}}}
+                }}
+            }
         ]
     },
     source =  {invoice_id, ?STRING}
