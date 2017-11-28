@@ -247,6 +247,7 @@
 -define(STAT_RESPONSE_INVOICES, ?STAT_RESPONSE({invoices, [?STAT_INVOICE]})).
 
 -define(STAT_RESPONSE_PAYMENTS, ?STAT_RESPONSE({payments, [?STAT_PAYMENT]})).
+-define(STAT_RESPONSE_PAYOUTS,  ?STAT_RESPONSE({payouts,  [?STAT_PAYOUT]})).
 
 -define(STAT_RESPONSE_RECORDS, ?STAT_RESPONSE({records, [?STAT_RECORD]})).
 
@@ -289,6 +290,27 @@
         session_id = ?STRING
     }},
     context = ?CONTENT
+}).
+
+-define(STAT_PAYOUT, #merchstat_StatPayout{
+    id = ?STRING,
+    party_id = ?STRING,
+    shop_id = ?STRING,
+    created_at = ?TIMESTAMP,
+    status = {paid, #merchstat_PayoutPaid{}},
+    amount = ?INTEGER,
+    fee = ?INTEGER,
+    currency_symbolic_code = ?RUB,
+    type = {bank_account, #merchstat_PayoutAccount{
+        account = #merchstat_BankAccount{
+            account = <<"12345678901234567890">>,
+            bank_name = ?STRING,
+            bank_post_account = <<"12345678901234567890">>,
+            bank_bik = <<"123456789">>
+        },
+        inn = <<"12345678901234567890">>,
+        purpose = ?STRING
+    }}
 }).
 
 -define(STAT_RECORD, #{

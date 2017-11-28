@@ -495,7 +495,7 @@ process_request('SearchPayouts', Req, Context, ReqCtx) ->
         <<"shop_id">> => genlib_map:get('shopID', Req),
         <<"from_time">> => get_time('fromTime', Req),
         <<"to_time">> => get_time('toTime', Req),
-        <<"payout_status">> => genlib_map:get('payoutStatus', Req),
+        <<"payout_status">> => [<<"paid">>, <<"confirmed">>],
         <<"payout_id">> => genlib_map:get('payoutID', Req),
         <<"payout_type">> => encode_payout_type(genlib_map:get('payoutToolType', Req))
     },
@@ -3151,13 +3151,12 @@ decode_stat_payout(#merchstat_StatPayout{
     id = PayoutID,
     shop_id = ShopID,
     created_at = CreatedAt,
-    status = PayoutStatus,
     amount = Amount,
     fee = Fee,
     currency_symbolic_code = Currency,
     type = PayoutType
 }) ->
-    genlib_map:compact(maps:merge(#{
+    genlib_map:compact(#{
         <<"id">> => PayoutID,
         <<"shopID">> => ShopID,
         <<"createdAt">> => CreatedAt,
@@ -3165,17 +3164,7 @@ decode_stat_payout(#merchstat_StatPayout{
         <<"fee">> => Fee,
         <<"currency">> => Currency,
         <<"payoutToolDetails">> => decode_stat_payout_tool_details(PayoutType)
-    }, decode_stat_payout_status(PayoutStatus))).
-
-decode_stat_payout_status({cancelled, #merchstat_PayoutCancelled{details = Details}}) ->
-    #{
-        <<"status">> => <<"cancelled">>,
-        <<"cancellationDetails">> => genlib:to_binary(Details)
-    };
-decode_stat_payout_status({Status, _}) ->
-    #{
-        <<"status">> => genlib:to_binary(Status)
-    }.
+    }).
 
 decode_stat_payout_tool_details(PayoutType) ->
     decode_payout_tool_details(merchstat_to_domain(PayoutType)).

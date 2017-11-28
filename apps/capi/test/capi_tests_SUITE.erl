@@ -1037,8 +1037,16 @@ search_payments_ok_test(Config) ->
 
 -spec search_payouts_ok_test(config()) ->
     _.
-search_payouts_ok_test(_) ->
-    ok.
+search_payouts_ok_test(Config) ->
+    mock_services([{merchant_stat, fun('GetPayouts', _) -> {ok, ?STAT_RESPONSE_PAYOUTS} end}], Config),
+    Query = [
+        {limit, 2},
+        {offset, 2},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}}
+    ],
+
+    {ok, _, _} = capi_client_searches:search_payouts(?config(context, Config), ?STRING, Query).
 
 -spec get_payment_conversion_stats_ok_test(_) ->
     _.
