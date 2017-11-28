@@ -530,11 +530,24 @@ get_invoice_ok_test(Config) ->
 -spec get_invoice_events_ok_test(config()) ->
     _.
 get_invoice_events_ok_test(Config) ->
-    mock_services([{invoicing, fun('GetEvents', _) -> {ok, [?INVOICE_EVENT]} end}], Config),
-    Limit = 10,
-    {ok, Events1} = capi_client_invoices:get_invoice_events(?config(context, Config), ?STRING, Limit),
-    {ok, Events2} = capi_client_invoices:get_invoice_events(?config(context, Config), ?STRING, 10, Limit),
-    true = ((length(Events1) =< Limit) andalso (length(Events2) =< Limit)).
+    _ = mock_services([
+        {invoicing, fun
+            ('GetEvents', [_, _, #payproc_EventRange{'after' = ID, limit = N}]) ->
+                {ok, lists:sublist([
+                    ?INVOICE_EVENT(1),
+                    ?INVOICE_EVENT(2),
+                    ?INVOICE_EVENT_PRIVATE(3),
+                    ?INVOICE_EVENT(4),
+                    ?INVOICE_EVENT_PRIVATE(5),
+                    ?INVOICE_EVENT_PRIVATE(6),
+                    ?INVOICE_EVENT(7)
+                ], if is_integer(ID) -> ID + 1; true -> 1 end, N)}
+        end}
+    ], Config),
+    {ok, [#{<<"id">> := 1}, #{<<"id">> := 2}, #{<<"id">> := 4}]} =
+        capi_client_invoices:get_invoice_events(?config(context, Config), ?STRING, 3),
+    {ok, [#{<<"id">> := 4}, #{<<"id">> := 7}]} =
+        capi_client_invoices:get_invoice_events(?config(context, Config), ?STRING, 2, 3).
 
 -spec get_invoice_payment_methods_ok_test(config()) ->
     _.

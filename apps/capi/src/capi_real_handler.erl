@@ -4115,19 +4115,22 @@ collect_events(Collected, 0, _, _, _) ->
     {ok, Collected};
 
 collect_events(Collected0, Left, After, GetterFun, DecodeFun) when Left > 0 ->
-    Result = get_events(Left, After, GetterFun),
-    case Result of
-        {ok, []} ->
-            {ok, Collected0};
+    case get_events(Left, After, GetterFun) of
         {ok, Events} ->
             Filtered = decode_and_filter_events(DecodeFun, Events),
-            collect_events(
-                Collected0 ++ Filtered,
-                Left - length(Filtered),
-                get_last_event_id(Events),
-                GetterFun,
-                DecodeFun
-            );
+            Collected = Collected0 ++ Filtered,
+            case length(Events) of
+                Left ->
+                    collect_events(
+                        Collected,
+                        Left - length(Filtered),
+                        get_last_event_id(Events),
+                        GetterFun,
+                        DecodeFun
+                    );
+                N when N < Left ->
+                    {ok, Collected}
+            end;
         Error ->
             Error
     end.
