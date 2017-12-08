@@ -43,14 +43,18 @@ get_payment_institutions(Context) ->
         domain = Domain
     } = Snapshot,
     {globals, #domain_GlobalsObject{data = Globals}} = genlib_map:get({globals, #domain_GlobalsRef{}}, Domain),
-    #domain_Globals{payment_institutions = PaymentInstitutionRefs} = Globals,
-    {ok, lists:map(
-        fun(Ref) ->
-            {_, Obj} = genlib_map:get({payment_institution, Ref}, Domain),
-            Obj
-        end,
-        ordsets:to_list(PaymentInstitutionRefs)
-    )}.
+    {ok, case Globals#domain_Globals.payment_institutions of
+        PaymentInstitutionRefs when PaymentInstitutionRefs /= undefined ->
+            lists:map(
+                fun(Ref) ->
+                    {_, Obj} = genlib_map:get({payment_institution, Ref}, Domain),
+                    Obj
+                end,
+                ordsets:to_list(PaymentInstitutionRefs)
+            );
+        undefined ->
+            []
+    end}.
 
 -spec get(ref(), context()) -> {ok, data()} | {error, not_found}.
 

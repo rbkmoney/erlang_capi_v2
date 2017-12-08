@@ -1159,9 +1159,7 @@ process_request('GetCategoryByRef', Req, Context0, ReqCtx) ->
             {404, [], general_error(<<"Category not found">>)}
     end;
 
-process_request('GetPaymentInstitutions', Req, Context, ReqCtx) ->
-    _ = get_user_info(Context),
-    _ = get_party_id(Context),
+process_request('GetPaymentInstitutions', Req, _Context, ReqCtx) ->
     Residence = case genlib_map:get(residence, Req) of
         Bin when is_binary(Bin) ->
             binary_to_existing_atom(Bin, utf8);
@@ -1183,9 +1181,7 @@ process_request('GetPaymentInstitutions', Req, Context, ReqCtx) ->
     ),
     {ok, {200, [], Resp}};
 
-process_request('GetPaymentInstitutionByRef', Req, Context, ReqCtx) ->
-    _ = get_user_info(Context),
-    _ = get_party_id(Context),
+process_request('GetPaymentInstitutionByRef', Req, _Context, ReqCtx) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
     case capi_domain:get({payment_institution, ?payment_institution_ref(PaymentInstitutionID)}, ReqCtx) of
         {ok, PaymentInstitution} ->
