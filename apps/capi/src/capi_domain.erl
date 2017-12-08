@@ -4,6 +4,7 @@
 -include_lib("dmsl/include/dmsl_domain_config_thrift.hrl").
 
 -export([get_categories/1]).
+-export([get_payment_institutions/1]).
 -export([get/2]).
 
 -type context() :: woody_context:ctx().
@@ -11,6 +12,7 @@
 -type data() :: _.
 
 -type category() :: #domain_CategoryObject{}.
+-type payment_institution() :: #domain_PaymentInstitutionObject{}.
 
 -spec get_categories(context()) -> {ok, [category()]}.
 get_categories(Context) ->
@@ -30,6 +32,31 @@ get_categories(Context) ->
         Domain
     ),
     {ok, Categories}.
+
+-spec get_payment_institutions(context()) -> {ok, [payment_institution()]}.
+
+get_payment_institutions(Context) ->
+    % All this mess was done to reduce requests to dominant.
+    % TODO rewrite this with dmt_client, cache, unicorns and rainbows.
+    {ok, Snapshot} = get_shapshot(Context),
+    #'Snapshot'{
+        domain = Domain
+    } = Snapshot,
+    {globals, #domain_GlobalsObject{data = Globals}} = genlib_map:get({globals, #domain_GlobalsRef{}}, Domain),
+    {ok, get_payment_institutions(Globals, Domain)}.
+
+get_payment_institutions(#domain_Globals{payment_institutions = PaymentInstitutionRefs}, Domain)
+    when PaymentInstitutionRefs /= undefined
+->
+    lists:map(
+        fun(Ref) ->
+            {_, Obj} = genlib_map:get({payment_institution, Ref}, Domain),
+            Obj
+        end,
+        ordsets:to_list(PaymentInstitutionRefs)
+    );
+get_payment_institutions(#domain_Globals{payment_institutions = undefined}, _) ->
+    [].
 
 -spec get(ref(), context()) -> {ok, data()} | {error, not_found}.
 
