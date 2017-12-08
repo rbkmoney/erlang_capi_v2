@@ -151,6 +151,7 @@
 -define(CONTRACT, #domain_Contract{
     id = ?STRING,
     contractor = {registered_user, #domain_RegisteredUser{email = ?STRING}},
+    payment_institution = #domain_PaymentInstitutionRef{id = ?INTEGER},
     created_at = ?TIMESTAMP,
     valid_since = ?TIMESTAMP,
     valid_until = ?TIMESTAMP,
@@ -185,7 +186,8 @@
     blocking = ?BLOCKING,
     suspension = ?SUSPENTION,
     contracts = #{?STRING => ?CONTRACT},
-    shops = #{?STRING => ?SHOP}
+    shops = #{?STRING => ?SHOP},
+    revision = 0
 }).
 
 -define(CLAIM, #payproc_Claim{
@@ -335,6 +337,28 @@
             data = #domain_Category{
                 name = ?STRING,
                 description = ?STRING
+            }
+        }},
+        {globals, #domain_GlobalsRef{}} =>
+        {globals, #domain_GlobalsObject{
+            ref = #domain_GlobalsRef{},
+            data = #domain_Globals{
+                external_account_set = {value, #domain_ExternalAccountSetRef{id = ?INTEGER}},
+                payment_institutions = [#domain_PaymentInstitutionRef{id = ?INTEGER}]
+            }
+        }},
+        {payment_institution, #domain_PaymentInstitutionRef{id = ?INTEGER}} =>
+        {payment_institution, #domain_PaymentInstitutionObject{
+            ref = #domain_PaymentInstitutionRef{id = ?INTEGER},
+            data = #domain_PaymentInstitution{
+                name = ?STRING,
+                description = ?STRING,
+                system_account_set = {value, #domain_SystemAccountSetRef{id = ?INTEGER}},
+                default_contract_template = {value, #domain_ContractTemplateRef{id = ?INTEGER}},
+                providers = {value, []},
+                inspector = {value, #domain_InspectorRef{id = ?INTEGER}},
+                realm = test,
+                residences = []
             }
         }}
     }
