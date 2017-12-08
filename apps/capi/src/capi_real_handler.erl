@@ -1160,12 +1160,7 @@ process_request('GetCategoryByRef', Req, Context0, ReqCtx) ->
     end;
 
 process_request('GetPaymentInstitutions', Req, _Context, ReqCtx) ->
-    Residence = case genlib_map:get(residence, Req) of
-        Bin when is_binary(Bin) ->
-            binary_to_existing_atom(Bin, utf8);
-        undefined ->
-            undefined
-    end,
+    Residence = encode_residence(genlib_map:get(residence, Req)),
     Realm = genlib_map:get(realm, Req),
     {ok, PaymentInstObjects} = capi_domain:get_payment_institutions(ReqCtx),
     Resp = lists:filtermap(
@@ -2238,6 +2233,11 @@ encode_payment_institution_ref(Ref) ->
     #domain_PaymentInstitutionRef{
         id = Ref
     }.
+
+encode_residence(Residence) when is_binary(Residence) ->
+    binary_to_existing_atom(Residence, utf8);
+encode_residence(undefined) ->
+    undefined.
 
 encode_flow(#{<<"type">> := <<"PaymentFlowInstant">>}) ->
     {instant, #payproc_InvoicePaymentParamsFlowInstant{}};
@@ -3562,25 +3562,20 @@ decode_account_state(#payproc_AccountState{
         <<"currency">> => decode_currency(Currency)
     }.
 
-decode_payment_terms(undefined) ->
-    #{};
 decode_payment_terms(#domain_PaymentsServiceTerms{
     currencies = Currencies,
     categories = Categories
 }) ->
     genlib_map:compact(#{
-        <<"currencies">> => decode_payment_terms_currencies(Currencies),
-        <<"categories">> => decode_payment_terms_categories(Categories)
-    }).
+        <<"currencies">> => decode_payment_terms(fun decode_currency/1, Currencies),
+        <<"categories">> => decode_payment_terms(fun decode_category_ref/1, Categories)
+    });
+decode_payment_terms(undefined) ->
+    #{}.
 
-decode_payment_terms_currencies({value, Currencies}) ->
-    [decode_currency(C) || C <- ordsets:to_list(Currencies)];
-decode_payment_terms_currencies(_) ->
-    undefined.
-
-decode_payment_terms_categories({value, Categories}) ->
-    [decode_category_ref(C) || C <- ordsets:to_list(Categories)];
-decode_payment_terms_categories(_) ->
+decode_payment_terms(Fun, {value, Val}) when is_list(Val) ->
+    [Fun(V) || V <- Val];
+decode_payment_terms(_, _) ->
     undefined.
 
 decode_user_interaction({payment_terminal_reciept, #'PaymentTerminalReceipt'{
