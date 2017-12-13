@@ -2493,42 +2493,37 @@ decode_payment_tool_token({payment_terminal, PaymentTerminal}) ->
 decode_payment_tool_token({digital_wallet, DigitalWallet}) ->
     decode_digital_wallet(DigitalWallet).
 
-decode_payment_tool_details({bank_card, BankCard}) ->
-    decode_bank_card_details(<<"PaymentToolDetailsBankCard">>, BankCard);
-decode_payment_tool_details({payment_terminal, #domain_PaymentTerminal{
-    terminal_type = Type
-}}) ->
-    #{
-        <<"detailsType">> => <<"PaymentToolDetailsPaymentTerminal">>,
-        <<"provider">> => genlib:to_binary(Type)
-    };
-decode_payment_tool_details({digital_wallet, DigitalWallet}) ->
-    decode_digital_wallet_details(<<"PaymentToolDetailsDigitalWallet">>, DigitalWallet).
+decode_payment_tool_details({bank_card, V}) ->
+    decode_bank_card_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsBankCard">>});
+decode_payment_tool_details({payment_terminal, V}) ->
+    decode_payment_terminal_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsPaymentTerminal">>});
+decode_payment_tool_details({digital_wallet, V}) ->
+    decode_digital_wallet_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsDigitalWallet">>}).
 
-decode_bank_card_details(DetailsType, #domain_BankCard{
+decode_bank_card_details(#domain_BankCard{
     'payment_system' = PaymentSystem,
     'masked_pan' = MaskedPan
-}) ->
-    #{
-        <<"detailsType">> => DetailsType,
+}, V) ->
+    V#{
         <<"cardNumberMask">> => decode_masked_pan(MaskedPan),
         <<"paymentSystem">> => genlib:to_binary(PaymentSystem)
     }.
 
-decode_digital_wallet_details(DetailsType, #domain_DigitalWallet{
-    provider = Provider,
+decode_payment_terminal_details(#domain_PaymentTerminal{
+    terminal_type = Type
+}, V) ->
+    V#{
+        <<"provider">> => genlib:to_binary(Type)
+    }.
+
+decode_digital_wallet_details(#domain_DigitalWallet{
+    provider = qiwi,
     id = ID
-}) ->
-    maps:merge(
-        #{<<"detailsType">> => DetailsType},
-        case Provider of
-            qiwi ->
-                #{
-                    <<"digitalWalletDetailsType">> => <<"DigitalWalletDetailsQIWI">>,
-                    <<"phoneNumberMask">> => mask_phone_number(ID)
-                }
-        end
-    ).
+}, V) ->
+    V#{
+        <<"digitalWalletDetailsType">> => <<"DigitalWalletDetailsQIWI">>,
+        <<"phoneNumberMask">> => mask_phone_number(ID)
+    }.
 
 -define(MASKED_PAN_MAX_LENGTH, 4).
 
@@ -2967,11 +2962,8 @@ decode_payout_tool_params(Currency, Info) ->
         <<"details">> => decode_payout_tool_details(Info)
     }.
 
-decode_bank_account_details(TypeName, BankAccount) ->
-    maps:merge(
-        #{<<"detailsType">> => TypeName},
-        decode_bank_account(BankAccount)
-    ).
+decode_bank_account_details(BankAccount, V) ->
+    maps:merge(V, decode_bank_account(BankAccount)).
 
 decode_bank_account(#domain_BankAccount{
     account = Account,
@@ -3216,10 +3208,10 @@ decode_stat_payout_status({Status, _}) ->
 decode_stat_payout_tool_details(PayoutType) ->
     decode_payout_tool_details(merchstat_to_domain(PayoutType)).
 
-decode_payout_tool_details({bank_card, BankCard}) ->
-    decode_bank_card_details(<<"PayoutToolDetailsBankCard">>, BankCard);
-decode_payout_tool_details({bank_account, BankAccount}) ->
-    decode_bank_account_details(<<"PayoutToolDetailsBankAccount">>, BankAccount).
+decode_payout_tool_details({bank_card, V}) ->
+    decode_bank_card_details(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankCard">>});
+decode_payout_tool_details({bank_account, V}) ->
+    decode_bank_account_details(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankAccount">>}).
 
 encode_payout_type('PayoutCard') ->
     <<"bank_card">>;
