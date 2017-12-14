@@ -1190,8 +1190,6 @@ process_request('GetPaymentInstitutionPaymentTerms', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
-    % TODO add contractor params to swag
-    ContractorParams = encode_contractor_params(),
     Result = prepare_party(
         Context,
         ReqCtx,
@@ -1199,7 +1197,7 @@ process_request('GetPaymentInstitutionPaymentTerms', Req, Context, ReqCtx) ->
             service_call(
                 party_management,
                 'ComputePaymentInstitutionTerms',
-                [UserInfo, PartyID, ?payment_institution_ref(PaymentInstitutionID), ContractorParams],
+                [UserInfo, PartyID, ?payment_institution_ref(PaymentInstitutionID)],
                 ReqCtx
             )
         end
@@ -1689,9 +1687,6 @@ get_webhook(PartyID, WebhookID, ReqCtx) ->
         {exception, Exception} ->
             {exception, Exception}
     end.
-
-encode_contractor_params() ->
-    #payproc_ContractorParams{}.
 
 encode_webhook_id(WebhookID) ->
     try
@@ -2190,19 +2185,36 @@ encode_payout_tool_params(#{
     }.
 
 encode_payout_tool_info(#{<<"detailsType">> := <<"PayoutToolDetailsBankAccount">>} = Tool) ->
-   {bank_account, encode_bank_account(Tool)}.
+   {russian_bank_account, encode_russian_bank_account(Tool)};
+encode_payout_tool_info(#{<<"detailsType">> := <<"PayoutToolDetailsInternationalBankAccount">>} = Tool) ->
+   {international_bank_account, encode_international_bank_account(Tool)}.
 
-encode_bank_account(#{
+encode_russian_bank_account(#{
     <<"account">> := Account,
     <<"bankName">> := BankName,
     <<"bankPostAccount">> := BankPostAccount,
     <<"bankBik">> := BankBik
 }) ->
-    #domain_BankAccount{
+    #domain_RussianBankAccount{
         account = Account,
         bank_name = BankName,
         bank_post_account = BankPostAccount,
         bank_bik = BankBik
+    }.
+
+encode_international_bank_account(#{
+    <<"accountHolder">> := AccountHolder,
+    <<"bankName">> := BankName,
+    <<"bankAddress">> := BankAddress,
+    <<"iban">> := Iban,
+    <<"bic">> := Bic
+}) ->
+    #domain_InternationalBankAccount{
+        account_holder = AccountHolder,
+        bank_name = BankName,
+        bank_address = BankAddress,
+        iban = Iban,
+        bic = Bic
     }.
 
 encode_contractor(#{<<"contractorType">> := <<"LegalEntity">>} = Contractor) ->
@@ -2223,7 +2235,16 @@ encode_legal_entity(#{
         representative_position = maps:get(<<"representativePosition">>, Entity),
         representative_full_name = maps:get(<<"representativeFullName">>, Entity),
         representative_document = maps:get(<<"representativeDocument">>, Entity),
-        bank_account = encode_bank_account(maps:get(<<"bankAccount">>, Entity))
+        russian_bank_account = encode_russian_bank_account(maps:get(<<"bankAccount">>, Entity))
+    }};
+encode_legal_entity(#{
+    <<"entityType">> := <<"InternationalLegalEntity">>
+} = Entity) ->
+    {international_legal_entity, #domain_InternationalLegalEntity{
+        legal_name = genlib_map:get(<<"legalName">>, Entity),
+        trading_name = genlib_map:get(<<"tradingName">>, Entity),
+        registered_address = genlib_map:get(<<"registeredOffice">>, Entity),
+        actual_address = genlib_map:get(<<"principalPlaceOfBusiness">>, Entity)
     }}.
 
 encode_registered_user(#{<<"email">> := Email}) ->
@@ -2729,7 +2750,7 @@ merchstat_to_domain({bank_account, #merchstat_PayoutAccount{account = #merchstat
     bank_post_account = BankPostAccount,
     bank_bik = BankBik
 }}}) ->
-    {bank_account, #domain_BankAccount{
+    {russian_bank_account, #domain_RussianBankAccount{
         account = Account,
         bank_name = BankName,
         bank_post_account = BankPostAccount,
@@ -3021,13 +3042,7 @@ decode_payout_tool_params(Currency, Info) ->
         <<"details">> => decode_payout_tool_details(Info)
     }.
 
-decode_bank_account_details(TypeName, BankAccount) ->
-    maps:merge(
-        #{<<"detailsType">> => TypeName},
-        decode_bank_account(BankAccount)
-    ).
-
-decode_bank_account(#domain_BankAccount{
+decode_russian_bank_account(#domain_RussianBankAccount{
     account = Account,
     bank_name = BankName,
     bank_post_account = BankPostAccount,
@@ -3038,6 +3053,21 @@ decode_bank_account(#domain_BankAccount{
         <<"bankName">> => BankName,
         <<"bankPostAccount">> => BankPostAccount,
         <<"bankBik">> => BankBik
+    }.
+
+decode_international_bank_account(#domain_InternationalBankAccount{
+    account_holder = AccountHolder,
+    bank_name = BankName,
+    bank_address = BankAddress,
+    iban = Iban,
+    bic = Bic
+}) ->
+    #{
+        <<"accountHolder">> => AccountHolder,
+        <<"bankName">> => BankName,
+        <<"bankAddress">> => BankAddress,
+        <<"iban">> => Iban,
+        <<"bic">> => Bic
     }.
 
 decode_contract_adjustment(#domain_ContractAdjustment{
@@ -3115,7 +3145,7 @@ decode_legal_entity({
         representative_position = RepresentativePosition,
         representative_full_name = RepresentativeFullName,
         representative_document = RepresentativeDocument,
-        bank_account = BankAccount
+        russian_bank_account = BankAccount
     }
 }) ->
     #{
@@ -3128,8 +3158,24 @@ decode_legal_entity({
         <<"representativePosition">> => RepresentativePosition,
         <<"representativeFullName">> => RepresentativeFullName,
         <<"representativeDocument">> => RepresentativeDocument,
-        <<"bankAccount">> => decode_bank_account(BankAccount)
-    }.
+        <<"bankAccount">> => decode_russian_bank_account(BankAccount)
+    };
+decode_legal_entity({
+    international_legal_entity,
+    #domain_InternationalLegalEntity{
+        legal_name = LegalName,
+        trading_name = TradingName,
+        registered_address = RegisteredOffice,
+        actual_address = PrincipalPlaceOfBusiness
+    }
+}) ->
+    genlib_map:compact(#{
+        <<"entityType">> => <<"InternationalLegalEntity">>,
+        <<"legalName">> => LegalName,
+        <<"tradingName">> => TradingName,
+        <<"registeredOffice">> => RegisteredOffice,
+        <<"principalPlaceOfBusiness">> => PrincipalPlaceOfBusiness
+    }).
 
 decode_registered_user(#domain_RegisteredUser{email = Email}) ->
     #{<<"email">> => Email}.
@@ -3139,14 +3185,16 @@ decode_payment_institution_obj(#domain_PaymentInstitutionObject{
     data = #domain_PaymentInstitution{
         name = Name,
         description = Description,
-        realm = Realm
+        realm = Realm,
+        residences = Residences
     }
 }) ->
     genlib_map:compact(#{
         <<"id">> => ID,
         <<"name">> => Name,
         <<"description">> => Description,
-        <<"realm">> => genlib:to_binary(Realm)
+        <<"realm">> => genlib:to_binary(Realm),
+        <<"residences">> => [atom_to_binary(R, utf8) || R <- ordsets:to_list(Residences)]
     }).
 
 is_blocked({blocked, _}) ->
@@ -3290,8 +3338,16 @@ decode_stat_payout_tool_details(PayoutType) ->
 
 decode_payout_tool_details({bank_card, BankCard}) ->
     decode_bank_card_details(<<"PayoutToolDetailsBankCard">>, BankCard);
-decode_payout_tool_details({bank_account, BankAccount}) ->
-    decode_bank_account_details(<<"PayoutToolDetailsBankAccount">>, BankAccount).
+decode_payout_tool_details({russian_bank_account, BankAccount}) ->
+    maps:merge(
+        #{<<"detailsType">> => <<"PayoutToolDetailsBankAccount">>},
+        decode_russian_bank_account(BankAccount)
+    );
+decode_payout_tool_details({international_bank_account, BankAccount}) ->
+    maps:merge(
+        #{<<"detailsType">> => <<"PayoutToolDetailsInternationalBankAccount">>},
+        decode_international_bank_account(BankAccount)
+    ).
 
 encode_payout_type('PayoutCard') ->
     <<"bank_card">>;
