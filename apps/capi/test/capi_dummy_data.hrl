@@ -368,7 +368,7 @@
                 providers = {value, []},
                 inspector = {value, #domain_InspectorRef{id = ?INTEGER}},
                 realm = test,
-                residences = []
+                residences = [rus]
             }
         }}
     }
