@@ -3180,7 +3180,7 @@ decode_payment_institution_obj(#domain_PaymentInstitutionObject{
         <<"name">> => Name,
         <<"description">> => Description,
         <<"realm">> => genlib:to_binary(Realm),
-        <<"residences">> => [atom_to_binary(R, utf8) || R <- ordsets:to_list(Residences)]
+        <<"residences">> => [list_to_binary(string:to_upper(atom_to_list(R))) || R <- ordsets:to_list(Residences)]
     }).
 
 is_blocked({blocked, _}) ->
