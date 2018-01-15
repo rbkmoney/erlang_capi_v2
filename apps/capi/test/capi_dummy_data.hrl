@@ -253,8 +253,8 @@
 
 -define (STAT_RESPONSE(Data), #merchstat_StatResponse{
     data = Data,
-    total_count = ?INTEGER}
-).
+    total_count = ?INTEGER
+}).
 
 -define(STAT_RESPONSE_INVOICES, ?STAT_RESPONSE({invoices, [?STAT_INVOICE]})).
 
@@ -306,7 +306,6 @@
 -define(STAT_RECORD, #{
     <<"offset">> => ?INTEGER_BINARY,
     <<"successful_count">> => ?INTEGER_BINARY,
-    <<"total_count">> => ?INTEGER_BINARY,
     <<"conversion">> => ?INTEGER_BINARY,
     <<"city_id">> => ?INTEGER_BINARY,
     <<"currency_symbolic_code">> => ?RUB,
@@ -338,23 +337,30 @@
     ]
 }).
 
+-define(GLOBALS,
+    {globals, #domain_GlobalsObject{
+        ref = #domain_GlobalsRef{},
+        data = #domain_Globals{
+            external_account_set = {value, #domain_ExternalAccountSetRef{id = ?INTEGER}},
+            payment_institutions = [#domain_PaymentInstitutionRef{id = ?INTEGER}],
+            contract_payment_institution_defaults = #domain_ContractPaymentInstitutionDefaults{
+                test = #domain_PaymentInstitutionRef{id = ?INTEGER},
+                live = #domain_PaymentInstitutionRef{id = ?INTEGER}
+            }
+        }
+    }}
+).
+
 -define(SNAPSHOT, #'Snapshot'{
     version = ?INTEGER,
     domain = #{
+        {globals, #domain_GlobalsRef{}} => ?GLOBALS,
         {category, #domain_CategoryRef{id = ?INTEGER}} =>
         {category, #domain_CategoryObject{
             ref = #domain_CategoryRef{id = ?INTEGER},
             data = #domain_Category{
                 name = ?STRING,
                 description = ?STRING
-            }
-        }},
-        {globals, #domain_GlobalsRef{}} =>
-        {globals, #domain_GlobalsObject{
-            ref = #domain_GlobalsRef{},
-            data = #domain_Globals{
-                external_account_set = {value, #domain_ExternalAccountSetRef{id = ?INTEGER}},
-                payment_institutions = [#domain_PaymentInstitutionRef{id = ?INTEGER}]
             }
         }},
         {payment_institution, #domain_PaymentInstitutionRef{id = ?INTEGER}} =>
