@@ -48,6 +48,8 @@ get_service_modname(reporting) ->
     {dmsl_reporting_thrift, 'Reporting'};
 get_service_modname(repository) ->
     {dmsl_domain_config_thrift, 'Repository'};
+get_service_modname(repository_client) ->
+    {dmsl_domain_config_thrift, 'RepositoryClient'};
 get_service_modname(accounter) ->
     {dmsl_accounter_thrift, 'Accounter'};
 get_service_modname(geo_ip_service) ->

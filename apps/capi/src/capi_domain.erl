@@ -5,14 +5,17 @@
 
 -export([get_categories/1]).
 -export([get_payment_institutions/1]).
+-export([get_default_payment_institution_ref/2]).
 -export([get/2]).
 
 -type context() :: woody_context:ctx().
 -type ref() :: dmsl_domain_thrift:'Reference'().
 -type data() :: _.
 
--type category() :: #domain_CategoryObject{}.
--type payment_institution() :: #domain_PaymentInstitutionObject{}.
+-type category() :: dmsl_domain_thrift:'CategoryObject'().
+-type payment_institution_ref() :: dmsl_domain_thrift:'PaymentInstitutionRef'().
+-type payment_institution_realm() :: dmsl_domain_thrift:'PaymentInstitutionRealm'().
+-type payment_institution() :: dmsl_domain_thrift:'PaymentInstitutionObject'().
 
 -spec get_categories(context()) -> {ok, [category()]}.
 get_categories(Context) ->
@@ -58,6 +61,19 @@ get_payment_institutions(#domain_Globals{payment_institutions = PaymentInstituti
 get_payment_institutions(#domain_Globals{payment_institutions = undefined}, _) ->
     [].
 
+-spec get_default_payment_institution_ref(payment_institution_realm(), context()) -> payment_institution_ref().
+
+get_default_payment_institution_ref(Realm, Context) ->
+    #domain_Globals{
+        contract_payment_institution_defaults = PaymentInstitutionDefaults
+    } = checkout_globals(Context),
+    case Realm of
+        test ->
+            PaymentInstitutionDefaults#domain_ContractPaymentInstitutionDefaults.test;
+        live ->
+            PaymentInstitutionDefaults#domain_ContractPaymentInstitutionDefaults.live
+    end.
+
 -spec get(ref(), context()) -> {ok, data()} | {error, not_found}.
 
 get(Ref, Context) ->
@@ -80,3 +96,15 @@ get_shapshot(Context) ->
 
 get_shapshot(Reference, Context) ->
     capi_woody_client:call_service(repository, 'Checkout', [Reference], Context).
+
+checkout_object(Context, ObjectRef) ->
+    checkout_object(head(), ObjectRef, Context).
+
+checkout_object(Reference, ObjectRef, Context) ->
+    capi_woody_client:call_service(repository_client, 'checkoutObject', [Reference, ObjectRef], Context).
+
+checkout_globals(Context) ->
+    {ok, #'VersionedObject'{
+        object = {globals, #domain_GlobalsObject{data = Globals}}
+    }} = checkout_object(Context, {globals, #domain_GlobalsRef{}}),
+    Globals.

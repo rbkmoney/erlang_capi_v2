@@ -830,7 +830,16 @@ revoke_claim_ok_test(Config) ->
 -spec create_claim_ok_test(config()) ->
     _.
 create_claim_ok_test(Config) ->
-    mock_services([{party_management, fun('CreateClaim', _) -> {ok, ?CLAIM} end}], Config),
+    mock_services([
+        {party_management, fun
+            ('CreateClaim', _) ->
+                {ok, ?CLAIM}
+        end},
+        {repository_client, fun
+            ('checkoutObject', [_, {globals, _}]) ->
+                {ok, #'VersionedObject'{version = ?INTEGER, object = ?GLOBALS}}
+        end}
+    ], Config),
     Changeset = [
         #{
             <<"partyModificationType">> => <<"ContractModification">>,
@@ -853,8 +862,7 @@ create_claim_ok_test(Config) ->
                     <<"bankPostAccount">> => <<"12345678901234567890">>,
                     <<"bankBik">> => <<"123456789">>
                 }
-            },
-            <<"paymentInstitutionID">> => ?INTEGER
+            }
         },
         #{
             <<"partyModificationType">> => <<"ContractModification">>,

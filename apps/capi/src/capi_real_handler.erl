@@ -1282,7 +1282,7 @@ process_request('CreateClaim', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     try
-        Changeset = encode_claim_changeset(maps:get('ClaimChangeset', Req)),
+        Changeset = encode_claim_changeset(maps:get('ClaimChangeset', Req), ReqCtx),
         Result = prepare_party(
             Context,
             ReqCtx,
@@ -2098,23 +2098,24 @@ encode_category_ref(Ref) ->
         id = Ref
     }.
 
-encode_claim_changeset(Changeset) when is_list(Changeset)->
-    lists:map(fun encode_party_modification/1, Changeset).
+encode_claim_changeset(Changeset, ReqCtx) when is_list(Changeset)->
+    lists:map(fun (C) -> encode_party_modification(C, ReqCtx) end, Changeset).
 
-encode_party_modification(#{<<"partyModificationType">> := Type} = Modification) ->
+encode_party_modification(#{<<"partyModificationType">> := Type} = Modification, ReqCtx) ->
     case Type of
         <<"ContractModification">> ->
-            {contract_modification, encode_contract_modification(Modification)};
+            {contract_modification, encode_contract_modification(Modification, ReqCtx)};
         <<"ShopModification">> ->
-            {shop_modification, encode_shop_modification(Modification)}
+            {shop_modification, encode_shop_modification(Modification, ReqCtx)}
     end.
 
-encode_contract_modification(#{<<"contractID">> := ContractID} = Modification) ->
+encode_contract_modification(#{<<"contractID">> := ContractID} = Modification, ReqCtx) ->
     EncodedMod = case maps:get(<<"contractModificationType">>, Modification) of
         <<"ContractCreation">> ->
+            PaymentInstitutionRef = genlib_map:get(<<"paymentInstitutionID">>, Modification),
             {creation, #payproc_ContractParams{
                 contractor = encode_contractor(maps:get(<<"contractor">>, Modification)),
-                payment_institution = encode_payment_institution_ref(maps:get(<<"paymentInstitutionID">>, Modification))
+                payment_institution = ensure_payment_institution(PaymentInstitutionRef, ReqCtx)
             }};
         <<"ContractTermination">> ->
             {termination, #payproc_ContractTermination{
@@ -2142,7 +2143,12 @@ encode_contract_modification(#{<<"contractID">> := ContractID} = Modification) -
         modification = EncodedMod
     }.
 
-encode_shop_modification(#{<<"shopID">> := ShopID} = Modification) ->
+ensure_payment_institution(Ref, _ReqCtx) when Ref /= undefined ->
+    encode_payment_institution_ref(Ref);
+ensure_payment_institution(undefined, ReqCtx) ->
+    capi_domain:get_default_payment_institution_ref(live, ReqCtx).
+
+encode_shop_modification(#{<<"shopID">> := ShopID} = Modification, _ReqCtx) ->
     EncodedMod = case maps:get(<<"shopModificationType">>, Modification) of
         <<"ShopCreation">> ->
             {creation, encode_shop_params(Modification)};
@@ -3440,11 +3446,13 @@ decode_party_modification({
     }, decode_shop_modification(ShopModification)).
 
 decode_contract_modification({creation, #payproc_ContractParams{
-    contractor = Contractor
+    contractor = Contractor,
+    payment_institution = PaymentInstitutionRef
 }}) ->
     #{
         <<"contractModificationType">> => <<"ContractCreation">>,
-        <<"contractor">> => decode_contractor(Contractor)
+        <<"contractor">> => decode_contractor(Contractor),
+        <<"paymentInstitutionID">> => decode_payment_institution_ref(PaymentInstitutionRef)
     };
 
 decode_contract_modification({legal_agreement_binding, LegalAgreement}) ->
