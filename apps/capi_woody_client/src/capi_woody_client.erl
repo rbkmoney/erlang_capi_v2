@@ -3,6 +3,9 @@
 -export([call_service/4]).
 -export([call_service/5]).
 
+-export([get_service_spec/1]).
+-export([get_service_modname/1]).
+
 %%
 
 -type service_name() :: atom().
@@ -21,8 +24,14 @@ call_service(ServiceName, Function, Args, Context, EventHandler) ->
     Request = {Service, Function, Args},
     woody_client:call(Request, #{url => Url, event_handler => EventHandler}, Context).
 
+-spec get_service_spec(service_name()) ->
+    {woody:url(), woody:service()}.
+
 get_service_spec(ServiceName) ->
     {get_service_url(ServiceName), get_service_modname(ServiceName)}.
+
+-spec get_service_modname(service_name()) ->
+    woody:service().
 
 get_service_url(ServiceName) ->
     maps:get(ServiceName, genlib_app:env(?MODULE, service_urls)).

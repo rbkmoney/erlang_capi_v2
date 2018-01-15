@@ -1292,7 +1292,7 @@ mock_services(Services, Config) when is_list(Config) ->
             event_handler => capi_woody_event_handler,
             handlers => lists:map(
                 fun({Service, Fun}) ->
-                    WoodyService = proplists:get_value(Service, woody_services()),
+                    WoodyService = capi_woody_client:get_service_modname(Service),
                     {make_path(Service), {WoodyService, {Module, #{function => Fun}}}}
                 end,
                 Services
@@ -1318,21 +1318,6 @@ get_random_port() ->
 
 get_context(Token) ->
     capi_client_lib:get_context(?CAPI_URL, Token, 10000, ipv4).
-
-woody_services() ->
-    [
-        {invoicing, {dmsl_payment_processing_thrift, 'Invoicing'}},
-        {invoice_templating, {dmsl_payment_processing_thrift, 'InvoiceTemplating'}},
-        {accounter, {dmsl_accounter_thrift, 'Accounter'}},
-        {party_management, {dmsl_payment_processing_thrift, 'PartyManagement'}},
-        {cds_storage, {dmsl_cds_thrift, 'Storage'}},
-        {repository, {dmsl_domain_config_thrift, 'Repository'}},
-        {webhook_manager, {dmsl_webhooker_thrift, 'WebhookManager'}},
-        {geo_ip_service, {dmsl_geo_ip_thrift, 'GeoIpService'}},
-        {merchant_stat, {dmsl_merch_stat_thrift, 'MerchantStatistics'}},
-        {reporting, {dmsl_reporting_thrift, 'Reporting'}},
-        {customer_management, {dmsl_payment_processing_thrift, 'CustomerManagement'}}
-    ].
 
 get_keysource(Key, Config) ->
     filename:join(?config(data_dir, Config), Key).
