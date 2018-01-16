@@ -30,11 +30,11 @@ call_service(ServiceName, Function, Args, Context, EventHandler) ->
 get_service_spec(ServiceName) ->
     {get_service_url(ServiceName), get_service_modname(ServiceName)}.
 
--spec get_service_modname(service_name()) ->
-    woody:service().
-
 get_service_url(ServiceName) ->
     maps:get(ServiceName, genlib_app:env(?MODULE, service_urls)).
+
+-spec get_service_modname(service_name()) ->
+    woody:service().
 
 get_service_modname(invoicing) ->
     {dmsl_payment_processing_thrift, 'Invoicing'};
