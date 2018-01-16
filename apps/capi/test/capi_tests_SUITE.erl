@@ -111,6 +111,9 @@
 
     get_categories_ok_test/1,
     get_category_by_ref_ok_test/1,
+    get_payment_institutions/1,
+    get_payment_institution_by_ref/1,
+    get_payment_institution_payment_terms/1,
 
     create_customer_ok_test/1,
     get_customer_ok_test/1,
@@ -237,6 +240,9 @@ groups() ->
                 download_report_file_ok_test,
                 get_categories_ok_test,
                 get_category_by_ref_ok_test,
+                get_payment_institutions,
+                get_payment_institution_by_ref,
+                get_payment_institution_payment_terms,
                 delete_customer_ok_test
             ]
         },
@@ -824,7 +830,16 @@ revoke_claim_ok_test(Config) ->
 -spec create_claim_ok_test(config()) ->
     _.
 create_claim_ok_test(Config) ->
-    mock_services([{party_management, fun('CreateClaim', _) -> {ok, ?CLAIM} end}], Config),
+    mock_services([
+        {party_management, fun
+            ('CreateClaim', _) ->
+                {ok, ?CLAIM}
+        end},
+        {repository_client, fun
+            ('checkoutObject', [_, {globals, _}]) ->
+                {ok, #'VersionedObject'{version = ?INTEGER, object = ?GLOBALS}}
+        end}
+    ], Config),
     Changeset = [
         #{
             <<"partyModificationType">> => <<"ContractModification">>,
@@ -1107,6 +1122,33 @@ get_category_by_ref_ok_test(Config) ->
     mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
     {ok, _} = capi_client_categories:get_category_by_ref(?config(context, Config), ?INTEGER).
 
+-spec get_payment_institutions(config()) ->
+    _.
+get_payment_institutions(Config) ->
+    mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
+    {ok, [_Something]} = capi_client_payment_institutions:get_payment_institutions(?config(context, Config)),
+    {ok, []} = capi_client_payment_institutions:get_payment_institutions(?config(context, Config), undefined, <<"live">>),
+    {ok, [#{<<"realm">> := <<"test">>}]} =
+        capi_client_payment_institutions:get_payment_institutions(?config(context, Config), undefined, <<"test">>).
+
+-spec get_payment_institution_by_ref(config()) ->
+    _.
+get_payment_institution_by_ref(Config) ->
+    mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
+    {ok, _} = capi_client_payment_institutions:get_payment_institution_by_ref(?config(context, Config), ?INTEGER).
+
+-spec get_payment_institution_payment_terms(config()) ->
+    _.
+get_payment_institution_payment_terms(Config) ->
+    mock_services(
+        [
+            {repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end},
+            {party_management, fun('ComputePaymentInstitutionTerms', _) -> {ok, ?TERM_SET} end}
+        ],
+        Config
+    ),
+    {ok, _} = capi_client_payment_institutions:get_payment_institution_payment_terms(?config(context, Config), ?INTEGER).
+
 -spec create_customer_ok_test(config()) ->
     _.
 create_customer_ok_test(Config) ->
@@ -1258,7 +1300,7 @@ mock_services(Services, Config) when is_list(Config) ->
             event_handler => capi_woody_event_handler,
             handlers => lists:map(
                 fun({Service, Fun}) ->
-                    WoodyService = proplists:get_value(Service, woody_services()),
+                    WoodyService = capi_woody_client:get_service_modname(Service),
                     {make_path(Service), {WoodyService, {Module, #{function => Fun}}}}
                 end,
                 Services
@@ -1284,21 +1326,6 @@ get_random_port() ->
 
 get_context(Token) ->
     capi_client_lib:get_context(?CAPI_URL, Token, 10000, ipv4).
-
-woody_services() ->
-    [
-        {invoicing, {dmsl_payment_processing_thrift, 'Invoicing'}},
-        {invoice_templating, {dmsl_payment_processing_thrift, 'InvoiceTemplating'}},
-        {accounter, {dmsl_accounter_thrift, 'Accounter'}},
-        {party_management, {dmsl_payment_processing_thrift, 'PartyManagement'}},
-        {cds_storage, {dmsl_cds_thrift, 'Storage'}},
-        {repository, {dmsl_domain_config_thrift, 'Repository'}},
-        {webhook_manager, {dmsl_webhooker_thrift, 'WebhookManager'}},
-        {geo_ip_service, {dmsl_geo_ip_thrift, 'GeoIpService'}},
-        {merchant_stat, {dmsl_merch_stat_thrift, 'MerchantStatistics'}},
-        {reporting, {dmsl_reporting_thrift, 'Reporting'}},
-        {customer_management, {dmsl_payment_processing_thrift, 'CustomerManagement'}}
-    ].
 
 get_keysource(Key, Config) ->
     filename:join(?config(data_dir, Config), Key).
