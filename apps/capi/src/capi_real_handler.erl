@@ -22,6 +22,9 @@
 -define(DEFAULT_INVOICE_LINE_META, #{}).
 -define(DEFAULT_URL_LIFETIME, 60). % seconds
 
+-define(payment_institution_ref(PaymentInstitutionID),
+    #domain_PaymentInstitutionRef{id = PaymentInstitutionID}).
+
 -spec authorize_api_key(swag_server:operation_id(), swag_server:api_key()) ->
     Result :: false | {true, capi_auth:context()}.
 
@@ -1163,6 +1166,57 @@ process_request('GetCategoryByRef', Req, Context0, ReqCtx) ->
             {404, [], general_error(<<"Category not found">>)}
     end;
 
+process_request('GetPaymentInstitutions', Req, _Context, ReqCtx) ->
+    Residence = encode_residence(genlib_map:get(residence, Req)),
+    Realm = genlib_map:get(realm, Req),
+    {ok, PaymentInstObjects} = capi_domain:get_payment_institutions(ReqCtx),
+    Resp = lists:filtermap(
+        fun(P) ->
+            case check_payment_institution(Realm, Residence, P) of
+                true ->
+                    {true, decode_payment_institution_obj(P)};
+                false ->
+                    false
+            end
+        end,
+        PaymentInstObjects
+    ),
+    {ok, {200, [], Resp}};
+
+process_request('GetPaymentInstitutionByRef', Req, _Context, ReqCtx) ->
+    PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
+    case capi_domain:get({payment_institution, ?payment_institution_ref(PaymentInstitutionID)}, ReqCtx) of
+        {ok, PaymentInstitution} ->
+            Resp = decode_payment_institution_obj(PaymentInstitution),
+            {ok, {200, [], Resp}};
+        {error, not_found} ->
+            {404, [], general_error(<<"Payment institution not found">>)}
+    end;
+
+process_request('GetPaymentInstitutionPaymentTerms', Req, Context, ReqCtx) ->
+    UserInfo = get_user_info(Context),
+    PartyID = get_party_id(Context),
+    PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
+    Result = prepare_party(
+        Context,
+        ReqCtx,
+        fun () ->
+            service_call(
+                party_management,
+                'ComputePaymentInstitutionTerms',
+                [UserInfo, PartyID, ?payment_institution_ref(PaymentInstitutionID)],
+                ReqCtx
+            )
+        end
+    ),
+    case Result of
+        {ok, #domain_TermSet{payments = PaymentTerms}} ->
+            Resp = decode_payment_terms(PaymentTerms),
+            {ok, {200, [], Resp}};
+        {exception, #payproc_PaymentInstitutionNotFound{}} ->
+            {404, [], general_error(<<"Payment institution not found">>)}
+    end;
+
 process_request('GetAccountByID', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
@@ -1571,6 +1625,24 @@ process_request('GetCustomerEvents', Req, _Context, ReqCtx) ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
             end
     end.
+
+check_payment_institution(Realm, Residence, PaymentInstitution) ->
+    check_payment_institution_realm(Realm, PaymentInstitution) andalso
+        check_payment_institution_residence(Residence, PaymentInstitution).
+
+check_payment_institution_realm(undefined, _) ->
+    true;
+check_payment_institution_realm(Realm1, #domain_PaymentInstitutionObject{
+    data = #domain_PaymentInstitution{realm = Realm2}
+}) ->
+    Realm1 =:= Realm2.
+
+check_payment_institution_residence(undefined, _) ->
+    true;
+check_payment_institution_residence(Residence, #domain_PaymentInstitutionObject{
+    data = #domain_PaymentInstitution{residences = Residences}
+}) ->
+    ordsets:is_element(Residence, Residences).
 
 generate_report_presigned_url(FileID, ReqCtx) ->
     ExpiresAt = get_default_url_lifetime(),
@@ -2061,7 +2133,8 @@ encode_contract_modification(#{<<"contractID">> := ContractID} = Modification) -
     EncodedMod = case maps:get(<<"contractModificationType">>, Modification) of
         <<"ContractCreation">> ->
             {creation, #payproc_ContractParams{
-                contractor = encode_contractor(maps:get(<<"contractor">>, Modification))
+                contractor = encode_contractor(maps:get(<<"contractor">>, Modification)),
+                payment_institution = encode_payment_institution_ref(maps:get(<<"paymentInstitutionID">>, Modification))
             }};
         <<"ContractTermination">> ->
             {termination, #payproc_ContractTermination{
@@ -2137,19 +2210,36 @@ encode_payout_tool_params(#{
     }.
 
 encode_payout_tool_info(#{<<"detailsType">> := <<"PayoutToolDetailsBankAccount">>} = Tool) ->
-   {bank_account, encode_bank_account(Tool)}.
+   {russian_bank_account, encode_russian_bank_account(Tool)};
+encode_payout_tool_info(#{<<"detailsType">> := <<"PayoutToolDetailsInternationalBankAccount">>} = Tool) ->
+   {international_bank_account, encode_international_bank_account(Tool)}.
 
-encode_bank_account(#{
+encode_russian_bank_account(#{
     <<"account">> := Account,
     <<"bankName">> := BankName,
     <<"bankPostAccount">> := BankPostAccount,
     <<"bankBik">> := BankBik
 }) ->
-    #domain_BankAccount{
+    #domain_RussianBankAccount{
         account = Account,
         bank_name = BankName,
         bank_post_account = BankPostAccount,
         bank_bik = BankBik
+    }.
+
+encode_international_bank_account(#{
+    <<"accountHolder">> := AccountHolder,
+    <<"bankName">> := BankName,
+    <<"bankAddress">> := BankAddress,
+    <<"iban">> := Iban,
+    <<"bic">> := Bic
+}) ->
+    #domain_InternationalBankAccount{
+        account_holder = AccountHolder,
+        bank_name = BankName,
+        bank_address = BankAddress,
+        iban = Iban,
+        bic = Bic
     }.
 
 encode_contractor(#{<<"contractorType">> := <<"LegalEntity">>} = Contractor) ->
@@ -2170,11 +2260,30 @@ encode_legal_entity(#{
         representative_position = maps:get(<<"representativePosition">>, Entity),
         representative_full_name = maps:get(<<"representativeFullName">>, Entity),
         representative_document = maps:get(<<"representativeDocument">>, Entity),
-        bank_account = encode_bank_account(maps:get(<<"bankAccount">>, Entity))
+        russian_bank_account = encode_russian_bank_account(maps:get(<<"bankAccount">>, Entity))
+    }};
+encode_legal_entity(#{
+    <<"entityType">> := <<"InternationalLegalEntity">>
+} = Entity) ->
+    {international_legal_entity, #domain_InternationalLegalEntity{
+        legal_name = genlib_map:get(<<"legalName">>, Entity),
+        trading_name = genlib_map:get(<<"tradingName">>, Entity),
+        registered_address = genlib_map:get(<<"registeredOffice">>, Entity),
+        actual_address = genlib_map:get(<<"principalPlaceOfBusiness">>, Entity)
     }}.
 
 encode_registered_user(#{<<"email">> := Email}) ->
     #domain_RegisteredUser{email = Email}.
+
+encode_payment_institution_ref(Ref) ->
+    #domain_PaymentInstitutionRef{
+        id = Ref
+    }.
+
+encode_residence(Residence) when is_binary(Residence) ->
+    binary_to_existing_atom(Residence, utf8);
+encode_residence(undefined) ->
+    undefined.
 
 encode_flow(#{<<"type">> := <<"PaymentFlowInstant">>}) ->
     {instant, #payproc_InvoicePaymentParamsFlowInstant{}};
@@ -2672,7 +2781,7 @@ merchstat_to_domain({bank_account, #merchstat_PayoutAccount{account = #merchstat
     bank_post_account = BankPostAccount,
     bank_bik = BankBik
 }}}) ->
-    {bank_account, #domain_BankAccount{
+    {russian_bank_account, #domain_RussianBankAccount{
         account = Account,
         bank_name = BankName,
         bank_post_account = BankPostAccount,
@@ -2912,6 +3021,7 @@ decode_contract(#domain_Contract{
     id = ContractID,
     created_at = CreatedAt,
     contractor = Contractor,
+    payment_institution = PaymentInstitutionRef,
     valid_since = ValidSince,
     valid_until = ValidUntil,
     status = Status0,
@@ -2922,6 +3032,7 @@ decode_contract(#domain_Contract{
         <<"id">> => ContractID,
         <<"createdAt">> => CreatedAt,
         <<"contractor">> => decode_contractor(Contractor),
+        <<"paymentInstitutionID">> => decode_payment_institution_ref(PaymentInstitutionRef),
         <<"validSince">> => ValidSince,
         <<"validUntil">> => ValidUntil,
         <<"legalAgreement">> => decode_legal_agreement(LegalAgreement)
@@ -2962,20 +3073,32 @@ decode_payout_tool_params(Currency, Info) ->
         <<"details">> => decode_payout_tool_details(Info)
     }.
 
-decode_bank_account_details(BankAccount, V) ->
-    maps:merge(V, decode_bank_account(BankAccount)).
-
-decode_bank_account(#domain_BankAccount{
+decode_russian_bank_account(#domain_RussianBankAccount{
     account = Account,
     bank_name = BankName,
     bank_post_account = BankPostAccount,
     bank_bik = BankBik
-}) ->
-    #{
+}, V) ->
+    V#{
         <<"account">> => Account,
         <<"bankName">> => BankName,
         <<"bankPostAccount">> => BankPostAccount,
         <<"bankBik">> => BankBik
+    }.
+
+decode_international_bank_account(#domain_InternationalBankAccount{
+    account_holder = AccountHolder,
+    bank_name = BankName,
+    bank_address = BankAddress,
+    iban = Iban,
+    bic = Bic
+}, V) ->
+    V#{
+        <<"accountHolder">> => AccountHolder,
+        <<"bankName">> => BankName,
+        <<"bankAddress">> => BankAddress,
+        <<"iban">> => Iban,
+        <<"bic">> => Bic
     }.
 
 decode_contract_adjustment(#domain_ContractAdjustment{
@@ -2990,6 +3113,9 @@ decode_contract_adjustment(#domain_ContractAdjustment{
         <<"validSince">> => ValidSince,
         <<"validUntil">> => ValidUntil
     }).
+
+decode_payment_institution_ref(#domain_PaymentInstitutionRef{id = Ref}) ->
+    Ref.
 
 decode_shop(#domain_Shop{
     id = ShopID,
@@ -3050,7 +3176,7 @@ decode_legal_entity({
         representative_position = RepresentativePosition,
         representative_full_name = RepresentativeFullName,
         representative_document = RepresentativeDocument,
-        bank_account = BankAccount
+        russian_bank_account = BankAccount
     }
 }) ->
     #{
@@ -3063,11 +3189,44 @@ decode_legal_entity({
         <<"representativePosition">> => RepresentativePosition,
         <<"representativeFullName">> => RepresentativeFullName,
         <<"representativeDocument">> => RepresentativeDocument,
-        <<"bankAccount">> => decode_bank_account(BankAccount)
-    }.
+        <<"bankAccount">> => decode_russian_bank_account(BankAccount, #{})
+    };
+decode_legal_entity({
+    international_legal_entity,
+    #domain_InternationalLegalEntity{
+        legal_name = LegalName,
+        trading_name = TradingName,
+        registered_address = RegisteredOffice,
+        actual_address = PrincipalPlaceOfBusiness
+    }
+}) ->
+    genlib_map:compact(#{
+        <<"entityType">> => <<"InternationalLegalEntity">>,
+        <<"legalName">> => LegalName,
+        <<"tradingName">> => TradingName,
+        <<"registeredOffice">> => RegisteredOffice,
+        <<"principalPlaceOfBusiness">> => PrincipalPlaceOfBusiness
+    }).
 
 decode_registered_user(#domain_RegisteredUser{email = Email}) ->
     #{<<"email">> => Email}.
+
+decode_payment_institution_obj(#domain_PaymentInstitutionObject{
+    ref = #domain_PaymentInstitutionRef{id = ID},
+    data = #domain_PaymentInstitution{
+        name = Name,
+        description = Description,
+        realm = Realm,
+        residences = Residences
+    }
+}) ->
+    genlib_map:compact(#{
+        <<"id">> => ID,
+        <<"name">> => Name,
+        <<"description">> => Description,
+        <<"realm">> => genlib:to_binary(Realm),
+        <<"residences">> => [list_to_binary(string:to_upper(atom_to_list(R))) || R <- ordsets:to_list(Residences)]
+    }).
 
 is_blocked({blocked, _}) ->
     true;
@@ -3210,8 +3369,10 @@ decode_stat_payout_tool_details(PayoutType) ->
 
 decode_payout_tool_details({bank_card, V}) ->
     decode_bank_card_details(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankCard">>});
-decode_payout_tool_details({bank_account, V}) ->
-    decode_bank_account_details(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankAccount">>}).
+decode_payout_tool_details({russian_bank_account, V}) ->
+    decode_russian_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankAccount">>});
+decode_payout_tool_details({international_bank_account, V}) ->
+    decode_international_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsInternationalBankAccount">>}).
 
 encode_payout_type('PayoutCard') ->
     <<"bank_card">>;
@@ -3318,11 +3479,13 @@ decode_party_modification({
     }, decode_shop_modification(ShopModification)).
 
 decode_contract_modification({creation, #payproc_ContractParams{
-    contractor = Contractor
+    contractor = Contractor,
+    payment_institution = PaymentInstitutionRef
 }}) ->
     #{
         <<"contractModificationType">> => <<"ContractCreation">>,
-        <<"contractor">> => decode_contractor(Contractor)
+        <<"contractor">> => decode_contractor(Contractor),
+        <<"paymentInstitutionID">> => decode_payment_institution_ref(PaymentInstitutionRef)
     };
 
 decode_contract_modification({legal_agreement_binding, LegalAgreement}) ->
@@ -3437,7 +3600,7 @@ decode_shop_params(#payproc_ShopParams{
 
 decode_category(#domain_CategoryObject{
     ref = #domain_CategoryRef{
-        id = CategoryRef
+        id = CategoryID
     },
     data = #domain_Category{
         name = Name,
@@ -3446,7 +3609,7 @@ decode_category(#domain_CategoryObject{
 }) ->
     genlib_map:compact(#{
         <<"name">> => Name,
-        <<"categoryID">> => CategoryRef,
+        <<"categoryID">> => CategoryID,
         <<"description">> => Description
     }).
 
@@ -3481,6 +3644,22 @@ decode_account_state(#payproc_AccountState{
         <<"availableAmount">> => AvailableAmount,
         <<"currency">> => decode_currency(Currency)
     }.
+
+decode_payment_terms(#domain_PaymentsServiceTerms{
+    currencies = Currencies,
+    categories = Categories
+}) ->
+    genlib_map:compact(#{
+        <<"currencies">> => decode_payment_terms(fun decode_currency/1, Currencies),
+        <<"categories">> => decode_payment_terms(fun decode_category_ref/1, Categories)
+    });
+decode_payment_terms(undefined) ->
+    #{}.
+
+decode_payment_terms(Fun, {value, Val}) when is_list(Val) ->
+    [Fun(V) || V <- Val];
+decode_payment_terms(_, _) ->
+    undefined.
 
 decode_user_interaction({payment_terminal_reciept, #'PaymentTerminalReceipt'{
     short_payment_id = SPID,

@@ -114,6 +114,9 @@
 
     get_categories_ok_test/1,
     get_category_by_ref_ok_test/1,
+    get_payment_institutions/1,
+    get_payment_institution_by_ref/1,
+    get_payment_institution_payment_terms/1,
 
     create_customer_ok_test/1,
     get_customer_ok_test/1,
@@ -248,6 +251,9 @@ groups() ->
                 download_report_file_ok_test,
                 get_categories_ok_test,
                 get_category_by_ref_ok_test,
+                get_payment_institutions,
+                get_payment_institution_by_ref,
+                get_payment_institution_payment_terms,
                 delete_customer_ok_test
             ]
         },
@@ -946,7 +952,8 @@ create_claim_ok_test(Config) ->
                     <<"bankPostAccount">> => <<"12345678901234567890">>,
                     <<"bankBik">> => <<"123456789">>
                 }
-            }
+            },
+            <<"paymentInstitutionID">> => ?INTEGER
         },
         #{
             <<"partyModificationType">> => <<"ContractModification">>,
@@ -1205,6 +1212,33 @@ get_categories_ok_test(Config) ->
 get_category_by_ref_ok_test(Config) ->
     mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
     {ok, _} = capi_client_categories:get_category_by_ref(?config(context, Config), ?INTEGER).
+
+-spec get_payment_institutions(config()) ->
+    _.
+get_payment_institutions(Config) ->
+    mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
+    {ok, [_Something]} = capi_client_payment_institutions:get_payment_institutions(?config(context, Config)),
+    {ok, []} = capi_client_payment_institutions:get_payment_institutions(?config(context, Config), undefined, <<"live">>),
+    {ok, [#{<<"realm">> := <<"test">>}]} =
+        capi_client_payment_institutions:get_payment_institutions(?config(context, Config), undefined, <<"test">>).
+
+-spec get_payment_institution_by_ref(config()) ->
+    _.
+get_payment_institution_by_ref(Config) ->
+    mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
+    {ok, _} = capi_client_payment_institutions:get_payment_institution_by_ref(?config(context, Config), ?INTEGER).
+
+-spec get_payment_institution_payment_terms(config()) ->
+    _.
+get_payment_institution_payment_terms(Config) ->
+    mock_services(
+        [
+            {repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end},
+            {party_management, fun('ComputePaymentInstitutionTerms', _) -> {ok, ?TERM_SET} end}
+        ],
+        Config
+    ),
+    {ok, _} = capi_client_payment_institutions:get_payment_institution_payment_terms(?config(context, Config), ?INTEGER).
 
 -spec create_customer_ok_test(config()) ->
     _.
