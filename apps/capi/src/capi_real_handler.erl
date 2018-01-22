@@ -3454,11 +3454,13 @@ decode_party_modification({
     }, decode_shop_modification(ShopModification)).
 
 decode_contract_modification({creation, #payproc_ContractParams{
-    contractor = Contractor
+    contractor = Contractor,
+    payment_institution = PaymentInstitutionRef
 }}) ->
     #{
         <<"contractModificationType">> => <<"ContractCreation">>,
-        <<"contractor">> => decode_contractor(Contractor)
+        <<"contractor">> => decode_contractor(Contractor),
+        <<"paymentInstitutionID">> => decode_payment_institution_ref(PaymentInstitutionRef)
     };
 
 decode_contract_modification({legal_agreement_binding, LegalAgreement}) ->
