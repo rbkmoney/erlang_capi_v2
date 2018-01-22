@@ -151,13 +151,14 @@
 -define(CONTRACT, #domain_Contract{
     id = ?STRING,
     contractor = {registered_user, #domain_RegisteredUser{email = ?STRING}},
+    payment_institution = #domain_PaymentInstitutionRef{id = ?INTEGER},
     created_at = ?TIMESTAMP,
     valid_since = ?TIMESTAMP,
     valid_until = ?TIMESTAMP,
     status = {active, #domain_ContractActive{}},
     terms = #domain_TermSetHierarchyRef{id = ?INTEGER},
     adjustments = [?CONTRACT_ADJUSTMENT],
-    payout_tools = [?PAYOUT_TOOL]
+    payout_tools = [?PAYOUT_TOOL(?RUSSIAN_BANK_ACCOUNT), ?PAYOUT_TOOL(?INTERNATIONAL_BANK_ACCOUNT)]
 }).
 
 -define(BLOCKING, {unblocked, #domain_Unblocked{
@@ -185,7 +186,8 @@
     blocking = ?BLOCKING,
     suspension = ?SUSPENTION,
     contracts = #{?STRING => ?CONTRACT},
-    shops = #{?STRING => ?SHOP}
+    shops = #{?STRING => ?SHOP},
+    revision = 0
 }).
 
 -define(CLAIM, #payproc_Claim{
@@ -215,17 +217,27 @@
     terms = #domain_TermSetHierarchyRef{id = ?INTEGER}
 }).
 
--define(PAYOUT_TOOL, #domain_PayoutTool{
+-define(PAYOUT_TOOL(ToolInfo), #domain_PayoutTool{
     id = ?STRING,
     created_at = ?TIMESTAMP,
     currency = #domain_CurrencyRef{symbolic_code = ?RUB},
-    payout_tool_info = {bank_account, #domain_BankAccount{
-        account = <<"12345678901234567890">>,
-        bank_name = ?STRING,
-        bank_post_account = <<"12345678901234567890">>,
-        bank_bik = <<"123456789">>
-    }}
+    payout_tool_info = ToolInfo
 }).
+
+-define(RUSSIAN_BANK_ACCOUNT, {russian_bank_account, #domain_RussianBankAccount{
+    account = <<"12345678901234567890">>,
+    bank_name = ?STRING,
+    bank_post_account = <<"12345678901234567890">>,
+    bank_bik = <<"123456789">>
+}}).
+
+-define(INTERNATIONAL_BANK_ACCOUNT, {international_bank_account, #domain_InternationalBankAccount{
+    account_holder = ?STRING,
+    bank_name = ?STRING,
+    bank_address = ?STRING,
+    iban = <<"GR1601101250000000012300695">>,
+    bic = <<"DEUTDEFF500">>
+}}).
 
 -define(WEBHOOK, #webhooker_Webhook{
     id = ?INTEGER,
@@ -335,6 +347,28 @@
             data = #domain_Category{
                 name = ?STRING,
                 description = ?STRING
+            }
+        }},
+        {globals, #domain_GlobalsRef{}} =>
+        {globals, #domain_GlobalsObject{
+            ref = #domain_GlobalsRef{},
+            data = #domain_Globals{
+                external_account_set = {value, #domain_ExternalAccountSetRef{id = ?INTEGER}},
+                payment_institutions = [#domain_PaymentInstitutionRef{id = ?INTEGER}]
+            }
+        }},
+        {payment_institution, #domain_PaymentInstitutionRef{id = ?INTEGER}} =>
+        {payment_institution, #domain_PaymentInstitutionObject{
+            ref = #domain_PaymentInstitutionRef{id = ?INTEGER},
+            data = #domain_PaymentInstitution{
+                name = ?STRING,
+                description = ?STRING,
+                system_account_set = {value, #domain_SystemAccountSetRef{id = ?INTEGER}},
+                default_contract_template = {value, #domain_ContractTemplateRef{id = ?INTEGER}},
+                providers = {value, []},
+                inspector = {value, #domain_InspectorRef{id = ?INTEGER}},
+                realm = test,
+                residences = [rus]
             }
         }}
     }
