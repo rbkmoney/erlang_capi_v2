@@ -159,18 +159,25 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
 
 process_request('CreatePaymentResource', Req, Context, ReqCtx) ->
     Params = maps:get('PaymentResourceParams', Req),
-    ClientInfo = maps:get(<<"clientInfo">>, Params),
-    PaymentTool = maps:get(<<"paymentTool">>, Params),
-    case PaymentTool of
-        #{<<"paymentToolType">> := <<"CardData">>} ->
-            process_card_data(ClientInfo, PaymentTool, Context, ReqCtx);
-        #{<<"paymentToolType">> := <<"PaymentTerminalData">>} ->
-            process_payment_terminal_data(ClientInfo, PaymentTool, Context);
-        _ ->
-            {ok, {400, [], logic_error(
-                invalidPaymentTool,
-                <<"Specified payment tool is invalid or unsupported">>
-            )}}
+    ClientInfo = enrich_client_info(maps:get(<<"clientInfo">>, Params), Context),
+    try
+        V = maps:get(<<"paymentTool">>, Params),
+        {PaymentTool, PaymentSessionID} = case V of
+            #{<<"paymentToolType">> := <<"CardData">>} ->
+                process_card_data(V, ReqCtx);
+            #{<<"paymentToolType">> := <<"PaymentTerminalData">>} ->
+                process_payment_terminal_data(V, ReqCtx);
+            #{<<"paymentToolType">> := <<"DigitalWalletData">>} ->
+                process_digital_wallet_data(V, ReqCtx)
+        end,
+        {ok, {201, [], decode_disposable_payment_resource(#domain_DisposablePaymentResource{
+            payment_tool = PaymentTool,
+            payment_session_id = PaymentSessionID,
+            client_info = encode_client_info(ClientInfo)
+        })}}
+    catch
+        Result ->
+            Result
     end;
 
 process_request('CreateInvoiceAccessToken', Req, Context, ReqCtx) ->
@@ -1907,7 +1914,7 @@ encode_payer_params(#{
     <<"contactInfo">> := ContactInfo
 }) ->
     PaymentTool = encode_payment_tool_token(Token),
-    {ClientInfo, PaymentSession} = unwrap_session(EncodedSession),
+    {ClientInfo, PaymentSession} = unwrap_payment_session(EncodedSession),
     {payment_resource, #payproc_PaymentResourcePayerParams{
         resource = #domain_DisposablePaymentResource{
             payment_tool = PaymentTool,
@@ -1922,7 +1929,9 @@ encode_payment_tool_token(Token) ->
         #{<<"type">> := <<"bank_card">>} = Encoded ->
             encode_bank_card(Encoded);
         #{<<"type">> := <<"payment_terminal">>} = Encoded ->
-            encode_payment_terminal(Encoded)
+            encode_payment_terminal(Encoded);
+        #{<<"type">> := <<"digital_wallet">>} = Encoded ->
+            encode_digital_wallet(Encoded)
     catch
         error:badarg ->
             erlang:throw(invalid_token)
@@ -1949,6 +1958,22 @@ decode_payment_terminal(#domain_PaymentTerminal{
         <<"type">> => <<"payment_terminal">>,
         <<"terminal_type">> => Type
     }).
+
+decode_digital_wallet(#domain_DigitalWallet{
+    provider = Provider,
+    id = ID
+}) ->
+    capi_utils:map_to_base64url(#{
+        <<"type">> => <<"digital_wallet">>,
+        <<"provider">> => atom_to_binary(Provider, utf8),
+        <<"id">> => ID
+    }).
+
+decode_client_info(ClientInfo) ->
+    #{
+        <<"fingerprint">> => ClientInfo#domain_ClientInfo.fingerprint,
+        <<"ip">> => ClientInfo#domain_ClientInfo.ip_address
+    }.
 
 encode_client_info(ClientInfo) ->
     #domain_ClientInfo{
@@ -2334,6 +2359,12 @@ encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
         terminal_type = binary_to_existing_atom(Type, utf8)
     }}.
 
+encode_digital_wallet(#{<<"provider">> := Provider, <<"id">> := ID}) ->
+    {digital_wallet, #domain_DigitalWallet{
+        provider = binary_to_existing_atom(Provider, utf8),
+        id = ID
+    }}.
+
 encode_customer_params(PartyID, Params) ->
     #payproc_CustomerParams{
         party_id = PartyID,
@@ -2358,7 +2389,7 @@ encode_customer_binding_params(#{
     }
 }) ->
     PaymentTool = encode_payment_tool_token(Token),
-    {ClientInfo, PaymentSession} = unwrap_session(EncodedSession),
+    {ClientInfo, PaymentSession} = unwrap_payment_session(EncodedSession),
     #payproc_CustomerBindingParams{
         payment_resource = #domain_DisposablePaymentResource{
             payment_tool = PaymentTool,
@@ -2366,23 +2397,6 @@ encode_customer_binding_params(#{
             client_info = encode_client_info(ClientInfo)
         }
     }.
-
-wrap_session(ClientInfo, PaymentSession) ->
-    capi_utils:map_to_base64url(#{
-        <<"clientInfo">> => ClientInfo,
-        <<"paymentSession">> => PaymentSession
-    }).
-
-unwrap_session(Encoded) ->
-    #{
-        <<"clientInfo">> := ClientInfo,
-        <<"paymentSession">> := PaymentSession
-     } = try capi_utils:base64url_to_map(Encoded)
-    catch
-        error:badarg ->
-            erlang:throw(invalid_payment_session)
-    end,
-    {ClientInfo, PaymentSession}.
 
 decode_invoice_event(#payproc_Event{
     id = EventID,
@@ -2584,26 +2598,40 @@ decode_payer({payment_resource, #domain_PaymentResourcePayer{
 decode_payment_tool_token({bank_card, BankCard}) ->
     decode_bank_card(BankCard);
 decode_payment_tool_token({payment_terminal, PaymentTerminal}) ->
-    decode_payment_terminal(PaymentTerminal).
+    decode_payment_terminal(PaymentTerminal);
+decode_payment_tool_token({digital_wallet, DigitalWallet}) ->
+    decode_digital_wallet(DigitalWallet).
 
-decode_payment_tool_details({bank_card, BankCard}) ->
-    decode_bank_card_details(<<"PaymentToolDetailsBankCard">>, BankCard);
-decode_payment_tool_details({payment_terminal, #domain_PaymentTerminal{
+decode_payment_tool_details({bank_card, V}) ->
+    decode_bank_card_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsBankCard">>});
+decode_payment_tool_details({payment_terminal, V}) ->
+    decode_payment_terminal_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsPaymentTerminal">>});
+decode_payment_tool_details({digital_wallet, V}) ->
+    decode_digital_wallet_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsDigitalWallet">>}).
+
+decode_bank_card_details(#domain_BankCard{
+    'payment_system' = PaymentSystem,
+    'masked_pan' = MaskedPan
+}, V) ->
+    V#{
+        <<"cardNumberMask">> => decode_masked_pan(MaskedPan),
+        <<"paymentSystem">> => genlib:to_binary(PaymentSystem)
+    }.
+
+decode_payment_terminal_details(#domain_PaymentTerminal{
     terminal_type = Type
-}}) ->
-    #{
-        <<"detailsType">> => <<"PaymentToolDetailsPaymentTerminal">>,
+}, V) ->
+    V#{
         <<"provider">> => genlib:to_binary(Type)
     }.
 
-decode_bank_card_details(DetailsType, #domain_BankCard{
-    'payment_system' = PaymentSystem,
-    'masked_pan' = MaskedPan
-}) ->
-    #{
-        <<"detailsType">> => DetailsType,
-        <<"cardNumberMask">> => decode_masked_pan(MaskedPan),
-        <<"paymentSystem">> => genlib:to_binary(PaymentSystem)
+decode_digital_wallet_details(#domain_DigitalWallet{
+    provider = qiwi,
+    id = ID
+}, V) ->
+    V#{
+        <<"digitalWalletDetailsType">> => <<"DigitalWalletDetailsQIWI">>,
+        <<"phoneNumberMask">> => mask_phone_number(ID)
     }.
 
 -define(MASKED_PAN_MAX_LENGTH, 4).
@@ -2612,6 +2640,9 @@ decode_masked_pan(MaskedPan) when byte_size(MaskedPan) > ?MASKED_PAN_MAX_LENGTH 
     binary:part(MaskedPan, {byte_size(MaskedPan), -?MASKED_PAN_MAX_LENGTH});
 decode_masked_pan(MaskedPan) ->
     MaskedPan.
+
+mask_phone_number(PhoneNumber) ->
+    capi_utils:redact(PhoneNumber, <<"^\\+\\d(\\d{1,10}?)\\d{2,4}$">>).
 
 decode_contact_info(#domain_ContactInfo{
     phone_number = PhoneNumber,
@@ -3047,8 +3078,8 @@ decode_russian_bank_account(#domain_RussianBankAccount{
     bank_name = BankName,
     bank_post_account = BankPostAccount,
     bank_bik = BankBik
-}) ->
-    #{
+}, V) ->
+    V#{
         <<"account">> => Account,
         <<"bankName">> => BankName,
         <<"bankPostAccount">> => BankPostAccount,
@@ -3061,8 +3092,8 @@ decode_international_bank_account(#domain_InternationalBankAccount{
     bank_address = BankAddress,
     iban = Iban,
     bic = Bic
-}) ->
-    #{
+}, V) ->
+    V#{
         <<"accountHolder">> => AccountHolder,
         <<"bankName">> => BankName,
         <<"bankAddress">> => BankAddress,
@@ -3158,7 +3189,7 @@ decode_legal_entity({
         <<"representativePosition">> => RepresentativePosition,
         <<"representativeFullName">> => RepresentativeFullName,
         <<"representativeDocument">> => RepresentativeDocument,
-        <<"bankAccount">> => decode_russian_bank_account(BankAccount)
+        <<"bankAccount">> => decode_russian_bank_account(BankAccount, #{})
     };
 decode_legal_entity({
     international_legal_entity,
@@ -3336,18 +3367,12 @@ decode_stat_payout_status({Status, _}) ->
 decode_stat_payout_tool_details(PayoutType) ->
     decode_payout_tool_details(merchstat_to_domain(PayoutType)).
 
-decode_payout_tool_details({bank_card, BankCard}) ->
-    decode_bank_card_details(<<"PayoutToolDetailsBankCard">>, BankCard);
-decode_payout_tool_details({russian_bank_account, BankAccount}) ->
-    maps:merge(
-        #{<<"detailsType">> => <<"PayoutToolDetailsBankAccount">>},
-        decode_russian_bank_account(BankAccount)
-    );
-decode_payout_tool_details({international_bank_account, BankAccount}) ->
-    maps:merge(
-        #{<<"detailsType">> => <<"PayoutToolDetailsInternationalBankAccount">>},
-        decode_international_bank_account(BankAccount)
-    ).
+decode_payout_tool_details({bank_card, V}) ->
+    decode_bank_card_details(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankCard">>});
+decode_payout_tool_details({russian_bank_account, V}) ->
+    decode_russian_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankAccount">>});
+decode_payout_tool_details({international_bank_account, V}) ->
+    decode_international_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsInternationalBankAccount">>}).
 
 encode_payout_type('PayoutCard') ->
     <<"bank_card">>;
@@ -3840,20 +3865,15 @@ decode_customer_binding(#payproc_CustomerBinding{
 
 decode_disposable_payment_resource(#domain_DisposablePaymentResource{
     payment_tool = PaymentTool,
-    payment_session_id = PaymentSession,
-    client_info = #domain_ClientInfo{
-        fingerprint = Fingerprint,
-        ip_address = IP
-    }
+    payment_session_id = PaymentSessionID,
+    client_info = ClientInfo0
 }) ->
+    ClientInfo = decode_client_info(ClientInfo0),
     #{
         <<"paymentToolToken">> => decode_payment_tool_token(PaymentTool),
-        <<"paymentSession">> => PaymentSession,
+        <<"paymentSession">> => wrap_payment_session(ClientInfo, PaymentSessionID),
         <<"paymentToolDetails">> => decode_payment_tool_details(PaymentTool),
-        <<"clientInfo">> => #{
-            <<"ip">> => IP,
-            <<"fingerprint">> => Fingerprint
-        }
+        <<"clientInfo">> => ClientInfo
     }.
 
 decode_customer_binding_status({Status, StatusInfo}) ->
@@ -4122,24 +4142,12 @@ process_search_request_result(QueryType, Result, #{decode_fun := DecodeFun}) ->
     end.
 
 get_time(Key, Req) ->
-    to_universal_time(genlib_map:get(Key, Req)).
-
-to_universal_time(Tz = undefined) ->
-    Tz;
-to_universal_time(Tz) ->
-    {ok, {Date, Time, Usec, TzOffset}} = rfc3339:parse(Tz),
-    TzSec = calendar:datetime_to_gregorian_seconds({Date, Time}),
-    %% The following crappy code is a dialyzer workaround
-    %% for the wrong rfc3339:parse/1 spec.
-    {UtcDate, UtcTime} = calendar:gregorian_seconds_to_datetime(
-        case TzOffset of
-            _ when is_integer(TzOffset) ->
-                TzSec - (60*TzOffset);
-            _ ->
-                TzSec
-        end),
-    {ok, Utc} = rfc3339:format({UtcDate, UtcTime, Usec, 0}),
-    Utc.
+    case genlib_map:get(Key, Req) of
+        Timestamp when is_binary(Timestamp) ->
+            capi_utils:to_universal_time(Timestamp);
+        undefined ->
+            undefined
+    end.
 
 get_split_interval(SplitSize, minute) ->
     SplitSize * 60;
@@ -4362,7 +4370,9 @@ decode_payment_methods({value, PaymentMethodRefs}) ->
 decode_payment_method(bank_card, PaymentSystems) ->
     #{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems)};
 decode_payment_method(payment_terminal, Providers) ->
-    #{<<"method">> => <<"PaymentTerminal">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}.
+    #{<<"method">> => <<"PaymentTerminal">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)};
+decode_payment_method(digital_wallet, Providers) ->
+    #{<<"method">> => <<"DigitalWallet">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}.
 
 compute_terms(ServiceName, Args, Context) ->
     service_call(
@@ -4375,81 +4385,87 @@ compute_terms(ServiceName, Args, Context) ->
 reply_5xx(Code) when Code >= 500 andalso Code < 600 ->
     {Code, [], <<>>}.
 
-process_card_data(ClientInfo0, PaymentTool, Context, ReqCtx) ->
-    CardData = get_card_data(PaymentTool),
+process_card_data(Data, ReqCtx) ->
     Result = service_call(
         cds_storage,
         'PutCardData',
-        [CardData],
+        [encode_card_data(Data)],
         ReqCtx
     ),
     case Result of
         {ok, #'PutCardDataResult'{
-            session_id = PaymentSession,
+            session_id = SessionID,
             bank_card = BankCard
         }} ->
-            Token = decode_bank_card(BankCard),
-            PreparedIP = get_prepared_ip(Context),
-            ClientInfo = ClientInfo0#{<<"ip">> => PreparedIP},
-
-            Session = wrap_session(ClientInfo, PaymentSession),
-            Resp = #{
-                <<"paymentToolToken">> => Token,
-                <<"paymentSession">> => Session,
-                <<"paymentToolDetails">> => decode_payment_tool_details({bank_card, BankCard}),
-                <<"clientInfo">> => ClientInfo
-            },
-            {ok, {201, [], Resp}};
+            {{bank_card, BankCard}, SessionID};
         {exception, Exception} ->
             case Exception of
                 #'InvalidCardData'{} ->
-                    {ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}};
+                    throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}});
                 #'KeyringLocked'{} ->
                     % TODO
                     % It's better for the cds to signal woody-level unavailability when the
                     % keyring is locked, isn't it? It could always mention keyring lock as a
                     % reason in a woody error definition.
-                    {error, reply_5xx(503)}
+                    throw({error, reply_5xx(503)})
             end
     end.
 
-get_card_data(PaymentTool) ->
-    {Month, Year} = parse_exp_date(genlib_map:get(<<"expDate">>, PaymentTool)),
-    CardNumber = genlib:to_binary(genlib_map:get(<<"cardNumber">>, PaymentTool)),
+encode_card_data(CardData) ->
+    {Month, Year} = parse_exp_date(genlib_map:get(<<"expDate">>, CardData)),
+    CardNumber = genlib:to_binary(genlib_map:get(<<"cardNumber">>, CardData)),
     #'CardData'{
         pan  = CardNumber,
         exp_date = #'ExpDate'{
             month = Month,
             year = Year
         },
-        cardholder_name = genlib_map:get(<<"cardHolder">>, PaymentTool),
-        cvv = genlib_map:get(<<"cvv">>, PaymentTool)
+        cardholder_name = genlib_map:get(<<"cardHolder">>, CardData),
+        cvv = genlib_map:get(<<"cvv">>, CardData)
     }.
 
-get_prepared_ip(Context) ->
-    #{
-        ip_address := IP
-    } = get_peer_info(Context),
-    genlib:to_binary(inet:ntoa(IP)).
-
-process_payment_terminal_data(ClientInfo0, TerminalData, Context) ->
+process_payment_terminal_data(Data, _ReqCtx) ->
     PaymentTerminal = #domain_PaymentTerminal{
         terminal_type = binary_to_existing_atom(
-            genlib_map:get(<<"provider">>, TerminalData),
+            genlib_map:get(<<"provider">>, Data),
             utf8
         )
     },
-    Token = decode_payment_terminal(PaymentTerminal),
-    PreparedIP = get_prepared_ip(Context),
-    ClientInfo = ClientInfo0#{<<"ip">> => PreparedIP},
-    Session = wrap_session(ClientInfo, <<"">>),
-    Resp = #{
-        <<"paymentToolToken">> => Token,
-        <<"paymentSession">> => Session,
-        <<"paymentToolDetails">> => decode_payment_tool_details({payment_terminal, PaymentTerminal}),
-        <<"clientInfo">> => ClientInfo
-    },
-    {ok, {201, [], Resp}}.
+    {{payment_terminal, PaymentTerminal}, <<>>}.
+
+process_digital_wallet_data(Data, _ReqCtx) ->
+    DigitalWallet = case Data of
+        #{<<"digitalWalletType">> := <<"DigitalWalletQIWI">>} ->
+            #domain_DigitalWallet{
+                provider = qiwi,
+                id = maps:get(<<"phoneNumber">>, Data)
+            }
+    end,
+    {{digital_wallet, DigitalWallet}, <<>>}.
+
+enrich_client_info(ClientInfo, Context) ->
+    ClientInfo#{<<"ip">> => prepare_client_ip(Context)}.
+
+prepare_client_ip(Context) ->
+    #{ip_address := IP} = get_peer_info(Context),
+    genlib:to_binary(inet:ntoa(IP)).
+
+wrap_payment_session(ClientInfo, PaymentSession) ->
+    capi_utils:map_to_base64url(#{
+        <<"clientInfo">> => ClientInfo,
+        <<"paymentSession">> => PaymentSession
+    }).
+
+unwrap_payment_session(Encoded) ->
+    #{
+        <<"clientInfo">> := ClientInfo,
+        <<"paymentSession">> := PaymentSession
+     } = try capi_utils:base64url_to_map(Encoded)
+    catch
+        error:badarg ->
+            erlang:throw(invalid_payment_session)
+    end,
+    {ClientInfo, PaymentSession}.
 
 get_default_url_lifetime() ->
     Now = erlang:system_time(second),
@@ -4460,18 +4476,3 @@ get_default_url_lifetime() ->
         Error ->
             error(Error)
     end.
-
--ifdef(TEST).
--include_lib("eunit/include/eunit.hrl").
-
--spec test() -> _.
-
--spec to_universal_time_test() -> _.
-to_universal_time_test() ->
-    ?assertEqual(undefined,                         to_universal_time(undefined)),
-    ?assertEqual(<<"2017-04-19T13:56:07Z">>,        to_universal_time(<<"2017-04-19T13:56:07Z">>)),
-    ?assertEqual(<<"2017-04-19T13:56:07.530000Z">>, to_universal_time(<<"2017-04-19T13:56:07.53Z">>)),
-    ?assertEqual(<<"2017-04-19T10:36:07.530000Z">>, to_universal_time(<<"2017-04-19T13:56:07.53+03:20">>)),
-    ?assertEqual(<<"2017-04-19T17:16:07.530000Z">>, to_universal_time(<<"2017-04-19T13:56:07.53-03:20">>)).
-
--endif. %%TEST
