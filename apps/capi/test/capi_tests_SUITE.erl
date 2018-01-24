@@ -64,7 +64,10 @@
     cancel_payment_ok_test/1,
     capture_payment_ok_test/1,
 
-    create_payment_tool_token_ok_test/1,
+    create_visa_payment_resource_ok_test/1,
+    create_nspkmir_payment_resource_ok_test/1,
+    create_euroset_payment_resource_ok_test/1,
+    create_qw_payment_resource_ok_test/1,
 
     get_my_party_ok_test/1,
     suspend_my_party_ok_test/1,
@@ -167,7 +170,7 @@ invoice_access_token_tests() ->
         get_payment_by_id_ok_test,
         cancel_payment_ok_test,
         capture_payment_ok_test,
-        create_payment_tool_token_ok_test
+        {group, payment_resources}
     ].
 
 customer_access_token_tests() ->
@@ -188,6 +191,14 @@ groups() ->
                 woody_unexpected_test,
                 woody_unavailable_test,
                 woody_unknown_test
+            ]
+        },
+        {payment_resources, [],
+            [
+                create_visa_payment_resource_ok_test,
+                create_nspkmir_payment_resource_ok_test,
+                create_euroset_payment_resource_ok_test,
+                create_qw_payment_resource_ok_test
             ]
         },
         {operations_by_base_api_token, [],
@@ -716,9 +727,9 @@ capture_payment_ok_test(Config) ->
     mock_services([{invoicing, fun('CapturePayment', _) -> {ok, ok} end}], Config),
     ok = capi_client_payments:capture_payment(?config(context, Config), ?STRING, ?STRING, ?STRING).
 
--spec create_payment_tool_token_ok_test(_) ->
+-spec create_visa_payment_resource_ok_test(_) ->
     _.
-create_payment_tool_token_ok_test(Config) ->
+create_visa_payment_resource_ok_test(Config) ->
     mock_services([
         {cds_storage, fun
             ('PutCardData', [#'CardData'{pan = <<"411111", _:6/binary, Mask:4/binary>>}]) ->
@@ -730,7 +741,30 @@ create_payment_tool_token_ok_test(Config) ->
                         masked_pan = Mask
                     },
                     session_id = ?STRING
-                }};
+                }}
+        end}
+    ], Config),
+    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
+    {ok, #{<<"paymentToolDetails">> := #{
+        <<"detailsType">> := <<"PaymentToolDetailsBankCard">>,
+        <<"paymentSystem">> := <<"visa">>,
+        <<"cardNumberMask">> := <<"1111">>
+    }}} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"CardData">>,
+            <<"cardNumber">> => <<"4111111111111111">>,
+            <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
+            <<"expDate">> => <<"08/27">>,
+            <<"cvv">> => <<"232">>
+        },
+        <<"clientInfo">> => ClientInfo
+    }).
+
+-spec create_nspkmir_payment_resource_ok_test(_) ->
+    _.
+create_nspkmir_payment_resource_ok_test(Config) ->
+    mock_services([
+        {cds_storage, fun
             ('PutCardData', [#'CardData'{pan = <<"22001111", _:6/binary, Mask:2/binary>>}]) ->
                 {ok, #'PutCardDataResult'{
                     bank_card = #domain_BankCard{
@@ -743,27 +777,51 @@ create_payment_tool_token_ok_test(Config) ->
                 }}
         end}
     ], Config),
-    PaymentTool = #{
-        <<"paymentToolType">> => <<"CardData">>,
-        <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
-        <<"expDate">> => <<"08/27">>,
-        <<"cvv">> => <<"232">>
-    },
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
-    {ok, #{<<"paymentToolDetails">> := #{
-        <<"detailsType">> := <<"PaymentToolDetailsBankCard">>,
-        <<"paymentSystem">> := <<"visa">>,
-        <<"cardNumberMask">> := <<"1111">>
-    }}} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
-        <<"paymentTool">> => PaymentTool#{<<"cardNumber">> => <<"4111111111111111">>},
-        <<"clientInfo">> => ClientInfo
-    }),
     {ok, #{<<"paymentToolDetails">> := #{
         <<"detailsType">> := <<"PaymentToolDetailsBankCard">>,
         <<"paymentSystem">> := <<"nspkmir">>,
         <<"cardNumberMask">> := <<"11">>
     }}} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
-        <<"paymentTool">> => PaymentTool#{<<"cardNumber">> => <<"2200111111111111">>},
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"CardData">>,
+            <<"cardNumber">> => <<"2200111111111111">>,
+            <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
+            <<"expDate">> => <<"08/27">>,
+            <<"cvv">> => <<"232">>
+        },
+        <<"clientInfo">> => ClientInfo
+    }).
+
+-spec create_euroset_payment_resource_ok_test(_) ->
+    _.
+create_euroset_payment_resource_ok_test(Config) ->
+    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
+    {ok, #{<<"paymentToolDetails">> := #{
+        <<"detailsType">> := <<"PaymentToolDetailsPaymentTerminal">>,
+        <<"provider">> := <<"euroset">>
+    }}} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"PaymentTerminalData">>,
+            <<"provider">> => <<"euroset">>
+        },
+        <<"clientInfo">> => ClientInfo
+    }).
+
+-spec create_qw_payment_resource_ok_test(_) ->
+    _.
+create_qw_payment_resource_ok_test(Config) ->
+    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
+    {ok, #{<<"paymentToolDetails">> := #{
+        <<"detailsType">> := <<"PaymentToolDetailsDigitalWallet">>,
+        <<"digitalWalletDetailsType">> := <<"DigitalWalletDetailsQIWI">>,
+        <<"phoneNumberMask">> := <<"+7******3210">>
+    }}} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"DigitalWalletData">>,
+            <<"digitalWalletType">> => <<"DigitalWalletQIWI">>,
+            <<"phoneNumber">> => <<"+79876543210">>
+        },
         <<"clientInfo">> => ClientInfo
     }).
 
