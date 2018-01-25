@@ -2773,6 +2773,14 @@ merchstat_to_domain({payment_terminal, #merchstat_PaymentTerminal{
     terminal_type = Type}}
 ) ->
     {payment_terminal, #domain_PaymentTerminal{terminal_type = Type}};
+merchstat_to_domain({digital_wallet, #merchstat_DigitalWallet{
+    provider = Provider,
+    id       = ID
+}}) ->
+    {digital_wallet, #domain_DigitalWallet{
+        provider = Provider,
+        id       = ID
+    }};
 merchstat_to_domain({bank_card, #merchstat_PayoutCard{card = BankCard}}) ->
     merchstat_to_domain({bank_card, BankCard});
 merchstat_to_domain({bank_account, #merchstat_PayoutAccount{account = #merchstat_BankAccount{
