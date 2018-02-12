@@ -3327,18 +3327,20 @@ decode_refund(#domain_InvoicePaymentRefund{
     status = Status,
     created_at = CreatedAt,
     reason = Reason,
-    cash = Cash
+    cash = #domain_Cash{
+        amount = Amount,
+        currency = Currency
+    }
 }) ->
     genlib_map:compact(maps:merge(
         #{
             <<"id">> => ID,
             <<"createdAt">> => CreatedAt,
-            <<"reason">> => Reason
+            <<"reason">> => Reason,
+            <<"amount">> => Amount,
+            <<"currency">> => decode_currency(Currency)
         },
-        maps:merge(
-            decode_optional_cash(Cash),
-            decode_refund_status(Status)
-        )
+        decode_refund_status(Status)
     )).
 
 decode_refund_status({Status, StatusInfo}) ->
@@ -3351,20 +3353,6 @@ decode_refund_status({Status, StatusInfo}) ->
     #{
         <<"status">> => genlib:to_binary(Status),
         <<"error">> => Error
-    }.
-
-decode_optional_cash(#domain_Cash{
-    amount = Amount,
-    currency = Currency
-}) ->
-    #{
-        <<"amount">> => Amount,
-        <<"currency">> => decode_currency(Currency)
-    };
-decode_optional_cash(undefined) ->
-    #{
-        <<"amount">> => undefined,
-        <<"currency">> => undefined
     }.
 
 decode_stat_payout(#merchstat_StatPayout{
