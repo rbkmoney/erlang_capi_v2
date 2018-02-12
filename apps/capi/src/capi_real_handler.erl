@@ -558,8 +558,10 @@ process_request('GetLocationsNames', Req, _Context, ReqCtx) ->
 process_request('CreateRefund', Req, Context, ReqCtx) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
+    RefundParams = maps:get('RefundParams', Req),
     Params = #payproc_InvoicePaymentRefundParams{
-        reason = genlib_map:get(reason, Req)
+        reason = genlib_map:get(<<"reason">>, RefundParams),
+        cash = encode_optional_cash(RefundParams)
     },
     UserInfo = get_user_info(Context),
     Result = service_call(
@@ -584,13 +586,13 @@ process_request('CreateRefund', Req, Context, ReqCtx) ->
                     {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
                 #payproc_InvalidPaymentStatus{} ->
                     {ok, {400, [], logic_error(invalidInvoicePaymentStatus, <<"Invalid invoice payment status">>)}};
-                #payproc_InvoicePaymentRefundPending{} ->
-                    {ok, {400, [], logic_error(invoicePaymentRefundPending, <<"Invoice payment refund pending">>)}};
                 #payproc_InsufficientAccountBalance{} ->
                     {ok, {400, [], logic_error(
                         insufficentAccountBalance,
                         <<"Operation can not be conducted because of insufficient funds on the merchant account">>
                     )}};
+                #payproc_InvoicePaymentAmountExceeded{} ->
+                    {ok, {400, [], logic_error(invoicePaymentAmountExceeded, <<"Payment amount exceeded">>)}};
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
             end
@@ -2398,6 +2400,11 @@ encode_customer_binding_params(#{
         }
     }.
 
+encode_optional_cash(Params = #{<<"amount">> := _, <<"currency">> := _}) ->
+    encode_cash(Params);
+encode_optional_cash(_) ->
+    undefined.
+
 decode_invoice_event(#payproc_Event{
     id = EventID,
     created_at = CreatedAt,
@@ -3319,13 +3326,19 @@ decode_refund(#domain_InvoicePaymentRefund{
     id = ID,
     status = Status,
     created_at = CreatedAt,
-    reason = Reason
+    reason = Reason,
+    cash = #domain_Cash{
+        amount = Amount,
+        currency = Currency
+    }
 }) ->
     genlib_map:compact(maps:merge(
         #{
             <<"id">> => ID,
             <<"createdAt">> => CreatedAt,
-            <<"reason">> => Reason
+            <<"reason">> => Reason,
+            <<"amount">> => Amount,
+            <<"currency">> => decode_currency(Currency)
         },
         decode_refund_status(Status)
     )).

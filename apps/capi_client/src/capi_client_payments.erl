@@ -103,14 +103,14 @@ get_refund_by_id(Context, InvoiceID, PaymentID, RefundID) ->
     Response = swag_client_payments_api:get_refund_by_id(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 
--spec create_refund(context(), binary(), binary(), binary()) -> {ok, term()} | {error, term()}.
-create_refund(Context, InvoiceID, PaymentID, Reason) ->
+-spec create_refund(context(), map(), binary(), binary()) -> {ok, term()} | {error, term()}.
+create_refund(Context, Request, InvoiceID, PaymentID) ->
     Params = #{
         binding => #{
             <<"invoiceID">> => InvoiceID,
             <<"paymentID">> => PaymentID
         },
-        body => #{<<"reason">> => genlib:to_binary(Reason)}
+        body => Request
     },
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
     Response = swag_client_payments_api:create_refund(Url, PreparedParams, Opts),
