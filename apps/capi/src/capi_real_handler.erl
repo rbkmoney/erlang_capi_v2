@@ -2424,47 +2424,60 @@ decode_invoice_event(#payproc_Event{
     end.
 
 decode_invoice_changes(InvoiceID, InvoiceChanges) when is_list(InvoiceChanges) ->
-    lists:foldl(
-        fun(Change, Acc) ->
-            case decode_invoice_change(InvoiceID, Change) of
-                #{} = Decoded ->
-                    Acc ++ [Decoded];
+    DecodedChanges = lists:foldl(
+        fun(Change, #{changes := Changes} = Acc) ->
+            Context = maps:get(context, Acc, #{}),
+            case decode_invoice_change(InvoiceID, Change, Context) of
+                #{changes := Decoded} = Result when is_map(Decoded) ->
+                    NewContext = maps:get(context, Result, #{}),
+                    #{
+                        changes => Changes ++ [Decoded],
+                        context => maps:merge(Context, NewContext)
+                    };
                 undefined ->
                     Acc
             end
         end,
-        [],
+        #{changes => []},
         InvoiceChanges
-    ).
+    ),
+    maps:get(changes, DecodedChanges).
 
-decode_invoice_change(_, {
-    invoice_created,
-    #payproc_InvoiceCreated{invoice = Invoice}
-}) ->
-    #{
+decode_invoice_change(
+    _,
+    {invoice_created, #payproc_InvoiceCreated{
+        invoice = Invoice
+    }},
+    _Context
+) ->
+    #{changes => #{
         <<"changeType">> => <<"InvoiceCreated">>,
         <<"invoice">> => decode_invoice(Invoice)
-    };
+    }};
 
-decode_invoice_change(_, {
-    invoice_status_changed,
-    #payproc_InvoiceStatusChanged{status = {Status, _}}
-}) ->
-    #{
+decode_invoice_change(
+    _,
+    {invoice_status_changed, #payproc_InvoiceStatusChanged{
+        status = {Status, _}
+    }},
+    _Context
+) ->
+    #{changes => #{
         <<"changeType">> => <<"InvoiceStatusChanged">>,
         <<"status">> => genlib:to_binary(Status)
-    };
+    }};
 
 decode_invoice_change(
     InvoiceID,
     {invoice_payment_change, #payproc_InvoicePaymentChange{
         id = PaymentID,
         payload = Change
-    }}
+    }},
+    Context
 ) ->
-    decode_payment_change(InvoiceID, PaymentID, Change);
+    decode_payment_change(InvoiceID, PaymentID, Change, Context);
 
-decode_invoice_change(_, _) ->
+decode_invoice_change(_, _, _) ->
     undefined.
 
 decode_payment_change(
@@ -2472,11 +2485,15 @@ decode_payment_change(
     _PaymentID,
     {invoice_payment_started, #payproc_InvoicePaymentStarted{
         payment = Payment
-    }}
+    }},
+    _Context
 ) ->
     #{
-        <<"changeType">> => <<"PaymentStarted">>,
-        <<"payment">> => decode_payment(InvoiceID, Payment)
+        changes => #{
+            <<"changeType">> => <<"PaymentStarted">>,
+            <<"payment">> => decode_payment(InvoiceID, Payment)
+        },
+        context => #{payment => Payment}
     };
 
 decode_payment_change(
@@ -2488,28 +2505,30 @@ decode_payment_change(
                 interaction = Interaction
             }
         }
-    }}
+    }},
+    _Context
 ) ->
-    #{
+    #{changes => #{
         <<"changeType">> => <<"PaymentInteractionRequested">>,
         <<"paymentID">> => PaymentID,
         <<"userInteraction">> => decode_user_interaction(Interaction)
-    };
+    }};
 
 decode_payment_change(
     _InvoiceID,
     PaymentID,
     {invoice_payment_status_changed, #payproc_InvoicePaymentStatusChanged{
         status = Status
-    }}
+    }},
+    _Context
 ) ->
-    genlib_map:compact(maps:merge(
+    #{changes => genlib_map:compact(maps:merge(
         #{
             <<"changeType">> => <<"PaymentStatusChanged">>,
             <<"paymentID">> => PaymentID
         },
         decode_payment_status(Status)
-    ));
+    ))};
 
 decode_payment_change(
     _InvoiceID,
@@ -2517,11 +2536,12 @@ decode_payment_change(
     {invoice_payment_refund_change, #payproc_InvoicePaymentRefundChange{
         id = RefundID,
         payload = Change
-    }}
+    }},
+    Context
 ) ->
-    decode_refund_change(PaymentID, RefundID, Change);
+    decode_refund_change(PaymentID, RefundID, Change, Context);
 
-decode_payment_change(_, _, _) ->
+decode_payment_change(_, _, _, _) ->
     undefined.
 
 decode_refund_change(
@@ -2529,31 +2549,33 @@ decode_refund_change(
     _RefundID,
     {invoice_payment_refund_created, #payproc_InvoicePaymentRefundCreated{
         refund = Refund
-    }}
+    }},
+    #{payment := #domain_InvoicePayment{id = PaymentID} = Payment}
 ) ->
-    #{
+    #{changes => #{
         <<"changeType">> => <<"RefundStarted">>,
         <<"paymentID">> => PaymentID,
-        <<"refund">> => decode_refund(Refund)
-    };
+        <<"refund">> => decode_refund_for_event(Refund, Payment)
+    }};
 
 decode_refund_change(
     PaymentID,
     RefundID,
     {invoice_payment_refund_status_changed, #payproc_InvoicePaymentRefundStatusChanged{
         status = Status
-    }}
+    }},
+    _
 ) ->
-    genlib_map:compact(maps:merge(
+    #{changes => genlib_map:compact(maps:merge(
         #{
             <<"changeType">> => <<"RefundStatusChanged">>,
             <<"paymentID">> => PaymentID,
             <<"refundID">> => RefundID
         },
         decode_refund_status(Status)
-    ));
+    ))};
 
-decode_refund_change(_, _, _) ->
+decode_refund_change(_, _, _, _) ->
     undefined.
 
 decode_invoice_payment(InvoiceID, #payproc_InvoicePayment{
@@ -3321,6 +3343,17 @@ decode_stat_invoice(#merchstat_StatInvoice{
 
 decode_stat_invoice_status(Status) ->
     decode_invoice_status(merchstat_to_domain(Status)).
+
+decode_refund_for_event(
+    #domain_InvoicePaymentRefund{cash = #domain_Cash{}} = Refund,
+    _Payment
+) ->
+    decode_refund(Refund);
+decode_refund_for_event(
+    #domain_InvoicePaymentRefund{cash = undefined} = Refund,
+    #domain_InvoicePayment{cost = Cash}
+) ->
+    decode_refund(Refund#domain_InvoicePaymentRefund{cash = Cash}).
 
 decode_refund(#domain_InvoicePaymentRefund{
     id = ID,
