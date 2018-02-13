@@ -2550,7 +2550,7 @@ decode_refund_change(
     {invoice_payment_refund_created, #payproc_InvoicePaymentRefundCreated{
         refund = Refund
     }},
-    #{payment := Payment}
+    #{payment := #domain_InvoicePayment{id = PaymentID} = Payment}
 ) ->
     #{changes => #{
         <<"changeType">> => <<"RefundStarted">>,
