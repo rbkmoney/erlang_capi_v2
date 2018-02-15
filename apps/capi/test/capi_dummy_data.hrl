@@ -349,6 +349,23 @@
                 description = ?STRING
             }
         }},
+        {schedule, #domain_ScheduleRef{id = ?INTEGER}} =>
+        {schedule, #domain_ScheduleObject{
+            ref = #domain_ScheduleRef{id = ?INTEGER},
+            data = #domain_Schedule{
+                name = ?STRING,
+                description = ?STRING,
+                schedule = #'Schedule'{
+                    year = {every, #'ScheduleEvery'{}},
+                    month = {every, #'ScheduleEvery'{}},
+                    day_of_month = {every, #'ScheduleEvery'{}},
+                    day_of_week = {every, #'ScheduleEvery'{}},
+                    hour = {every, #'ScheduleEvery'{}},
+                    minute = {every, #'ScheduleEvery'{}},
+                    second = {every, #'ScheduleEvery'{}}
+                }
+            }
+        }},
         {globals, #domain_GlobalsRef{}} =>
         {globals, #domain_GlobalsObject{
             ref = #domain_GlobalsRef{},
@@ -406,7 +423,9 @@
     source =  {invoice_id, ?STRING}
 }).
 
--define(TERM_SET, #domain_TermSet{}).
+-define(TERM_SET, #domain_TermSet{payouts = ?PAYOUTS_SERVICE_TERMS}).
+
+-define(PAYOUTS_SERVICE_TERMS, #domain_PayoutsServiceTerms{}).
 
 -define(CUSTOMER, #payproc_Customer{
     id = ?STRING,
