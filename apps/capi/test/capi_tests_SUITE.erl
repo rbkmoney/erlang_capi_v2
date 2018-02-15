@@ -1260,8 +1260,17 @@ get_payment_institution_payout_terms(Config) ->
         ],
         Config
     ),
-    {ok, _} = capi_client_payment_institutions:get_payment_institution_payout_methods(?config(context, Config), ?INTEGER),
-    {ok, _} = capi_client_payment_institutions:get_payment_institution_payout_schedules(?config(context, Config), ?INTEGER).
+    {ok, _} = capi_client_payment_institutions:get_payment_institution_payout_methods(
+        ?config(context, Config),
+        ?INTEGER,
+        <<"RUB">>
+    ),
+    {ok, _} = capi_client_payment_institutions:get_payment_institution_payout_schedules(
+        ?config(context, Config),
+        ?INTEGER,
+        <<"USD">>,
+        <<"BankAccount">>
+    ).
 
 -spec create_customer_ok_test(config()) ->
     _.

@@ -1166,9 +1166,9 @@ process_request('GetCategoryByRef', Req, Context0, ReqCtx) ->
             {404, [], general_error(<<"Category not found">>)}
     end;
 
-process_request('GetScheduleByRef', Req, Context0, ReqCtx) ->
-    _ = get_user_info(Context0),
-    _ = get_party_id(Context0),
+process_request('GetScheduleByRef', Req, Context, ReqCtx) ->
+    _ = get_user_info(Context),
+    _ = get_party_id(Context),
     ScheduleID = maps:get(scheduleID, Req),
     case get_schedule_by_id(genlib:to_int(ScheduleID), ReqCtx) of
         {ok, Schedule} ->
@@ -3934,9 +3934,13 @@ decode_customer_binding_status({Status, StatusInfo}) ->
         <<"error">> => Error
     }.
 
-encode_optional_payout_method(PayoutMethod) when is_binary(PayoutMethod) ->
+encode_optional_payout_method('BankAccount') ->
     #domain_PayoutMethodRef{
-        id = binary_to_existing_atom(PayoutMethod, utf8)
+        id = russian_bank_account
+    };
+encode_optional_payout_method('InternationalBankAccount') ->
+    #domain_PayoutMethodRef{
+        id = international_bank_account
     };
 encode_optional_payout_method(undefined) ->
     undefined.
