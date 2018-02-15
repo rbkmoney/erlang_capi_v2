@@ -3945,8 +3945,10 @@ encode_optional_payout_method('InternationalBankAccount') ->
 encode_optional_payout_method(undefined) ->
     undefined.
 
-decode_payout_method(#domain_PayoutMethodRef{id = PayoutMethod}) ->
-    genlib:to_binary(PayoutMethod).
+decode_payout_method(#domain_PayoutMethodRef{id = russian_bank_account}) ->
+    <<"BankAccount">>;
+decode_payout_method(#domain_PayoutMethodRef{id = international_bank_account}) ->
+    <<"InternationalBankAccount">>.
 
 decode_payout_methods_selector({value, Val}) when is_list(Val) ->
     lists:map(fun decode_payout_method/1, Val);
