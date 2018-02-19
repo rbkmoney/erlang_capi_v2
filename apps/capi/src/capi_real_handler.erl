@@ -3616,7 +3616,15 @@ decode_shop_modification({payout_tool_modification, PayoutToolID}) ->
     #{
         <<"shopModificationType">> => <<"ShopPayoutToolChange">>,
         <<"payoutToolID">> => PayoutToolID
-    }.
+    };
+
+decode_shop_modification({payout_schedule_modification, #payproc_ScheduleModification{
+    schedule = ScheduleRef
+}}) ->
+    genlib_map:compact(#{
+        <<"shopModificationType">> => <<"ShopPayoutScheduleChange">>,
+        <<"scheduleID">> => decode_schedule_ref(ScheduleRef)
+    }).
 
 decode_shop_params(#payproc_ShopParams{
     location =  Location,

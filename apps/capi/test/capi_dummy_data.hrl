@@ -196,8 +196,18 @@
     created_at = ?TIMESTAMP,
     updated_at = ?TIMESTAMP,
     status = {pending, #payproc_ClaimPending{}},
-    changeset = []
+    changeset = ?CLAIM_CHANGESET
 }).
+
+%% TODO cover ALL types of changes in changeset
+-define(CLAIM_CHANGESET, [
+    {shop_modification, #payproc_ShopModificationUnit{
+        id = ?STRING,
+        modification = {payout_schedule_modification, #payproc_ScheduleModification{
+            schedule = #domain_ScheduleRef{id = ?INTEGER}
+        }}
+    }}
+]).
 
 -define(ADJUSTMENT, #domain_InvoicePaymentAdjustment{
     id = ?STRING,
