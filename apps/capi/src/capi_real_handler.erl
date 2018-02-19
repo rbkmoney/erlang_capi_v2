@@ -1167,6 +1167,18 @@ process_request('GetCategoryByRef', Req, Context0, ReqCtx) ->
             {404, [], general_error(<<"Category not found">>)}
     end;
 
+process_request('GetScheduleByRef', Req, Context, ReqCtx) ->
+    _ = get_user_info(Context),
+    _ = get_party_id(Context),
+    ScheduleID = maps:get(scheduleID, Req),
+    case get_schedule_by_id(genlib:to_int(ScheduleID), ReqCtx) of
+        {ok, Schedule} ->
+            Resp = decode_schedule(Schedule),
+            {ok, {200, [], Resp}};
+        {error, not_found} ->
+            {404, [], general_error(<<"Schedule not found">>)}
+    end;
+
 process_request('GetPaymentInstitutions', Req, _Context, ReqCtx) ->
     Residence = encode_residence(genlib_map:get(residence, Req)),
     Realm = genlib_map:get(realm, Req),
@@ -1195,25 +1207,42 @@ process_request('GetPaymentInstitutionByRef', Req, _Context, ReqCtx) ->
     end;
 
 process_request('GetPaymentInstitutionPaymentTerms', Req, Context, ReqCtx) ->
-    UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
-    Result = prepare_party(
-        Context,
-        ReqCtx,
-        fun () ->
-            service_call(
-                party_management,
-                'ComputePaymentInstitutionTerms',
-                [UserInfo, PartyID, ?payment_institution_ref(PaymentInstitutionID)],
-                ReqCtx
-            )
-        end
-    ),
-    case Result of
+    VS = #payproc_Varset{},
+    case compute_payment_institution_terms(PaymentInstitutionID, VS, Context, ReqCtx) of
         {ok, #domain_TermSet{payments = PaymentTerms}} ->
             Resp = decode_payment_terms(PaymentTerms),
             {ok, {200, [], Resp}};
+        {exception, #payproc_PaymentInstitutionNotFound{}} ->
+            {404, [], general_error(<<"Payment institution not found">>)}
+    end;
+
+process_request('GetPaymentInstitutionPayoutMethods', Req, Context, ReqCtx) ->
+    PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
+    VS = prepare_varset(Req),
+    case compute_payment_institution_terms(PaymentInstitutionID, VS, Context, ReqCtx) of
+        {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{
+            payout_methods = PayoutMethods
+        }}} ->
+            Resp = decode_payout_methods_selector(PayoutMethods),
+            {ok, {200, [], Resp}};
+        {ok, #domain_TermSet{payouts = undefined}} ->
+            {404, [], general_error(<<"Automatic payouts not allowed">>)};
+        {exception, #payproc_PaymentInstitutionNotFound{}} ->
+            {404, [], general_error(<<"Payment institution not found">>)}
+    end;
+
+process_request('GetPaymentInstitutionPayoutSchedules', Req, Context, ReqCtx) ->
+    PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
+    VS = prepare_varset(Req),
+    case compute_payment_institution_terms(PaymentInstitutionID, VS, Context, ReqCtx) of
+        {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{
+            payout_schedules = Schedules
+        }}} ->
+            Resp = decode_payout_schedules_selector(Schedules),
+            {ok, {200, [], Resp}};
+        {ok, #domain_TermSet{payouts = undefined}} ->
+            {404, [], general_error(<<"Automatic payouts not allowed">>)};
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
             {404, [], general_error(<<"Payment institution not found">>)}
     end;
@@ -2193,7 +2222,11 @@ encode_shop_modification(#{<<"shopID">> := ShopID} = Modification, _ReqCtx) ->
                 payout_tool_id = maps:get(<<"payoutToolID">>, Modification)
             }};
         <<"ShopPayoutToolChange">> ->
-            {payout_tool_modification, maps:get(<<"payoutToolID">>, Modification)}
+            {payout_tool_modification, maps:get(<<"payoutToolID">>, Modification)};
+        <<"ShopPayoutScheduleChange">> ->
+            {payout_schedule_modification, #payproc_ScheduleModification{
+                schedule = encode_schedule_ref(genlib_map:get(<<"scheduleID">>, Modification))
+            }}
     end,
     #payproc_ShopModificationUnit{
         id = ShopID,
@@ -2238,19 +2271,14 @@ encode_russian_bank_account(#{
         bank_bik = BankBik
     }.
 
-encode_international_bank_account(#{
-    <<"accountHolder">> := AccountHolder,
-    <<"bankName">> := BankName,
-    <<"bankAddress">> := BankAddress,
-    <<"iban">> := Iban,
-    <<"bic">> := Bic
-}) ->
+encode_international_bank_account(Acc) ->
     #domain_InternationalBankAccount{
-        account_holder = AccountHolder,
-        bank_name = BankName,
-        bank_address = BankAddress,
-        iban = Iban,
-        bic = Bic
+        account_holder  = genlib_map:get(<<"accountHolder">>, Acc),
+        bank_name       = genlib_map:get(<<"bankName">>, Acc),
+        bank_address    = genlib_map:get(<<"bankAddress">>, Acc),
+        iban            = genlib_map:get(<<"iban">>, Acc),
+        bic             = genlib_map:get(<<"bic">>, Acc),
+        local_bank_code = genlib_map:get(<<"localBankCode">>, Acc)
     }.
 
 encode_contractor(#{<<"contractorType">> := <<"LegalEntity">>} = Contractor) ->
@@ -2280,7 +2308,8 @@ encode_legal_entity(#{
         legal_name = genlib_map:get(<<"legalName">>, Entity),
         trading_name = genlib_map:get(<<"tradingName">>, Entity),
         registered_address = genlib_map:get(<<"registeredOffice">>, Entity),
-        actual_address = genlib_map:get(<<"principalPlaceOfBusiness">>, Entity)
+        actual_address = genlib_map:get(<<"principalPlaceOfBusiness">>, Entity),
+        registered_number = genlib_map:get(<<"registeredNumber">>, Entity)
     }}.
 
 encode_registered_user(#{<<"email">> := Email}) ->
@@ -3091,15 +3120,17 @@ decode_international_bank_account(#domain_InternationalBankAccount{
     bank_name = BankName,
     bank_address = BankAddress,
     iban = Iban,
-    bic = Bic
+    bic = Bic,
+    local_bank_code = LocalBankCode
 }, V) ->
-    V#{
+    genlib_map:compact(V#{
         <<"accountHolder">> => AccountHolder,
         <<"bankName">> => BankName,
         <<"bankAddress">> => BankAddress,
         <<"iban">> => Iban,
-        <<"bic">> => Bic
-    }.
+        <<"bic">> => Bic,
+        <<"localBankCode">> => LocalBankCode
+    }).
 
 decode_contract_adjustment(#domain_ContractAdjustment{
     id = ID,
@@ -3122,25 +3153,25 @@ decode_shop(#domain_Shop{
     created_at = CreatedAt,
     blocking = Blocking,
     suspension = Suspension,
-    category  = #domain_CategoryRef{
-        id = CategoryRef
-    },
+    category  = CategoryRef,
     details  = ShopDetails,
     location = Location,
     account = ShopAccount,
     contract_id = ContractID,
-    payout_tool_id = PayoutToolID
+    payout_tool_id = PayoutToolID,
+    payout_schedule = ScheduleRef
 }) ->
     genlib_map:compact(#{
         <<"id">> => ShopID,
         <<"createdAt">> => CreatedAt,
         <<"isBlocked">> => is_blocked(Blocking),
         <<"isSuspended">> => is_suspended(Suspension),
-        <<"categoryID">> => CategoryRef,
+        <<"categoryID">> => decode_category_ref(CategoryRef),
         <<"details">> => decode_shop_details(ShopDetails),
         <<"location">> => decode_shop_location(Location),
         <<"contractID">> => ContractID,
         <<"payoutToolID">> => PayoutToolID,
+        <<"scheduleID">> => decode_schedule_ref(ScheduleRef),
         <<"account">> => decode_shop_account(ShopAccount)
     }).
 
@@ -3197,7 +3228,8 @@ decode_legal_entity({
         legal_name = LegalName,
         trading_name = TradingName,
         registered_address = RegisteredOffice,
-        actual_address = PrincipalPlaceOfBusiness
+        actual_address = PrincipalPlaceOfBusiness,
+        registered_number = RegisteredNumber
     }
 }) ->
     genlib_map:compact(#{
@@ -3205,7 +3237,8 @@ decode_legal_entity({
         <<"legalName">> => LegalName,
         <<"tradingName">> => TradingName,
         <<"registeredOffice">> => RegisteredOffice,
-        <<"principalPlaceOfBusiness">> => PrincipalPlaceOfBusiness
+        <<"principalPlaceOfBusiness">> => PrincipalPlaceOfBusiness,
+        <<"registeredNumber">> => RegisteredNumber
     }).
 
 decode_registered_user(#domain_RegisteredUser{email = Email}) ->
@@ -3583,7 +3616,15 @@ decode_shop_modification({payout_tool_modification, PayoutToolID}) ->
     #{
         <<"shopModificationType">> => <<"ShopPayoutToolChange">>,
         <<"payoutToolID">> => PayoutToolID
-    }.
+    };
+
+decode_shop_modification({payout_schedule_modification, #payproc_ScheduleModification{
+    schedule = ScheduleRef
+}}) ->
+    genlib_map:compact(#{
+        <<"shopModificationType">> => <<"ShopPayoutScheduleChange">>,
+        <<"scheduleID">> => decode_schedule_ref(ScheduleRef)
+    }).
 
 decode_shop_params(#payproc_ShopParams{
     location =  Location,
@@ -3736,6 +3777,11 @@ decode_currency(#domain_CurrencyRef{
 }) ->
     SymbolicCode.
 
+encode_optional_currency(SymbolicCode) when is_binary(SymbolicCode) ->
+    encode_currency(SymbolicCode);
+encode_optional_currency(undefined) ->
+    undefined.
+
 encode_currency(SymbolicCode) ->
     #domain_CurrencyRef{
         symbolic_code = SymbolicCode
@@ -3887,6 +3933,57 @@ decode_customer_binding_status({Status, StatusInfo}) ->
         <<"status">> => genlib:to_binary(Status),
         <<"error">> => Error
     }.
+
+encode_optional_payout_method('BankAccount') ->
+    #domain_PayoutMethodRef{
+        id = russian_bank_account
+    };
+encode_optional_payout_method('InternationalBankAccount') ->
+    #domain_PayoutMethodRef{
+        id = international_bank_account
+    };
+encode_optional_payout_method(undefined) ->
+    undefined.
+
+decode_payout_method(#domain_PayoutMethodRef{id = russian_bank_account}) ->
+    <<"BankAccount">>;
+decode_payout_method(#domain_PayoutMethodRef{id = international_bank_account}) ->
+    <<"InternationalBankAccount">>.
+
+decode_payout_methods_selector({value, Val}) when is_list(Val) ->
+    lists:map(fun decode_payout_method/1, Val);
+decode_payout_methods_selector(_) ->
+    [].
+
+decode_payout_schedules_selector({value, Val}) when is_list(Val) ->
+    lists:map(fun decode_schedule_ref/1, Val);
+decode_payout_schedules_selector(_) ->
+    [].
+
+decode_schedule(#domain_ScheduleObject{
+    ref = #domain_ScheduleRef{
+        id = ID
+    },
+    data = #domain_Schedule{
+        name = Name,
+        description = Description
+    }
+}) ->
+    genlib_map:compact(#{
+        <<"scheduleID">> => ID,
+        <<"name">> => Name,
+        <<"description">> => Description
+    }).
+
+encode_schedule_ref(ID) when ID /= undefined ->
+    #domain_ScheduleRef{id = ID};
+encode_schedule_ref(undefined) ->
+    undefined.
+
+decode_schedule_ref(#domain_ScheduleRef{id = ID}) when ID /= undefined ->
+    ID;
+decode_schedule_ref(undefined) ->
+    undefined.
 
 -define(invpaid()      , {paid, #webhooker_InvoicePaid{}}).
 -define(invcancelled() , {cancelled, #webhooker_InvoiceCancelled{}}).
@@ -4313,6 +4410,10 @@ get_category_by_id(CategoryID, ReqCtx) ->
     CategoryRef = {category, #domain_CategoryRef{id = CategoryID}},
     capi_domain:get(CategoryRef, ReqCtx).
 
+get_schedule_by_id(ScheduleID, ReqCtx) ->
+    Ref = {schedule, #domain_ScheduleRef{id = ScheduleID}},
+    capi_domain:get(Ref, ReqCtx).
+
 collect_events(Limit, After, GetterFun, DecodeFun) ->
     collect_events([], Limit, After, GetterFun, DecodeFun).
 
@@ -4491,3 +4592,27 @@ get_default_url_lifetime() ->
         Error ->
             error(Error)
     end.
+
+compute_payment_institution_terms(PaymentInstitutionID, VS, Context, ReqCtx) ->
+    UserInfo = get_user_info(Context),
+    PartyID = get_party_id(Context),
+    prepare_party(
+        Context,
+        ReqCtx,
+        fun () ->
+            service_call(
+                party_management,
+                'ComputePaymentInstitutionTerms',
+                [UserInfo, PartyID, ?payment_institution_ref(PaymentInstitutionID), VS],
+                ReqCtx
+            )
+        end
+    ).
+
+prepare_varset(Req) ->
+    Currency = encode_optional_currency(genlib_map:get(currency, Req)),
+    PayoutMethod = encode_optional_payout_method(genlib_map:get(payoutMethod, Req)),
+    #payproc_Varset{
+        currency = Currency,
+        payout_method = PayoutMethod
+    }.
