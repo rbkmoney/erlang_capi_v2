@@ -1173,7 +1173,7 @@ process_request('GetScheduleByRef', Req, Context, ReqCtx) ->
     ScheduleID = maps:get(scheduleID, Req),
     case get_schedule_by_id(genlib:to_int(ScheduleID), ReqCtx) of
         {ok, Schedule} ->
-            Resp = decode_schedule(Schedule),
+            Resp = decode_payout_schedule(Schedule),
             {ok, {200, [], Resp}};
         {error, not_found} ->
             {404, [], general_error(<<"Schedule not found">>)}
@@ -3171,7 +3171,7 @@ decode_shop(#domain_Shop{
         <<"location">> => decode_shop_location(Location),
         <<"contractID">> => ContractID,
         <<"payoutToolID">> => PayoutToolID,
-        <<"scheduleID">> => decode_schedule_ref(ScheduleRef),
+        <<"scheduleID">> => decode_payout_schedule_ref(ScheduleRef),
         <<"account">> => decode_shop_account(ShopAccount)
     }).
 
@@ -3623,7 +3623,7 @@ decode_shop_modification({payout_schedule_modification, #payproc_ScheduleModific
 }}) ->
     genlib_map:compact(#{
         <<"shopModificationType">> => <<"ShopPayoutScheduleChange">>,
-        <<"scheduleID">> => decode_schedule_ref(ScheduleRef)
+        <<"scheduleID">> => decode_payout_schedule_ref(ScheduleRef)
     }).
 
 decode_shop_params(#payproc_ShopParams{
@@ -3956,15 +3956,15 @@ decode_payout_methods_selector(_) ->
     [].
 
 decode_payout_schedules_selector({value, Val}) when is_list(Val) ->
-    lists:map(fun decode_schedule_ref/1, Val);
+    lists:map(fun decode_payout_schedule_ref/1, Val);
 decode_payout_schedules_selector(_) ->
     [].
 
-decode_schedule(#domain_ScheduleObject{
-    ref = #domain_ScheduleRef{
+decode_payout_schedule(#domain_PayoutScheduleObject{
+    ref = #domain_PayoutScheduleRef{
         id = ID
     },
-    data = #domain_Schedule{
+    data = #domain_PayoutSchedule{
         name = Name,
         description = Description
     }
@@ -3976,13 +3976,13 @@ decode_schedule(#domain_ScheduleObject{
     }).
 
 encode_schedule_ref(ID) when ID /= undefined ->
-    #domain_ScheduleRef{id = ID};
+    #domain_PayoutScheduleRef{id = ID};
 encode_schedule_ref(undefined) ->
     undefined.
 
-decode_schedule_ref(#domain_ScheduleRef{id = ID}) when ID /= undefined ->
+decode_payout_schedule_ref(#domain_PayoutScheduleRef{id = ID}) when ID /= undefined ->
     ID;
-decode_schedule_ref(undefined) ->
+decode_payout_schedule_ref(undefined) ->
     undefined.
 
 -define(invpaid()      , {paid, #webhooker_InvoicePaid{}}).
@@ -4411,7 +4411,7 @@ get_category_by_id(CategoryID, ReqCtx) ->
     capi_domain:get(CategoryRef, ReqCtx).
 
 get_schedule_by_id(ScheduleID, ReqCtx) ->
-    Ref = {schedule, #domain_ScheduleRef{id = ScheduleID}},
+    Ref = {payout_schedule, #domain_PayoutScheduleRef{id = ScheduleID}},
     capi_domain:get(Ref, ReqCtx).
 
 collect_events(Limit, After, GetterFun, DecodeFun) ->
