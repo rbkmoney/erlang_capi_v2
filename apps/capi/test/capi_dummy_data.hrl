@@ -145,7 +145,8 @@
     status = {pending, #domain_InvoicePaymentRefundPending{}},
     created_at = ?TIMESTAMP,
     domain_revision = ?INTEGER,
-    reason = ?STRING
+    reason = ?STRING,
+    cash = ?CASH
 }).
 
 -define(CONTRACT, #domain_Contract{
