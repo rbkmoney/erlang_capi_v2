@@ -1218,9 +1218,9 @@ get_category_by_ref_ok_test(Config) ->
 get_payment_institutions(Config) ->
     mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
     {ok, [_Something]} = capi_client_payment_institutions:get_payment_institutions(?config(context, Config)),
-    {ok, []} = capi_client_payment_institutions:get_payment_institutions(?config(context, Config), undefined, <<"live">>),
+    {ok, []} = capi_client_payment_institutions:get_payment_institutions(?config(context, Config), <<"RUS">>, <<"live">>),
     {ok, [#{<<"realm">> := <<"test">>}]} =
-        capi_client_payment_institutions:get_payment_institutions(?config(context, Config), undefined, <<"test">>).
+        capi_client_payment_institutions:get_payment_institutions(?config(context, Config), <<"RUS">>, <<"test">>).
 
 -spec get_payment_institution_by_ref(config()) ->
     _.
