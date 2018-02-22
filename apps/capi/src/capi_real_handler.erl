@@ -1313,7 +1313,9 @@ process_request('CreateClaim', Req, Context, ReqCtx) ->
                     #payproc_ChangesetConflict{} ->
                         {ok, {400, [], logic_error(changesetConflict, <<"Changeset conflict">>)}};
                     #payproc_InvalidChangeset{} ->
-                        {ok, {400, [], logic_error(invalidChangeset, <<"Invalid changeset">>)}}
+                        {ok, {400, [], logic_error(invalidChangeset, <<"Invalid changeset">>)}};
+                    #'InvalidRequest'{errors = Errors} ->
+                        {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
                 end
         end
     catch
