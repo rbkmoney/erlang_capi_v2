@@ -13,7 +13,7 @@
  {<<"cowlib">>,{pkg,<<"cowlib">>,<<"1.0.2">>},1},
  {<<"dmsl">>,
   {git,"git@github.com:rbkmoney/damsel.git",
-       {ref,"2891c9a681858059e2e57e2605bd1fa5cf201145"}},
+       {ref,"8ad5f76f81f7986eee13fc03d8cce5382d521bc0"}},
   0},
  {<<"genlib">>,
   {git,"https://github.com/rbkmoney/genlib.git",

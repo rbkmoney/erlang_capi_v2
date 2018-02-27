@@ -151,7 +151,7 @@
 
 -define(CONTRACT, #domain_Contract{
     id = ?STRING,
-    contractor = {registered_user, #domain_RegisteredUser{email = ?STRING}},
+    contractor = ?CONTRACTOR,
     payment_institution = #domain_PaymentInstitutionRef{id = ?INTEGER},
     created_at = ?TIMESTAMP,
     valid_since = ?TIMESTAMP,
@@ -161,6 +161,8 @@
     adjustments = [?CONTRACT_ADJUSTMENT],
     payout_tools = [?PAYOUT_TOOL(?RUSSIAN_BANK_ACCOUNT), ?PAYOUT_TOOL(?INTERNATIONAL_BANK_ACCOUNT)]
 }).
+
+-define(CONTRACTOR, {registered_user, #domain_RegisteredUser{email = ?STRING}}).
 
 -define(BLOCKING, {unblocked, #domain_Unblocked{
         reason = ?STRING,
@@ -174,11 +176,15 @@
     created_at = ?TIMESTAMP,
     blocking = ?BLOCKING,
     suspension = ?SUSPENTION,
-    details = #domain_ShopDetails{name = ?STRING},
-    location = {url, ?STRING},
+    details = ?SHOP_DETAILS,
+    location = ?SHOP_LOCATION,
     category = #domain_CategoryRef{id = ?INTEGER},
     contract_id = ?STRING
 }).
+
+-define(SHOP_LOCATION, {url, ?STRING}).
+
+-define(SHOP_DETAILS, #domain_ShopDetails{name = ?STRING}).
 
 -define(PARTY, #domain_Party{
     id = ?STRING,
@@ -197,8 +203,96 @@
     created_at = ?TIMESTAMP,
     updated_at = ?TIMESTAMP,
     status = {pending, #payproc_ClaimPending{}},
-    changeset = []
+    changeset = ?CLAIM_CHANGESET
 }).
+
+-define(CLAIM_CHANGESET, [
+    %% contract modifications
+    {contract_modification, #payproc_ContractModificationUnit{
+        id = ?STRING,
+        modification = {creation, #payproc_ContractParams{
+            contractor = ?CONTRACTOR,
+            payment_institution = #domain_PaymentInstitutionRef{id = ?INTEGER}
+        }}
+    }},
+    {contract_modification, #payproc_ContractModificationUnit{
+        id = ?STRING,
+        modification = {termination, #payproc_ContractTermination{
+            reason = ?STRING
+        }}
+    }},
+    {contract_modification, #payproc_ContractModificationUnit{
+        id = ?STRING,
+        modification = {adjustment_modification, #payproc_ContractAdjustmentModificationUnit{
+            adjustment_id = ?STRING,
+            modification = {creation, #payproc_ContractAdjustmentParams{
+                template = #domain_ContractTemplateRef{id = ?INTEGER}
+            }}
+        }}
+    }},
+    {contract_modification, #payproc_ContractModificationUnit{
+        id = ?STRING,
+        modification = {payout_tool_modification, #payproc_PayoutToolModificationUnit{
+            payout_tool_id = ?STRING,
+            modification = {creation, #payproc_PayoutToolParams{
+                currency = #domain_CurrencyRef{symbolic_code = ?RUB},
+                tool_info = ?RUSSIAN_BANK_ACCOUNT
+            }}
+        }}
+    }},
+    {contract_modification, #payproc_ContractModificationUnit{
+        id = ?STRING,
+        modification = {legal_agreement_binding, #domain_LegalAgreement{
+            signed_at = ?TIMESTAMP,
+            legal_agreement_id = ?STRING
+        }}
+    }},
+    %% shop modifications
+    {shop_modification, #payproc_ShopModificationUnit{
+        id = ?STRING,
+        modification = {creation, #payproc_ShopParams{
+            location =  ?SHOP_LOCATION,
+            details = ?SHOP_DETAILS,
+            contract_id = ?STRING,
+            payout_tool_id = ?STRING
+        }}
+    }},
+    {shop_modification, #payproc_ShopModificationUnit{
+        id = ?STRING,
+        modification = {category_modification, #domain_CategoryRef{id = ?INTEGER}}
+    }},
+    {shop_modification, #payproc_ShopModificationUnit{
+        id = ?STRING,
+        modification = {details_modification, ?SHOP_DETAILS}
+    }},
+    {shop_modification, #payproc_ShopModificationUnit{
+        id = ?STRING,
+        modification = {contract_modification, #payproc_ShopContractModification{
+            contract_id = ?STRING,
+            payout_tool_id = ?STRING
+        }}
+    }},
+    {shop_modification, #payproc_ShopModificationUnit{
+        id = ?STRING,
+        modification = {payout_tool_modification, ?STRING}
+    }},
+    {shop_modification, #payproc_ShopModificationUnit{
+        id = ?STRING,
+        modification = {location_modification, ?SHOP_LOCATION}
+    }},
+    {shop_modification, #payproc_ShopModificationUnit{
+        id = ?STRING,
+        modification = {shop_account_creation, #payproc_ShopAccountParams{
+            currency = #domain_CurrencyRef{symbolic_code = ?RUB}
+        }}
+    }},
+    {shop_modification, #payproc_ShopModificationUnit{
+        id = ?STRING,
+        modification = {payout_schedule_modification, #payproc_ScheduleModification{
+            schedule = #domain_PayoutScheduleRef{id = ?INTEGER}
+        }}
+    }}
+]).
 
 -define(ADJUSTMENT, #domain_InvoicePaymentAdjustment{
     id = ?STRING,
@@ -364,6 +458,26 @@
                 description = ?STRING
             }
         }},
+        {payout_schedule, #domain_PayoutScheduleRef{id = ?INTEGER}} =>
+        {payout_schedule, #domain_PayoutScheduleObject{
+            ref = #domain_PayoutScheduleRef{id = ?INTEGER},
+            data = #domain_PayoutSchedule{
+                name = ?STRING,
+                description = ?STRING,
+                schedule = #'Schedule'{
+                    year = {every, #'ScheduleEvery'{}},
+                    month = {every, #'ScheduleEvery'{}},
+                    day_of_month = {every, #'ScheduleEvery'{}},
+                    day_of_week = {every, #'ScheduleEvery'{}},
+                    hour = {every, #'ScheduleEvery'{}},
+                    minute = {every, #'ScheduleEvery'{}},
+                    second = {every, #'ScheduleEvery'{}}
+                },
+                policy = #domain_PayoutCompilationPolicy{
+                    assets_freeze_for = #'TimeSpan'{}
+                }
+            }
+        }},
         {payment_institution, #domain_PaymentInstitutionRef{id = ?INTEGER}} =>
         {payment_institution, #domain_PaymentInstitutionObject{
             ref = #domain_PaymentInstitutionRef{id = ?INTEGER},
@@ -413,7 +527,9 @@
     source =  {invoice_id, ?STRING}
 }).
 
--define(TERM_SET, #domain_TermSet{}).
+-define(TERM_SET, #domain_TermSet{payouts = ?PAYOUTS_SERVICE_TERMS}).
+
+-define(PAYOUTS_SERVICE_TERMS, #domain_PayoutsServiceTerms{}).
 
 -define(CUSTOMER, #payproc_Customer{
     id = ?STRING,
