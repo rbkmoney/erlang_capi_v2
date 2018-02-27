@@ -2701,11 +2701,11 @@ decode_payment_status({Status, StatusInfo}) ->
 
 decode_operation_failure({operation_timeout, _}) ->
     logic_error(timeout, <<"timeout">>);
-decode_operation_failure({external_failure, #domain_ExternalFailure{
+decode_operation_failure({failure, #domain_Failure{
     code = Code,
-    description = Description
+    reason = Reason
 }}) ->
-    logic_error(Code, Description).
+    logic_error(Code, Reason).
 
 decode_stat_payment(#merchstat_StatPayment{
     id = PaymentID,
@@ -2847,9 +2847,9 @@ merchstat_to_domain({Status, #merchstat_InvoicePaymentFailed{
     }}
 }}) ->
     {Status, #domain_InvoicePaymentFailed{
-        failure = {external_failure, #domain_ExternalFailure{
+        failure = {failure, #domain_Failure{
             code = Code,
-            description = Description
+            reason = Description
         }}
     }};
 merchstat_to_domain({Status, #merchstat_InvoicePaymentFailed{
