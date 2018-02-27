@@ -4,6 +4,10 @@
 -export([get_payment_institutions/3]).
 -export([get_payment_institution_by_ref/2]).
 -export([get_payment_institution_payment_terms/2]).
+-export([get_payment_institution_payout_methods/2]).
+-export([get_payment_institution_payout_methods/3]).
+-export([get_payment_institution_payout_schedules/2]).
+-export([get_payment_institution_payout_schedules/4]).
 
 -type context() :: capi_client_lib:context().
 
@@ -45,4 +49,41 @@ get_payment_institution_payment_terms(Context, PaymentInstitutionID) ->
     },
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
     Response = swag_client_payment_institutions_api:get_payment_institution_payment_terms(Url, PreparedParams, Opts),
+    capi_client_lib:handle_response(Response).
+
+-spec get_payment_institution_payout_methods(context(), term()) -> {ok, term()} | {error, term()}.
+get_payment_institution_payout_methods(Context, PaymentInstitutionID) ->
+    get_payment_institution_payout_methods(Context, PaymentInstitutionID, undefined).
+
+-spec get_payment_institution_payout_methods(context(), term(), term()) -> {ok, term()} | {error, term()}.
+get_payment_institution_payout_methods(Context, PaymentInstitutionID, Currency) ->
+    Params = #{
+        binding => #{
+            <<"paymentInstitutionID">> => genlib:to_list(PaymentInstitutionID)
+        },
+        qs_val => genlib_map:compact(#{
+            currency => Currency
+        })
+    },
+    {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
+    Response = swag_client_payment_institutions_api:get_payment_institution_payout_methods(Url, PreparedParams, Opts),
+    capi_client_lib:handle_response(Response).
+
+-spec get_payment_institution_payout_schedules(context(), term()) -> {ok, term()} | {error, term()}.
+get_payment_institution_payout_schedules(Context, PaymentInstitutionID) ->
+    get_payment_institution_payout_schedules(Context, PaymentInstitutionID, undefined, undefined).
+
+-spec get_payment_institution_payout_schedules(context(), term(), term(), term()) -> {ok, term()} | {error, term()}.
+get_payment_institution_payout_schedules(Context, PaymentInstitutionID, Currency, Method) ->
+    Params = #{
+        binding => #{
+            <<"paymentInstitutionID">> => genlib:to_list(PaymentInstitutionID)
+        },
+        qs_val => genlib_map:compact(#{
+            currency => Currency,
+            payoutMethod => Method
+        })
+    },
+    {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
+    Response = swag_client_payment_institutions_api:get_payment_institution_payout_schedules(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
