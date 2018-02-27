@@ -1341,7 +1341,9 @@ process_request('CreateClaim', Req, Context, ReqCtx) ->
                     #payproc_ChangesetConflict{} ->
                         {ok, {400, [], logic_error(changesetConflict, <<"Changeset conflict">>)}};
                     #payproc_InvalidChangeset{} ->
-                        {ok, {400, [], logic_error(invalidChangeset, <<"Invalid changeset">>)}}
+                        {ok, {400, [], logic_error(invalidChangeset, <<"Invalid changeset">>)}};
+                    #'InvalidRequest'{errors = Errors} ->
+                        {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
                 end
         end
     catch
@@ -2310,9 +2312,12 @@ encode_payment_institution_ref(Ref) ->
     }.
 
 encode_residence(Residence) when is_binary(Residence) ->
-    binary_to_existing_atom(Residence, utf8);
+    list_to_existing_atom(string:to_lower(binary_to_list(Residence)));
 encode_residence(undefined) ->
     undefined.
+
+decode_residence(Residence) when is_atom(Residence) ->
+    list_to_binary(string:to_upper(atom_to_list(Residence))).
 
 encode_flow(#{<<"type">> := <<"PaymentFlowInstant">>}) ->
     {instant, #payproc_InvoicePaymentParamsFlowInstant{}};
@@ -3266,7 +3271,7 @@ decode_payment_institution_obj(#domain_PaymentInstitutionObject{
         <<"name">> => Name,
         <<"description">> => Description,
         <<"realm">> => genlib:to_binary(Realm),
-        <<"residences">> => [list_to_binary(string:to_upper(atom_to_list(R))) || R <- ordsets:to_list(Residences)]
+        <<"residences">> => [decode_residence(R) || R <- ordsets:to_list(Residences)]
     }).
 
 is_blocked({blocked, _}) ->
