@@ -320,11 +320,17 @@ get_operation_access('GetCategories'             , _) ->
     [];
 get_operation_access('GetCategoryByRef'          , _) ->
     [];
+get_operation_access('GetScheduleByRef'          , _) ->
+    [];
 get_operation_access('GetPaymentInstitutions'    , _) ->
     [];
 get_operation_access('GetPaymentInstitutionByRef', _) ->
     [];
 get_operation_access('GetPaymentInstitutionPaymentTerms', _) ->
+    [{[party], read}];
+get_operation_access('GetPaymentInstitutionPayoutMethods', _) ->
+    [{[party], read}];
+get_operation_access('GetPaymentInstitutionPayoutSchedules', _) ->
     [{[party], read}];
 get_operation_access('GetLocationsNames'         , _) ->
     [].
