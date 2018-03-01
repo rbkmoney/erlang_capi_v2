@@ -2539,11 +2539,11 @@ decode_payment_change(
     }},
     _Context
 ) ->
-    #{changes => #{
+    #{
         <<"changeType">> => <<"PaymentInteractionRequested">>,
         <<"paymentID">> => PaymentID,
         <<"userInteraction">> => decode_user_interaction(Interaction)
-    }};
+    };
 
 decode_payment_change(
     _InvoiceID,
