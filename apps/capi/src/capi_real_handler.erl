@@ -3387,7 +3387,8 @@ decode_refund_for_event(
     #{req_ctx := ReqCtx, user_info := UserInfo}
 ) ->
     % Need to fix it!
-    {ok, #domain_InvoicePayment{cost = Cash}} = get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
+    {ok, #payproc_InvoicePayment{payment = #domain_InvoicePayment{cost = Cash}}} =
+        get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
     decode_refund(Refund#domain_InvoicePaymentRefund{cash = Cash}).
 
 decode_refund(#domain_InvoicePaymentRefund{
