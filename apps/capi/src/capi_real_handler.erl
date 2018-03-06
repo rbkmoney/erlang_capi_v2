@@ -291,11 +291,16 @@ process_request('GetInvoiceEvents', Req, Context, ReqCtx) ->
             ReqCtx
         )
     end,
+    DecodingContext = #{
+        user_info => UserInfo,
+        req_ctx => ReqCtx
+    },
     Result  = collect_events(
         maps:get(limit, Req),
         genlib_map:get(eventID, Req),
         GetterFun,
-        fun decode_invoice_event/1
+        fun decode_invoice_event/2,
+        DecodingContext
     ),
     case Result of
         {ok, Events} when is_list(Events) ->
@@ -558,8 +563,10 @@ process_request('GetLocationsNames', Req, _Context, ReqCtx) ->
 process_request('CreateRefund', Req, Context, ReqCtx) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
+    RefundParams = maps:get('RefundParams', Req),
     Params = #payproc_InvoicePaymentRefundParams{
-        reason = genlib_map:get(reason, Req)
+        reason = genlib_map:get(<<"reason">>, RefundParams),
+        cash = encode_optional_cash(RefundParams)
     },
     UserInfo = get_user_info(Context),
     Result = service_call(
@@ -584,13 +591,13 @@ process_request('CreateRefund', Req, Context, ReqCtx) ->
                     {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
                 #payproc_InvalidPaymentStatus{} ->
                     {ok, {400, [], logic_error(invalidInvoicePaymentStatus, <<"Invalid invoice payment status">>)}};
-                #payproc_InvoicePaymentRefundPending{} ->
-                    {ok, {400, [], logic_error(invoicePaymentRefundPending, <<"Invoice payment refund pending">>)}};
                 #payproc_InsufficientAccountBalance{} ->
                     {ok, {400, [], logic_error(
                         insufficentAccountBalance,
                         <<"Operation can not be conducted because of insufficient funds on the merchant account">>
                     )}};
+                #payproc_InvoicePaymentAmountExceeded{} ->
+                    {ok, {400, [], logic_error(invoicePaymentAmountExceeded, <<"Payment amount exceeded">>)}};
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
             end
@@ -1640,7 +1647,8 @@ process_request('GetCustomerEvents', Req, _Context, ReqCtx) ->
         maps:get(limit, Req),
         genlib_map:get(eventID, Req),
         GetterFun,
-        fun decode_customer_event/1
+        fun decode_customer_event/2,
+        undefined
     ),
     case Result of
         {ok, Events} when is_list(Events) ->
@@ -2443,13 +2451,18 @@ encode_customer_binding_params(#{
         }
     }.
 
+encode_optional_cash(Params = #{<<"amount">> := _, <<"currency">> := _}) ->
+    encode_cash(Params);
+encode_optional_cash(_) ->
+    undefined.
+
 decode_invoice_event(#payproc_Event{
     id = EventID,
     created_at = CreatedAt,
     payload =  {invoice_changes, InvoiceChanges},
     source =  {invoice_id, InvoiceID} %%@TODO deal with Party source
-}) ->
-    Changes = decode_invoice_changes(InvoiceID, InvoiceChanges),
+}, Context) ->
+    Changes = decode_invoice_changes(InvoiceID, InvoiceChanges, Context),
     case Changes of
         [_Something | _] ->
             {true, #{
@@ -2461,10 +2474,10 @@ decode_invoice_event(#payproc_Event{
             false
     end.
 
-decode_invoice_changes(InvoiceID, InvoiceChanges) when is_list(InvoiceChanges) ->
+decode_invoice_changes(InvoiceID, InvoiceChanges, Context) when is_list(InvoiceChanges) ->
     lists:foldl(
         fun(Change, Acc) ->
-            case decode_invoice_change(InvoiceID, Change) of
+            case decode_invoice_change(InvoiceID, Change, Context) of
                 #{} = Decoded ->
                     Acc ++ [Decoded];
                 undefined ->
@@ -2475,19 +2488,25 @@ decode_invoice_changes(InvoiceID, InvoiceChanges) when is_list(InvoiceChanges) -
         InvoiceChanges
     ).
 
-decode_invoice_change(_, {
-    invoice_created,
-    #payproc_InvoiceCreated{invoice = Invoice}
-}) ->
+decode_invoice_change(
+    _,
+    {invoice_created, #payproc_InvoiceCreated{
+        invoice = Invoice
+    }},
+    _Context
+) ->
     #{
         <<"changeType">> => <<"InvoiceCreated">>,
         <<"invoice">> => decode_invoice(Invoice)
     };
 
-decode_invoice_change(_, {
-    invoice_status_changed,
-    #payproc_InvoiceStatusChanged{status = {Status, _}}
-}) ->
+decode_invoice_change(
+    _,
+    {invoice_status_changed, #payproc_InvoiceStatusChanged{
+        status = {Status, _}
+    }},
+    _Context
+) ->
     #{
         <<"changeType">> => <<"InvoiceStatusChanged">>,
         <<"status">> => genlib:to_binary(Status)
@@ -2498,11 +2517,12 @@ decode_invoice_change(
     {invoice_payment_change, #payproc_InvoicePaymentChange{
         id = PaymentID,
         payload = Change
-    }}
+    }},
+    Context
 ) ->
-    decode_payment_change(InvoiceID, PaymentID, Change);
+    decode_payment_change(InvoiceID, PaymentID, Change, Context);
 
-decode_invoice_change(_, _) ->
+decode_invoice_change(_, _, _) ->
     undefined.
 
 decode_payment_change(
@@ -2510,7 +2530,8 @@ decode_payment_change(
     _PaymentID,
     {invoice_payment_started, #payproc_InvoicePaymentStarted{
         payment = Payment
-    }}
+    }},
+    _Context
 ) ->
     #{
         <<"changeType">> => <<"PaymentStarted">>,
@@ -2526,7 +2547,8 @@ decode_payment_change(
                 interaction = Interaction
             }
         }
-    }}
+    }},
+    _Context
 ) ->
     #{
         <<"changeType">> => <<"PaymentInteractionRequested">>,
@@ -2539,7 +2561,8 @@ decode_payment_change(
     PaymentID,
     {invoice_payment_status_changed, #payproc_InvoicePaymentStatusChanged{
         status = Status
-    }}
+    }},
+    _Context
 ) ->
     genlib_map:compact(maps:merge(
         #{
@@ -2550,37 +2573,42 @@ decode_payment_change(
     ));
 
 decode_payment_change(
-    _InvoiceID,
+    InvoiceID,
     PaymentID,
     {invoice_payment_refund_change, #payproc_InvoicePaymentRefundChange{
         id = RefundID,
         payload = Change
-    }}
+    }},
+    Context
 ) ->
-    decode_refund_change(PaymentID, RefundID, Change);
+    decode_refund_change(InvoiceID, PaymentID, RefundID, Change, Context);
 
-decode_payment_change(_, _, _) ->
+decode_payment_change(_, _, _, _) ->
     undefined.
 
 decode_refund_change(
+    InvoiceID,
     PaymentID,
     _RefundID,
     {invoice_payment_refund_created, #payproc_InvoicePaymentRefundCreated{
         refund = Refund
-    }}
+    }},
+    Context
 ) ->
     #{
         <<"changeType">> => <<"RefundStarted">>,
         <<"paymentID">> => PaymentID,
-        <<"refund">> => decode_refund(Refund)
+        <<"refund">> => decode_refund_for_event(Refund, InvoiceID, PaymentID, Context)
     };
 
 decode_refund_change(
+    _InvoiceID,
     PaymentID,
     RefundID,
     {invoice_payment_refund_status_changed, #payproc_InvoicePaymentRefundStatusChanged{
         status = Status
-    }}
+    }},
+    _Context
 ) ->
     genlib_map:compact(maps:merge(
         #{
@@ -2591,7 +2619,7 @@ decode_refund_change(
         decode_refund_status(Status)
     ));
 
-decode_refund_change(_, _, _) ->
+decode_refund_change(_, _, _, _, _) ->
     undefined.
 
 decode_invoice_payment(InvoiceID, #payproc_InvoicePayment{
@@ -3345,17 +3373,41 @@ decode_stat_invoice(#merchstat_StatInvoice{
 decode_stat_invoice_status(Status) ->
     decode_invoice_status(merchstat_to_domain(Status)).
 
+decode_refund_for_event(
+    #domain_InvoicePaymentRefund{cash = #domain_Cash{}} = Refund,
+    _InvoiceID,
+    _PaymentID,
+    _Context
+) ->
+    decode_refund(Refund);
+decode_refund_for_event(
+    #domain_InvoicePaymentRefund{cash = undefined} = Refund,
+    InvoiceID,
+    PaymentID,
+    #{req_ctx := ReqCtx, user_info := UserInfo}
+) ->
+    % Need to fix it!
+    {ok, #payproc_InvoicePayment{payment = #domain_InvoicePayment{cost = Cash}}} =
+        get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
+    decode_refund(Refund#domain_InvoicePaymentRefund{cash = Cash}).
+
 decode_refund(#domain_InvoicePaymentRefund{
     id = ID,
     status = Status,
     created_at = CreatedAt,
-    reason = Reason
+    reason = Reason,
+    cash = #domain_Cash{
+        amount = Amount,
+        currency = Currency
+    }
 }) ->
     genlib_map:compact(maps:merge(
         #{
             <<"id">> => ID,
             <<"createdAt">> => CreatedAt,
-            <<"reason">> => Reason
+            <<"reason">> => Reason,
+            <<"amount">> => Amount,
+            <<"currency">> => decode_currency(Currency)
         },
         decode_refund_status(Status)
     )).
@@ -3827,7 +3879,7 @@ decode_customer_event(#payproc_Event{
     created_at = CreatedAt,
     source =  {customer_id, _},
     payload =  {customer_changes, CustomerChanges}
-}) ->
+}, _) ->
     Changes = decode_customer_changes(CustomerChanges),
     case Changes of
         [_Something | _] ->
@@ -4419,16 +4471,16 @@ get_schedule_by_id(ScheduleID, ReqCtx) ->
     Ref = {payout_schedule, #domain_PayoutScheduleRef{id = ScheduleID}},
     capi_domain:get(Ref, ReqCtx).
 
-collect_events(Limit, After, GetterFun, DecodeFun) ->
-    collect_events([], Limit, After, GetterFun, DecodeFun).
+collect_events(Limit, After, GetterFun, DecodeFun, DecodingContext) ->
+    collect_events([], Limit, After, GetterFun, DecodeFun, DecodingContext).
 
-collect_events(Collected, 0, _, _, _) ->
+collect_events(Collected, 0, _, _, _, _) ->
     {ok, Collected};
 
-collect_events(Collected0, Left, After, GetterFun, DecodeFun) when Left > 0 ->
+collect_events(Collected0, Left, After, GetterFun, DecodeFun, DecodingContext) when Left > 0 ->
     case get_events(Left, After, GetterFun) of
         {ok, Events} ->
-            Filtered = decode_and_filter_events(DecodeFun, Events),
+            Filtered = decode_and_filter_events(DecodeFun, DecodingContext, Events),
             Collected = Collected0 ++ Filtered,
             case length(Events) of
                 Left ->
@@ -4437,7 +4489,8 @@ collect_events(Collected0, Left, After, GetterFun, DecodeFun) when Left > 0 ->
                         Left - length(Filtered),
                         get_last_event_id(Events),
                         GetterFun,
-                        DecodeFun
+                        DecodeFun,
+                        DecodingContext
                     );
                 N when N < Left ->
                     {ok, Collected}
@@ -4446,8 +4499,19 @@ collect_events(Collected0, Left, After, GetterFun, DecodeFun) when Left > 0 ->
             Error
     end.
 
-decode_and_filter_events(DecodeFun, Events) ->
-    lists:filtermap(DecodeFun, Events).
+decode_and_filter_events(DecodeFun, DecodingContext, Events) ->
+    lists:foldr(
+        fun(Event, Acc) ->
+             case DecodeFun(Event, DecodingContext) of
+                {true, Ev} ->
+                    [Ev|Acc];
+                false ->
+                    Acc
+            end
+        end,
+        [],
+        Events
+    ).
 
 get_last_event_id(Events) ->
     #payproc_Event{

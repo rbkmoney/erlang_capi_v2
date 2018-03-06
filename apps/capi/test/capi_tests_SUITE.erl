@@ -59,6 +59,7 @@
     get_payments_ok_test/1,
     get_payment_by_id_ok_test/1,
     create_refund/1,
+    create_partial_refund/1,
     get_refund_by_id/1,
     get_refunds/1,
     cancel_payment_ok_test/1,
@@ -213,6 +214,7 @@ groups() ->
                 rescind_invoice_ok_test,
                 fulfill_invoice_ok_test,
                 create_refund,
+                create_partial_refund,
                 get_refund_by_id,
                 get_refunds,
                 update_invoice_template_ok_test,
@@ -705,7 +707,19 @@ get_payment_by_id_ok_test(Config) ->
     _.
 create_refund(Config) ->
     mock_services([{invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end}], Config),
-    {ok, _} = capi_client_payments:create_refund(?config(context, Config), ?STRING, ?STRING, <<>>).
+    Req = #{<<"reason">> => ?STRING},
+    {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
+
+-spec create_partial_refund(config()) ->
+    _.
+create_partial_refund(Config) ->
+    mock_services([{invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end}], Config),
+    Req = #{
+        <<"reason">> => ?STRING,
+        <<"currency">> => ?RUB,
+        <<"amount">> => ?INTEGER
+    },
+    {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec get_refund_by_id(config()) ->
     _.
