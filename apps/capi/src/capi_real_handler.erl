@@ -564,11 +564,17 @@ process_request('CreateRefund', Req, Context, ReqCtx) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
     RefundParams = maps:get('RefundParams', Req),
+    UserInfo = get_user_info(Context),
+    EncodingContext = #{
+        req_ctx => ReqCtx,
+        user_info => UserInfo,
+        invoice_id => InvoiceID,
+        payment_id => PaymentID
+    },
     Params = #payproc_InvoicePaymentRefundParams{
         reason = genlib_map:get(<<"reason">>, RefundParams),
-        cash = encode_optional_cash(RefundParams)
+        cash = encode_optional_refund_cash(RefundParams, EncodingContext)
     },
-    UserInfo = get_user_info(Context),
     Result = service_call(
         invoicing,
         'RefundPayment',
@@ -2440,9 +2446,24 @@ encode_customer_binding_params(#{
         }
     }.
 
-encode_optional_cash(Params = #{<<"amount">> := _, <<"currency">> := _}) ->
+encode_optional_refund_cash(Params = #{<<"amount">> := _, <<"currency">> := _}, _) ->
     encode_cash(Params);
-encode_optional_cash(_) ->
+encode_optional_refund_cash(
+    Params = #{<<"amount">> := _},
+    #{
+        req_ctx := ReqCtx,
+        user_info := UserInfo,
+        invoice_id := InvoiceID,
+        payment_id := PaymentID
+    }
+) ->
+    {ok, #payproc_InvoicePayment{
+        payment = #domain_InvoicePayment{
+            cost = #domain_Cash{currency = Currency}
+        }
+    }} = get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
+    encode_cash(Params#{<<"currency">> => Currency});
+encode_optional_refund_cash(_, _) ->
     undefined.
 
 decode_invoice_event(#payproc_Event{
