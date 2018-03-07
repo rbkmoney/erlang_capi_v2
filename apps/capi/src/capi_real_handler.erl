@@ -2462,7 +2462,7 @@ encode_optional_refund_cash(
             cost = #domain_Cash{currency = Currency}
         }
     }} = get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
-    encode_cash(Params#{<<"currency">> => Currency});
+    encode_cash(Params#{<<"currency">> => decode_currency(Currency)});
 encode_optional_refund_cash(_, _) ->
     undefined.
 
