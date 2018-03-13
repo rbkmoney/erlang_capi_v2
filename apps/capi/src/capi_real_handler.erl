@@ -3505,7 +3505,7 @@ decode_stat_payout_tool_details(PayoutType) ->
     decode_payout_tool_details(merchstat_to_domain(PayoutType)).
 
 decode_payout_tool_details({bank_card, V}) ->
-    decode_bank_card_details(V, #{<<"detailsType">> => <<"Payout">>});
+    decode_bank_card_details(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankCard">>});
 decode_payout_tool_details({russian_bank_account, V}) ->
     decode_russian_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankAccount">>});
 decode_payout_tool_details({international_bank_account, V}) ->
