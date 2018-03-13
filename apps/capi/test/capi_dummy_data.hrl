@@ -357,6 +357,12 @@
 
 -define(STAT_RESPONSE_RECORDS, ?STAT_RESPONSE({records, [?STAT_RECORD]})).
 
+-define(STAT_RESPONSE_PAYOUTS, ?STAT_RESPONSE({payouts, [
+    ?STAT_PAYOUT({bank_card, #merchstat_PayoutCard{card = ?STAT_BANK_CARD}}),
+    ?STAT_PAYOUT({bank_account, ?STAT_PAYOUT_BANK_ACCOUNT_RUS}),
+    ?STAT_PAYOUT({bank_account, ?STAT_PAYOUT_BANK_ACCOUNT_INT})
+]})).
+
 -define(STAT_INVOICE, #merchstat_StatInvoice{
     id = ?STRING,
     owner_id = ?STRING,
@@ -383,12 +389,7 @@
     fee = ?INTEGER,
     currency_symbolic_code = ?RUB,
     payer = {payment_resource, #merchstat_PaymentResourcePayer{
-            payment_tool = {bank_card, #merchstat_BankCard{
-            token = ?STRING,
-            payment_system = visa,
-            bin = ?STRING,
-            masked_pan = <<"TEST1234">>
-        }},
+            payment_tool = {bank_card, ?STAT_BANK_CARD},
         ip_address = ?STRING,
         fingerprint = ?STRING,
         phone_number = ?STRING,
@@ -410,6 +411,58 @@
     <<"unic_count">> => ?INTEGER_BINARY,
     <<"total_count">> => ?INTEGER_BINARY,
     <<"payment_system">> => <<"visa">>
+}).
+
+-define(STAT_PAYOUT(Type), #merchstat_StatPayout{
+    id = ?STRING,
+    party_id = ?STRING,
+    shop_id = ?STRING,
+    created_at = ?TIMESTAMP,
+    status = {paid, #merchstat_PayoutPaid{}},
+    amount = ?INTEGER,
+    fee = ?INTEGER,
+    currency_symbolic_code = ?RUB,
+    type = Type,
+    cash_flow_descriptions = [?CASH_FLOW_DESCRIPTION]
+}).
+
+-define(STAT_PAYOUT_BANK_ACCOUNT_RUS, {russian_payout_account, #merchstat_RussianPayoutAccount{
+    bank_account = #merchstat_RussianBankAccount{
+        account = <<"12345678901234567890">>,
+        bank_name = ?STRING,
+        bank_post_account = <<"12345678901234567890">>,
+        bank_bik = <<"123456789">>
+    },
+    inn = ?STRING,
+    purpose = ?STRING
+}}).
+
+-define(STAT_PAYOUT_BANK_ACCOUNT_INT, {international_payout_account, #merchstat_InternationalPayoutAccount{
+    bank_account = #merchstat_InternationalBankAccount{
+        account_holder = ?STRING,
+        bank_name = ?STRING,
+        bank_address = ?STRING,
+        iban = <<"GR1601101250000000012300695">>,
+        bic = <<"DEUTDEFF500">>
+    },
+    purpose = ?STRING
+}}).
+
+-define(STAT_BANK_CARD, #merchstat_BankCard{
+    token = ?STRING,
+    payment_system = visa,
+    bin = ?STRING,
+    masked_pan = <<"TEST1234">>
+}).
+
+-define(CASH_FLOW_DESCRIPTION, #merchstat_CashFlowDescription{
+    amount = ?INTEGER,
+    fee = ?INTEGER,
+    currency_symbolic_code = ?RUB,
+    from_time = ?TIMESTAMP,
+    to_time = ?TIMESTAMP,
+    cash_flow_type = payment,
+    count = ?INTEGER
 }).
 
 -define(REPORT, #reports_Report{
