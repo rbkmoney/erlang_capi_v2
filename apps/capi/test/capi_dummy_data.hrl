@@ -358,9 +358,9 @@
 -define(STAT_RESPONSE_RECORDS, ?STAT_RESPONSE({records, [?STAT_RECORD]})).
 
 -define(STAT_RESPONSE_PAYOUTS, ?STAT_RESPONSE({payouts, [
-    ?STAT_PAYOUT({bank_card, #merchstat_PayoutCard{card = ?STAT_BANK_CARD}}),
-    ?STAT_PAYOUT({bank_account, ?STAT_PAYOUT_BANK_ACCOUNT_RUS}),
-    ?STAT_PAYOUT({bank_account, ?STAT_PAYOUT_BANK_ACCOUNT_INT})
+    ?STAT_PAYOUT({bank_card, #merchstat_PayoutCard{card = ?STAT_BANK_CARD}}, [?CASH_FLOW_DESCRIPTION]),
+    ?STAT_PAYOUT({bank_account, ?STAT_PAYOUT_BANK_ACCOUNT_RUS}, undefined),
+    ?STAT_PAYOUT({bank_account, ?STAT_PAYOUT_BANK_ACCOUNT_INT}, [?CASH_FLOW_DESCRIPTION])
 ]})).
 
 -define(STAT_INVOICE, #merchstat_StatInvoice{
@@ -413,7 +413,7 @@
     <<"payment_system">> => <<"visa">>
 }).
 
--define(STAT_PAYOUT(Type), #merchstat_StatPayout{
+-define(STAT_PAYOUT(Type, CashFlowDescriptions), #merchstat_StatPayout{
     id = ?STRING,
     party_id = ?STRING,
     shop_id = ?STRING,
@@ -423,7 +423,7 @@
     fee = ?INTEGER,
     currency_symbolic_code = ?RUB,
     type = Type,
-    cash_flow_descriptions = [?CASH_FLOW_DESCRIPTION]
+    cash_flow_descriptions = CashFlowDescriptions
 }).
 
 -define(STAT_PAYOUT_BANK_ACCOUNT_RUS, {russian_payout_account, #merchstat_RussianPayoutAccount{

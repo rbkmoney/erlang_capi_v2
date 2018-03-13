@@ -3519,8 +3519,10 @@ decode_payout_tool_details({russian_bank_account, V}) ->
 decode_payout_tool_details({international_bank_account, V}) ->
     decode_international_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsInternationalBankAccount">>}).
 
-decode_stat_payout_cash_flow_descriptions(CashFlowDescriptions) ->
-    [decode_stat_payout_cash_flow_description(CashFlowDescr) || CashFlowDescr <- CashFlowDescriptions].
+decode_stat_payout_cash_flow_descriptions(CashFlowDescriptions) when is_list(CashFlowDescriptions) ->
+    [decode_stat_payout_cash_flow_description(CashFlowDescr) || CashFlowDescr <- CashFlowDescriptions];
+decode_stat_payout_cash_flow_descriptions(undefined) ->
+    undefined.
 
 decode_stat_payout_cash_flow_description(#merchstat_CashFlowDescription{
     amount = Amount,
