@@ -2866,17 +2866,41 @@ merchstat_to_domain({digital_wallet, #merchstat_DigitalWallet{
     }};
 merchstat_to_domain({bank_card, #merchstat_PayoutCard{card = BankCard}}) ->
     merchstat_to_domain({bank_card, BankCard});
-merchstat_to_domain({bank_account, #merchstat_PayoutAccount{account = #merchstat_BankAccount{
-    account = Account,
-    bank_name = BankName,
-    bank_post_account = BankPostAccount,
-    bank_bik = BankBik
-}}}) ->
+merchstat_to_domain({bank_account,
+    {russian_payout_account, #merchstat_RussianPayoutAccount{
+        bank_account = #merchstat_RussianBankAccount{
+            account = Account,
+            bank_name = BankName,
+            bank_post_account = BankPostAccount,
+            bank_bik = BankBik
+        }
+    }}
+}) ->
     {russian_bank_account, #domain_RussianBankAccount{
         account = Account,
         bank_name = BankName,
         bank_post_account = BankPostAccount,
         bank_bik = BankBik
+    }};
+merchstat_to_domain({bank_account,
+    {international_payout_account, #merchstat_InternationalPayoutAccount{
+        bank_account = #merchstat_InternationalBankAccount{
+            account_holder = AccountHolder,
+            bank_name = BankName,
+            bank_address = BankAddress,
+            iban = Iban,
+            bic = Bic,
+            local_bank_code = LocalBankCode
+        }
+    }}
+}) ->
+    {international_bank_account, #domain_InternationalBankAccount{
+        account_holder = AccountHolder,
+        bank_name = BankName,
+        bank_address = BankAddress,
+        iban = Iban,
+        bic = Bic,
+        local_bank_code = LocalBankCode
     }};
 
 merchstat_to_domain({Status, #merchstat_InvoicePaymentPending{}}) ->
@@ -3461,7 +3485,8 @@ decode_stat_payout(#merchstat_StatPayout{
     amount = Amount,
     fee = Fee,
     currency_symbolic_code = Currency,
-    type = PayoutType
+    type = PayoutType,
+    summary = PayoutSummary
 }) ->
     genlib_map:compact(maps:merge(#{
         <<"id">> => PayoutID,
@@ -3470,7 +3495,8 @@ decode_stat_payout(#merchstat_StatPayout{
         <<"amount">> => Amount,
         <<"fee">> => Fee,
         <<"currency">> => Currency,
-        <<"payoutToolDetails">> => decode_stat_payout_tool_details(PayoutType)
+        <<"payoutToolDetails">> => decode_stat_payout_tool_details(PayoutType),
+        <<"payoutSummary">> => decode_stat_payout_summary(PayoutSummary)
     }, decode_stat_payout_status(PayoutStatus))).
 
 decode_stat_payout_status({cancelled, #merchstat_PayoutCancelled{details = Details}}) ->
@@ -3492,6 +3518,30 @@ decode_payout_tool_details({russian_bank_account, V}) ->
     decode_russian_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankAccount">>});
 decode_payout_tool_details({international_bank_account, V}) ->
     decode_international_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsInternationalBankAccount">>}).
+
+decode_stat_payout_summary(PayoutSummary) when is_list(PayoutSummary) ->
+    [decode_stat_payout_summary_item(PayoutSummaryItem) || PayoutSummaryItem <- PayoutSummary];
+decode_stat_payout_summary(undefined) ->
+    undefined.
+
+decode_stat_payout_summary_item(#merchstat_PayoutSummaryItem{
+    amount = Amount,
+    fee = Fee,
+    currency_symbolic_code = Currency,
+    from_time = FromTime,
+    to_time = ToTime,
+    operation_type = OperationType,
+    count = Count
+}) ->
+    genlib_map:compact(#{
+        <<"amount">> => Amount,
+        <<"fee">> => Fee,
+        <<"currency">> => Currency,
+        <<"count">> => Count,
+        <<"fromTime">> => FromTime,
+        <<"toTime">> => ToTime,
+        <<"type">> => genlib:to_binary(OperationType)
+    }).
 
 encode_payout_type('PayoutCard') ->
     <<"bank_card">>;
