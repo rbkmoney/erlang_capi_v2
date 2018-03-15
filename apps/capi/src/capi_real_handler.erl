@@ -3478,7 +3478,7 @@ decode_stat_payout(#merchstat_StatPayout{
     fee = Fee,
     currency_symbolic_code = Currency,
     type = PayoutType,
-    cash_flow_descriptions = CashFlowDescriptions
+    summary = PayoutSummary
 }) ->
     genlib_map:compact(maps:merge(#{
         <<"id">> => PayoutID,
@@ -3488,7 +3488,7 @@ decode_stat_payout(#merchstat_StatPayout{
         <<"fee">> => Fee,
         <<"currency">> => Currency,
         <<"payoutToolDetails">> => decode_stat_payout_tool_details(PayoutType),
-        <<"payoutCashFlowDescriptions">> => decode_stat_payout_cash_flow_descriptions(CashFlowDescriptions)
+        <<"payoutSummary">> => decode_stat_payout_summary(PayoutSummary)
     }, decode_stat_payout_status(PayoutStatus))).
 
 decode_stat_payout_status({cancelled, #merchstat_PayoutCancelled{details = Details}}) ->
@@ -3511,18 +3511,18 @@ decode_payout_tool_details({russian_bank_account, V}) ->
 decode_payout_tool_details({international_bank_account, V}) ->
     decode_international_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsInternationalBankAccount">>}).
 
-decode_stat_payout_cash_flow_descriptions(CashFlowDescriptions) when is_list(CashFlowDescriptions) ->
-    [decode_stat_payout_cash_flow_description(CashFlowDescr) || CashFlowDescr <- CashFlowDescriptions];
-decode_stat_payout_cash_flow_descriptions(undefined) ->
+decode_stat_payout_summary(PayoutSummary) when is_list(PayoutSummary) ->
+    [decode_stat_payout_summary_item(PayoutSummaryItem) || PayoutSummaryItem <- PayoutSummary];
+decode_stat_payout_summary(undefined) ->
     undefined.
 
-decode_stat_payout_cash_flow_description(#merchstat_CashFlowDescription{
+decode_stat_payout_summary_item(#merchstat_PayoutSummaryItem{
     amount = Amount,
     fee = Fee,
     currency_symbolic_code = Currency,
     from_time = FromTime,
     to_time = ToTime,
-    cash_flow_type = CashFlowType,
+    operation_type = OperationType,
     count = Count
 }) ->
     genlib_map:compact(#{
@@ -3532,7 +3532,7 @@ decode_stat_payout_cash_flow_description(#merchstat_CashFlowDescription{
         <<"count">> => Count,
         <<"fromTime">> => FromTime,
         <<"toTime">> => ToTime,
-        <<"type">> => genlib:to_binary(CashFlowType)
+        <<"type">> => genlib:to_binary(OperationType)
     }).
 
 encode_payout_type('PayoutCard') ->
