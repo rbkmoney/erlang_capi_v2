@@ -84,7 +84,7 @@ process_request('CreateInvoice', Req, Context, ReqCtx) ->
         )
     of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {201, [], make_invoice_and_token(Invoice, PartyID, Context)}};
+            {ok, {201, [], make_invoice_and_token(Invoice, PartyID)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
@@ -187,7 +187,7 @@ process_request('CreateInvoiceAccessToken', Req, Context, ReqCtx) ->
     Result = get_invoice_by_id(ReqCtx, UserInfo, InvoiceID),
     case Result of
         {ok, #'payproc_Invoice'{}} ->
-            Token = make_invoice_access_token(InvoiceID, PartyID, Context),
+            Token = issue_access_token(PartyID, {invoice, InvoiceID}),
             {ok, {201, [], Token}};
         {exception, Exception} ->
             case Exception of
@@ -676,7 +676,7 @@ process_request('CreateInvoiceTemplate', Req, Context, ReqCtx) ->
         )
     of
         {ok, InvoiceTpl} ->
-            {ok, {201, [], make_invoice_tpl_and_token(InvoiceTpl, PartyID, Context)}};
+            {ok, {201, [], make_invoice_tpl_and_token(InvoiceTpl, PartyID)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
@@ -821,7 +821,7 @@ process_request('CreateInvoiceWithTemplate', Req, Context, ReqCtx) ->
         )
     of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {201, [], make_invoice_and_token(Invoice, PartyID, Context)}};
+            {ok, {201, [], make_invoice_and_token(Invoice, PartyID)}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -1482,7 +1482,7 @@ process_request('CreateCustomer', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, Customer} ->
-            {ok, {201, [], make_customer_and_token(Customer, PartyID, Context)}};
+            {ok, {201, [], make_customer_and_token(Customer, PartyID)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
@@ -1543,7 +1543,7 @@ process_request('CreateCustomerAccessToken', Req, Context, ReqCtx) ->
     Result = get_customer_by_id(ReqCtx, CustomerID),
     case Result of
         {ok, #payproc_Customer{}} ->
-            Token = make_customer_access_token(CustomerID, PartyID, Context),
+            Token = issue_access_token(PartyID, {customer, CustomerID}),
             {ok, {201, [], Token}};
         {exception, Exception} ->
             case Exception of
@@ -2342,52 +2342,27 @@ encode_flow(#{<<"type">> := <<"PaymentFlowHold">>} = Entity) ->
         on_hold_expiration = binary_to_existing_atom(OnHoldExpiration, utf8)
     }}.
 
-make_invoice_and_token(Invoice, PartyID, Context) ->
+make_invoice_and_token(Invoice, PartyID) ->
     #{
         <<"invoice">> => decode_invoice(Invoice),
-        <<"invoiceAccessToken">> => make_invoice_access_token(
-            Invoice#domain_Invoice.id,
-            PartyID,
-            Context
-        )
+        <<"invoiceAccessToken">> => issue_access_token(PartyID, {invoice, Invoice#domain_Invoice.id})
     }.
 
-make_invoice_tpl_and_token(InvoiceTpl, PartyID, Context) ->
+make_invoice_tpl_and_token(InvoiceTpl, PartyID) ->
     #{
         <<"invoiceTemplate">> => decode_invoice_tpl(InvoiceTpl),
-        <<"invoiceTemplateAccessToken">> => make_invoice_tpl_access_token(
-            InvoiceTpl#domain_InvoiceTemplate.id,
-            PartyID,
-            Context
-        )
+        <<"invoiceTemplateAccessToken">> =>
+            issue_access_token(PartyID, {invoice_tpl, InvoiceTpl#domain_InvoiceTemplate.id})
     }.
 
-make_customer_and_token(Customer, PartyID, Context) ->
+make_customer_and_token(Customer, PartyID) ->
     #{
         <<"customer">> => decode_customer(Customer),
-        <<"customerAccessToken">> => make_customer_access_token(
-            Customer#payproc_Customer.id,
-            PartyID,
-            Context
-        )
+        <<"customerAccessToken">> => issue_access_token(PartyID, {customer, Customer#payproc_Customer.id})
     }.
 
-make_invoice_access_token(InvoiceID, PartyID, Context) ->
-    Fun = fun capi_auth:issue_invoice_access_token/3,
-    make_access_token(Fun, InvoiceID, PartyID, Context).
-
-make_invoice_tpl_access_token(InvoiceTplID, PartyID, Context) ->
-    Fun = fun capi_auth:issue_invoice_template_access_token/3,
-    make_access_token(Fun, InvoiceTplID, PartyID, Context).
-
-make_customer_access_token(CustomerID, PartyID, Context) ->
-    Fun = fun capi_auth:issue_customer_access_token/3,
-    make_access_token(Fun, CustomerID, PartyID, Context).
-
-make_access_token(Fun, ID, PartyID, _Context) ->
-    AdditionalClaims = #{},
-    {ok, Token} = Fun(PartyID, ID, AdditionalClaims),
-    #{<<"payload">> => Token}.
+issue_access_token(PartyID, TokenSpec) ->
+    #{<<"payload">> => capi_auth:issue_access_token(PartyID, TokenSpec)}.
 
 encode_bank_card(#{
     <<"token">> := Token,

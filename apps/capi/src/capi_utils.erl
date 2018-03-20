@@ -8,6 +8,8 @@
 
 -export([redact/2]).
 
+-export([unwrap/1]).
+
 -spec logtag_process(atom(), any()) -> ok.
 
 logtag_process(Key, Value) when is_atom(Key) ->
@@ -63,6 +65,15 @@ to_universal_time(Timestamp) ->
     ),
     {ok, TimestampUTC} = rfc3339:format({DateUTC, TimeUTC, Usec, 0}),
     TimestampUTC.
+
+-spec unwrap(ok | {ok, Value} | {error, _Error}) ->
+    Value | no_return().
+unwrap(ok) ->
+    ok;
+unwrap({ok, Value}) ->
+    Value;
+unwrap({error, Error}) ->
+    erlang:error({unwrap_error, Error}).
 
 %%
 
