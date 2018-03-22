@@ -33,21 +33,27 @@ authorize_api_key(OperationID, ApiKey) ->
     capi_auth:authorize_api_key(OperationID, ApiKey).
 
 -type request_data() :: #{atom() | binary() => term()}.
+-type processing_context() :: #{
+    swagger_context := swag_server:request_context(),
+    woody_context   := woody_context:ctx()
+}.
 
 -spec handle_request(
     OperationID :: swag_server:operation_id(),
     Req :: request_data(),
-    Context :: swag_server:request_context()
+    SwagContext :: swag_server:request_context()
 ) ->
     {ok | error, swag_server_logic_handler:response()}.
 
-handle_request(OperationID, Req, Context) ->
+handle_request(OperationID, Req, SwagContext) ->
     _ = lager:info("Processing request ~p", [OperationID]),
+    AuthContext = get_auth_context(SwagContext),
     try
-        case capi_auth:authorize_operation(OperationID, Req, get_auth_context(Context)) of
+        case capi_auth:authorize_operation(OperationID, Req, AuthContext) of
             ok ->
-                ReqContext = create_context(Req, get_auth_context(Context)),
-                process_request(OperationID, Req, Context, ReqContext);
+                WoodyContext = create_woody_context(Req, AuthContext),
+                Context = create_processing_context(SwagContext, WoodyContext),
+                process_request(OperationID, Req, Context);
             {error, _} = Error ->
                 _ = lager:info("Operation ~p authorization failed due to ~p", [OperationID, Error]),
                 {error, {401, [], general_error(<<"Unauthorized operation">>)}}
@@ -60,27 +66,23 @@ handle_request(OperationID, Req, Context) ->
 -spec process_request(
     OperationID :: swag_server:operation_id(),
     Req :: request_data(),
-    Context :: swag_server:request_context(),
-    ReqCtx :: woody_context:ctx()
+    Context :: context()
 ) ->
     {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
 
-process_request('CreateInvoice', Req, Context, ReqCtx) ->
+process_request('CreateInvoice', Req, Context) ->
     PartyID = get_party_id(Context),
     try
-        Params = encode_invoice_params(PartyID, maps:get('InvoiceParams', Req)),
-        UserInfo = get_user_info(Context),
         prepare_party(
-           Context,
-           ReqCtx,
            fun () ->
-               service_call(
+               service_call_with_user_info(
                    invoicing,
                    'Create',
-                   [UserInfo, Params],
-                   ReqCtx
+                   [encode_invoice_params(PartyID, maps:get('InvoiceParams', Req))],
+                   Context
                )
-           end
+           end,
+           Context
         )
     of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
@@ -103,21 +105,20 @@ process_request('CreateInvoice', Req, Context, ReqCtx) ->
             {ok, {400, [], logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)}}
     end;
 
-process_request('CreatePayment', Req, Context, ReqCtx) ->
+process_request('CreatePayment', Req, Context) ->
     InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('PaymentParams', Req),
     Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
     Payer = genlib_map:get(<<"payer">>, PaymentParams),
-    UserInfo = get_user_info(Context),
     Result = try
         Params =  #payproc_InvoicePaymentParams{
             'payer' = encode_payer_params(Payer),
             'flow' = encode_flow(Flow)
         },
-        service_call(
+        service_call_with_user_info(
             invoicing,
             'StartPayment',
-            [UserInfo, InvoiceID, Params],
+            [InvoiceID, Params],
             ReqCtx
         )
     catch
@@ -127,7 +128,7 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
 
     case Result of
         {ok, Payment} ->
-            {ok, {201, [], decode_invoice_payment(InvoiceID, Payment)}};
+            {ok, {201, [], decode_invoice_payment(InvoiceID, Payment, Context)}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidInvoiceStatus{} ->
@@ -157,37 +158,36 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
             )}}
     end;
 
-process_request('CreatePaymentResource', Req, Context, ReqCtx) ->
+process_request('CreatePaymentResource', Req, Context) ->
     Params = maps:get('PaymentResourceParams', Req),
     ClientInfo = enrich_client_info(maps:get(<<"clientInfo">>, Params), Context),
     try
         V = maps:get(<<"paymentTool">>, Params),
-        {PaymentTool, PaymentSessionID} = case V of
-            #{<<"paymentToolType">> := <<"CardData">>} ->
-                process_card_data(V, ReqCtx);
-            #{<<"paymentToolType">> := <<"PaymentTerminalData">>} ->
-                process_payment_terminal_data(V, ReqCtx);
-            #{<<"paymentToolType">> := <<"DigitalWalletData">>} ->
-                process_digital_wallet_data(V, ReqCtx)
-        end,
+        {PaymentTool, PaymentSessionID} =
+            case V of
+                #{<<"paymentToolType">> := <<"CardData">>} ->
+                    process_card_data(V, Context);
+                #{<<"paymentToolType">> := <<"PaymentTerminalData">>} ->
+                    process_payment_terminal_data(V, Context);
+                #{<<"paymentToolType">> := <<"DigitalWalletData">>} ->
+                    process_digital_wallet_data(V, Context)
+            end,
         {ok, {201, [], decode_disposable_payment_resource(#domain_DisposablePaymentResource{
             payment_tool = PaymentTool,
             payment_session_id = PaymentSessionID,
             client_info = encode_client_info(ClientInfo)
-        })}}
+        }, Context)}}
     catch
         Result ->
             Result
     end;
 
-process_request('CreateInvoiceAccessToken', Req, Context, ReqCtx) ->
-    PartyID = get_party_id(Context),
+process_request('CreateInvoiceAccessToken', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    UserInfo = get_user_info(Context),
-    Result = get_invoice_by_id(ReqCtx, UserInfo, InvoiceID),
+    Result = get_invoice_by_id(Context, InvoiceID),
     case Result of
         {ok, #'payproc_Invoice'{}} ->
-            Token = issue_access_token(PartyID, {invoice, InvoiceID}),
+            Token = issue_access_token(get_party_id(Context), {invoice, InvoiceID}),
             {ok, {201, [], Token}};
         {exception, Exception} ->
             case Exception of
@@ -198,13 +198,12 @@ process_request('CreateInvoiceAccessToken', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('GetInvoiceByID', Req, Context, ReqCtx) ->
+process_request('GetInvoiceByID', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    UserInfo = get_user_info(Context),
-    Result = get_invoice_by_id(ReqCtx, UserInfo, InvoiceID),
+    Result = get_invoice_by_id(get_party_id(Context), InvoiceID),
     case Result of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            Resp = decode_invoice(Invoice),
+            Resp = decode_invoice(Invoice, Context),
             {ok, {200, [], Resp}};
         {exception, Exception} ->
             case Exception of
@@ -215,19 +214,16 @@ process_request('GetInvoiceByID', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('FulfillInvoice', Req, Context, ReqCtx) ->
+process_request('FulfillInvoice', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-
     Params = maps:get('Reason', Req),
     Reason = maps:get(<<"reason">>, Params),
 
-    UserInfo = get_user_info(Context),
-
-    Result = service_call(
+    Result = service_call_with_user_info(
         invoicing,
         'Fulfill',
-        [UserInfo, InvoiceID, Reason],
-        ReqCtx
+        [InvoiceID, Reason],
+        Context
     ),
     case Result of
         {ok, _} ->
@@ -247,18 +243,16 @@ process_request('FulfillInvoice', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('RescindInvoice', Req, Context, ReqCtx) ->
+process_request('RescindInvoice', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-
     Params = maps:get('Reason', Req),
     Reason = maps:get(<<"reason">>, Params),
 
-    UserInfo = get_user_info(Context),
-    Result = service_call(
+    Result = service_call_with_user_info(
         invoicing,
         'Rescind',
-        [UserInfo, InvoiceID, Reason],
-        ReqCtx
+        [InvoiceID, Reason],
+        Context
     ),
     case Result of
         {ok, _} ->
@@ -280,28 +274,25 @@ process_request('RescindInvoice', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('GetInvoiceEvents', Req, Context, ReqCtx) ->
+process_request('GetInvoiceEvents', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    UserInfo = get_user_info(Context),
-    GetterFun = fun(Range) ->
-        service_call(
-            invoicing,
-            'GetEvents',
-            [UserInfo, InvoiceID, Range],
-            ReqCtx
-        )
-    end,
-    DecodingContext = #{
-        user_info => UserInfo,
-        req_ctx => ReqCtx
-    },
-    Result  = collect_events(
-        maps:get(limit, Req),
-        genlib_map:get(eventID, Req),
-        GetterFun,
-        fun decode_invoice_event/2,
-        DecodingContext
-    ),
+    GetterFun =
+        fun(Range) ->
+            service_call_with_user_info(
+                invoicing,
+                'GetEvents',
+                [InvoiceID, Range],
+                Context
+            )
+        end,
+    Result =
+        collect_events(
+            maps:get(limit, Req),
+            genlib_map:get(eventID, Req),
+            GetterFun,
+            fun decode_invoice_event/2,
+            Context
+        ),
     case Result of
         {ok, Events} when is_list(Events) ->
             {ok, {200, [], Events}};
@@ -318,15 +309,8 @@ process_request('GetInvoiceEvents', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('GetInvoicePaymentMethods', Req, Context, ReqCtx) ->
-    Result = construct_payment_methods(
-        invoicing,
-        [
-            get_user_info(Context),
-            maps:get(invoiceID, Req)
-        ],
-        ReqCtx
-    ),
+process_request('GetInvoicePaymentMethods', Req, Context) ->
+    Result = construct_payment_methods(invoicing, [maps:get(invoiceID, Req)], Context),
     case Result of
         {ok, PaymentMethods} when is_list(PaymentMethods) ->
             {ok, {200, [], PaymentMethods}};
@@ -341,13 +325,12 @@ process_request('GetInvoicePaymentMethods', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('GetPayments', Req, Context, ReqCtx) ->
+process_request('GetPayments', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    UserInfo = get_user_info(Context),
-    Result = get_invoice_by_id(ReqCtx, UserInfo, InvoiceID),
+    Result = get_invoice_by_id(Context, InvoiceID),
     case Result of
         {ok, #'payproc_Invoice'{payments = Payments}} ->
-            Resp = [decode_invoice_payment(InvoiceID, P) || P <- Payments],
+            Resp = [decode_invoice_payment(InvoiceID, P, Context) || P <- Payments],
             {ok, {200, [], Resp}};
         {exception, Exception} ->
             case Exception of
@@ -358,14 +341,14 @@ process_request('GetPayments', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('GetPaymentByID', Req, Context, ReqCtx) ->
+%% TODO продолжить переводить всё на context
+process_request('GetPaymentByID', Req, Context) ->
     PaymentID = maps:get(paymentID, Req),
     InvoiceID = maps:get(invoiceID, Req),
-    UserInfo = get_user_info(Context),
-    Result = get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
+    Result = get_payment_by_id(InvoiceID, PaymentID, Context),
     case Result of
         {ok, Payment} ->
-            Resp = decode_invoice_payment(InvoiceID, Payment),
+            Resp = decode_invoice_payment(InvoiceID, Payment, Context),
             {ok, {200, [], Resp}};
         {exception, Exception} ->
             case Exception of
@@ -378,18 +361,16 @@ process_request('GetPaymentByID', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('CancelPayment', Req, Context, ReqCtx) ->
+process_request('CancelPayment', Req, Context) ->
     PaymentID = maps:get(paymentID, Req),
     InvoiceID = maps:get(invoiceID, Req),
     Params = maps:get('Reason', Req),
     Reason = maps:get(<<"reason">>, Params),
-    UserInfo = get_user_info(Context),
-
-    Result = service_call(
+    Result = service_call_with_user_info(
         invoicing,
         'CancelPayment',
-        [UserInfo, InvoiceID, PaymentID, Reason],
-        ReqCtx
+        [InvoiceID, PaymentID, Reason],
+        Context
     ),
     case Result of
         {ok, _} ->
@@ -415,18 +396,16 @@ process_request('CancelPayment', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('CapturePayment', Req, Context, ReqCtx) ->
+process_request('CapturePayment', Req, Context) ->
     PaymentID = maps:get(paymentID, Req),
     InvoiceID = maps:get(invoiceID, Req),
     Params = maps:get('Reason', Req),
     Reason = maps:get(<<"reason">>, Params),
-    UserInfo = get_user_info(Context),
-
-    Result = service_call(
+    Result = service_call_with_user_info(
         invoicing,
         'CapturePayment',
-        [UserInfo, InvoiceID, PaymentID, Reason],
-        ReqCtx
+        [InvoiceID, PaymentID, Reason],
+        Context
     ),
     case Result of
         {ok, _} ->
@@ -452,7 +431,7 @@ process_request('CapturePayment', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('SearchInvoices', Req, Context, ReqCtx) ->
+process_request('SearchInvoices', Req, Context) ->
     Query = #{
         <<"merchant_id">> => get_party_id(Context),
         <<"shop_id">> => genlib_map:get('shopID', Req),
@@ -475,11 +454,11 @@ process_request('SearchInvoices', Req, Context, ReqCtx) ->
     },
     Opts = #{
         thrift_fun => 'GetInvoices',
-        decode_fun => fun decode_stat_invoice/1
+        decode_fun => fun decode_stat_invoice/2
     },
-    process_search_request(invoices, Query, Req, ReqCtx, Opts);
+    process_search_request(invoices, Query, Req, Context, Opts);
 
-process_request('SearchPayments', Req, Context, ReqCtx) ->
+process_request('SearchPayments', Req, Context) ->
     Query = #{
         <<"merchant_id">> => get_party_id(Context),
         <<"shop_id">> => genlib_map:get('shopID', Req),
@@ -500,11 +479,11 @@ process_request('SearchPayments', Req, Context, ReqCtx) ->
     },
     Opts = #{
         thrift_fun => 'GetPayments',
-        decode_fun => fun decode_stat_payment/1
+        decode_fun => fun decode_stat_payment/2
     },
-    process_search_request(payments, Query, Req, ReqCtx, Opts);
+    process_search_request(payments, Query, Req, Context, Opts);
 
-process_request('SearchPayouts', Req, Context, ReqCtx) ->
+process_request('SearchPayouts', Req, Context) ->
     Query = #{
         <<"merchant_id">> => get_party_id(Context),
         <<"shop_id">> => genlib_map:get('shopID', Req),
@@ -518,26 +497,26 @@ process_request('SearchPayouts', Req, Context, ReqCtx) ->
         thrift_fun => 'GetPayouts',
         decode_fun => fun decode_stat_payout/1
     },
-    process_search_request(payouts, Query, Req, ReqCtx, Opts);
+    process_search_request(payouts, Query, Req, Context, Opts);
 
-process_request('GetPaymentConversionStats', Req, Context, ReqCtx) ->
-    process_merchant_stat(payments_conversion_stat, Req, Context, ReqCtx);
+process_request('GetPaymentConversionStats', Req, Context) ->
+    process_merchant_stat(payments_conversion_stat, Req, Context);
 
-process_request('GetPaymentRevenueStats', Req, Context, ReqCtx) ->
-    process_merchant_stat(payments_turnover, Req, Context, ReqCtx);
+process_request('GetPaymentRevenueStats', Req, Context) ->
+    process_merchant_stat(payments_turnover, Req, Context);
 
-process_request('GetPaymentGeoStats', Req, Context, ReqCtx) ->
-    process_merchant_stat(payments_geo_stat, Req, Context, ReqCtx);
+process_request('GetPaymentGeoStats', Req, Context) ->
+    process_merchant_stat(payments_geo_stat, Req, Context);
 
-process_request('GetPaymentRateStats', Req, Context, ReqCtx) ->
-    process_merchant_stat(customers_rate_stat, Req, Context, ReqCtx);
+process_request('GetPaymentRateStats', Req, Context) ->
+    process_merchant_stat(customers_rate_stat, Req, Context);
 
-process_request('GetPaymentMethodStats', Req, Context, ReqCtx) ->
+process_request('GetPaymentMethodStats', Req, Context) ->
     bankCard =  maps:get(paymentMethod, Req),
     StatType = payments_pmt_cards_stat,
-    process_merchant_stat(StatType, Req, Context, ReqCtx);
+    process_merchant_stat(StatType, Req, Context);
 
-process_request('GetLocationsNames', Req, _Context, ReqCtx) ->
+process_request('GetLocationsNames', Req, Context) ->
     Language = maps:get('language', Req),
     GeoIDs = ordsets:from_list(maps:get('geoIDs', Req)),
 
@@ -545,7 +524,7 @@ process_request('GetLocationsNames', Req, _Context, ReqCtx) ->
         geo_ip_service,
         'GetLocationName',
         [GeoIDs, Language],
-        ReqCtx
+        Context
     ),
 
     case Result of
@@ -560,30 +539,23 @@ process_request('GetLocationsNames', Req, _Context, ReqCtx) ->
             {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
     end;
 
-process_request('CreateRefund', Req, Context, ReqCtx) ->
+process_request('CreateRefund', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
     RefundParams = maps:get('RefundParams', Req),
-    UserInfo = get_user_info(Context),
-    EncodingContext = #{
-        req_ctx => ReqCtx,
-        user_info => UserInfo,
-        invoice_id => InvoiceID,
-        payment_id => PaymentID
-    },
     Params = #payproc_InvoicePaymentRefundParams{
         reason = genlib_map:get(<<"reason">>, RefundParams),
-        cash = encode_optional_refund_cash(RefundParams, EncodingContext)
+        cash = encode_optional_refund_cash(RefundParams, InvoiceID, PaymentID, Context)
     },
-    Result = service_call(
+    Result = service_call_with_user_info(
         invoicing,
         'RefundPayment',
-        [UserInfo, InvoiceID, PaymentID, Params],
-        ReqCtx
+        [InvoiceID, PaymentID, Params],
+        Context
     ),
     case Result of
         {ok, Refund} ->
-            Resp = decode_refund(Refund),
+            Resp = decode_refund(Refund, Context),
             {ok, {201, [], Resp}};
         {exception, Exception} ->
             case Exception of
@@ -609,14 +581,13 @@ process_request('CreateRefund', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('GetRefunds', Req, Context, ReqCtx) ->
+process_request('GetRefunds', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
-    UserInfo = get_user_info(Context),
-    Result = get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
+    Result = get_payment_by_id(InvoiceID, PaymentID, Context),
     case Result of
         {ok, #payproc_InvoicePayment{refunds = Refunds}} ->
-            Resp = [decode_refund(R) || R <- Refunds],
+            Resp = [decode_refund(R, Context) || R <- Refunds],
             {ok, {200, [], Resp}};
         {exception, Exception} ->
             case Exception of
@@ -629,20 +600,19 @@ process_request('GetRefunds', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('GetRefundByID', Req, Context, ReqCtx) ->
+process_request('GetRefundByID', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
     RefundID = maps:get(refundID, Req),
-    UserInfo = get_user_info(Context),
-    Result = service_call(
+    Result = service_call_with_user_info(
         invoicing,
         'GetPaymentRefund',
-        [UserInfo, InvoiceID, PaymentID, RefundID],
-        ReqCtx
+        [InvoiceID, PaymentID, RefundID],
+        Context
     ),
     case Result of
         {ok, Refund} ->
-            Resp = decode_refund(Refund),
+            Resp = decode_refund(Refund, Context),
             {ok, {200, [], Resp}};
         {exception, Exception} ->
             case Exception of
@@ -657,22 +627,20 @@ process_request('GetRefundByID', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('CreateInvoiceTemplate', Req, Context, ReqCtx) ->
+process_request('CreateInvoiceTemplate', Req, Context) ->
     PartyID = get_party_id(Context),
-    UserInfo = get_user_info(Context),
     try
         Params = encode_invoice_tpl_create_params(PartyID, maps:get('InvoiceTemplateCreateParams', Req)),
         prepare_party(
-            Context,
-            ReqCtx,
             fun () ->
-                service_call(
+                service_call_with_user_info(
                     invoice_templating,
                     'Create',
-                    [UserInfo, Params],
-                    ReqCtx
+                    [Params],
+                    Context
                 )
-            end
+            end,
+            Context
         )
     of
         {ok, InvoiceTpl} ->
@@ -695,15 +663,13 @@ process_request('CreateInvoiceTemplate', Req, Context, ReqCtx) ->
             {ok, {400, [], logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}}
     end;
 
-process_request('GetInvoiceTemplateByID', Req, Context, ReqCtx) ->
+process_request('GetInvoiceTemplateByID', Req, Context) ->
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
-    UserInfo = get_user_info(Context),
     Result = prepare_party(
-        Context,
-        ReqCtx,
         fun () ->
-            get_invoice_tpl_by_id(ReqCtx, UserInfo, InvoiceTplID)
-        end
+            get_invoice_tpl_by_id(InvoiceTplID, Context)
+        end,
+        Context
     ),
     case Result of
         {ok, InvoiceTpl} ->
@@ -719,20 +685,16 @@ process_request('GetInvoiceTemplateByID', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('UpdateInvoiceTemplate', Req, Context, ReqCtx) ->
-    InvoiceTplID = maps:get('invoiceTemplateID', Req),
-    UserInfo = get_user_info(Context),
+process_request('UpdateInvoiceTemplate', Req, Context) ->
     try
         Params = encode_invoice_tpl_update_params(maps:get('InvoiceTemplateUpdateParams', Req)),
         prepare_party(
-            Context,
-            ReqCtx,
             fun () ->
                 service_call(
                     invoice_templating,
                     'Update',
-                    [UserInfo, InvoiceTplID, Params],
-                    ReqCtx
+                    [maps:get('invoiceTemplateID', Req), Params],
+                    Context
                 )
             end
         )
@@ -767,20 +729,17 @@ process_request('UpdateInvoiceTemplate', Req, Context, ReqCtx) ->
             {ok, {400, [], logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}}
     end;
 
-process_request('DeleteInvoiceTemplate', Req, Context, ReqCtx) ->
-    InvoiceTplID = maps:get('invoiceTemplateID', Req),
-    UserInfo = get_user_info(Context),
+process_request('DeleteInvoiceTemplate', Req, Context) ->
     Result = prepare_party(
-        Context,
-        ReqCtx,
         fun () ->
-            service_call(
+            service_call_with_user_info(
                 invoice_templating,
                 'Delete',
-                [UserInfo, InvoiceTplID],
+                [maps:get('invoiceTemplateID', Req)],
                 ReqCtx
             )
-        end
+        end,
+        Context
     ),
     case Result of
         {ok, _R} ->
@@ -800,24 +759,22 @@ process_request('DeleteInvoiceTemplate', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('CreateInvoiceWithTemplate', Req, Context, ReqCtx) ->
+process_request('CreateInvoiceWithTemplate', Req) ->
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
     InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
-    UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     try
         Params = encode_invoice_params_with_tpl(InvoiceTplID, InvoiceParams),
         prepare_party(
-            Context,
-            ReqCtx,
             fun () ->
-                service_call(
+                service_call_with_user_info(
                     invoicing,
                     'CreateWithTemplate',
-                    [UserInfo, Params],
-                    ReqCtx
-                   )
-            end
+                    [Params],
+                    Context
+                )
+            end,
+            Context
         )
     of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
@@ -849,7 +806,6 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context, ReqCtx) ->
     Result = construct_payment_methods(
         invoice_templating,
         [
-            get_user_info(Context),
             maps:get('invoiceTemplateID', Req),
             Timestamp
         ],
@@ -871,22 +827,17 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('ActivateShop', Req, Context, ReqCtx) ->
-    UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
-    ShopID = maps:get(shopID, Req),
-
+process_request('ActivateShop', Req, Context) ->
     Result = prepare_party(
-        Context,
-        ReqCtx,
         fun () ->
-            service_call(
+            service_call_with_user_info(
                 party_management,
                 'ActivateShop',
-                [UserInfo, PartyID, ShopID],
-                ReqCtx
+                [get_party_id(Context), maps:get(shopID, Req)],
+                Context
             )
-        end
+        end,
+        Context
     ),
 
     case Result of
@@ -903,21 +854,16 @@ process_request('ActivateShop', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('SuspendShop', Req, Context, ReqCtx) ->
-    UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
-    ShopID = maps:get(shopID, Req),
-
+process_request('SuspendShop', Req, Context) ->
     Result = prepare_party(
-        Context,
-        ReqCtx,
         fun () ->
-            service_call(
+            service_call_with_user_info(
                 party_management,
                 'SuspendShop',
-                [UserInfo, PartyID, ShopID],
-                ReqCtx
-            )
+                [get_party_id(Context), maps:get(shopID, Req)],
+                Context
+            ),
+            Context
         end
     ),
 
@@ -935,28 +881,22 @@ process_request('SuspendShop', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('GetShops', _Req, Context, ReqCtx) ->
-    UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
-    {ok, #domain_Party{shops = Shops}} = get_my_party(Context, ReqCtx, UserInfo, PartyID),
+process_request('GetShops', _Req, Context) ->
+    {ok, #domain_Party{shops = Shops}} = get_my_party(get_party_id(Context), Context),
     Resp = decode_shops_map(Shops),
     {ok, {200, [], Resp}};
 
-process_request('GetShopByID', Req, Context, ReqCtx) ->
-    UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
-    ShopID = maps:get(shopID, Req),
+process_request('GetShopByID', Req, Context) ->
     Result = prepare_party(
-        Context,
-        ReqCtx,
         fun () ->
-            service_call(
+            service_call_with_user_info(
                 party_management,
                 'GetShop',
-                [UserInfo, PartyID, ShopID],
-                ReqCtx
+                [get_party_id(Context), maps:get(shopID, Req)],
+                Context
             )
-        end
+        end,
+        Context
     ),
 
     case Result of
@@ -1010,11 +950,8 @@ process_request('DownloadFile', Req, Context, ReqCtx) ->
             {ok, {404, [], general_error(<<"Report not found">>)}}
     end;
 
-process_request('GetContracts', _Req, Context, ReqCtx) ->
-    UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
-    Result = get_my_party(Context, ReqCtx, UserInfo, PartyID),
-
+process_request('GetContracts', _Req, Context) ->
+    Result = get_my_party(get_party_id(Context), Context),
     case Result of
         {ok, #domain_Party{
             contracts = Contracts
@@ -1106,27 +1043,22 @@ process_request('GetContractAdjustmentByID', Req, Context, ReqCtx) ->
             {ok, {404, [], general_error(<<"Contract not found">>)}}
     end;
 
-process_request('GetMyParty', _Req, Context, ReqCtx) ->
-    UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
-    {ok, Party} = get_my_party(Context, ReqCtx, UserInfo, PartyID),
+process_request('GetMyParty', _Req, Context) ->
+    {ok, Party} = get_my_party(get_party_id(Context), Context),
     Resp = decode_party(Party),
     {ok, {200, [], Resp}};
 
-process_request('SuspendMyParty', _Req, Context, ReqCtx) ->
-    UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
+process_request('SuspendMyParty', _Req, Context) ->
     Result = prepare_party(
-        Context,
-        ReqCtx,
         fun () ->
-            service_call(
+            service_call_with_user_info(
                 party_management,
                 'Suspend',
-                [UserInfo, PartyID],
-                ReqCtx
+                [get_party_id(Context)],
+                Context
             )
-        end
+        end,
+        Context
     ),
     case Result of
         {ok, _R} ->
@@ -1138,20 +1070,17 @@ process_request('SuspendMyParty', _Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('ActivateMyParty', _Req, Context, ReqCtx) ->
-    UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
+process_request('ActivateMyParty', _Req, Context) ->
     Result = prepare_party(
-        Context,
-        ReqCtx,
         fun () ->
-            service_call(
+            service_call_with_user_info(
                 party_management,
                 'Activate',
-                [UserInfo, PartyID],
-                ReqCtx
+                [get_party_id(Context)],
+                Context
             )
-        end
+        end,
+        Context
     ),
     case Result of
         {ok, _R} ->
@@ -1259,21 +1188,17 @@ process_request('GetPaymentInstitutionPayoutSchedules', Req, Context, ReqCtx) ->
             {404, [], general_error(<<"Payment institution not found">>)}
     end;
 
-process_request('GetAccountByID', Req, Context, ReqCtx) ->
-    UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
-    AccountID = maps:get('accountID', Req),
+process_request('GetAccountByID', Req, Context) ->
     Result = prepare_party(
-        Context,
-        ReqCtx,
         fun () ->
-            service_call(
+            service_call_with_user_info(
                 party_management,
                 'GetAccountState',
-                [UserInfo, PartyID, genlib:to_int(AccountID)],
-                ReqCtx
+                [get_party_id(Context), genlib:to_int(maps:get('accountID', Req))],
+                Context
             )
-        end
+        end,
+        Context
     ),
     case Result of
         {ok, S} ->
@@ -1283,41 +1208,36 @@ process_request('GetAccountByID', Req, Context, ReqCtx) ->
             {ok, {404, [], general_error(<<"Account not found">>)}}
     end;
 
-process_request('GetClaims', Req, Context, ReqCtx) ->
-    UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
+process_request('GetClaims', Req, Context) ->
     ClaimStatus = maps:get('claimStatus', Req),
-    {ok, Claims} = prepare_party(
-        Context,
-        ReqCtx,
-        fun () ->
-            service_call(
-                party_management,
-                'GetClaims',
-                [UserInfo, PartyID],
-                ReqCtx
-            )
-        end
-    ),
+    {ok, Claims} =
+        prepare_party(
+            fun () ->
+                service_call_with_user_info(
+                    party_management,
+                    'GetClaims',
+                    [get_party_id(Context)],
+                    Context
+                )
+            end,
+            Context
+        ),
     Resp = decode_claims(filter_claims(ClaimStatus, Claims)),
     {ok, {200, [], Resp}};
 
-process_request('GetClaimByID', Req, Context, ReqCtx) ->
-    UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
-    ClaimID = maps:get('claimID', Req),
-    Result = prepare_party(
-        Context,
-        ReqCtx,
-        fun () ->
-            service_call(
-                party_management,
-                'GetClaim',
-                [UserInfo, PartyID, genlib:to_int(ClaimID)],
-                ReqCtx
-            )
-        end
-    ),
+process_request('GetClaimByID', Req, Context) ->
+    Result =
+        prepare_party(
+            fun () ->
+                service_call_with_user_info(
+                    party_management,
+                    'GetClaim',
+                    [get_party_id(Context), genlib:to_int(maps:get('claimID', Req))],
+                    Context
+                )
+            end,
+            Context
+        ),
     case Result of
         {ok, Claim} ->
             Resp = decode_claim(Claim),
@@ -1326,23 +1246,21 @@ process_request('GetClaimByID', Req, Context, ReqCtx) ->
             {ok, {404, [], general_error(<<"Claim not found">>)}}
     end;
 
-process_request('CreateClaim', Req, Context, ReqCtx) ->
-    UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
+process_request('CreateClaim', Req, Context) ->
     try
         Changeset = encode_claim_changeset(maps:get('ClaimChangeset', Req)),
-        Result = prepare_party(
-            Context,
-            ReqCtx,
-            fun () ->
-                service_call(
-                    party_management,
-                    'CreateClaim',
-                    [UserInfo, PartyID, Changeset],
-                    ReqCtx
-                )
-            end
-        ),
+        Result =
+            prepare_party(
+                fun () ->
+                    service_call_with_user_info(
+                        party_management,
+                        'CreateClaim',
+                        [get_party_id(Context), Changeset],
+                        Context
+                    )
+                end,
+                Context
+            ),
         case Result of
             {ok, Claim} ->
                 Resp = decode_claim(Claim),
@@ -1365,45 +1283,47 @@ process_request('CreateClaim', Req, Context, ReqCtx) ->
     end;
 
 % TODO disabled temporary, exception handling must be fixed befor enabling
-% process_request('UpdateClaimByID', Req, Context, ReqCtx) ->
-%     UserInfo = get_user_info(Context),
-%     PartyID = get_party_id(Context),
-%     ClaimID = genlib:to_int(maps:get('claimID', Req)),
-%     ClaimRevision = genlib:to_int(maps:get('claimRevision', Req)),
-%     Changeset = encode_claim_changeset(maps:get('claimChangeset', Req)),
-%     {ok, Party} = prepare_party(
-%         Context,
-%         ReqCtx,
-%         fun () ->
-%             service_call(
-%                 party_management,
-%                 'UpdateClaim',
-%                 [UserInfo, PartyID, ClaimID, ClaimRevision, Changeset],
-%                 ReqCtx
-%             )
-%         end
-%     ),
+% process_request('UpdateClaimByID', Req, Context) ->
+%     {ok, Party} =
+%         prepare_party(
+%             Context,
+%             ReqCtx,
+%             fun () ->
+%                 service_call_with_user_info(
+%                     party_management,
+%                     'UpdateClaim',
+%                     [
+%                         get_party_id(Context),
+%                         genlib:to_int(maps:get('claimID', Req)),
+%                         genlib:to_int(maps:get('claimRevision', Req)),
+%                         encode_claim_changeset(maps:get('claimChangeset', Req))
+%                     ],
+%                     Context
+%                 )
+%             end,
+%             Context
+%         ),
 %     Resp = decode_party(Party),
 %     {ok, {200, [], Resp}};
 
-process_request('RevokeClaimByID', Req, Context, ReqCtx) ->
-    UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
-    ClaimID = genlib:to_int(maps:get('claimID', Req)),
-    ClaimRevision = genlib:to_int(maps:get('claimRevision', Req)),
-    Reason = encode_reason(maps:get('Reason', Req)),
-    Result = prepare_party(
-        Context,
-        ReqCtx,
-        fun () ->
-            service_call(
-                party_management,
-                'RevokeClaim',
-                [UserInfo, PartyID, ClaimID, ClaimRevision, Reason],
-                ReqCtx
-            )
-        end
-    ),
+process_request('RevokeClaimByID', Req, Context) ->
+    Result =
+        prepare_party(
+            fun () ->
+                service_call_with_user_info(
+                    party_management,
+                    'RevokeClaim',
+                    [
+                        get_party_id(Context),
+                        genlib:to_int(maps:get('claimID', Req)),
+                        genlib:to_int(maps:get('claimRevision', Req)),
+                        encode_reason(maps:get('Reason', Req))
+                    ],
+                    Context
+                )
+            end,
+            Context
+        ),
     case Result of
         {ok, _} ->
             {ok, {204, [], undefined}};
@@ -1465,21 +1385,20 @@ process_request('DeleteWebhookByID', Req, Context, ReqCtx) ->
             {ok, {404, [], general_error(<<"Webhook not found">>)}}
     end;
 
-process_request('CreateCustomer', Req, Context, ReqCtx) ->
+process_request('CreateCustomer', Req, Context) ->
     PartyID = get_party_id(Context),
-    Params = encode_customer_params(PartyID, maps:get('Customer', Req)),
-    Result = prepare_party(
-       Context,
-       ReqCtx,
-       fun () ->
-           service_call(
-               customer_management,
-               'Create',
-               [Params],
-               ReqCtx
-           )
-       end
-    ),
+    Result =
+        prepare_party(
+           fun () ->
+               service_call(
+                   customer_management,
+                   'Create',
+                   [encode_customer_params(PartyID, maps:get('Customer', Req))],
+                   Context
+               )
+           end,
+           Context
+        ),
     case Result of
         {ok, Customer} ->
             {ok, {201, [], make_customer_and_token(Customer, PartyID)}};
@@ -1554,7 +1473,7 @@ process_request('CreateCustomerAccessToken', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('CreateBinding', Req, _Context, ReqCtx) ->
+process_request('CreateBinding', Req, Context, ReqCtx) ->
     CustomerID = maps:get(customerID, Req),
     BindingParams = maps:get('CustomerBindingParams', Req),
     Result = try
@@ -1572,7 +1491,7 @@ process_request('CreateBinding', Req, _Context, ReqCtx) ->
 
     case Result of
         {ok, CustomerBinding} ->
-            {ok, {201, [], decode_customer_binding(CustomerBinding)}};
+            {ok, {201, [], decode_customer_binding(CustomerBinding, Context)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
@@ -1602,12 +1521,12 @@ process_request('CreateBinding', Req, _Context, ReqCtx) ->
             )}}
     end;
 
-process_request('GetBindings', Req, _Context, ReqCtx) ->
+process_request('GetBindings', Req, Context, ReqCtx) ->
     CustomerID = maps:get(customerID, Req),
     Result = get_customer_by_id(ReqCtx, CustomerID),
     case Result of
         {ok, #payproc_Customer{bindings = Bindings}} ->
-            {ok, {200, [], [decode_customer_binding(B) || B <- Bindings]}};
+            {ok, {200, [], [decode_customer_binding(B, Context) || B <- Bindings]}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -1617,7 +1536,7 @@ process_request('GetBindings', Req, _Context, ReqCtx) ->
             end
     end;
 
-process_request('GetBinding', Req, _Context, ReqCtx) ->
+process_request('GetBinding', Req, Context, ReqCtx) ->
     CustomerID = maps:get(customerID, Req),
     BindingID = maps:get(customerBindingID, Req),
     Result = get_customer_by_id(ReqCtx, CustomerID),
@@ -1625,7 +1544,7 @@ process_request('GetBinding', Req, _Context, ReqCtx) ->
         {ok, #payproc_Customer{bindings = Bindings}} ->
             case lists:keyfind(BindingID, #payproc_CustomerBinding.id, Bindings) of
                 #payproc_CustomerBinding{} = B ->
-                    {ok, {200, [], decode_customer_binding(B)}};
+                    {ok, {200, [], decode_customer_binding(B, Context)}};
                 false ->
                     {ok, {404, [], general_error(<<"Customer binding not found">>)}}
             end;
@@ -1704,29 +1623,26 @@ generate_report_presigned_url(FileID, ReqCtx) ->
             end
     end.
 
-validate_webhook_params(#webhooker_WebhookParams{event_filter = EventFilter}, Context, ReqCtx) ->
-    validate_event_filter(EventFilter, Context, ReqCtx).
+validate_webhook_params(#webhooker_WebhookParams{event_filter = EventFilter}, Context) ->
+    validate_event_filter(EventFilter, Context).
 
-validate_event_filter({invoice, #webhooker_InvoiceEventFilter{shop_id = ShopID}}, Context, ReqCtx) ->
-    validate_event_filter_shop(ShopID, Context, ReqCtx);
+validate_event_filter({invoice, #webhooker_InvoiceEventFilter{shop_id = ShopID}}, Context) ->
+    validate_event_filter_shop(ShopID, Context);
 
-validate_event_filter({customer, #webhooker_CustomerEventFilter{shop_id = ShopID}}, Context, ReqCtx) ->
-    validate_event_filter_shop(ShopID, Context, ReqCtx).
+validate_event_filter({customer, #webhooker_CustomerEventFilter{shop_id = ShopID}}, Context) ->
+    validate_event_filter_shop(ShopID, Context).
 
-validate_event_filter_shop(ShopID, Context, ReqCtx) when ShopID /= undefined ->
-    PartyID = get_party_id(Context),
-    UserInfo = get_user_info(Context),
+validate_event_filter_shop(ShopID, Context) when ShopID /= undefined ->
     prepare_party(
-        Context,
-        ReqCtx,
         fun () ->
-            service_call(
+            service_call_with_user_info(
                 party_management,
                 'GetShop',
-                [UserInfo, PartyID, ShopID],
-                ReqCtx
+                [get_party_id(Context), ShopID],
+                Context
             )
-        end
+        end,
+        Context
     ).
 
 get_webhook(PartyID, WebhookID, ReqCtx) ->
@@ -1787,14 +1703,23 @@ encode_webhook_scope(#{
 
 %%%
 
-service_call(ServiceName, Function, Args, Context) ->
-    capi_woody_client:call_service(ServiceName, Function, Args, Context).
+service_call(ServiceName, Function, Args, #{woody_context := WoodyContext}) ->
+    capi_woody_client:call_service(ServiceName, Function, Args, WoodyContext).
 
-create_context(#{'X-Request-ID' := RequestID}, AuthContext) ->
+service_call_with_user_info(ServiceName, Function, Args, Context) ->
+    service_call(ServiceName, Function, [get_user_info(Context) | Args], Context).
+
+create_woody_context(#{'X-Request-ID' := RequestID}, AuthContext) ->
     RpcID = #{trace_id := TraceID} = woody_context:new_rpc_id(genlib:to_binary(RequestID)),
     _ = lager:debug("Created TraceID:~p for RequestID:~p", [TraceID , RequestID]),
     WoodyContext = woody_context:new(RpcID),
     woody_user_identity:put(collect_user_identity(AuthContext), WoodyContext).
+
+create_processing_context(SwagContext, WoodyContext) ->
+    #{
+        woody_context => WoodyContext,
+        auth_context  => get_auth_context(Context)
+    }.
 
 collect_user_identity(AuthContext) ->
     genlib_map:compact(#{
@@ -1812,6 +1737,24 @@ limit_exceeded_error(Limit) ->
 
 general_error(Message) ->
     #{<<"message">> => genlib:to_binary(Message)}.
+
+payment_error(Error, Context) ->
+    #{<<"message">> => payment_error_message(Error, capi_auth:get_consumer(capi_auth:get_claims(Context)))}.
+
+payment_error_message(Error, client) ->
+    payproc_errors:match('PaymentFailure', Error, fun payment_error_client_maping/1);
+payment_error_message(Error, merchant) ->
+    payproc_errors:format(Error).
+
+%% client error mapping
+%% @see https://github.com/petrkozorezov/swag/blob/master/spec/definitions/PaymentError.yaml
+payment_error_client_maping({preauthorization_failed, _}) -> <<"PreauthorizationFailed">>;
+payment_error_client_maping({authorization_failed, {payment_tool_rejected , _}}) -> <<"InvalidPaymentTool"   >>;
+payment_error_client_maping({authorization_failed, {account_not_found     , _}}) -> <<"InvalidPaymentTool"   >>;
+payment_error_client_maping({authorization_failed, {account_limit_exceeded, _}}) -> <<"AccountLimitsExceeded">>;
+payment_error_client_maping({authorization_failed, {insufficient_funds    , _}}) -> <<"AccountBlocked"       >>;
+payment_error_client_maping({authorization_failed, {account_blocked       , _}}) -> <<"AccountBlocked"       >>;
+payment_error_client_maping(_                                                  ) -> <<"PaymentRejected"      >>.
 
 parse_exp_date(ExpDate) when is_binary(ExpDate) ->
     [Month, Year0] = binary:split(ExpDate, <<"/">>),
@@ -2421,24 +2364,16 @@ encode_customer_binding_params(#{
         }
     }.
 
-encode_optional_refund_cash(Params = #{<<"amount">> := _, <<"currency">> := _}, _) ->
+encode_optional_refund_cash(Params = #{<<"amount">> := _, <<"currency">> := _}, _, _, _) ->
     encode_cash(Params);
-encode_optional_refund_cash(
-    Params = #{<<"amount">> := _},
-    #{
-        req_ctx := ReqCtx,
-        user_info := UserInfo,
-        invoice_id := InvoiceID,
-        payment_id := PaymentID
-    }
-) ->
+encode_optional_refund_cash(Params = #{<<"amount">> := _}, InvoiceID, PaymentID, Context) ->
     {ok, #payproc_InvoicePayment{
         payment = #domain_InvoicePayment{
             cost = #domain_Cash{currency = Currency}
         }
-    }} = get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
+    }} = get_payment_by_id(InvoiceID, PaymentID, Context),
     encode_cash(Params#{<<"currency">> => decode_currency(Currency)});
-encode_optional_refund_cash(_, _) ->
+encode_optional_refund_cash(_, _, _, _) ->
     undefined.
 
 decode_invoice_event(#payproc_Event{
@@ -2516,11 +2451,11 @@ decode_payment_change(
     {invoice_payment_started, #payproc_InvoicePaymentStarted{
         payment = Payment
     }},
-    _Context
+    Context
 ) ->
     #{
         <<"changeType">> => <<"PaymentStarted">>,
-        <<"payment">> => decode_payment(InvoiceID, Payment)
+        <<"payment">> => decode_payment(InvoiceID, Payment, Context)
     };
 
 decode_payment_change(
@@ -2547,14 +2482,14 @@ decode_payment_change(
     {invoice_payment_status_changed, #payproc_InvoicePaymentStatusChanged{
         status = Status
     }},
-    _Context
+    Context
 ) ->
     genlib_map:compact(maps:merge(
         #{
             <<"changeType">> => <<"PaymentStatusChanged">>,
             <<"paymentID">> => PaymentID
         },
-        decode_payment_status(Status)
+        decode_payment_status(Status, Context)
     ));
 
 decode_payment_change(
@@ -2593,7 +2528,7 @@ decode_refund_change(
     {invoice_payment_refund_status_changed, #payproc_InvoicePaymentRefundStatusChanged{
         status = Status
     }},
-    _Context
+    Context
 ) ->
     genlib_map:compact(maps:merge(
         #{
@@ -2601,16 +2536,14 @@ decode_refund_change(
             <<"paymentID">> => PaymentID,
             <<"refundID">> => RefundID
         },
-        decode_refund_status(Status)
+        decode_refund_status(Status, Context)
     ));
 
 decode_refund_change(_, _, _, _, _) ->
     undefined.
 
-decode_invoice_payment(InvoiceID, #payproc_InvoicePayment{
-    payment = Payment
-}) ->
-    decode_payment(InvoiceID, Payment).
+decode_invoice_payment(InvoiceID, #payproc_InvoicePayment{payment = Payment}, Context) ->
+    decode_payment(InvoiceID, Payment, Context).
 
 decode_payment(InvoiceID, #domain_InvoicePayment{
     id = PaymentID,
@@ -2622,7 +2555,7 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
         currency = Currency
     },
     flow = Flow
-}) ->
+}, Context) ->
     genlib_map:compact(maps:merge(#{
         <<"id">> =>  PaymentID,
         <<"invoiceID">> => InvoiceID,
@@ -2632,7 +2565,7 @@ decode_payment(InvoiceID, #domain_InvoicePayment{
         <<"amount">> => Amount,
         <<"currency">> => decode_currency(Currency),
         <<"payer">> => decode_payer(Payer)
-    }, decode_payment_status(Status))).
+    }, decode_payment_status(Status, Context))).
 
 decode_payer({customer, #domain_CustomerPayer{
     customer_id = ID
@@ -2711,10 +2644,10 @@ decode_contact_info(#domain_ContactInfo{
         <<"email">> => Email
     }).
 
-decode_payment_status({Status, StatusInfo}) ->
+decode_payment_status({Status, StatusInfo}, Context) ->
     Error = case StatusInfo of
         #domain_InvoicePaymentFailed{failure = OperationFailure} ->
-            decode_operation_failure(OperationFailure);
+            decode_operation_failure(OperationFailure, Context);
         _ ->
             undefined
     end,
@@ -2723,13 +2656,10 @@ decode_payment_status({Status, StatusInfo}) ->
         <<"error">> => Error
     }.
 
-decode_operation_failure({operation_timeout, _}) ->
+decode_operation_failure({operation_timeout, _}, _) ->
     logic_error(timeout, <<"timeout">>);
-decode_operation_failure({failure, #domain_Failure{
-    code = Code,
-    reason = Reason
-}}) ->
-    logic_error(Code, Reason).
+decode_operation_failure({failure, Failure}, Context) ->
+    payment_error(Failure, Context).
 
 decode_stat_payment(#merchstat_StatPayment{
     id = PaymentID,
@@ -2744,7 +2674,7 @@ decode_stat_payment(#merchstat_StatPayment{
     payer = Payer,
     context = RawContext,
     location_info = Location
-}) ->
+}, Context) ->
     genlib_map:compact(maps:merge(#{
         <<"id">> =>  PaymentID,
         <<"invoiceID">> => InvoiceID,
@@ -2757,7 +2687,7 @@ decode_stat_payment(#merchstat_StatPayment{
         <<"payer">> => decode_stat_payer(Payer),
         <<"geoLocationInfo">> => decode_geo_location_info(Location),
         <<"metadata">> =>  decode_context(RawContext)
-    }, decode_stat_payment_status(Status))).
+    }, decode_stat_payment_status(Status, Context))).
 
 decode_stat_payer({customer, #merchstat_CustomerPayer{
     customer_id = ID
@@ -2795,8 +2725,8 @@ decode_stat_payment_tool_token(PaymentTool) ->
 decode_stat_payment_tool_details(PaymentTool) ->
     decode_payment_tool_details(merchstat_to_domain(PaymentTool)).
 
-decode_stat_payment_status(PaymentStatus) ->
-    decode_payment_status(merchstat_to_domain(PaymentStatus)).
+decode_stat_payment_status(PaymentStatus, Context) ->
+    decode_payment_status(merchstat_to_domain(PaymentStatus), Context).
 
 decode_stat_payment_flow(Flow) ->
     decode_flow(merchstat_to_domain(Flow)).
@@ -3384,7 +3314,7 @@ decode_stat_invoice(#merchstat_StatInvoice{
     currency_symbolic_code = Currency,
     context = RawContext,
     cart = Cart
-}) ->
+}, Context) ->
     genlib_map:compact(maps:merge(#{
         <<"id">> => InvoiceID,
         <<"shopID">> => ShopID,
@@ -3396,28 +3326,28 @@ decode_stat_invoice(#merchstat_StatInvoice{
         <<"product">> => Product,
         <<"description">> => Description,
         <<"cart">> => decode_invoice_cart(Cart)
-    }, decode_stat_invoice_status(InvoiceStatus))).
+    }, decode_stat_invoice_status(InvoiceStatus, Context))).
 
-decode_stat_invoice_status(Status) ->
+decode_stat_invoice_status(Status, Context) ->
     decode_invoice_status(merchstat_to_domain(Status)).
 
 decode_refund_for_event(
     #domain_InvoicePaymentRefund{cash = #domain_Cash{}} = Refund,
     _InvoiceID,
     _PaymentID,
-    _Context
+    Context
 ) ->
-    decode_refund(Refund);
+    decode_refund(Refund, Context);
 decode_refund_for_event(
     #domain_InvoicePaymentRefund{cash = undefined} = Refund,
     InvoiceID,
     PaymentID,
-    #{req_ctx := ReqCtx, user_info := UserInfo}
+    Context,
 ) ->
     % Need to fix it!
     {ok, #payproc_InvoicePayment{payment = #domain_InvoicePayment{cost = Cash}}} =
-        get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
-    decode_refund(Refund#domain_InvoicePaymentRefund{cash = Cash}).
+        get_payment_by_id(InvoiceID, PaymentID, Context),
+    decode_refund(Refund#domain_InvoicePaymentRefund{cash = Cash}, Context).
 
 decode_refund(#domain_InvoicePaymentRefund{
     id = ID,
@@ -3428,7 +3358,7 @@ decode_refund(#domain_InvoicePaymentRefund{
         amount = Amount,
         currency = Currency
     }
-}) ->
+}, Context) ->
     genlib_map:compact(maps:merge(
         #{
             <<"id">> => ID,
@@ -3437,13 +3367,13 @@ decode_refund(#domain_InvoicePaymentRefund{
             <<"amount">> => Amount,
             <<"currency">> => decode_currency(Currency)
         },
-        decode_refund_status(Status)
+        decode_refund_status(Status, Context)
     )).
 
-decode_refund_status({Status, StatusInfo}) ->
+decode_refund_status({Status, StatusInfo}, Context) ->
     Error = case StatusInfo of
         #domain_InvoicePaymentRefundFailed{failure = OperationFailure} ->
-            decode_operation_failure(OperationFailure);
+            decode_operation_failure(OperationFailure, Context);
         _ ->
             undefined
     end,
@@ -3934,7 +3864,7 @@ decode_customer_event(#payproc_Event{
     source =  {customer_id, _},
     payload =  {customer_changes, CustomerChanges}
 }, _) ->
-    Changes = decode_customer_changes(CustomerChanges),
+    Changes = decode_customer_changes(CustomerChanges, Context),
     case Changes of
         [_Something | _] ->
             {true, #{
@@ -3946,40 +3876,40 @@ decode_customer_event(#payproc_Event{
             false
     end.
 
-decode_customer_changes(CustomerChanges) when is_list(CustomerChanges) ->
+decode_customer_changes(CustomerChanges, Context) when is_list(CustomerChanges) ->
     lists:filtermap(
-        fun decode_customer_change/1,
+        fun(V) -> decode_customer_change(V, Context) end,
         CustomerChanges
     ).
 
 decode_customer_change({customer_binding_changed, #payproc_CustomerBindingChanged{
     id = BindingID,
     payload = Payload
-}}) ->
-    decode_customer_binding_change(BindingID, Payload);
-decode_customer_change(_) ->
+}}, Context) ->
+    decode_customer_binding_change(BindingID, Payload, Context);
+decode_customer_change(_, _) ->
     false.
 
 decode_customer_binding_change(_, {started, #payproc_CustomerBindingStarted{
     binding = CustomerBinding
-}}) ->
+}}, Context) ->
     {true, #{
         <<"changeType">> => <<"CustomerBindingStarted">>,
-        <<"customerBinding">> => decode_customer_binding(CustomerBinding)
+        <<"customerBinding">> => decode_customer_binding(CustomerBinding, Context)
     }};
 decode_customer_binding_change(BindingID, {status_changed, #payproc_CustomerBindingStatusChanged{
     status = Status
-}}) ->
+}}, Context) ->
     {true, genlib_map:compact(maps:merge(
         #{
             <<"changeType">> => <<"CustomerBindingStatusChanged">>,
             <<"customerBindingID">> => BindingID
         },
-        decode_customer_binding_status(Status)
+        decode_customer_binding_status(Status, Context)
     ))};
 decode_customer_binding_change(BindingID, {interaction_requested, #payproc_CustomerBindingInteractionRequested{
     interaction = UserInteraction
-}}) ->
+}}, _) ->
     {true, #{
         <<"changeType">> => <<"CustomerBindingInteractionRequested">>,
         <<"customerBindingID">> => BindingID,
@@ -4011,13 +3941,13 @@ decode_customer_binding(#payproc_CustomerBinding{
     id = ID,
     payment_resource = DisposablePaymentResource,
     status = Status
-}) ->
+}, Context) ->
     genlib_map:compact(maps:merge(
         #{
             <<"id">> => ID,
             <<"paymentResource">> => decode_disposable_payment_resource(DisposablePaymentResource)
         },
-        decode_customer_binding_status(Status)
+        decode_customer_binding_status(Status, Context)
     )).
 
 decode_disposable_payment_resource(#domain_DisposablePaymentResource{
@@ -4033,10 +3963,10 @@ decode_disposable_payment_resource(#domain_DisposablePaymentResource{
         <<"clientInfo">> => ClientInfo
     }.
 
-decode_customer_binding_status({Status, StatusInfo}) ->
+decode_customer_binding_status({Status, StatusInfo}, Context) ->
     Error = case StatusInfo of
         #payproc_CustomerBindingFailed{failure = OperationFailure} ->
-            decode_operation_failure(OperationFailure);
+            decode_operation_failure(OperationFailure, Context);
         _ ->
             undefined
     end,
@@ -4315,7 +4245,7 @@ process_merchant_stat_result(StatType, Result) ->
             end
     end.
 
-process_search_request(QueryType, Query, Req, ReqCtx, Opts = #{thrift_fun := ThriftFun}) ->
+process_search_request(QueryType, Query, Req, Context, ReqCtx, Opts = #{thrift_fun := ThriftFun}) ->
     Limit = genlib_map:get('limit', Req),
     Offset = genlib_map:get('offset', Req),
     QueryParams = #{
@@ -4329,12 +4259,12 @@ process_search_request(QueryType, Query, Req, ReqCtx, Opts = #{thrift_fun := Thr
         [encode_stat_request(Dsl)],
         ReqCtx
     ),
-    process_search_request_result(QueryType, Result, Opts).
+    process_search_request_result(QueryType, Result, Context, Opts).
 
-process_search_request_result(QueryType, Result, #{decode_fun := DecodeFun}) ->
+process_search_request_result(QueryType, Result, Context, #{decode_fun := DecodeFun}) ->
     case Result of
         {ok, #merchstat_StatResponse{data = {QueryType, Data}, total_count = TotalCount}} ->
-            DecodedData = [DecodeFun(D) || D <- Data],
+            DecodedData = [DecodeFun(D, Context) || D <- Data],
             Resp = #{
                 <<"result">> => DecodedData,
                 <<"totalCount">> => TotalCount
@@ -4399,12 +4329,12 @@ process_woody_error(_Source, resource_unavailable, _Details) ->
 process_woody_error(_Source, result_unknown, _Details) ->
     {error, reply_5xx(504)}.
 
-prepare_party(Context, ReqCtx, ServiceCall) ->
+prepare_party(ServiceCall, Context) ->
     Result0 = ServiceCall(),
     case Result0 of
         {exception, #payproc_PartyNotFound{}} ->
             _ = lager:info("Attempting to create a missing party"),
-            Result1 = create_party(Context, ReqCtx),
+            Result1 = create_party(Context),
             case Result1 of
                 ok ->
                     ServiceCall();
@@ -4415,15 +4345,12 @@ prepare_party(Context, ReqCtx, ServiceCall) ->
             Result0
     end.
 
-create_party(Context, ReqCtx) ->
-    PartyID = get_party_id(Context),
-    UserInfo = get_user_info(Context),
-    PartyParams = get_party_params(Context),
-    Result = service_call(
+create_party(Context) ->
+    Result = service_call_with_user_info(
         party_management,
         'Create',
-        [UserInfo, PartyID, PartyParams],
-        ReqCtx
+        [get_party_id(Context), get_party_params(Context)],
+        Context
     ),
     case Result of
         {ok, _} ->
@@ -4434,8 +4361,8 @@ create_party(Context, ReqCtx) ->
             Error
     end.
 
-get_invoice_by_id(ReqCtx, UserInfo, InvoiceID) ->
-    service_call(
+get_invoice_by_id(Context, InvoiceID) ->
+    service_call_with_user_info(
         invoicing,
         'Get',
         [UserInfo, InvoiceID],
@@ -4450,34 +4377,33 @@ get_customer_by_id(ReqCtx, CustomerID) ->
         ReqCtx
     ).
 
-get_invoice_tpl_by_id(ReqCtx, UserInfo, InvoiceTplID) ->
-    service_call(
+get_invoice_tpl_by_id(InvoiceTplID, Context) ->
+    service_call_with_user_info(
         invoice_templating,
         'Get',
-        [UserInfo, InvoiceTplID],
-        ReqCtx
+        [InvoiceTplID],
+        Context
     ).
 
-get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID) ->
-    service_call(
+get_payment_by_id(InvoiceID, PaymentID, Context) ->
+    service_call_with_user_info(
         invoicing,
         'GetPayment',
-        [UserInfo, InvoiceID, PaymentID],
-        ReqCtx
+        [InvoiceID, PaymentID],
+        Context
     ).
 
-get_my_party(Context, ReqCtx, UserInfo, PartyID) ->
+get_my_party(PartyID, Context) ->
     prepare_party(
-        Context,
-        ReqCtx,
         fun () ->
-            service_call(
+            service_call_with_user_info(
                 party_management,
                 'Get',
-                [UserInfo, PartyID],
-                ReqCtx
+                [PartyID],
+                Context
             )
-        end
+        end,
+        Context
     ).
 
 delete_webhook(PartyID, WebhookID, ReqCtx) ->
@@ -4488,18 +4414,17 @@ delete_webhook(PartyID, WebhookID, ReqCtx) ->
             Exception
     end.
 
-get_contract_by_id(Context, ReqCtx, UserInfo, PartyID, ContractID) ->
+get_contract_by_id(PartyID, ContractID, Context) ->
     prepare_party(
-        Context,
-        ReqCtx,
         fun () ->
-            service_call(
+            service_call_with_user_info(
                 party_management,
                 'GetContract',
-                [UserInfo, PartyID, ContractID],
-                ReqCtx
+                [PartyID, ContractID],
+                Context
             )
-        end
+        end,
+        Context
     ).
 
 get_category_by_id(CategoryID, ReqCtx) ->
@@ -4574,7 +4499,7 @@ construct_payment_methods(ServiceName, Args, Context) ->
                 payment_methods = PaymentMethodRefs
             }
         }} ->
-            {ok, decode_payment_methods(PaymentMethodRefs)};
+            {ok, decode_payment_methods(PaymentMethodRefs, Context)};
         Error ->
             Error
     end.
@@ -4599,7 +4524,7 @@ decode_payment_method(digital_wallet, Providers) ->
     #{<<"method">> => <<"DigitalWallet">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}.
 
 compute_terms(ServiceName, Args, Context) ->
-    service_call(
+    service_call_with_user_info(
         ServiceName,
         'ComputeTerms',
         Args,
@@ -4702,19 +4627,16 @@ get_default_url_lifetime() ->
     end.
 
 compute_payment_institution_terms(PaymentInstitutionID, VS, Context, ReqCtx) ->
-    UserInfo = get_user_info(Context),
-    PartyID = get_party_id(Context),
     prepare_party(
-        Context,
-        ReqCtx,
         fun () ->
-            service_call(
+            service_call_with_user_info(
                 party_management,
                 'ComputePaymentInstitutionTerms',
-                [UserInfo, PartyID, ?payment_institution_ref(PaymentInstitutionID), VS],
-                ReqCtx
+                [get_party_id(Context), ?payment_institution_ref(PaymentInstitutionID), VS],
+                Context
             )
-        end
+        end,
+        Context
     ).
 
 prepare_varset(Req) ->
