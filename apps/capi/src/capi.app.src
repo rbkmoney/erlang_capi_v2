@@ -2,7 +2,7 @@
     {description, "A service that does something"},
     {vsn, "0.1.0"},
     {registered, []},
-    {mod, { capi , []}},
+    {mod, {capi , []}},
     {applications, [
         kernel,
         stdlib,
@@ -20,13 +20,8 @@
         rfc3339,
         base64url,
         snowflake,
-        woody_user_identity
+        woody_user_identity,
+        payproc_errors
     ]},
-    {env, []},
-    {modules, []},
-    {maintainers, [
-        "Artem Ocheredko <galaxie.stern@gmail.com>"
-    ]},
-    {licenses, []},
-    {links, []}
+    {env, []}
 ]}.
