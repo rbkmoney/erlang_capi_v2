@@ -604,6 +604,8 @@ process_request('CreateRefund', Req, Context, ReqCtx) ->
                     )}};
                 #payproc_InvoicePaymentAmountExceeded{} ->
                     {ok, {400, [], logic_error(invoicePaymentAmountExceeded, <<"Payment amount exceeded">>)}};
+                #payproc_InconsistentRefundCurrency{} ->
+                    {ok, {400, [], logic_error(inconsistentRefundCurrency, <<"Inconsistent refund currency">>)}};
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
             end
