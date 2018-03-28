@@ -1367,38 +1367,6 @@ limit_exceeded_error(Limit) ->
 general_error(Message) ->
     #{<<"message">> => genlib:to_binary(Message)}.
 
-payment_error(Error, Context) ->
-    #{<<"message">> => payment_error_message(Error, capi_auth:get_consumer(capi_auth:get_claims(Context)))}.
-
-payment_error_message(Error, client) ->
-    payproc_errors:match('PaymentFailure', Error, fun payment_error_client_maping/1);
-payment_error_message(Error, merchant) ->
-    encode_merchant_payment_error(Error).
-
-encode_merchant_payment_error(Error) ->
-    % чтобы не городить ещё один обход дерева как в payproc_errors проще отформатировать в текст,
-    % а потом уже в json
-    encode_merchant_payment_error_(
-        binary:split(erlang:list_to_binary(payproc_errors:format_raw(Error)), <<":">>, [global])
-    ).
-
-encode_merchant_payment_error_([H|T]) ->
-    R = #{<<"code">> => H},
-    case T of
-        [] -> R;
-        _  -> R#{<<"sub">> => encode_merchant_payment_error_(T)}
-    end.
-
-%% client error mapping
-%% @see https://github.com/petrkozorezov/swag/blob/master/spec/definitions/PaymentError.yaml
-payment_error_client_maping({preauthorization_failed, _}) -> <<"PreauthorizationFailed">>;
-payment_error_client_maping({authorization_failed, {payment_tool_rejected , _}}) -> <<"InvalidPaymentTool"   >>;
-payment_error_client_maping({authorization_failed, {account_not_found     , _}}) -> <<"InvalidPaymentTool"   >>;
-payment_error_client_maping({authorization_failed, {account_limit_exceeded, _}}) -> <<"AccountLimitsExceeded">>;
-payment_error_client_maping({authorization_failed, {insufficient_funds    , _}}) -> <<"AccountBlocked"       >>;
-payment_error_client_maping({authorization_failed, {account_blocked       , _}}) -> <<"AccountBlocked"       >>;
-payment_error_client_maping(_                                                  ) -> <<"PaymentRejected"      >>.
-
 parse_exp_date(ExpDate) when is_binary(ExpDate) ->
     [Month, Year0] = binary:split(ExpDate, <<"/">>),
     Year = case genlib:to_int(Year0) of
@@ -2176,7 +2144,7 @@ decode_payment_status({Status, StatusInfo}, Context) ->
     Error =
         case StatusInfo of
             #domain_InvoicePaymentFailed{failure = OperationFailure} ->
-                decode_operation_failure(OperationFailure, Context);
+                decode_payment_operation_failure(OperationFailure, Context);
             _ ->
                 undefined
         end,
@@ -2185,10 +2153,39 @@ decode_payment_status({Status, StatusInfo}, Context) ->
         <<"error" >> => Error
     }.
 
-decode_operation_failure({operation_timeout, _}, _) ->
-    logic_error(timeout, <<"timeout">>);
-decode_operation_failure({failure, Failure}, Context) ->
-    payment_error(Failure, Context).
+decode_payment_operation_failure({operation_timeout, _}, _) ->
+    payment_error(<<"timeout">>);
+decode_payment_operation_failure({failure, Failure}, Context) ->
+    case capi_auth:get_consumer(capi_auth:get_claims(get_auth_context(Context))) of
+        client ->
+            payment_error(payproc_errors:match('PaymentFailure', Failure, fun payment_error_client_maping/1));
+        merchant ->
+            % чтобы не городить ещё один обход дерева как в payproc_errors проще отформатировать в текст,
+            % а потом уже в json
+            decode_payment_operation_failure_(
+                binary:split(erlang:list_to_binary(payproc_errors:format_raw(Failure)), <<":">>, [global])
+            )
+    end.
+
+decode_payment_operation_failure_([H|T]) ->
+    R = payment_error(H),
+    case T of
+        [] -> R;
+        _  -> R#{<<"subError">> => decode_payment_operation_failure_(T)}
+    end.
+
+payment_error(Code) ->
+    #{<<"code">> => Code}.
+
+%% client error mapping
+%% @see https://github.com/petrkozorezov/swag/blob/master/spec/definitions/PaymentError.yaml
+payment_error_client_maping({preauthorization_failed, _}) -> <<"PreauthorizationFailed">>;
+payment_error_client_maping({authorization_failed, {payment_tool_rejected , _}}) -> <<"InvalidPaymentTool"   >>;
+payment_error_client_maping({authorization_failed, {account_not_found     , _}}) -> <<"InvalidPaymentTool"   >>;
+payment_error_client_maping({authorization_failed, {account_limit_exceeded, _}}) -> <<"AccountLimitsExceeded">>;
+payment_error_client_maping({authorization_failed, {insufficient_funds    , _}}) -> <<"InsufficientFunds"    >>;
+payment_error_client_maping({authorization_failed, {account_blocked       , _}}) -> <<"AccountBlocked"       >>;
+payment_error_client_maping(_                                                  ) -> <<"PaymentRejected"      >>.
 
 decode_stat_payment(Stat, Context) ->
     merge_and_compact(#{
@@ -2697,6 +2694,11 @@ decode_refund_status({Status, StatusInfo}, Context) ->
         <<"status">> => genlib:to_binary(Status),
         <<"error" >> => Error
     }.
+
+decode_operation_failure({operation_timeout, _}, _) ->
+    logic_error(timeout, <<"timeout">>);
+decode_operation_failure({failure, #domain_Failure{code = Code, reason = Reason}}, _) ->
+    logic_error(Code, Reason).
 
 decode_stat_payout(Payout, _Context) ->
     merge_and_compact(#{
