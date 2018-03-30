@@ -1312,6 +1312,8 @@ encode_webhook_scope(#{<<"topic">> := <<"CustomersTopic">>, <<"shopID">> := Shop
 %%%
 
 % Нужно быть аккуратным с флагами их порядок влияет на порядок аргументов при вызове функций!
+% обычно параметры идут в порядке [user_info, party_id, party_creation],
+% но это зависит от damsel протокола
 service_call_with(Flags, Call, Context) ->
     % реверс тут чтобы в флагах писать порядок аналогично вызову функций
     service_call_with_(lists:reverse(Flags), Call, Context).
