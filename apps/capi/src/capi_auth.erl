@@ -143,7 +143,7 @@ resolve_token_spec({customer, CustomerID}) ->
         {[{customers, CustomerID}, bindings], write},
         {[payment_resources], write}
     ],
-    Expiration = {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME},
+    Expiration = {lifetime, ?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME},
     {#{}, ACL, Expiration}.
 
 -spec get_subject_id(context()) -> binary().
