@@ -2179,13 +2179,22 @@ payment_error(Code) ->
 
 %% client error mapping
 %% @see https://github.com/petrkozorezov/swag/blob/master/spec/definitions/PaymentError.yaml
-payment_error_client_maping({preauthorization_failed, _}) -> <<"PreauthorizationFailed">>;
-payment_error_client_maping({authorization_failed, {payment_tool_rejected , _}}) -> <<"InvalidPaymentTool"   >>;
-payment_error_client_maping({authorization_failed, {account_not_found     , _}}) -> <<"InvalidPaymentTool"   >>;
-payment_error_client_maping({authorization_failed, {account_limit_exceeded, _}}) -> <<"AccountLimitsExceeded">>;
-payment_error_client_maping({authorization_failed, {insufficient_funds    , _}}) -> <<"InsufficientFunds"    >>;
-payment_error_client_maping({authorization_failed, {account_blocked       , _}}) -> <<"AccountBlocked"       >>;
-payment_error_client_maping(_                                                  ) -> <<"PaymentRejected"      >>.
+payment_error_client_maping({preauthorization_failed, _})->
+    <<"PreauthorizationFailed">>;
+payment_error_client_maping({authorization_failed, {account_blocked, _}}) ->
+    <<"ContactIssuer">>;
+payment_error_client_maping({authorization_failed, {payment_tool_rejected, {_, unknown}}}) ->
+    <<"ContactIssuer">>;
+payment_error_client_maping({authorization_failed, {payment_tool_rejected, _}}) ->
+    <<"InvalidPaymentTool">>;
+payment_error_client_maping({authorization_failed, {account_not_found, _}}) ->
+    <<"InvalidPaymentTool">>;
+payment_error_client_maping({authorization_failed, {account_limit_exceeded, _}}) ->
+    <<"AccountLimitsExceeded">>;
+payment_error_client_maping({authorization_failed, {insufficient_funds, _}}) ->
+    <<"InsufficientFunds">>;
+payment_error_client_maping(_) ->
+    <<"PaymentRejected">>.
 
 decode_stat_payment(Stat, Context) ->
     merge_and_compact(#{
