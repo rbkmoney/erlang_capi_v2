@@ -2184,9 +2184,9 @@ payment_error(Code) ->
 payment_error_client_maping({preauthorization_failed, _})->
     <<"PreauthorizationFailed">>;
 payment_error_client_maping({authorization_failed, {account_blocked, _}}) ->
-    <<"ContactIssuer">>;
+    <<"RejectedByIssuer">>;
 payment_error_client_maping({authorization_failed, {payment_tool_rejected, {_, unknown}}}) ->
-    <<"ContactIssuer">>;
+    <<"RejectedByIssuer">>;
 payment_error_client_maping({authorization_failed, {payment_tool_rejected, _}}) ->
     <<"InvalidPaymentTool">>;
 payment_error_client_maping({authorization_failed, {account_not_found, _}}) ->
