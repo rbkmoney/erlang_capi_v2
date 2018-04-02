@@ -3,6 +3,7 @@
 -include_lib("common_test/include/ct.hrl").
 
 -include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
+-include_lib("dmsl/include/dmsl_payment_processing_errors_thrift.hrl").
 -include_lib("dmsl/include/dmsl_accounter_thrift.hrl").
 -include_lib("dmsl/include/dmsl_cds_thrift.hrl").
 -include_lib("dmsl/include/dmsl_domain_config_thrift.hrl").
@@ -58,6 +59,8 @@
     create_payment_ok_test/1,
     get_payments_ok_test/1,
     get_payment_by_id_ok_test/1,
+    get_client_payment_status_test/1,
+    get_merchant_payment_status_test/1,
     create_refund/1,
     create_partial_refund/1,
     create_partial_refund_without_currency/1,
@@ -171,6 +174,7 @@ invoice_access_token_tests() ->
         get_invoice_payment_methods_ok_test,
         create_payment_ok_test,
         get_payments_ok_test,
+        get_client_payment_status_test,
         get_payment_by_id_ok_test,
         cancel_payment_ok_test,
         capture_payment_ok_test,
@@ -214,6 +218,7 @@ groups() ->
                 create_customer_access_token_ok_test,
                 rescind_invoice_ok_test,
                 fulfill_invoice_ok_test,
+                get_merchant_payment_status_test,
                 create_refund,
                 create_partial_refund,
                 create_partial_refund_without_currency,
@@ -745,6 +750,44 @@ get_payments_ok_test(Config) ->
 get_payment_by_id_ok_test(Config) ->
     mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
     {ok, _} = capi_client_payments:get_payment_by_id(?config(context, Config), ?STRING, ?STRING).
+
+-spec get_client_payment_status_test(config()) ->
+    _.
+get_client_payment_status_test(Config) ->
+    {ok, #{
+        <<"status">> := <<"failed">>,
+        <<"error" >> := #{<<"code">> := <<"InvalidPaymentTool">>}
+    }} = get_failed_payment_with_invalid_cvv(Config).
+
+-spec get_merchant_payment_status_test(config()) ->
+    _.
+get_merchant_payment_status_test(Config) ->
+    {ok, #{
+        <<"status">> := <<"failed">>,
+        <<"error" >> :=
+            #{<<"code">> := <<"authorization_failed">>, <<"subError">> :=
+                #{<<"code">> := <<"payment_tool_rejected">>,<<"subError">> :=
+                    #{<<"code">> := <<"bank_card_rejected">>, <<"subError">> :=
+                        #{<<"code">> := <<"cvv_invalid">>}}}}
+    }} = get_failed_payment_with_invalid_cvv(Config).
+
+-spec get_failed_payment_with_invalid_cvv(config()) ->
+    _.
+get_failed_payment_with_invalid_cvv(Config) ->
+    Failure =
+        payproc_errors:construct('PaymentFailure', {authorization_failed,
+            {payment_tool_rejected,
+                {bank_card_rejected,
+                    {cvv_invalid, #payprocerr_GeneralFailure{}}
+                }
+            }
+        }, <<"Reason">>),
+    mock_services(
+        [{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_FAILED_PAYMENT({failure, Failure})} end}],
+        Config
+    ),
+    % mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
+    capi_client_payments:get_payment_by_id(?config(context, Config), ?STRING, ?STRING).
 
 -spec create_refund(config()) ->
     _.

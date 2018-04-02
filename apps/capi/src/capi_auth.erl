@@ -2,25 +2,23 @@
 
 -export([authorize_api_key/2]).
 -export([authorize_operation/3]).
--export([issue_invoice_access_token/2]).
--export([issue_invoice_access_token/3]).
--export([issue_invoice_template_access_token/2]).
--export([issue_invoice_template_access_token/3]).
--export([issue_customer_access_token/2]).
--export([issue_customer_access_token/3]).
+-export([issue_access_token/2]).
 
 -export([get_subject_id/1]).
 -export([get_claims/1]).
 -export([get_claim/2]).
 -export([get_claim/3]).
+-export([get_consumer/1]).
 
 -export([get_resource_hierarchy/0]).
 
--type context() :: capi_authorizer_jwt:t().
--type claims()  :: capi_authorizer_jwt:claims().
+-type context () :: capi_authorizer_jwt:t().
+-type claims  () :: capi_authorizer_jwt:claims().
+-type consumer() :: client | merchant | provider.
 
--export_type([context/0]).
--export_type([claims/0]).
+-export_type([context /0]).
+-export_type([claims  /0]).
+-export_type([consumer/0]).
 
 -spec authorize_api_key(
     OperationID :: swag_server:operation_id(),
@@ -103,67 +101,50 @@ authorize_operation(OperationID, Req, {{_SubjectID, ACL}, _}) ->
 -define(DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME, 259200).
 -define(DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME, 259200).
 
--spec issue_invoice_access_token(PartyID :: binary(), InvoiceID :: binary()) ->
-    {ok, capi_authorizer_jwt:token()} | {error, _}.
+-type token_spec() ::
+      {invoice    , InvoiceID    :: binary()}
+    | {invoice_tpl, InvoiceTplID :: binary()}
+    | {customer   , CustomerID   :: binary()}
+.
 
-issue_invoice_access_token(PartyID, InvoiceID) ->
-    issue_invoice_access_token(PartyID, InvoiceID, #{}).
-
-
--spec issue_invoice_access_token(PartyID :: binary(), InvoiceID :: binary(), claims()) ->
-    {ok, capi_authorizer_jwt:token()} | {error, _}.
-
-issue_invoice_access_token(PartyID, InvoiceID, Claims) ->
-    ACL = [
-        {[{invoices, InvoiceID}]           , read},
-        {[{invoices, InvoiceID}, payments] , read},
-        {[{invoices, InvoiceID}, payments] , write},
-        {[payment_resources]               , write}
-    ],
-    issue_access_token(PartyID, Claims, ACL, {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME}).
-
--spec issue_invoice_template_access_token(PartyID :: binary(), InvoiceTplID :: binary()) ->
-    {ok, capi_authorizer_jwt:token()} | {error, _}.
-
-issue_invoice_template_access_token(PartyID, InvoiceID) ->
-    issue_invoice_template_access_token(PartyID, InvoiceID, #{}).
-
-
--spec issue_invoice_template_access_token(PartyID :: binary(), InvoiceTplID :: binary(), claims()) ->
-    {ok, capi_authorizer_jwt:token()} | {error, _}.
-
-issue_invoice_template_access_token(PartyID, InvoiceTplID, Claims) ->
-    ACL = [
-        {[party, {invoice_templates, InvoiceTplID}] , read},
-        {[party, {invoice_templates, InvoiceTplID}, invoice_template_invoices] , write}
-    ],
-    issue_access_token(PartyID, Claims, ACL, unlimited).
-
--spec issue_customer_access_token(PartyID :: binary(), CustomerID :: binary()) ->
-    {ok, capi_authorizer_jwt:token()} | {error, _}.
-
-issue_customer_access_token(PartyID, CustomerID) ->
-    issue_customer_access_token(PartyID, CustomerID, #{}).
-
--spec issue_customer_access_token(PartyID :: binary(), CustomerID :: binary(), claims()) ->
-    {ok, capi_authorizer_jwt:token()} | {error, _}.
-
-issue_customer_access_token(PartyID, CustomerID, Claims) ->
-    ACL = [
-        {[{customers, CustomerID}], read},
-        {[{customers, CustomerID}, bindings], read},
-        {[{customers, CustomerID}, bindings], write},
-        {[payment_resources], write}
-    ],
-    issue_access_token(PartyID, Claims, ACL, {lifetime, ?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME}).
+-spec issue_access_token(PartyID :: binary(), token_spec()) ->
+    capi_authorizer_jwt:token().
+issue_access_token(PartyID, TokenSpec) ->
+    {Claims, ACL, Expiration} = resolve_token_spec(TokenSpec),
+    capi_utils:unwrap(capi_authorizer_jwt:issue({{PartyID, capi_acl:from_list(ACL)}, Claims}, Expiration)).
 
 -type acl() :: [{capi_acl:scope(), capi_acl:permission()}].
 
--spec issue_access_token(PartyID :: binary(), claims(), acl(), capi_authorizer_jwt:expiration()) ->
-    {ok, capi_authorizer_jwt:token()} | {error, _}.
-
-issue_access_token(PartyID, Claims, ACL, Expiration) ->
-    capi_authorizer_jwt:issue({{PartyID, capi_acl:from_list(ACL)}, Claims}, Expiration).
+-spec resolve_token_spec(token_spec()) ->
+    {claims(), acl(), capi_authorizer_jwt:expiration()}.
+resolve_token_spec({invoice, InvoiceID}) ->
+    Claims =
+        #{
+            <<"cons">> => <<"client">> % token consumer
+        },
+    ACL = [
+        {[{invoices, InvoiceID}]           , read },
+        {[{invoices, InvoiceID}, payments] , read },
+        {[{invoices, InvoiceID}, payments] , write},
+        {[payment_resources              ] , write}
+    ],
+    Expiration = {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME},
+    {Claims, ACL, Expiration};
+resolve_token_spec({invoice_tpl, InvoiceTplID}) ->
+    ACL = [
+        {[party, {invoice_templates, InvoiceTplID}                           ], read },
+        {[party, {invoice_templates, InvoiceTplID}, invoice_template_invoices], write}
+    ],
+    {#{}, ACL, unlimited};
+resolve_token_spec({customer, CustomerID}) ->
+    ACL = [
+        {[{customers, CustomerID}], read},
+        {[{customers, CustomerID}, bindings], read },
+        {[{customers, CustomerID}, bindings], write},
+        {[payment_resources], write}
+    ],
+    Expiration = {lifetime, ?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME},
+    {#{}, ACL, Expiration}.
 
 -spec get_subject_id(context()) -> binary().
 
@@ -183,7 +164,7 @@ get_claim(ClaimName, {_Subject, Claims}) ->
 -spec get_claim(binary(), context(), term()) -> term().
 
 get_claim(ClaimName, {_Subject, Claims}, Default) ->
-     maps:get(ClaimName, Claims, Default).
+    maps:get(ClaimName, Claims, Default).
 
 %%
 
@@ -344,3 +325,12 @@ get_resource_hierarchy() ->
         invoices            => #{payments => #{}},
         payment_resources => #{}
     }.
+
+-spec get_consumer(claims()) ->
+    consumer().
+get_consumer(Claims) ->
+    case maps:get(<<"cons">>, Claims, <<"merchant">>) of
+        <<"merchant">> -> merchant;
+        <<"client"  >> -> client;
+        <<"provider">> -> provider
+    end.

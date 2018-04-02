@@ -111,22 +111,29 @@
 
 -define(PAYER, {payment_resource, ?PAYMENT_RESOURCE_PAYER}).
 
--define(PAYMENT, #domain_InvoicePayment{
+-define(PAYMENT(Status), #domain_InvoicePayment{
     id              = ?STRING,
     created_at      = ?TIMESTAMP,
     domain_revision = ?INTEGER,
-    status          = {pending, #domain_InvoicePaymentPending{}},
+    status          = Status,
     payer           = ?PAYER,
     cost            = ?CASH,
     flow            = {instant, #domain_InvoicePaymentFlowInstant{}},
     context         = ?CONTENT
 }).
+-define(PAYMENT, ?PAYMENT({pending, #domain_InvoicePaymentPending{}})).
 
--define(PAYPROC_PAYMENT, #payproc_InvoicePayment{
-    payment = ?PAYMENT,
-    refunds = [?REFUND],
-    adjustments = [?ADJUSTMENT]
+-define(PAYPROC_PAYMENT(Payment, Refunds, Adjustments), #payproc_InvoicePayment{
+    payment     = Payment,
+    refunds     = Refunds,
+    adjustments = Adjustments
 }).
+
+-define(PAYPROC_PAYMENT, ?PAYPROC_PAYMENT(?PAYMENT, [?REFUND], [?ADJUSTMENT])).
+
+-define(FAILED_PAYMENT(Failure), ?PAYMENT({failed, #domain_InvoicePaymentFailed{failure = Failure}})).
+
+-define(PAYPROC_FAILED_PAYMENT(Failure), ?PAYPROC_PAYMENT(?FAILED_PAYMENT(Failure), [], [])).
 
 -define(ACCOUNT_STATE, #payproc_AccountState{
     account_id = ?INTEGER,
