@@ -2181,11 +2181,13 @@ payment_error(Code) ->
 
 %% client error mapping
 %% @see https://github.com/petrkozorezov/swag/blob/master/spec/definitions/PaymentError.yaml
+-spec payment_error_client_maping(dmsl_payment_processing_errors_thrift:'PaymentFailure'()) ->
+    binary().
 payment_error_client_maping({preauthorization_failed, _})->
     <<"PreauthorizationFailed">>;
 payment_error_client_maping({authorization_failed, {account_blocked, _}}) ->
     <<"RejectedByIssuer">>;
-payment_error_client_maping({authorization_failed, {payment_tool_rejected, {_, unknown}}}) ->
+payment_error_client_maping({authorization_failed, {rejected_by_issuer, _}}) ->
     <<"RejectedByIssuer">>;
 payment_error_client_maping({authorization_failed, {payment_tool_rejected, _}}) ->
     <<"InvalidPaymentTool">>;
@@ -2312,9 +2314,8 @@ merchstat_to_domain({Status, #merchstat_InvoicePaymentRefunded{}}) ->
 merchstat_to_domain({Status, #merchstat_InvoicePaymentFailed{failure = Failure}}) ->
     NewFailure =
         case Failure of
-            {external_failure, #merchstat_ExternalFailure{code = Code, description = Description}} ->
-                %% TODO fixme
-                {failure, #domain_Failure{code = Code, reason = Description}};
+            {failure, _} ->
+                Failure;
             {operation_timeout, #merchstat_OperationTimeout{}} ->
                 {operation_timeout, #domain_OperationTimeout{}}
         end,
