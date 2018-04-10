@@ -10,6 +10,7 @@
 -include_lib("dmsl/include/dmsl_webhooker_thrift.hrl").
 -include_lib("dmsl/include/dmsl_merch_stat_thrift.hrl").
 -include_lib("dmsl/include/dmsl_reporting_thrift.hrl").
+-include_lib("dmsl/include/dmsl_payment_tool_provider_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 -include_lib("jose/include/jose_jwk.hrl").
 
@@ -73,6 +74,7 @@
     create_nspkmir_payment_resource_ok_test/1,
     create_euroset_payment_resource_ok_test/1,
     create_qw_payment_resource_ok_test/1,
+    create_applepay_payment_resource_ok_test/1,
 
     get_my_party_ok_test/1,
     suspend_my_party_ok_test/1,
@@ -206,7 +208,8 @@ groups() ->
                 create_visa_payment_resource_ok_test,
                 create_nspkmir_payment_resource_ok_test,
                 create_euroset_payment_resource_ok_test,
-                create_qw_payment_resource_ok_test
+                create_qw_payment_resource_ok_test,
+                create_applepay_payment_resource_ok_test
             ]
         },
         {operations_by_base_api_token, [],
@@ -949,6 +952,24 @@ create_qw_payment_resource_ok_test(Config) ->
         <<"clientInfo">> => ClientInfo
     }).
 
+-spec create_applepay_payment_resource_ok_test(_) ->
+    _.
+create_applepay_payment_resource_ok_test(Config) ->
+    mock_services([
+        {payment_tool_provider, fun('Unwrap', _) -> {ok, ?UNWRAPPED_PAYMENT_TOOL} end},
+        {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end}
+    ], Config),
+    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
+    {ok, _} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"TokenizedCardData">>,
+            <<"provider">> => <<"ApplePay">>,
+            <<"merchantID">> => <<"SomeMerchantID">>,
+            <<"paymentToken">> => #{}
+        },
+        <<"clientInfo">> => ClientInfo
+    }).
+
 -spec get_my_party_ok_test(config()) ->
     _.
 get_my_party_ok_test(Config) ->
@@ -1552,7 +1573,8 @@ woody_services() ->
         {geo_ip_service, {dmsl_geo_ip_thrift, 'GeoIpService'}},
         {merchant_stat, {dmsl_merch_stat_thrift, 'MerchantStatistics'}},
         {reporting, {dmsl_reporting_thrift, 'Reporting'}},
-        {customer_management, {dmsl_payment_processing_thrift, 'CustomerManagement'}}
+        {customer_management, {dmsl_payment_processing_thrift, 'CustomerManagement'}},
+        {payment_tool_provider, {dmsl_payment_tool_provider_thrift, 'PaymentToolProvider'}}
     ].
 
 get_keysource(Key, Config) ->

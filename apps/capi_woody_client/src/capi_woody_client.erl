@@ -48,4 +48,6 @@ get_service_modname(webhook_manager) ->
 get_service_modname(customer_management) ->
     {dmsl_payment_processing_thrift, 'CustomerManagement'};
 get_service_modname(party_management) ->
-    {dmsl_payment_processing_thrift, 'PartyManagement'}.
+    {dmsl_payment_processing_thrift, 'PartyManagement'};
+get_service_modname(payment_tool_provider) ->
+    {dmsl_payment_tool_provider_thrift, 'PaymentToolProvider'}.

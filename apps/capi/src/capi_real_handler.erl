@@ -8,6 +8,7 @@
 -include_lib("dmsl/include/dmsl_user_interaction_thrift.hrl").
 -include_lib("dmsl/include/dmsl_geo_ip_thrift.hrl").
 -include_lib("dmsl/include/dmsl_reporting_thrift.hrl").
+-include_lib("dmsl/include/dmsl_payment_tool_provider_thrift.hrl").
 
 -behaviour(swag_server_logic_handler).
 
@@ -156,7 +157,8 @@ process_request('CreatePaymentResource', Req, Context) ->
             case Data of
                 #{<<"paymentToolType">> := <<"CardData"           >>} -> process_card_data(Data, Context);
                 #{<<"paymentToolType">> := <<"PaymentTerminalData">>} -> process_payment_terminal_data(Data);
-                #{<<"paymentToolType">> := <<"DigitalWalletData"  >>} -> process_digital_wallet_data(Data)
+                #{<<"paymentToolType">> := <<"DigitalWalletData"  >>} -> process_digital_wallet_data(Data);
+                #{<<"paymentToolType">> := <<"TokenizedCardData"  >>} -> process_tokenized_card_data(Data, Context)
             end,
         PaymentResource =
             #domain_DisposablePaymentResource{
@@ -1624,10 +1626,13 @@ encode_invoice_context(Params) ->
     encode_invoice_context(Params, ?DEFAULT_INVOICE_META).
 
 encode_invoice_context(Params, DefaultMeta) ->
-    Context = jsx:encode(genlib_map:get(<<"metadata">>, Params, DefaultMeta)),
+    Context = genlib_map:get(<<"metadata">>, Params, DefaultMeta),
+    encode_content(json, Context).
+
+encode_content(json, Data) ->
     #'Content'{
         type = <<"application/json">>,
-        data = Context
+        data = jsx:encode(Data)
     }.
 
 encode_invoice_tpl_line_cost(#{<<"costType">> := CostType} = Cost) ->
@@ -3525,22 +3530,7 @@ reply_5xx(Code) when Code >= 500 andalso Code < 600 ->
     {Code, [], <<>>}.
 
 process_card_data(Data, Context) ->
-    Call = {cds_storage, 'PutCardData', [encode_card_data(Data)]},
-    case service_call(Call, Context) of
-        {ok, #'PutCardDataResult'{session_id = SessionID, bank_card = BankCard}} ->
-            {{bank_card, BankCard}, SessionID};
-        {exception, Exception} ->
-            case Exception of
-                #'InvalidCardData'{} ->
-                    throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}});
-                #'KeyringLocked'{} ->
-                    % TODO
-                    % It's better for the cds to signal woody-level unavailability when the
-                    % keyring is locked, isn't it? It could always mention keyring lock as a
-                    % reason in a woody error definition.
-                    throw({error, reply_5xx(503)})
-            end
-    end.
+    put_card_data_to_cds(encode_card_data(Data), Context).
 
 encode_card_data(CardData) ->
     {Month, Year} = parse_exp_date(genlib_map:get(<<"expDate">>, CardData)),
@@ -3571,6 +3561,73 @@ process_digital_wallet_data(Data) ->
             }
     end,
     {{digital_wallet, DigitalWallet}, <<>>}.
+
+process_tokenized_card_data(Data, Context) ->
+    Call = {payment_tool_provider, 'Unwrap', [encode_wrapped_payment_tool(Data)]},
+    {ok, UnwrappedPaymentTool} = service_call(Call, Context),
+    put_card_data_to_cds(encode_tokenized_card_data(UnwrappedPaymentTool), Context).
+
+encode_wrapped_payment_tool(Data) ->
+    #paytoolprv_WrappedPaymentTool{
+        request = encode_payment_request(Data)
+    }.
+
+encode_payment_request(#{<<"provider" >> := <<"ApplePay">>} = Data) ->
+    PaymentToken = genlib_map:get(<<"paymentToken">>, Data),
+    {apple, #paytoolprv_ApplePayRequest{
+        merchant_id = genlib_map:get(<<"merchantID">>, Data),
+        payment_token = encode_content(json, PaymentToken)
+    }};
+encode_payment_request(#{<<"provider" >> := <<"SamsungPay">>} = Data) ->
+    {samsung, #paytoolprv_SamsungPayRequest{
+        service_id = genlib_map:get(<<"serviceID">>, Data),
+        reference_id = genlib_map:get(<<"referenceID">>, Data)
+    }}.
+
+encode_tokenized_card_data(#paytoolprv_UnwrappedPaymentTool{
+    payment_data = {tokenized_card, #paytoolprv_TokenizedCard{
+        dpan = DPAN,
+        exp_date = #paytoolprv_ExpDate{
+            month = Month,
+            year = Year
+        },
+        auth_data = {auth_3ds, #paytoolprv_Auth3DS{
+            cryptogram = Cryptogram,
+            eci = _ECI
+        }}
+    }},
+    card_info = #paytoolprv_CardInfo{
+        cardholder_name = CardholderName
+    }
+}) ->
+    #'CardData'{
+        pan  = DPAN,
+        exp_date = #'ExpDate'{
+            month = Month,
+            year = Year
+        },
+        cardholder_name = CardholderName,
+        % FIX after changes in cds protocol
+        cvv = Cryptogram
+    }.
+
+put_card_data_to_cds(Data, Context) ->
+    Call = {cds_storage, 'PutCardData', [Data]},
+    case service_call(Call, Context) of
+        {ok, #'PutCardDataResult'{session_id = SessionID, bank_card = BankCard}} ->
+            {{bank_card, BankCard}, SessionID};
+        {exception, Exception} ->
+            case Exception of
+                #'InvalidCardData'{} ->
+                    throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}});
+                #'KeyringLocked'{} ->
+                    % TODO
+                    % It's better for the cds to signal woody-level unavailability when the
+                    % keyring is locked, isn't it? It could always mention keyring lock as a
+                    % reason in a woody error definition.
+                    throw({error, reply_5xx(503)})
+            end
+    end.
 
 enrich_client_info(ClientInfo, Context) ->
     ClientInfo#{<<"ip">> => prepare_client_ip(Context)}.
