@@ -607,3 +607,30 @@
     bank_card = ?BANK_CARD,
     session_id = ?STRING
 }).
+
+-define(UNWRAPPED_PAYMENT_TOOL, #paytoolprv_UnwrappedPaymentTool{
+    payment_data = {tokenized_card, #paytoolprv_TokenizedCard{
+        dpan = ?STRING,
+        exp_date = #paytoolprv_ExpDate{
+            month = 10,
+            year = 2018
+        },
+        auth_data = {auth_3ds, #paytoolprv_Auth3DS{
+            cryptogram = ?STRING,
+            eci = ?STRING
+        }}
+    }},
+    card_info = #paytoolprv_CardInfo{
+        display_name = ?STRING,
+        cardholder_name = ?STRING,
+        last_4_digits = ?STRING,
+        card_class = debit,
+        payment_system = visa
+    },
+    details = {apple, #paytoolprv_ApplePayDetails{
+        transaction_id = ?STRING,
+        amount = ?INTEGER,
+        currency_numeric_code = 643,
+        device_id = ?STRING
+    }}
+}).
