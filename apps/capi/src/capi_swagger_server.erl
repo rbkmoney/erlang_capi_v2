@@ -1,7 +1,7 @@
 -module(capi_swagger_server).
 
--export([child_spec/1]).
--export([request_hook/1]).
+-export([child_spec   /1]).
+-export([request_hook /1]).
 -export([response_hook/4]).
 
 -define(APP, capi).
@@ -11,13 +11,13 @@
 
 -define(START_TIME_TAG, processing_start_time).
 
--type params() :: module().
+-type params() :: {[erl_health:checker()], module()}.
 
--spec child_spec(params()) -> supervisor:child_spec().
-
-child_spec(LogicHandler) ->
+-spec child_spec(params()) ->
+    supervisor:child_spec().
+child_spec({HealthCheckers, LogicHandler}) ->
     {Transport, TransportOpts} = get_socket_transport(),
-    CowboyOpts = get_cowboy_config(LogicHandler),
+    CowboyOpts = get_cowboy_config(HealthCheckers, LogicHandler),
     AcceptorsPool = genlib_app:env(?APP, acceptors_poolsize, ?DEFAULT_ACCEPTORS_POOLSIZE),
     ranch:child_spec(?MODULE, AcceptorsPool,
         Transport, TransportOpts, cowboy_protocol, CowboyOpts).
@@ -27,8 +27,12 @@ get_socket_transport() ->
     Port     = genlib_app:env(?APP, port, ?DEFAULT_PORT),
     {ranch_tcp, [{ip, IP}, {port, Port}]}.
 
-get_cowboy_config(LogicHandler) ->
-    Dispatch = cowboy_router:compile(swag_server_router:get_paths(LogicHandler)),
+get_cowboy_config(HealthCheckers, LogicHandler) ->
+    Dispatch =
+        cowboy_router:compile(add_route(
+            erl_health_handle:get_route(HealthCheckers),
+            swag_server_router:get_paths(LogicHandler)
+        )),
     [
         {env, [
             {dispatch, Dispatch},
@@ -42,6 +46,9 @@ get_cowboy_config(LogicHandler) ->
         {onrequest, cowboy_access_log:get_request_hook()},
         {onresponse, fun ?MODULE:response_hook/4}
     ].
+
+add_route(Route, [{Host, Routes}]) ->
+    [{Host, [Route|Routes]}].
 
 -spec request_hook(cowboy_req:req()) ->
     cowboy_req:req().

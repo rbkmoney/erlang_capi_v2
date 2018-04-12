@@ -20,7 +20,9 @@
         rfc3339,
         base64url,
         snowflake,
-        woody_user_identity
+        woody_user_identity,
+        payproc_errors,
+        erl_health
     ]},
     {env, []},
     {modules, []},
