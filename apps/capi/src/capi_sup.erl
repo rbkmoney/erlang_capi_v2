@@ -24,8 +24,8 @@ start_link() ->
 init([]) ->
     AuthorizerSpecs = get_authorizer_child_specs(),
     {LogicHandler, LogicHandlerSpecs} = get_logic_handler_info(),
-    HealthCheckers = genlib_app:env(capi, health_checkers, []),
-    SwaggerSpec = capi_swagger_server:child_spec({HealthCheckers, LogicHandler}),
+    HealthRoutes = [{'_', [erl_health_handle:get_route(genlib_app:env(capi, health_checkers, []))]}],
+    SwaggerSpec = capi_swagger_server:child_spec({HealthRoutes, LogicHandler}),
     {ok, {
         {one_for_all, 0, 1},
             AuthorizerSpecs ++ LogicHandlerSpecs ++ [SwaggerSpec]
