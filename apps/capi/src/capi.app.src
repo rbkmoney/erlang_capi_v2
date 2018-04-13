@@ -21,7 +21,8 @@
         base64url,
         snowflake,
         woody_user_identity,
-        payproc_errors
+        payproc_errors,
+        erl_health
     ]},
     {env, []}
 ]}.
