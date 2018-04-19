@@ -859,7 +859,14 @@ capture_payment_ok_test(Config) ->
 create_visa_payment_resource_ok_test(Config) ->
     mock_services([
         {cds_storage, fun
-            ('PutCardData', [#'CardData'{pan = <<"411111", _:6/binary, Mask:4/binary>>}]) ->
+            ('PutCardData', [
+                #'CardData'{pan = <<"411111", _:6/binary, Mask:4/binary>>},
+                #'SessionData'{
+                    auth_data = {card_security_code, #'CardSecurityCode'{
+                        value = <<"232">>
+                    }}
+                }
+            ]) ->
                 {ok, #'PutCardDataResult'{
                     bank_card = #domain_BankCard{
                         token = ?STRING,
@@ -892,7 +899,14 @@ create_visa_payment_resource_ok_test(Config) ->
 create_nspkmir_payment_resource_ok_test(Config) ->
     mock_services([
         {cds_storage, fun
-            ('PutCardData', [#'CardData'{pan = <<"22001111", _:6/binary, Mask:2/binary>>}]) ->
+            ('PutCardData', [
+                #'CardData'{pan = <<"22001111", _:6/binary, Mask:2/binary>>},
+                #'SessionData'{
+                    auth_data = {card_security_code, #'CardSecurityCode'{
+                        value = <<"232">>
+                    }}
+                }
+            ]) ->
                 {ok, #'PutCardDataResult'{
                     bank_card = #domain_BankCard{
                         token = ?STRING,
@@ -960,15 +974,16 @@ create_applepay_payment_resource_ok_test(Config) ->
         {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
-    {ok, _} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
-        <<"paymentTool">> => #{
-            <<"paymentToolType">> => <<"TokenizedCardData">>,
-            <<"provider">> => <<"ApplePay">>,
-            <<"merchantID">> => <<"SomeMerchantID">>,
-            <<"paymentToken">> => #{}
-        },
-        <<"clientInfo">> => ClientInfo
-    }).
+    {ok, #{<<"paymentToolDetails">> := #{<<"paymentSystem">> := <<"mastercard">>}}} =
+        capi_client_tokens:create_payment_resource(?config(context, Config), #{
+            <<"paymentTool">> => #{
+                <<"paymentToolType">> => <<"TokenizedCardData">>,
+                <<"provider">> => <<"ApplePay">>,
+                <<"merchantID">> => <<"SomeMerchantID">>,
+                <<"paymentToken">> => #{}
+            },
+            <<"clientInfo">> => ClientInfo
+        }).
 
 -spec get_my_party_ok_test(config()) ->
     _.
