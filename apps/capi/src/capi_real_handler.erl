@@ -2927,16 +2927,10 @@ merchstat_to_domain({Status, #merchstat_InvoicePaymentCancelled{}}) ->
 merchstat_to_domain({Status, #merchstat_InvoicePaymentRefunded{}}) ->
     {Status, #domain_InvoicePaymentRefunded{}};
 merchstat_to_domain({Status, #merchstat_InvoicePaymentFailed{
-    failure = {external_failure, #merchstat_ExternalFailure{
-        code = Code,
-        description = Description
-    }}
+    failure = {failure, Failure}
 }}) ->
     {Status, #domain_InvoicePaymentFailed{
-        failure = {failure, #domain_Failure{
-            code = Code,
-            reason = Description
-        }}
+        failure = {failure, Failure}
     }};
 merchstat_to_domain({Status, #merchstat_InvoicePaymentFailed{
     failure = {operation_timeout, #merchstat_OperationTimeout{}}
