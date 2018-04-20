@@ -418,13 +418,13 @@ process_request('SearchPayments', Req, Context) ->
 
 process_request('SearchPayouts', Req, Context) ->
     Query = #{
-        <<"merchant_id"  >> => get_party_id(Context),
-        <<"shop_id"      >> => genlib_map:get('shopID', Req),
-        <<"from_time"    >> => get_time('fromTime', Req),
-        <<"to_time"      >> => get_time('toTime', Req),
-        <<"payout_status">> => genlib_map:get('payoutStatus', Req),
-        <<"payout_id"    >> => genlib_map:get('payoutID', Req),
-        <<"payout_type"  >> => encode_payout_type(genlib_map:get('payoutToolType', Req))
+        <<"merchant_id"    >> => get_party_id(Context),
+        <<"shop_id"        >> => genlib_map:get('shopID', Req),
+        <<"from_time"      >> => get_time('fromTime', Req),
+        <<"to_time"        >> => get_time('toTime', Req),
+        <<"payout_statuses">> => [<<"confirmed">>, <<"paid">>],
+        <<"payout_id"      >> => genlib_map:get('payoutID', Req),
+        <<"payout_type"    >> => encode_payout_type(genlib_map:get('payoutToolType', Req))
     },
     Opts = #{
         thrift_fun => 'GetPayouts',
