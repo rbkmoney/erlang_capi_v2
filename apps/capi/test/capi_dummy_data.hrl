@@ -624,7 +624,7 @@
         cardholder_name = ?STRING,
         last_4_digits = ?STRING,
         card_class = debit,
-        payment_system = visa
+        payment_system = mastercard
     },
     details = {apple, #paytoolprv_ApplePayDetails{
         transaction_id = ?STRING,

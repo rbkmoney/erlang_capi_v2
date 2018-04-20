@@ -4634,7 +4634,7 @@ reply_5xx(Code) when Code >= 500 andalso Code < 600 ->
     {Code, [], <<>>}.
 
 process_card_data(Data, ReqCtx) ->
-    put_card_data_to_cds(encode_card_data(Data), ReqCtx).
+    put_card_data_to_cds(encode_card_data(Data), encode_session_data(Data), ReqCtx).
 
 encode_card_data(CardData) ->
     {Month, Year} = parse_exp_date(genlib_map:get(<<"expDate">>, CardData)),
@@ -4645,8 +4645,14 @@ encode_card_data(CardData) ->
             month = Month,
             year = Year
         },
-        cardholder_name = genlib_map:get(<<"cardHolder">>, CardData),
-        cvv = genlib_map:get(<<"cvv">>, CardData)
+        cardholder_name = genlib_map:get(<<"cardHolder">>, CardData)
+    }.
+
+encode_session_data(CardData) ->
+    #'SessionData'{
+        auth_data = {card_security_code, #'CardSecurityCode'{
+            value = genlib_map:get(<<"cvv">>, CardData)
+        }}
     }.
 
 process_payment_terminal_data(Data, _ReqCtx) ->
@@ -4675,7 +4681,24 @@ process_tokenized_card_data(Data, ReqCtx) ->
         [encode_wrapped_payment_tool(Data)],
         ReqCtx
     ),
-    put_card_data_to_cds(encode_tokenized_card_data(UnwrappedPaymentTool), ReqCtx).
+    process_put_card_data_result(
+        put_card_data_to_cds(
+            encode_tokenized_card_data(UnwrappedPaymentTool),
+            encode_tokenized_session_data(UnwrappedPaymentTool),
+            ReqCtx
+        ),
+        UnwrappedPaymentTool
+    ).
+
+process_put_card_data_result(
+    {{bank_card, BankCard}, SessionID},
+    #paytoolprv_UnwrappedPaymentTool{
+        card_info = #paytoolprv_CardInfo{
+            payment_system = PaymentSystem
+        }
+    }
+) ->
+    {{bank_card, BankCard#domain_BankCard{payment_system = PaymentSystem}}, SessionID}.
 
 encode_wrapped_payment_tool(Data) ->
     #paytoolprv_WrappedPaymentTool{
@@ -4700,11 +4723,7 @@ encode_tokenized_card_data(#paytoolprv_UnwrappedPaymentTool{
         exp_date = #paytoolprv_ExpDate{
             month = Month,
             year = Year
-        },
-        auth_data = {auth_3ds, #paytoolprv_Auth3DS{
-            cryptogram = Cryptogram,
-            eci = _ECI
-        }}
+        }
     }},
     card_info = #paytoolprv_CardInfo{
         cardholder_name = CardholderName
@@ -4716,13 +4735,26 @@ encode_tokenized_card_data(#paytoolprv_UnwrappedPaymentTool{
             month = Month,
             year = Year
         },
-        cardholder_name = CardholderName,
-        % FIX after changes in cds protocol
-        cvv = Cryptogram
+        cardholder_name = CardholderName
     }.
 
-put_card_data_to_cds(Data, ReqCtx) ->
-    case service_call(cds_storage, 'PutCardData', [Data], ReqCtx) of
+encode_tokenized_session_data(#paytoolprv_UnwrappedPaymentTool{
+    payment_data = {tokenized_card, #paytoolprv_TokenizedCard{
+        auth_data = {auth_3ds, #paytoolprv_Auth3DS{
+            cryptogram = Cryptogram,
+            eci = ECI
+        }}
+    }}
+}) ->
+    #'SessionData'{
+        auth_data = {auth_3ds, #'Auth3DS'{
+            cryptogram = Cryptogram,
+            eci = ECI
+        }}
+    }.
+
+put_card_data_to_cds(CardData, SessionData, ReqCtx) ->
+    case service_call(cds_storage, 'PutCardData', [CardData, SessionData], ReqCtx) of
         {ok, #'PutCardDataResult'{session_id = SessionID, bank_card = BankCard}} ->
             {{bank_card, BankCard}, SessionID};
         {exception, Exception} ->
