@@ -248,6 +248,8 @@ verify(Token) ->
         error:badarg = Reason ->
             {error, {invalid_token, Reason}};
         error:{badarg, _} = Reason ->
+            {error, {invalid_token, Reason}};
+        error:Reason ->
             {error, {invalid_token, Reason}}
     end.
 
