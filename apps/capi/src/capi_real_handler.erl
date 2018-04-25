@@ -3332,8 +3332,8 @@ process_merchant_stat_result(StatType, Result) ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-                #merchstat_DatasetTooBig{limit = Limit} ->
-                    {ok, {400, [], limit_exceeded_error(Limit)}}
+                #merchstat_BadToken{reason = Reason} ->
+                    {ok, {400, [], logic_error(badToken, Reason)}}
             end
     end.
 
@@ -3358,8 +3358,8 @@ process_search_request_result(QueryType, Result, Context, #{decode_fun := Decode
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-                #merchstat_DatasetTooBig{limit = Limit} ->
-                    {ok, {400, [], limit_exceeded_error(Limit)}}
+                #merchstat_BadToken{reason = Reason} ->
+                    {ok, {400, [], logic_error(badToken, Reason)}}
             end
     end.
 
