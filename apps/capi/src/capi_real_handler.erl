@@ -4319,13 +4319,8 @@ process_merchant_stat_result(StatType, Result) ->
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
             Resp = [decode_stat_info(StatType, S) || S <- Stats],
             {ok, {200, [], Resp}};
-        {exception, Exception} ->
-            case Exception of
-                #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-                #merchstat_DatasetTooBig{limit = Limit} ->
-                    {ok, {400, [], limit_exceeded_error(Limit)}}
-            end
+        {exception, #'InvalidRequest'{errors = Errors}} ->
+            {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
     end.
 
 process_search_request(QueryType, Query, Req, ReqCtx, Opts = #{thrift_fun := ThriftFun}) ->
@@ -4353,13 +4348,8 @@ process_search_request_result(QueryType, Result, #{decode_fun := DecodeFun}) ->
                 <<"totalCount">> => TotalCount
             },
             {ok, {200, [], Resp}};
-        {exception, Exception} ->
-            case Exception of
-                #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-                #merchstat_DatasetTooBig{limit = Limit} ->
-                    {ok, {400, [], limit_exceeded_error(Limit)}}
-            end
+        {exception, #'InvalidRequest'{errors = Errors}} ->
+            {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
     end.
 
 get_time(Key, Req) ->
