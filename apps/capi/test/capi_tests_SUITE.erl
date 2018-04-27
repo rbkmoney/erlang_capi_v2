@@ -708,7 +708,7 @@ get_account_by_id_ok_test(Config) ->
 create_payment_ok_test(Config) ->
     mock_services(
         [
-            {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
+            {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT(?BANK_CARD)} end},
             {invoicing, fun('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}
         ],
         Config
@@ -971,7 +971,7 @@ create_qw_payment_resource_ok_test(Config) ->
 create_applepay_payment_resource_ok_test(Config) ->
     mock_services([
         {payment_tool_provider, fun('Unwrap', _) -> {ok, ?UNWRAPPED_PAYMENT_TOOL} end},
-        {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end}
+        {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT(?BANK_CARD_WITH_TP)} end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
     {ok, #{<<"paymentToolDetails">> := #{<<"paymentSystem">> := <<"mastercard">>}}} =
@@ -1426,7 +1426,7 @@ create_customer_access_token_ok_test(Config) ->
 create_binding_ok_test(Config) ->
     mock_services(
         [
-            {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
+            {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT(?BANK_CARD)} end},
             {customer_management, fun('StartBinding', _) -> {ok, ?CUSTOMER_BINDING} end}
         ],
         Config
