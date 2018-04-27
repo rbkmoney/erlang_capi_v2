@@ -581,9 +581,28 @@
     source =  {invoice_id, ?STRING}
 }).
 
--define(TERM_SET, #domain_TermSet{payouts = ?PAYOUTS_SERVICE_TERMS}).
+-define(TERM_SET, #domain_TermSet{
+    payouts = ?PAYOUTS_SERVICE_TERMS,
+    payments = ?PAYMENTS_SERVICE_TERMS
+}).
 
 -define(PAYOUTS_SERVICE_TERMS, #domain_PayoutsServiceTerms{}).
+
+-define(PAYMENTS_SERVICE_TERMS, #domain_PaymentsServiceTerms{
+    payment_methods = {value,
+        [
+            #domain_PaymentMethodRef{
+                id = {bank_card, visa}
+            },
+            #domain_PaymentMethodRef{
+                id = {tokenized_bank_card, #domain_TokenizedBankCard{
+                    payment_system = visa,
+                    token_provider = applepay
+                }}
+            }
+        ]
+    }
+}).
 
 -define(CUSTOMER, #payproc_Customer{
     id = ?STRING,
