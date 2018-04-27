@@ -1989,15 +1989,17 @@ decode_bank_card(#domain_BankCard{
     'token'  = Token,
     'payment_system' = PaymentSystem,
     'bin' = Bin,
-    'masked_pan' = MaskedPan
+    'masked_pan' = MaskedPan,
+    'token_provider' = TokenProvider
 }) ->
-    capi_utils:map_to_base64url(#{
+    capi_utils:map_to_base64url(genlib_map:compact(#{
         <<"type">> => <<"bank_card">>,
         <<"token">> => Token,
         <<"payment_system">> => PaymentSystem,
         <<"bin">> => Bin,
-        <<"masked_pan">> => MaskedPan
-    }).
+        <<"masked_pan">> => MaskedPan,
+        <<"token_provider">> => TokenProvider
+    })).
 
 decode_payment_terminal(#domain_PaymentTerminal{
     terminal_type = Type
@@ -2413,12 +2415,13 @@ encode_bank_card(#{
     <<"payment_system">> := PaymentSystem,
     <<"bin">> := Bin,
     <<"masked_pan">> := MaskedPan
-}) ->
+} = BankCard) ->
     {bank_card, #domain_BankCard{
         'token'  = Token,
         'payment_system' = binary_to_existing_atom(PaymentSystem, utf8),
         'bin' = Bin,
-        'masked_pan' = MaskedPan
+        'masked_pan' = MaskedPan,
+        'token_provider' = encode_token_provider(genlib_map:get(<<"token_provider">>, BankCard))
     }}.
 
 encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
@@ -2431,6 +2434,11 @@ encode_digital_wallet(#{<<"provider">> := Provider, <<"id">> := ID}) ->
         provider = binary_to_existing_atom(Provider, utf8),
         id = ID
     }}.
+
+encode_token_provider(TokenProvider) when TokenProvider /= undefined ->
+    binary_to_existing_atom(TokenProvider, utf8);
+encode_token_provider(undefined) ->
+    undefined.
 
 encode_customer_params(PartyID, Params) ->
     #payproc_CustomerParams{
