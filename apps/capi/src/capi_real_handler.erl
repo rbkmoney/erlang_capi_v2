@@ -3506,20 +3506,42 @@ decode_payment_methods(undefined) ->
     [];
 decode_payment_methods({value, PaymentMethodRefs}) ->
     PaymentMethods = [ID || #domain_PaymentMethodRef{id = ID} <- PaymentMethodRefs],
-    lists:map(
-        fun(Method) ->
+    lists:foldl(
+        fun(Method, Acc) ->
             {_, MethodTerms} = lists:unzip(proplists:lookup_all(Method, PaymentMethods)),
-            decode_payment_method(Method, MethodTerms)
+            decode_payment_method(Method, MethodTerms) ++ Acc
         end,
+        [],
         proplists:get_keys(PaymentMethods)
     ).
 
 decode_payment_method(bank_card, PaymentSystems) ->
-    #{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems)};
+    [#{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems)}];
 decode_payment_method(payment_terminal, Providers) ->
-    #{<<"method">> => <<"PaymentTerminal">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)};
+    [#{<<"method">> => <<"PaymentTerminal">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}];
 decode_payment_method(digital_wallet, Providers) ->
-    #{<<"method">> => <<"DigitalWallet">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}.
+    [#{<<"method">> => <<"DigitalWallet">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}];
+decode_payment_method(tokenized_bank_card, TokenizedBankCards) ->
+    decode_tokenized_bank_cards(TokenizedBankCards).
+
+decode_tokenized_bank_cards(TokenizedBankCards) ->
+    PropTokenizedBankCards = [
+        {TP, PS} || #domain_TokenizedBankCard{payment_system = PS, token_provider = TP} <- TokenizedBankCards
+    ],
+    lists:map(
+        fun(TokenProvider) ->
+            {_, PaymentSystems} = lists:unzip(proplists:lookup_all(TokenProvider, PropTokenizedBankCards)),
+            decode_tokenized_bank_card(TokenProvider, PaymentSystems)
+        end,
+        proplists:get_keys(PropTokenizedBankCards)
+    ).
+
+decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
+    #{
+        <<"method">> => <<"BankCard">>,
+        <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems),
+        <<"tokenProviders">> => [genlib:to_binary(TokenProvider)]
+    }.
 
 compute_terms(ServiceName, Args, Context) ->
     service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
