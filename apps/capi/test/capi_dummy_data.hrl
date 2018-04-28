@@ -90,14 +90,6 @@
     masked_pan = <<"TEST1234">>
 }).
 
--define(BANK_CARD_WITH_TP, #domain_BankCard{
-    token = ?STRING,
-    payment_system = visa,
-    bin = ?STRING,
-    masked_pan = <<"TEST1234">>,
-    token_provider = applepay
-}).
-
 -define(CONTACT_INFO, #domain_ContactInfo{
         phone_number = ?STRING,
         email = <<"test@test.ru">>
@@ -629,8 +621,8 @@
     status = {succeeded, #payproc_CustomerBindingSucceeded{}}
 }).
 
--define(PUT_CARD_DATA_RESULT(BankCard), #'PutCardDataResult'{
-    bank_card = BankCard,
+-define(PUT_CARD_DATA_RESULT, #'PutCardDataResult'{
+    bank_card = ?BANK_CARD,
     session_id = ?STRING
 }).
 
