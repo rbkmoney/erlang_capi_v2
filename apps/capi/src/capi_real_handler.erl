@@ -2870,13 +2870,15 @@ merchstat_to_domain({bank_card, #merchstat_BankCard{
     'token' = Token,
     'payment_system' = PaymentSystem,
     'bin' = Bin,
-    'masked_pan' = MaskedPan
+    'masked_pan' = MaskedPan,
+    'token_provider' = TokenProvider
 }}) ->
     {bank_card, #domain_BankCard{
         'token' = Token,
         'payment_system' = PaymentSystem,
         'bin' = Bin,
-        'masked_pan' = MaskedPan
+        'masked_pan' = MaskedPan,
+        'token_provider' = TokenProvider
     }};
 
 merchstat_to_domain({payment_terminal, #merchstat_PaymentTerminal{
