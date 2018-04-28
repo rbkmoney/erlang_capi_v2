@@ -24,7 +24,7 @@
 
 -define(LIFETIME_INTERVAL, #domain_LifetimeInterval{
     years = ?INTEGER,
-    months =?INTEGER,
+    months = ?INTEGER,
     days = ?INTEGER
 }).
 
@@ -353,15 +353,23 @@
 
 -define(STAT_RESPONSE_INVOICES, ?STAT_RESPONSE({invoices, [?STAT_INVOICE]})).
 
--define(STAT_RESPONSE_PAYMENTS, ?STAT_RESPONSE({payments, [?STAT_PAYMENT]})).
+-define(STAT_RESPONSE_PAYMENTS, ?STAT_RESPONSE({payments,
+    [
+        ?STAT_PAYMENT(?STAT_PAYER({bank_card, ?STAT_BANK_CARD})),
+        ?STAT_PAYMENT(?STAT_PAYER({bank_card, ?STAT_BANK_CARD_WITH_TP}))
+    ]
+})).
 
 -define(STAT_RESPONSE_RECORDS, ?STAT_RESPONSE({records, [?STAT_RECORD]})).
 
--define(STAT_RESPONSE_PAYOUTS, ?STAT_RESPONSE({payouts, [
-    ?STAT_PAYOUT({bank_card, #merchstat_PayoutCard{card = ?STAT_BANK_CARD}}, [?PAYOUT_SUMMARY_ITEM]),
-    ?STAT_PAYOUT({bank_account, ?STAT_PAYOUT_BANK_ACCOUNT_RUS}, undefined),
-    ?STAT_PAYOUT({bank_account, ?STAT_PAYOUT_BANK_ACCOUNT_INT}, [?PAYOUT_SUMMARY_ITEM])
-]})).
+-define(STAT_RESPONSE_PAYOUTS, ?STAT_RESPONSE({payouts,
+    [
+        ?STAT_PAYOUT({bank_card, #merchstat_PayoutCard{card = ?STAT_BANK_CARD}}, [?PAYOUT_SUMMARY_ITEM]),
+        ?STAT_PAYOUT({bank_card, #merchstat_PayoutCard{card = ?STAT_BANK_CARD_WITH_TP}}, [?PAYOUT_SUMMARY_ITEM]),
+        ?STAT_PAYOUT({bank_account, ?STAT_PAYOUT_BANK_ACCOUNT_RUS}, undefined),
+        ?STAT_PAYOUT({bank_account, ?STAT_PAYOUT_BANK_ACCOUNT_INT}, [?PAYOUT_SUMMARY_ITEM])
+    ]
+})).
 
 -define(STAT_INVOICE, #merchstat_StatInvoice{
     id = ?STRING,
@@ -377,7 +385,7 @@
     context = ?CONTENT
 }).
 
--define(STAT_PAYMENT, #merchstat_StatPayment{
+-define(STAT_PAYMENT(Payer), #merchstat_StatPayment{
     id = ?STRING,
     invoice_id = ?STRING,
     owner_id = ?STRING,
@@ -388,16 +396,18 @@
     flow = {instant, #merchstat_InvoicePaymentFlowInstant{}},
     fee = ?INTEGER,
     currency_symbolic_code = ?RUB,
-    payer = {payment_resource, #merchstat_PaymentResourcePayer{
-            payment_tool = {bank_card, ?STAT_BANK_CARD},
-        ip_address = ?STRING,
-        fingerprint = ?STRING,
-        phone_number = ?STRING,
-        email = <<"test@test.ru">>,
-        session_id = ?STRING
-    }},
+    payer = Payer,
     context = ?CONTENT
 }).
+
+-define (STAT_PAYER(PaymentTool), {payment_resource, #merchstat_PaymentResourcePayer{
+    payment_tool = PaymentTool,
+    ip_address = ?STRING,
+    fingerprint = ?STRING,
+    phone_number = ?STRING,
+    email = <<"test@test.ru">>,
+    session_id = ?STRING
+}}).
 
 -define(STAT_RECORD, #{
     <<"offset">> => ?INTEGER_BINARY,
@@ -452,6 +462,14 @@
     payment_system = visa,
     bin = ?STRING,
     masked_pan = <<"TEST1234">>
+}).
+
+-define(STAT_BANK_CARD_WITH_TP, #merchstat_BankCard{
+    token = ?STRING,
+    payment_system = visa,
+    bin = ?STRING,
+    masked_pan = <<"TEST1234">>,
+    token_provider = applepay
 }).
 
 -define(PAYOUT_SUMMARY_ITEM, #merchstat_PayoutSummaryItem{
