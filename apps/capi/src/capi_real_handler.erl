@@ -2284,7 +2284,8 @@ merchstat_to_domain({bank_card, BankCard = #merchstat_BankCard{}}) ->
         token          = BankCard#merchstat_BankCard.token,
         payment_system = BankCard#merchstat_BankCard.payment_system,
         bin            = BankCard#merchstat_BankCard.bin,
-        masked_pan     = BankCard#merchstat_BankCard.masked_pan
+        masked_pan     = BankCard#merchstat_BankCard.masked_pan,
+        token_provider = BankCard#merchstat_BankCard.token_provider
     }};
 merchstat_to_domain({payment_terminal, #merchstat_PaymentTerminal{terminal_type = Type}}) ->
     {payment_terminal, #domain_PaymentTerminal{terminal_type = Type}};
