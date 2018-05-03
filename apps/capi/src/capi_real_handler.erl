@@ -274,9 +274,7 @@ process_request('GetInvoicePaymentMethods', Req, Context) ->
                 #payproc_InvalidUser{} ->
                     {ok, {404, [], general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
-                #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
             end
     end;
 
@@ -3519,17 +3517,8 @@ process_card_data(Data, Context) ->
     case service_call(Call, Context) of
         {ok, #'PutCardDataResult'{session_id = SessionID, bank_card = BankCard}} ->
             {{bank_card, BankCard}, SessionID};
-        {exception, Exception} ->
-            case Exception of
-                #'InvalidCardData'{} ->
-                    throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}});
-                #'KeyringLocked'{} ->
-                    % TODO
-                    % It's better for the cds to signal woody-level unavailability when the
-                    % keyring is locked, isn't it? It could always mention keyring lock as a
-                    % reason in a woody error definition.
-                    throw({error, reply_5xx(503)})
-            end
+        {exception, #'InvalidCardData'{}} ->
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}})
     end.
 
 encode_card_data(CardData) ->
