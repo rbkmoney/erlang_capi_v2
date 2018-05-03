@@ -486,7 +486,7 @@ process_request('CreateRefund', Req, Context) ->
                 #payproc_OperationNotPermitted{} ->
                     {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
                 #payproc_InvalidPaymentStatus{} ->
-                    {ok, {400, [], logic_error(invalidInvoicePaymentStatus, <<"Invalid invoice payment status">>)}};
+                    {ok, {400, [], logic_error(invalidPaymentStatus, <<"Invalid invoice payment status">>)}};
                 #payproc_InsufficientAccountBalance{} ->
                     {ok, {400, [], logic_error(
                         insufficentAccountBalance,
@@ -684,9 +684,7 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
                 #payproc_InvoiceTemplateNotFound{} ->
                     {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
                 #payproc_InvoiceTemplateRemoved{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
-                #payproc_PartyNotExistsYet{} ->
-                    {ok, {400, [], logic_error(partyNotExistsYet, <<"Party not exists yet">>)}}
+                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}}
             end
     end;
 
