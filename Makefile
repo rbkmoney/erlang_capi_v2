@@ -19,17 +19,17 @@ SERVICE_IMAGE_PUSH_TAG ?= $(SERVICE_IMAGE_TAG)
 BASE_IMAGE_NAME := service_erlang
 BASE_IMAGE_TAG := 16e2b3ef17e5fdefac8554ced9c2c74e5c6e9e11
 
-BUILD_IMAGE_TAG := eee42f2ca018c313190bc350fe47d4dea70b6d27
+BUILD_IMAGE_TAG := 562313697353c29d4b34fb081a8b70e8c2207134
 
 CALL_ANYWHERE := \
 	submodules \
-	all rebar-update compile xref lint dialyze test \
+	all compile xref lint dialyze test cover \
 	start devrel release clean distclean \
 	generate regenerate swag_server.regenerate swag_client.regenerate
 
 CALL_W_CONTAINER := $(CALL_ANYWHERE)
 
-.PHONY: $(CALL_W_CONTAINER) all cover
+.PHONY: $(CALL_W_CONTAINER) all
 
 all: compile
 
@@ -42,14 +42,11 @@ $(SUBTARGETS): %/.git: %
 
 submodules: $(SUBTARGETS)
 
-rebar-update:
-	$(REBAR) update
-
 generate: swag_server.generate swag_client.generate
 
 regenerate: swag_server.regenerate swag_client.regenerate
 
-compile: submodules rebar-update generate
+compile: submodules generate
 	$(REBAR) compile
 
 xref:
