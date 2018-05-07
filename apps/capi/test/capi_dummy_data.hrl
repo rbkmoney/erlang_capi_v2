@@ -667,9 +667,9 @@
         }}
     }},
     card_info = #paytoolprv_CardInfo{
-        display_name = ?STRING,
+        display_name = <<"Visa 1234">>,
         cardholder_name = ?STRING,
-        last_4_digits = ?STRING,
+        last_4_digits = <<"1234">>,
         card_class = debit,
         payment_system = mastercard
     },

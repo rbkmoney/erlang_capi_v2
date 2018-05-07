@@ -3605,11 +3605,25 @@ process_put_card_data_result(
     {{bank_card, BankCard}, SessionID},
     #paytoolprv_UnwrappedPaymentTool{
         card_info = #paytoolprv_CardInfo{
-            payment_system = PaymentSystem
-        }
+            payment_system = PaymentSystem,
+            last_4_digits  = Last4
+        },
+        details = PaymentDetails
     }
 ) ->
-    {{bank_card, BankCard#domain_BankCard{payment_system = PaymentSystem}}, SessionID}.
+    {
+        {bank_card, BankCard#domain_BankCard{
+            payment_system = PaymentSystem,
+            masked_pan     = capi_utils:define(Last4, BankCard#domain_BankCard.masked_pan),
+            token_provider = get_payment_token_provider(PaymentDetails)
+        }},
+        SessionID
+    }.
+
+get_payment_token_provider({apple, _}) ->
+    applepay;
+get_payment_token_provider({samsung, _}) ->
+    samsungpay.
 
 encode_wrapped_payment_tool(Data) ->
     #paytoolprv_WrappedPaymentTool{

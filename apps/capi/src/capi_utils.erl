@@ -9,6 +9,7 @@
 -export([redact/2]).
 
 -export([unwrap/1]).
+-export([define/2]).
 
 -spec logtag_process(atom(), any()) -> ok.
 
@@ -74,6 +75,12 @@ unwrap({ok, Value}) ->
     Value;
 unwrap({error, Error}) ->
     erlang:error({unwrap_error, Error}).
+
+-spec define(undefined | T, T) -> T.
+define(undefined, V) ->
+    V;
+define(V, _Default) ->
+    V.
 
 %%
 
