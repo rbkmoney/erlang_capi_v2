@@ -335,9 +335,7 @@ process_request('GetInvoicePaymentMethods', Req, Context, ReqCtx) ->
                 #payproc_InvalidUser{} ->
                     {ok, {404, [], general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [],  general_error(<<"Invoice not found">>)}};
-                #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
             end
     end;
 
@@ -596,7 +594,7 @@ process_request('CreateRefund', Req, Context, ReqCtx) ->
                 #payproc_OperationNotPermitted{} ->
                     {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
                 #payproc_InvalidPaymentStatus{} ->
-                    {ok, {400, [], logic_error(invalidInvoicePaymentStatus, <<"Invalid invoice payment status">>)}};
+                    {ok, {400, [], logic_error(invalidPaymentStatus, <<"Invalid invoice payment status">>)}};
                 #payproc_InsufficientAccountBalance{} ->
                     {ok, {400, [], logic_error(
                         insufficentAccountBalance,
@@ -708,15 +706,12 @@ process_request('GetInvoiceTemplateByID', Req, Context, ReqCtx) ->
     case Result of
         {ok, InvoiceTpl} ->
             {ok, {200, [], decode_invoice_tpl(InvoiceTpl)}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
-                #payproc_InvoiceTemplateNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
-                #payproc_InvoiceTemplateRemoved{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}}
-            end
+        {exception, E} when
+            E == #payproc_InvalidUser{};
+            E == #payproc_InvoiceTemplateNotFound{};
+            E == #payproc_InvoiceTemplateRemoved{}
+        ->
+            {ok, {404, [], general_error(<<"Invoice template not found">>)}}
     end;
 
 process_request('UpdateInvoiceTemplate', Req, Context, ReqCtx) ->
@@ -861,17 +856,12 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context, ReqCtx) ->
     case Result of
         {ok, PaymentMethods} when is_list(PaymentMethods) ->
             {ok, {200, [], PaymentMethods}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
-                #payproc_InvoiceTemplateNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
-                #payproc_InvoiceTemplateRemoved{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
-                #payproc_PartyNotExistsYet{} ->
-                    {ok, {400, [], logic_error(partyNotExistsYet, <<"Party not exists yet">>)}}
-            end
+        {exception, E} when
+            E == #payproc_InvalidUser{};
+            E == #payproc_InvoiceTemplateNotFound{};
+            E == #payproc_InvoiceTemplateRemoved{}
+        ->
+            {ok, {404, [], general_error(<<"Invoice template not found">>)}}
     end;
 
 process_request('ActivateShop', Req, Context, ReqCtx) ->
@@ -4640,17 +4630,8 @@ process_card_data(Data, ReqCtx) ->
             bank_card = BankCard
         }} ->
             {{bank_card, BankCard}, SessionID};
-        {exception, Exception} ->
-            case Exception of
-                #'InvalidCardData'{} ->
-                    throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}});
-                #'KeyringLocked'{} ->
-                    % TODO
-                    % It's better for the cds to signal woody-level unavailability when the
-                    % keyring is locked, isn't it? It could always mention keyring lock as a
-                    % reason in a woody error definition.
-                    throw({error, reply_5xx(503)})
-            end
+        {exception, #'InvalidCardData'{}} ->
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}})
     end.
 
 encode_card_data(CardData) ->
