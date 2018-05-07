@@ -296,7 +296,7 @@
     {shop_modification, #payproc_ShopModificationUnit{
         id = ?STRING,
         modification = {payout_schedule_modification, #payproc_ScheduleModification{
-            schedule = #domain_PayoutScheduleRef{id = ?INTEGER}
+            schedule = #domain_BusinessScheduleRef{id = ?INTEGER}
         }}
     }}
 ]).
@@ -504,10 +504,10 @@
                 description = ?STRING
             }
         }},
-        {payout_schedule, #domain_PayoutScheduleRef{id = ?INTEGER}} =>
-        {payout_schedule, #domain_PayoutScheduleObject{
-            ref = #domain_PayoutScheduleRef{id = ?INTEGER},
-            data = #domain_PayoutSchedule{
+        {business_schedule, #domain_BusinessScheduleRef{id = ?INTEGER}} =>
+        {business_schedule, #domain_BusinessScheduleObject{
+            ref = #domain_BusinessScheduleRef{id = ?INTEGER},
+            data = #domain_BusinessSchedule{
                 name = ?STRING,
                 description = ?STRING,
                 schedule = #'Schedule'{
@@ -519,6 +519,7 @@
                     minute = {every, #'ScheduleEvery'{}},
                     second = {every, #'ScheduleEvery'{}}
                 },
+                delay = #'TimeSpan'{},
                 policy = #domain_PayoutCompilationPolicy{
                     assets_freeze_for = #'TimeSpan'{}
                 }

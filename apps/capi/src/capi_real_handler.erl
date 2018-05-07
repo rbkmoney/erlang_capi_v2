@@ -873,7 +873,7 @@ process_request('GetCategoryByRef', Req, Context) ->
 process_request('GetScheduleByRef', Req, Context) ->
     case get_schedule_by_id(genlib:to_int(maps:get(scheduleID, Req)), Context) of
         {ok, Schedule} ->
-            {ok, {200, [], decode_payout_schedule(Schedule)}};
+            {ok, {200, [], decode_business_schedule(Schedule)}};
         {error, not_found} ->
             {404, [], general_error(<<"Schedule not found">>)}
     end;
@@ -929,7 +929,7 @@ process_request('GetPaymentInstitutionPayoutSchedules', Req, Context) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
     case compute_payment_institution_terms(PaymentInstitutionID, prepare_varset(Req), Context) of
         {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{payout_schedules = Schedules}}} ->
-            {ok, {200, [], decode_payout_schedules_selector(Schedules)}};
+            {ok, {200, [], decode_business_schedules_selector(Schedules)}};
         {ok, #domain_TermSet{payouts = undefined}} ->
             {404, [], general_error(<<"Automatic payouts not allowed">>)};
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
@@ -2552,7 +2552,7 @@ decode_shop(Shop) ->
         <<"location"    >> => decode_shop_location(Shop#domain_Shop.location),
         <<"contractID"  >> => Shop#domain_Shop.contract_id,
         <<"payoutToolID">> => Shop#domain_Shop.payout_tool_id,
-        <<"scheduleID"  >> => decode_payout_schedule_ref(Shop#domain_Shop.payout_schedule),
+        <<"scheduleID"  >> => decode_business_schedule_ref(Shop#domain_Shop.payout_schedule),
         <<"account"     >> => decode_shop_account(Shop#domain_Shop.account)
     }).
 
@@ -2904,7 +2904,7 @@ decode_shop_modification({payout_tool_modification, PayoutToolID}) ->
 decode_shop_modification({payout_schedule_modification, #payproc_ScheduleModification{schedule = ScheduleRef}}) ->
     genlib_map:compact(#{
         <<"shopModificationType">> => <<"ShopPayoutScheduleChange">>,
-        <<"scheduleID"          >> => decode_payout_schedule_ref(ScheduleRef)
+        <<"scheduleID"          >> => decode_business_schedule_ref(ScheduleRef)
     }).
 
 decode_shop_params(ShopParams) ->
@@ -3148,26 +3148,26 @@ decode_payout_methods_selector({value, Val}) when is_list(Val) ->
 decode_payout_methods_selector(_) ->
     [].
 
-decode_payout_schedules_selector({value, Val}) when is_list(Val) ->
-    lists:map(fun decode_payout_schedule_ref/1, Val);
-decode_payout_schedules_selector(_) ->
+decode_business_schedules_selector({value, Val}) when is_list(Val) ->
+    lists:map(fun decode_business_schedule_ref/1, Val);
+decode_business_schedules_selector(_) ->
     [].
 
-decode_payout_schedule(#domain_PayoutScheduleObject{ref = Ref, data = Data}) ->
+decode_business_schedule(#domain_BusinessScheduleObject{ref = Ref, data = Data}) ->
     genlib_map:compact(#{
-        <<"scheduleID" >> => Ref#domain_PayoutScheduleRef.id,
-        <<"name"       >> => Data#domain_PayoutSchedule.name,
-        <<"description">> => Data#domain_PayoutSchedule.description
+        <<"scheduleID" >> => Ref#domain_BusinessScheduleRef.id,
+        <<"name"       >> => Data#domain_BusinessSchedule.name,
+        <<"description">> => Data#domain_BusinessSchedule.description
     }).
 
 encode_schedule_ref(ID) when ID /= undefined ->
-    #domain_PayoutScheduleRef{id = ID};
+    #domain_BusinessScheduleRef{id = ID};
 encode_schedule_ref(undefined) ->
     undefined.
 
-decode_payout_schedule_ref(#domain_PayoutScheduleRef{id = ID}) when ID /= undefined ->
+decode_business_schedule_ref(#domain_BusinessScheduleRef{id = ID}) when ID /= undefined ->
     ID;
-decode_payout_schedule_ref(undefined) ->
+decode_business_schedule_ref(undefined) ->
     undefined.
 
 -define(invpaid()      , {paid, #webhooker_InvoicePaid{}}).
@@ -3417,7 +3417,7 @@ get_category_by_id(CategoryID, #{woody_context := WoodyContext}) ->
     capi_domain:get(CategoryRef, WoodyContext).
 
 get_schedule_by_id(ScheduleID, #{woody_context := WoodyContext}) ->
-    Ref = {payout_schedule, #domain_PayoutScheduleRef{id = ScheduleID}},
+    Ref = {business_schedule, #domain_BusinessScheduleRef{id = ScheduleID}},
     capi_domain:get(Ref, WoodyContext).
 
 collect_events(Limit, After, GetterFun, DecodeFun, Context) ->
