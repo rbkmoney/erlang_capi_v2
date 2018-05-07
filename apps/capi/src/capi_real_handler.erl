@@ -569,15 +569,12 @@ process_request('GetInvoiceTemplateByID', Req, Context) ->
     case service_call_with([user_info, party_creation], Call, Context) of
         {ok, InvoiceTpl} ->
             {ok, {200, [], decode_invoice_tpl(InvoiceTpl)}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
-                #payproc_InvoiceTemplateNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
-                #payproc_InvoiceTemplateRemoved{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}}
-            end
+        {exception, E} when
+            E == #payproc_InvalidUser{};
+            E == #payproc_InvoiceTemplateNotFound{};
+            E == #payproc_InvoiceTemplateRemoved{}
+        ->
+            {ok, {404, [], general_error(<<"Invoice template not found">>)}}
     end;
 
 process_request('UpdateInvoiceTemplate', Req, Context) ->
@@ -677,15 +674,12 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
     case Result of
         {ok, PaymentMethods} when is_list(PaymentMethods) ->
             {ok, {200, [], PaymentMethods}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
-                #payproc_InvoiceTemplateNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
-                #payproc_InvoiceTemplateRemoved{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}}
-            end
+        {exception, E} when
+            E == #payproc_InvalidUser{};
+            E == #payproc_InvoiceTemplateNotFound{};
+            E == #payproc_InvoiceTemplateRemoved{}
+        ->
+            {ok, {404, [], general_error(<<"Invoice template not found">>)}}
     end;
 
 %%
