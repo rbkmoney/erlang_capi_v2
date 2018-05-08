@@ -1752,7 +1752,9 @@ encode_contract_modification(#{<<"contractID">> := ContractID} = Modification) -
             {payout_tool_modification, #payproc_PayoutToolModificationUnit{
                 payout_tool_id = maps:get(<<"payoutToolID">>, Modification),
                 modification   = {creation, encode_payout_tool_params(Modification)}
-            }}
+            }};
+        <<"ContractReportingPreferencesChange">> ->
+            {report_preferences_modification, encode_report_preferences(Modification)}
     end,
     #payproc_ContractModificationUnit{
         id           = ContractID,
@@ -1877,6 +1879,31 @@ encode_flow(#{<<"type">> := <<"PaymentFlowHold">>} = Entity) ->
     {hold, #payproc_InvoicePaymentParamsFlowHold{
         on_hold_expiration = binary_to_existing_atom(OnHoldExpiration, utf8)
     }}.
+
+encode_report_preferences(#{<<"serviceAcceptanceActPreferences">> := #{
+    <<"scheduleID">> := ScheduleID,
+    <<"signer">> := Signer
+}}) ->
+    #domain_ReportPreferences{
+        service_acceptance_act_preferences = #domain_ServiceAcceptanceActPreferences{
+            schedule = encode_schedule_ref(ScheduleID),
+            signer = encode_representative(Signer)
+        }
+    };
+encode_report_preferences(_) ->
+    #domain_ReportPreferences{}.
+
+encode_representative(Representative) ->
+    #domain_Representative{
+        position  = genlib_map:get(<<"position">>, Representative),
+        full_name = genlib_map:get(<<"fullName">>, Representative),
+        document  = encode_representative_document(genlib_map:get(<<"document">>, Representative))
+    }.
+
+encode_representative_document(#{<<"representativeDocumentType">> := <<"ArticlesOfAssociation">>}) ->
+    {articles_of_association, #domain_ArticlesOfAssociation{}};
+encode_representative_document(#{<<"representativeDocumentType">> := <<"PowerOfAttorney">>} = Document) ->
+    {power_of_attorney, encode_legal_agreement(Document)}.
 
 make_invoice_and_token(Invoice, PartyID) ->
     #{
@@ -2483,7 +2510,8 @@ decode_contract(Contract) ->
         <<"paymentInstitutionID">> => decode_payment_institution_ref(Contract#domain_Contract.payment_institution),
         <<"validSince"          >> => Contract#domain_Contract.valid_since,
         <<"validUntil"          >> => Contract#domain_Contract.valid_until,
-        <<"legalAgreement"      >> => decode_legal_agreement(Contract#domain_Contract.legal_agreement)
+        <<"legalAgreement"      >> => decode_legal_agreement(Contract#domain_Contract.legal_agreement),
+        <<"reportingPreferences">> => decode_reporting_preferences(Contract#domain_Contract.report_preferences)
     }, decode_contract_status(Contract#domain_Contract.status)).
 
 decode_contract_status({active, _}) ->
@@ -2854,7 +2882,12 @@ decode_contract_modification({payout_tool_modification, PaymentToolMod}) ->
     maps:merge(#{
         <<"contractModificationType">> => <<"ContractPayoutToolCreation">>,
         <<"payoutToolID"            >> => PayoutToolID
-    }, decode_payout_tool_params(PayoutToolParams)).
+    }, decode_payout_tool_params(PayoutToolParams));
+decode_contract_modification({report_preferences_modification, ReportPreferences}) ->
+    maps:merge(
+        #{<<"contractModificationType">> => <<"ContractReportingPreferencesChange">>},
+        decode_reporting_preferences(ReportPreferences)
+    ).
 
 decode_legal_agreement(#domain_LegalAgreement{signed_at = SignedAt, legal_agreement_id = ID}) ->
     #{
@@ -2864,6 +2897,43 @@ decode_legal_agreement(#domain_LegalAgreement{signed_at = SignedAt, legal_agreem
 decode_legal_agreement(undefined) ->
     undefined.
 
+decode_reporting_preferences(#domain_ReportPreferences{
+    service_acceptance_act_preferences = #domain_ServiceAcceptanceActPreferences{
+        schedule = ScheduleRef,
+        signer = Signer
+    }
+}) ->
+    #{
+        <<"serviceAcceptanceActPreferences">> => #{
+            <<"scheduleID">> => decode_business_schedule_ref(ScheduleRef),
+            <<"signer">> => decode_representative(Signer)
+        }
+    };
+decode_reporting_preferences(#domain_ReportPreferences{service_acceptance_act_preferences = undefined}) ->
+    #{};
+decode_reporting_preferences(undefined) ->
+    undefined.
+
+decode_representative(#domain_Representative{
+    position  = Position,
+    full_name = Name,
+    document  = Document
+}) ->
+    #{
+        <<"position">> => Position,
+        <<"fullName">> => Name,
+        <<"document">> => decode_representative_document(Document)
+    }.
+
+decode_representative_document({articles_of_association, #domain_ArticlesOfAssociation{}}) ->
+    #{
+        <<"representativeDocumentType">> => <<"ArticlesOfAssociation">>
+    };
+decode_representative_document({power_of_attorney, LegalAgreement}) ->
+    maps:merge(
+        #{<<"representativeDocumentType">> => <<"PowerOfAttorney">>},
+        decode_legal_agreement(LegalAgreement)
+    ).
 
 decode_shop_modification({creation, ShopParams}) ->
     maps:merge(

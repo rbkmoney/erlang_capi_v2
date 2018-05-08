@@ -251,7 +251,21 @@
         id = ?STRING,
         modification = {legal_agreement_binding, #domain_LegalAgreement{
             signed_at = ?TIMESTAMP,
-            legal_agreement_id = ?STRING
+            legal_agreement_id = ?STRING,
+            valid_until = ?TIMESTAMP
+        }}
+    }},
+    {contract_modification, #payproc_ContractModificationUnit{
+        id = ?STRING,
+        modification = {report_preferences_modification, #domain_ReportPreferences{
+            service_acceptance_act_preferences = #domain_ServiceAcceptanceActPreferences{
+                schedule = #domain_BusinessScheduleRef{id = ?INTEGER},
+                signer = #domain_Representative{
+                    position  = ?STRING,
+                    full_name = ?STRING,
+                    document  = {articles_of_association, #domain_ArticlesOfAssociation{}}
+                }
+            }
         }}
     }},
     %% shop modifications
