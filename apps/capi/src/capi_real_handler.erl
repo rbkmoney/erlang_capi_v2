@@ -2114,7 +2114,8 @@ decode_payment_tool_details({digital_wallet, V}) ->
 
 decode_bank_card_details(BankCard, V) ->
     V#{
-        <<"cardNumberMask">> => decode_masked_pan(BankCard#domain_BankCard.masked_pan    ),
+        <<"cardNumberMask">> => decode_masked_pan(BankCard#domain_BankCard.masked_pan),
+        <<"cardBin">>        => BankCard#domain_BankCard.bin,
         <<"paymentSystem" >> => genlib:to_binary (BankCard#domain_BankCard.payment_system)
     }.
 
