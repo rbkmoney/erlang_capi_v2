@@ -8,6 +8,7 @@
 -include_lib("dmsl/include/dmsl_user_interaction_thrift.hrl").
 -include_lib("dmsl/include/dmsl_geo_ip_thrift.hrl").
 -include_lib("dmsl/include/dmsl_reporting_thrift.hrl").
+-include_lib("dmsl/include/dmsl_payment_tool_provider_thrift.hrl").
 
 -behaviour(swag_server_logic_handler).
 
@@ -156,7 +157,8 @@ process_request('CreatePaymentResource', Req, Context) ->
             case Data of
                 #{<<"paymentToolType">> := <<"CardData"           >>} -> process_card_data(Data, Context);
                 #{<<"paymentToolType">> := <<"PaymentTerminalData">>} -> process_payment_terminal_data(Data);
-                #{<<"paymentToolType">> := <<"DigitalWalletData"  >>} -> process_digital_wallet_data(Data)
+                #{<<"paymentToolType">> := <<"DigitalWalletData"  >>} -> process_digital_wallet_data(Data);
+                #{<<"paymentToolType">> := <<"TokenizedCardData"  >>} -> process_tokenized_card_data(Data, Context)
             end,
         PaymentResource =
             #domain_DisposablePaymentResource{
@@ -1532,15 +1534,17 @@ decode_bank_card(#domain_BankCard{
     'token'          = Token,
     'payment_system' = PaymentSystem,
     'bin'            = Bin,
-    'masked_pan'     = MaskedPan
+    'masked_pan'     = MaskedPan,
+    'token_provider' = TokenProvider
 }) ->
-    capi_utils:map_to_base64url(#{
+    capi_utils:map_to_base64url(genlib_map:compact(#{
         <<"type"          >> => <<"bank_card">>,
         <<"token"         >> => Token,
         <<"payment_system">> => PaymentSystem,
         <<"bin"           >> => Bin,
-        <<"masked_pan"    >> => MaskedPan
-    }).
+        <<"masked_pan"    >> => MaskedPan,
+        <<"token_provider">> => TokenProvider
+    })).
 
 decode_payment_terminal(#domain_PaymentTerminal{
     terminal_type = Type
@@ -1614,10 +1618,13 @@ encode_invoice_context(Params) ->
     encode_invoice_context(Params, ?DEFAULT_INVOICE_META).
 
 encode_invoice_context(Params, DefaultMeta) ->
-    Context = jsx:encode(genlib_map:get(<<"metadata">>, Params, DefaultMeta)),
+    Context = genlib_map:get(<<"metadata">>, Params, DefaultMeta),
+    encode_content(json, Context).
+
+encode_content(json, Data) ->
     #'Content'{
         type = <<"application/json">>,
-        data = Context
+        data = jsx:encode(Data)
     }.
 
 encode_invoice_tpl_line_cost(#{<<"costType">> := CostType} = Cost) ->
@@ -1895,7 +1902,8 @@ encode_bank_card(BankCard) ->
         token          = maps:get(<<"token">>, BankCard),
         payment_system = binary_to_existing_atom(maps:get(<<"payment_system">>, BankCard), utf8),
         bin            = maps:get(<<"bin">>, BankCard),
-        masked_pan     = maps:get(<<"masked_pan">>, BankCard)
+        masked_pan     = maps:get(<<"masked_pan">>, BankCard),
+        token_provider = encode_token_provider(genlib_map:get(<<"token_provider">>, BankCard))
     }}.
 
 encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
@@ -1908,6 +1916,11 @@ encode_digital_wallet(#{<<"provider">> := Provider, <<"id">> := ID}) ->
         provider = binary_to_existing_atom(Provider, utf8),
         id       = ID
     }}.
+
+encode_token_provider(TokenProvider) when TokenProvider /= undefined ->
+    binary_to_existing_atom(TokenProvider, utf8);
+encode_token_provider(undefined) ->
+    undefined.
 
 encode_customer_params(PartyID, Params) ->
     #payproc_CustomerParams{
@@ -2261,7 +2274,8 @@ merchstat_to_domain({bank_card, BankCard = #merchstat_BankCard{}}) ->
         token          = BankCard#merchstat_BankCard.token,
         payment_system = BankCard#merchstat_BankCard.payment_system,
         bin            = BankCard#merchstat_BankCard.bin,
-        masked_pan     = BankCard#merchstat_BankCard.masked_pan
+        masked_pan     = BankCard#merchstat_BankCard.masked_pan,
+        token_provider = BankCard#merchstat_BankCard.token_provider
     }};
 merchstat_to_domain({payment_terminal, #merchstat_PaymentTerminal{terminal_type = Type}}) ->
     {payment_terminal, #domain_PaymentTerminal{terminal_type = Type}};
@@ -3483,20 +3497,42 @@ decode_payment_methods(undefined) ->
     [];
 decode_payment_methods({value, PaymentMethodRefs}) ->
     PaymentMethods = [ID || #domain_PaymentMethodRef{id = ID} <- PaymentMethodRefs],
-    lists:map(
-        fun(Method) ->
+    lists:foldl(
+        fun(Method, Acc) ->
             {_, MethodTerms} = lists:unzip(proplists:lookup_all(Method, PaymentMethods)),
-            decode_payment_method(Method, MethodTerms)
+            decode_payment_method(Method, MethodTerms) ++ Acc
         end,
+        [],
         proplists:get_keys(PaymentMethods)
     ).
 
 decode_payment_method(bank_card, PaymentSystems) ->
-    #{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems)};
+    [#{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems)}];
 decode_payment_method(payment_terminal, Providers) ->
-    #{<<"method">> => <<"PaymentTerminal">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)};
+    [#{<<"method">> => <<"PaymentTerminal">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}];
 decode_payment_method(digital_wallet, Providers) ->
-    #{<<"method">> => <<"DigitalWallet">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}.
+    [#{<<"method">> => <<"DigitalWallet">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}];
+decode_payment_method(tokenized_bank_card, TokenizedBankCards) ->
+    decode_tokenized_bank_cards(TokenizedBankCards).
+
+decode_tokenized_bank_cards(TokenizedBankCards) ->
+    PropTokenizedBankCards = [
+        {TP, PS} || #domain_TokenizedBankCard{payment_system = PS, token_provider = TP} <- TokenizedBankCards
+    ],
+    lists:map(
+        fun(TokenProvider) ->
+            {_, PaymentSystems} = lists:unzip(proplists:lookup_all(TokenProvider, PropTokenizedBankCards)),
+            decode_tokenized_bank_card(TokenProvider, PaymentSystems)
+        end,
+        proplists:get_keys(PropTokenizedBankCards)
+    ).
+
+decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
+    #{
+        <<"method">> => <<"BankCard">>,
+        <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems),
+        <<"tokenProviders">> => [genlib:to_binary(TokenProvider)]
+    }.
 
 compute_terms(ServiceName, Args, Context) ->
     service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
@@ -3505,13 +3541,7 @@ reply_5xx(Code) when Code >= 500 andalso Code < 600 ->
     {Code, [], <<>>}.
 
 process_card_data(Data, Context) ->
-    Call = {cds_storage, 'PutCardData', [encode_card_data(Data)]},
-    case service_call(Call, Context) of
-        {ok, #'PutCardDataResult'{session_id = SessionID, bank_card = BankCard}} ->
-            {{bank_card, BankCard}, SessionID};
-        {exception, #'InvalidCardData'{}} ->
-            throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}})
-    end.
+    put_card_data_to_cds(encode_card_data(Data), encode_session_data(Data), Context).
 
 encode_card_data(CardData) ->
     {Month, Year} = parse_exp_date(genlib_map:get(<<"expDate">>, CardData)),
@@ -3522,8 +3552,14 @@ encode_card_data(CardData) ->
             month = Month,
             year = Year
         },
-        cardholder_name = genlib_map:get(<<"cardHolder">>, CardData),
-        cvv = genlib_map:get(<<"cvv">>, CardData)
+        cardholder_name = genlib_map:get(<<"cardHolder">>, CardData)
+    }.
+
+encode_session_data(CardData) ->
+    #'SessionData'{
+        auth_data = {card_security_code, #'CardSecurityCode'{
+            value = genlib_map:get(<<"cvv">>, CardData)
+        }}
     }.
 
 process_payment_terminal_data(Data) ->
@@ -3542,6 +3578,113 @@ process_digital_wallet_data(Data) ->
             }
     end,
     {{digital_wallet, DigitalWallet}, <<>>}.
+
+process_tokenized_card_data(Data, Context) ->
+    Call = {payment_tool_provider, 'Unwrap', [encode_wrapped_payment_tool(Data)]},
+    {ok, UnwrappedPaymentTool} = service_call(Call, Context),
+    process_put_card_data_result(
+        put_card_data_to_cds(
+            encode_tokenized_card_data(UnwrappedPaymentTool),
+            encode_tokenized_session_data(UnwrappedPaymentTool),
+            Context
+        ),
+        UnwrappedPaymentTool
+    ).
+
+process_put_card_data_result(
+    {{bank_card, BankCard}, SessionID},
+    #paytoolprv_UnwrappedPaymentTool{
+        card_info = #paytoolprv_CardInfo{
+            payment_system = PaymentSystem,
+            last_4_digits  = Last4
+        },
+        details = PaymentDetails
+    }
+) ->
+    {
+        {bank_card, BankCard#domain_BankCard{
+            payment_system = PaymentSystem,
+            masked_pan     = capi_utils:define(Last4, BankCard#domain_BankCard.masked_pan),
+            token_provider = get_payment_token_provider(PaymentDetails)
+        }},
+        SessionID
+    }.
+
+get_payment_token_provider({apple, _}) ->
+    applepay;
+get_payment_token_provider({samsung, _}) ->
+    samsungpay.
+
+encode_wrapped_payment_tool(Data) ->
+    #paytoolprv_WrappedPaymentTool{
+        request = encode_payment_request(Data)
+    }.
+
+encode_payment_request(#{<<"provider" >> := <<"ApplePay">>} = Data) ->
+    PaymentToken = genlib_map:get(<<"paymentToken">>, Data),
+    {apple, #paytoolprv_ApplePayRequest{
+        merchant_id = genlib_map:get(<<"merchantID">>, Data),
+        payment_token = encode_content(json, PaymentToken)
+    }};
+encode_payment_request(#{<<"provider" >> := <<"SamsungPay">>} = Data) ->
+    {samsung, #paytoolprv_SamsungPayRequest{
+        service_id = genlib_map:get(<<"serviceID">>, Data),
+        reference_id = genlib_map:get(<<"referenceID">>, Data)
+    }}.
+
+encode_tokenized_card_data(#paytoolprv_UnwrappedPaymentTool{
+    payment_data = {tokenized_card, #paytoolprv_TokenizedCard{
+        dpan = DPAN,
+        exp_date = #paytoolprv_ExpDate{
+            month = Month,
+            year = Year
+        }
+    }},
+    card_info = #paytoolprv_CardInfo{
+        cardholder_name = CardholderName
+    }
+}) ->
+    #'CardData'{
+        pan  = DPAN,
+        exp_date = #'ExpDate'{
+            month = Month,
+            year = Year
+        },
+        cardholder_name = CardholderName
+    }.
+
+encode_tokenized_session_data(#paytoolprv_UnwrappedPaymentTool{
+    payment_data = {tokenized_card, #paytoolprv_TokenizedCard{
+        auth_data = {auth_3ds, #paytoolprv_Auth3DS{
+            cryptogram = Cryptogram,
+            eci = ECI
+        }}
+    }}
+}) ->
+    #'SessionData'{
+        auth_data = {auth_3ds, #'Auth3DS'{
+            cryptogram = Cryptogram,
+            eci = ECI
+        }}
+    }.
+
+put_card_data_to_cds(CardData, SessionData, Context) ->
+    Call = {cds_storage, 'PutCardData', [CardData, SessionData]},
+    case service_call(Call, Context) of
+        {ok, #'PutCardDataResult'{session_id = SessionID, bank_card = BankCard}} ->
+            {{bank_card, BankCard}, SessionID};
+        {exception, Exception} ->
+            case Exception of
+                #'InvalidCardData'{} ->
+                    throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}});
+                #'KeyringLocked'{} ->
+                    % TODO
+                    % It's better for the cds to signal woody-level unavailability when the
+                    % keyring is locked, isn't it? It could always mention keyring lock as a
+                    % reason in a woody error definition.
+                    throw({error, reply_5xx(503)})
+            end
+    end.
 
 enrich_client_info(ClientInfo, Context) ->
     ClientInfo#{<<"ip">> => prepare_client_ip(Context)}.
