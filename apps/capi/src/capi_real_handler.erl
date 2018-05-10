@@ -1795,10 +1795,11 @@ encode_shop_modification(#{<<"shopID">> := ShopID} = Modification) ->
 encode_reason(undefined                ) ->undefined;
 encode_reason(#{<<"reason">> := Reason}) -> Reason.
 
-encode_legal_agreement(#{<<"id">> := ID, <<"signedAt">> := SignedAt}) ->
+encode_legal_agreement(LegalAgreement) ->
     #domain_LegalAgreement{
-        signed_at = SignedAt,
-        legal_agreement_id = ID
+        signed_at = maps:get(<<"signedAt">>, LegalAgreement),
+        legal_agreement_id = maps:get(<<"id">>, LegalAgreement),
+        valid_until = genlib_map:get(<<"validUntil">>, LegalAgreement)
     }.
 
 encode_payout_tool_params(#{<<"currency">> := Currency, <<"details">> := Details}) ->
@@ -2895,11 +2896,18 @@ decode_contract_modification({report_preferences_modification, ReportPreferences
         decode_reporting_preferences(ReportPreferences)
     ).
 
-decode_legal_agreement(#domain_LegalAgreement{signed_at = SignedAt, legal_agreement_id = ID}) ->
-    #{
+decode_legal_agreement(
+    #domain_LegalAgreement{
+        signed_at = SignedAt,
+        legal_agreement_id = ID,
+        valid_until = ValidUntil
+    }
+) ->
+    genlib_map:compact(#{
         <<"id"      >> => ID,
-        <<"signedAt">> => SignedAt
-    }.
+        <<"signedAt">> => SignedAt,
+        <<"validUntil">> => ValidUntil
+    }).
 
 decode_reporting_preferences(#domain_ReportPreferences{
     service_acceptance_act_preferences = #domain_ServiceAcceptanceActPreferences{

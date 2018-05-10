@@ -1055,6 +1055,16 @@ create_claim_ok_test(Config) ->
         #{
             <<"partyModificationType">> => <<"ContractModification">>,
             <<"contractID">> => ?STRING,
+            <<"contractModificationType">> => <<"ContractLegalAgreementBinding">>,
+            <<"legalAgreement">> => #{
+                <<"id">> => ?STRING,
+                <<"signedAt">> => ?TIMESTAMP,
+                <<"validUntil">> => ?TIMESTAMP
+            }
+        },
+        #{
+            <<"partyModificationType">> => <<"ContractModification">>,
+            <<"contractID">> => ?STRING,
             <<"contractModificationType">> => <<"ContractReportingPreferencesChange">>,
             <<"serviceAcceptanceActPreferences">> => #{
                 <<"scheduleID">> => ?INTEGER,
