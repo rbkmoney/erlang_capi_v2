@@ -1895,9 +1895,9 @@ encode_report_preferences(_) ->
 
 encode_representative(Representative) ->
     #domain_Representative{
-        position  = genlib_map:get(<<"position">>, Representative),
-        full_name = genlib_map:get(<<"fullName">>, Representative),
-        document  = encode_representative_document(genlib_map:get(<<"document">>, Representative))
+        position  = maps:get(<<"position">>, Representative),
+        full_name = maps:get(<<"fullName">>, Representative),
+        document  = encode_representative_document(maps:get(<<"document">>, Representative))
     }.
 
 encode_representative_document(#{<<"representativeDocumentType">> := <<"ArticlesOfAssociation">>}) ->
@@ -2510,8 +2510,14 @@ decode_contract(Contract) ->
         <<"paymentInstitutionID">> => decode_payment_institution_ref(Contract#domain_Contract.payment_institution),
         <<"validSince"          >> => Contract#domain_Contract.valid_since,
         <<"validUntil"          >> => Contract#domain_Contract.valid_until,
-        <<"legalAgreement"      >> => decode_legal_agreement(Contract#domain_Contract.legal_agreement),
-        <<"reportingPreferences">> => decode_reporting_preferences(Contract#domain_Contract.report_preferences)
+        <<"legalAgreement"      >> => decode_optional(
+            Contract#domain_Contract.legal_agreement,
+            fun decode_legal_agreement/1
+        ),
+        <<"reportingPreferences">> => decode_optional(
+            Contract#domain_Contract.report_preferences,
+            fun decode_reporting_preferences/1
+        )
     }, decode_contract_status(Contract#domain_Contract.status)).
 
 decode_contract_status({active, _}) ->
@@ -2893,9 +2899,7 @@ decode_legal_agreement(#domain_LegalAgreement{signed_at = SignedAt, legal_agreem
     #{
         <<"id"      >> => ID,
         <<"signedAt">> => SignedAt
-    };
-decode_legal_agreement(undefined) ->
-    undefined.
+    }.
 
 decode_reporting_preferences(#domain_ReportPreferences{
     service_acceptance_act_preferences = #domain_ServiceAcceptanceActPreferences{
@@ -2910,9 +2914,7 @@ decode_reporting_preferences(#domain_ReportPreferences{
         }
     };
 decode_reporting_preferences(#domain_ReportPreferences{service_acceptance_act_preferences = undefined}) ->
-    #{};
-decode_reporting_preferences(undefined) ->
-    undefined.
+    #{}.
 
 decode_representative(#domain_Representative{
     position  = Position,
@@ -3674,3 +3676,8 @@ prepare_varset(Req) ->
 
 merge_and_compact(M1, M2) ->
     genlib_map:compact(maps:merge(M1, M2)).
+
+decode_optional(Arg, DecodeFun) when Arg /= undefined ->
+    DecodeFun(Arg);
+decode_optional(undefined, _) ->
+    undefined.
