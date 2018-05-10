@@ -244,7 +244,21 @@
         id = ?STRING,
         modification = {legal_agreement_binding, #domain_LegalAgreement{
             signed_at = ?TIMESTAMP,
-            legal_agreement_id = ?STRING
+            legal_agreement_id = ?STRING,
+            valid_until = ?TIMESTAMP
+        }}
+    }},
+    {contract_modification, #payproc_ContractModificationUnit{
+        id = ?STRING,
+        modification = {report_preferences_modification, #domain_ReportPreferences{
+            service_acceptance_act_preferences = #domain_ServiceAcceptanceActPreferences{
+                schedule = #domain_BusinessScheduleRef{id = ?INTEGER},
+                signer = #domain_Representative{
+                    position  = ?STRING,
+                    full_name = ?STRING,
+                    document  = {articles_of_association, #domain_ArticlesOfAssociation{}}
+                }
+            }
         }}
     }},
     %% shop modifications
@@ -289,7 +303,7 @@
     {shop_modification, #payproc_ShopModificationUnit{
         id = ?STRING,
         modification = {payout_schedule_modification, #payproc_ScheduleModification{
-            schedule = #domain_PayoutScheduleRef{id = ?INTEGER}
+            schedule = #domain_BusinessScheduleRef{id = ?INTEGER}
         }}
     }}
 ]).
@@ -511,10 +525,10 @@
                 description = ?STRING
             }
         }},
-        {payout_schedule, #domain_PayoutScheduleRef{id = ?INTEGER}} =>
-        {payout_schedule, #domain_PayoutScheduleObject{
-            ref = #domain_PayoutScheduleRef{id = ?INTEGER},
-            data = #domain_PayoutSchedule{
+        {business_schedule, #domain_BusinessScheduleRef{id = ?INTEGER}} =>
+        {business_schedule, #domain_BusinessScheduleObject{
+            ref = #domain_BusinessScheduleRef{id = ?INTEGER},
+            data = #domain_BusinessSchedule{
                 name = ?STRING,
                 description = ?STRING,
                 schedule = #'Schedule'{
@@ -526,6 +540,7 @@
                     minute = {every, #'ScheduleEvery'{}},
                     second = {every, #'ScheduleEvery'{}}
                 },
+                delay = #'TimeSpan'{},
                 policy = #domain_PayoutCompilationPolicy{
                     assets_freeze_for = #'TimeSpan'{}
                 }

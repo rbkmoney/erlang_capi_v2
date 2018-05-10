@@ -975,6 +975,29 @@ create_claim_ok_test(Config) ->
                 <<"bankPostAccount">> => <<"12345678901234567890">>,
                 <<"bankBik">> => <<"123456789">>
             }
+        },
+        #{
+            <<"partyModificationType">> => <<"ContractModification">>,
+            <<"contractID">> => ?STRING,
+            <<"contractModificationType">> => <<"ContractLegalAgreementBinding">>,
+            <<"legalAgreement">> => #{
+                <<"id">> => ?STRING,
+                <<"signedAt">> => ?TIMESTAMP,
+                <<"validUntil">> => ?TIMESTAMP
+            }
+        },
+        #{
+            <<"partyModificationType">> => <<"ContractModification">>,
+            <<"contractID">> => ?STRING,
+            <<"contractModificationType">> => <<"ContractReportingPreferencesChange">>,
+            <<"serviceAcceptanceActPreferences">> => #{
+                <<"scheduleID">> => ?INTEGER,
+                <<"signer">> => #{
+                    <<"position">> => ?STRING,
+                    <<"fullName">> => ?STRING,
+                    <<"document">> => #{<<"representativeDocumentType">> => <<"ArticlesOfAssociation">>}
+                }
+            }
         }
     ],
     {ok, _} = capi_client_claims:create_claim(?config(context, Config), Changeset).
