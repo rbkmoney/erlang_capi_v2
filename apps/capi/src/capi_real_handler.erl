@@ -1248,7 +1248,8 @@ process_request('GetPaymentInstitutionPayoutMethods', Req, Context, ReqCtx) ->
 
 process_request('GetPaymentInstitutionPayoutSchedules', Req, Context, ReqCtx) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
-    case compute_payment_institution_terms(PaymentInstitutionID, prepare_varset(Req), Context) of
+    VS = prepare_varset(Req),
+    case compute_payment_institution_terms(PaymentInstitutionID, VS, Context, ReqCtx) of
         {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{payout_schedules = Schedules}}} ->
             {ok, {200, [], decode_business_schedules_selector(Schedules)}};
         {ok, #domain_TermSet{payouts = undefined}} ->
@@ -3239,19 +3240,7 @@ decode_contract_adjustment(#domain_ContractAdjustment{
 decode_payment_institution_ref(#domain_PaymentInstitutionRef{id = Ref}) ->
     Ref.
 
-decode_shop(#domain_Shop{
-    id = ShopID,
-    created_at = CreatedAt,
-    blocking = Blocking,
-    suspension = Suspension,
-    category  = CategoryRef,
-    details  = ShopDetails,
-    location = Location,
-    account = ShopAccount,
-    contract_id = ContractID,
-    payout_tool_id = PayoutToolID,
-    payout_schedule = ScheduleRef
-}) ->
+decode_shop(Shop) ->
     genlib_map:compact(#{
         <<"id"          >> => Shop#domain_Shop.id,
         <<"createdAt"   >> => Shop#domain_Shop.created_at,
@@ -3692,7 +3681,7 @@ decode_contract_modification({payout_tool_modification, #payproc_PayoutToolModif
     payout_tool_id = PayoutToolID,
     modification = {creation, PayoutToolParams}
 }}) ->
-    Basic = #{
+    maps:merge(#{
         <<"contractModificationType">> => <<"ContractPayoutToolCreation">>,
         <<"payoutToolID"            >> => PayoutToolID
     }, decode_payout_tool_params(PayoutToolParams));
@@ -4369,13 +4358,8 @@ process_merchant_stat_result(StatType, Result) ->
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
             Resp = [decode_stat_info(StatType, S) || S <- Stats],
             {ok, {200, [], Resp}};
-        {exception, Exception} ->
-            case Exception of
-                #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-                #merchstat_DatasetTooBig{limit = Limit} ->
-                    {ok, {400, [], limit_exceeded_error(Limit)}}
-            end
+        {exception, #'InvalidRequest'{errors = Errors}} ->
+            {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
     end.
 
 process_search_request(QueryType, Query, Req, ReqCtx, Opts = #{thrift_fun := ThriftFun}) ->
@@ -4403,13 +4387,8 @@ process_search_request_result(QueryType, Result, #{decode_fun := DecodeFun}) ->
                 <<"totalCount">> => TotalCount
             },
             {ok, {200, [], Resp}};
-        {exception, Exception} ->
-            case Exception of
-                #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-                #merchstat_DatasetTooBig{limit = Limit} ->
-                    {ok, {400, [], limit_exceeded_error(Limit)}}
-            end
+        {exception, #'InvalidRequest'{errors = Errors}} ->
+            {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
     end.
 
 get_time(Key, Req) ->
@@ -4584,9 +4563,9 @@ get_category_by_id(CategoryID, ReqCtx) ->
     CategoryRef = {category, #domain_CategoryRef{id = CategoryID}},
     capi_domain:get(CategoryRef, ReqCtx).
 
-get_schedule_by_id(ScheduleID, #{woody_context := WoodyContext}) ->
+get_schedule_by_id(ScheduleID, ReqCtx) ->
     Ref = {business_schedule, #domain_BusinessScheduleRef{id = ScheduleID}},
-    capi_domain:get(Ref, WoodyContext).
+    capi_domain:get(Ref, ReqCtx).
 
 collect_events(Limit, After, GetterFun, DecodeFun, DecodingContext) ->
     collect_events([], Limit, After, GetterFun, DecodeFun, DecodingContext).
