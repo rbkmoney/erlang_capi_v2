@@ -873,7 +873,7 @@ process_request('GetCategoryByRef', Req, Context) ->
 process_request('GetScheduleByRef', Req, Context) ->
     case get_schedule_by_id(genlib:to_int(maps:get(scheduleID, Req)), Context) of
         {ok, Schedule} ->
-            {ok, {200, [], decode_payout_schedule(Schedule)}};
+            {ok, {200, [], decode_business_schedule(Schedule)}};
         {error, not_found} ->
             {404, [], general_error(<<"Schedule not found">>)}
     end;
@@ -929,7 +929,7 @@ process_request('GetPaymentInstitutionPayoutSchedules', Req, Context) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
     case compute_payment_institution_terms(PaymentInstitutionID, prepare_varset(Req), Context) of
         {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{payout_schedules = Schedules}}} ->
-            {ok, {200, [], decode_payout_schedules_selector(Schedules)}};
+            {ok, {200, [], decode_business_schedules_selector(Schedules)}};
         {ok, #domain_TermSet{payouts = undefined}} ->
             {404, [], general_error(<<"Automatic payouts not allowed">>)};
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
@@ -1752,7 +1752,9 @@ encode_contract_modification(#{<<"contractID">> := ContractID} = Modification) -
             {payout_tool_modification, #payproc_PayoutToolModificationUnit{
                 payout_tool_id = maps:get(<<"payoutToolID">>, Modification),
                 modification   = {creation, encode_payout_tool_params(Modification)}
-            }}
+            }};
+        <<"ContractReportingPreferencesChange">> ->
+            {report_preferences_modification, encode_report_preferences(Modification)}
     end,
     #payproc_ContractModificationUnit{
         id           = ContractID,
@@ -1793,10 +1795,11 @@ encode_shop_modification(#{<<"shopID">> := ShopID} = Modification) ->
 encode_reason(undefined                ) ->undefined;
 encode_reason(#{<<"reason">> := Reason}) -> Reason.
 
-encode_legal_agreement(#{<<"id">> := ID, <<"signedAt">> := SignedAt}) ->
+encode_legal_agreement(LegalAgreement) ->
     #domain_LegalAgreement{
-        signed_at = SignedAt,
-        legal_agreement_id = ID
+        signed_at = maps:get(<<"signedAt">>, LegalAgreement),
+        legal_agreement_id = maps:get(<<"id">>, LegalAgreement),
+        valid_until = genlib_map:get(<<"validUntil">>, LegalAgreement)
     }.
 
 encode_payout_tool_params(#{<<"currency">> := Currency, <<"details">> := Details}) ->
@@ -1877,6 +1880,31 @@ encode_flow(#{<<"type">> := <<"PaymentFlowHold">>} = Entity) ->
     {hold, #payproc_InvoicePaymentParamsFlowHold{
         on_hold_expiration = binary_to_existing_atom(OnHoldExpiration, utf8)
     }}.
+
+encode_report_preferences(#{<<"serviceAcceptanceActPreferences">> := #{
+    <<"scheduleID">> := ScheduleID,
+    <<"signer">> := Signer
+}}) ->
+    #domain_ReportPreferences{
+        service_acceptance_act_preferences = #domain_ServiceAcceptanceActPreferences{
+            schedule = encode_schedule_ref(ScheduleID),
+            signer = encode_representative(Signer)
+        }
+    };
+encode_report_preferences(_) ->
+    #domain_ReportPreferences{}.
+
+encode_representative(Representative) ->
+    #domain_Representative{
+        position  = maps:get(<<"position">>, Representative),
+        full_name = maps:get(<<"fullName">>, Representative),
+        document  = encode_representative_document(maps:get(<<"document">>, Representative))
+    }.
+
+encode_representative_document(#{<<"representativeDocumentType">> := <<"ArticlesOfAssociation">>}) ->
+    {articles_of_association, #domain_ArticlesOfAssociation{}};
+encode_representative_document(#{<<"representativeDocumentType">> := <<"PowerOfAttorney">>} = Document) ->
+    {power_of_attorney, encode_legal_agreement(Document)}.
 
 make_invoice_and_token(Invoice, PartyID) ->
     #{
@@ -2483,7 +2511,14 @@ decode_contract(Contract) ->
         <<"paymentInstitutionID">> => decode_payment_institution_ref(Contract#domain_Contract.payment_institution),
         <<"validSince"          >> => Contract#domain_Contract.valid_since,
         <<"validUntil"          >> => Contract#domain_Contract.valid_until,
-        <<"legalAgreement"      >> => decode_legal_agreement(Contract#domain_Contract.legal_agreement)
+        <<"legalAgreement"      >> => decode_optional(
+            Contract#domain_Contract.legal_agreement,
+            fun decode_legal_agreement/1
+        ),
+        <<"reportingPreferences">> => decode_optional(
+            Contract#domain_Contract.report_preferences,
+            fun decode_reporting_preferences/1
+        )
     }, decode_contract_status(Contract#domain_Contract.status)).
 
 decode_contract_status({active, _}) ->
@@ -2552,7 +2587,7 @@ decode_shop(Shop) ->
         <<"location"    >> => decode_shop_location(Shop#domain_Shop.location),
         <<"contractID"  >> => Shop#domain_Shop.contract_id,
         <<"payoutToolID">> => Shop#domain_Shop.payout_tool_id,
-        <<"scheduleID"  >> => decode_payout_schedule_ref(Shop#domain_Shop.payout_schedule),
+        <<"scheduleID"  >> => decode_business_schedule_ref(Shop#domain_Shop.payout_schedule),
         <<"account"     >> => decode_shop_account(Shop#domain_Shop.account)
     }).
 
@@ -2854,16 +2889,61 @@ decode_contract_modification({payout_tool_modification, PaymentToolMod}) ->
     maps:merge(#{
         <<"contractModificationType">> => <<"ContractPayoutToolCreation">>,
         <<"payoutToolID"            >> => PayoutToolID
-    }, decode_payout_tool_params(PayoutToolParams)).
+    }, decode_payout_tool_params(PayoutToolParams));
+decode_contract_modification({report_preferences_modification, ReportPreferences}) ->
+    maps:merge(
+        #{<<"contractModificationType">> => <<"ContractReportingPreferencesChange">>},
+        decode_reporting_preferences(ReportPreferences)
+    ).
 
-decode_legal_agreement(#domain_LegalAgreement{signed_at = SignedAt, legal_agreement_id = ID}) ->
-    #{
+decode_legal_agreement(
+    #domain_LegalAgreement{
+        signed_at = SignedAt,
+        legal_agreement_id = ID,
+        valid_until = ValidUntil
+    }
+) ->
+    genlib_map:compact(#{
         <<"id"      >> => ID,
-        <<"signedAt">> => SignedAt
-    };
-decode_legal_agreement(undefined) ->
-    undefined.
+        <<"signedAt">> => SignedAt,
+        <<"validUntil">> => ValidUntil
+    }).
 
+decode_reporting_preferences(#domain_ReportPreferences{
+    service_acceptance_act_preferences = #domain_ServiceAcceptanceActPreferences{
+        schedule = ScheduleRef,
+        signer = Signer
+    }
+}) ->
+    #{
+        <<"serviceAcceptanceActPreferences">> => #{
+            <<"scheduleID">> => decode_business_schedule_ref(ScheduleRef),
+            <<"signer">> => decode_representative(Signer)
+        }
+    };
+decode_reporting_preferences(#domain_ReportPreferences{service_acceptance_act_preferences = undefined}) ->
+    #{}.
+
+decode_representative(#domain_Representative{
+    position  = Position,
+    full_name = Name,
+    document  = Document
+}) ->
+    #{
+        <<"position">> => Position,
+        <<"fullName">> => Name,
+        <<"document">> => decode_representative_document(Document)
+    }.
+
+decode_representative_document({articles_of_association, #domain_ArticlesOfAssociation{}}) ->
+    #{
+        <<"representativeDocumentType">> => <<"ArticlesOfAssociation">>
+    };
+decode_representative_document({power_of_attorney, LegalAgreement}) ->
+    maps:merge(
+        #{<<"representativeDocumentType">> => <<"PowerOfAttorney">>},
+        decode_legal_agreement(LegalAgreement)
+    ).
 
 decode_shop_modification({creation, ShopParams}) ->
     maps:merge(
@@ -2904,7 +2984,7 @@ decode_shop_modification({payout_tool_modification, PayoutToolID}) ->
 decode_shop_modification({payout_schedule_modification, #payproc_ScheduleModification{schedule = ScheduleRef}}) ->
     genlib_map:compact(#{
         <<"shopModificationType">> => <<"ShopPayoutScheduleChange">>,
-        <<"scheduleID"          >> => decode_payout_schedule_ref(ScheduleRef)
+        <<"scheduleID"          >> => decode_business_schedule_ref(ScheduleRef)
     }).
 
 decode_shop_params(ShopParams) ->
@@ -3148,26 +3228,26 @@ decode_payout_methods_selector({value, Val}) when is_list(Val) ->
 decode_payout_methods_selector(_) ->
     [].
 
-decode_payout_schedules_selector({value, Val}) when is_list(Val) ->
-    lists:map(fun decode_payout_schedule_ref/1, Val);
-decode_payout_schedules_selector(_) ->
+decode_business_schedules_selector({value, Val}) when is_list(Val) ->
+    lists:map(fun decode_business_schedule_ref/1, Val);
+decode_business_schedules_selector(_) ->
     [].
 
-decode_payout_schedule(#domain_PayoutScheduleObject{ref = Ref, data = Data}) ->
+decode_business_schedule(#domain_BusinessScheduleObject{ref = Ref, data = Data}) ->
     genlib_map:compact(#{
-        <<"scheduleID" >> => Ref#domain_PayoutScheduleRef.id,
-        <<"name"       >> => Data#domain_PayoutSchedule.name,
-        <<"description">> => Data#domain_PayoutSchedule.description
+        <<"scheduleID" >> => Ref#domain_BusinessScheduleRef.id,
+        <<"name"       >> => Data#domain_BusinessSchedule.name,
+        <<"description">> => Data#domain_BusinessSchedule.description
     }).
 
 encode_schedule_ref(ID) when ID /= undefined ->
-    #domain_PayoutScheduleRef{id = ID};
+    #domain_BusinessScheduleRef{id = ID};
 encode_schedule_ref(undefined) ->
     undefined.
 
-decode_payout_schedule_ref(#domain_PayoutScheduleRef{id = ID}) when ID /= undefined ->
+decode_business_schedule_ref(#domain_BusinessScheduleRef{id = ID}) when ID /= undefined ->
     ID;
-decode_payout_schedule_ref(undefined) ->
+decode_business_schedule_ref(undefined) ->
     undefined.
 
 -define(invpaid()      , {paid, #webhooker_InvoicePaid{}}).
@@ -3417,7 +3497,7 @@ get_category_by_id(CategoryID, #{woody_context := WoodyContext}) ->
     capi_domain:get(CategoryRef, WoodyContext).
 
 get_schedule_by_id(ScheduleID, #{woody_context := WoodyContext}) ->
-    Ref = {payout_schedule, #domain_PayoutScheduleRef{id = ScheduleID}},
+    Ref = {business_schedule, #domain_BusinessScheduleRef{id = ScheduleID}},
     capi_domain:get(Ref, WoodyContext).
 
 collect_events(Limit, After, GetterFun, DecodeFun, Context) ->
@@ -3604,3 +3684,8 @@ prepare_varset(Req) ->
 
 merge_and_compact(M1, M2) ->
     genlib_map:compact(maps:merge(M1, M2)).
+
+decode_optional(Arg, DecodeFun) when Arg /= undefined ->
+    DecodeFun(Arg);
+decode_optional(undefined, _) ->
+    undefined.
