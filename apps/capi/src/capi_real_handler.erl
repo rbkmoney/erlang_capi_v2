@@ -2140,8 +2140,10 @@ decode_last_digits(MaskedPan) when byte_size(MaskedPan) > ?MASKED_PAN_MAX_LENGTH
 decode_last_digits(MaskedPan) ->
     MaskedPan.
 
+-define(PAN_LENGTH, 16).
+
 decode_masked_pan(Bin, LastDigits) ->
-    Mask = binary:copy(<<"*">>, 16 - byte_size(Bin) - byte_size(LastDigits)),
+    Mask = binary:copy(<<"*">>, ?PAN_LENGTH - byte_size(Bin) - byte_size(LastDigits)),
     <<Bin/binary, Mask/binary, LastDigits/binary>>.
 
 mask_phone_number(PhoneNumber) ->
