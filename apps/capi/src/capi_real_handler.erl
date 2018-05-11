@@ -368,7 +368,7 @@ process_request('SearchInvoices', Req, Context) ->
     Query = #{
         <<"merchant_id"              >> => get_party_id(Context),
         <<"shop_id"                  >> => genlib_map:get('shopID', Req),
-        <<"invoice_id"               >> =>  genlib_map:get('invoiceID', Req),
+        <<"invoice_id"               >> => genlib_map:get('invoiceID', Req),
         <<"from_time"                >> => get_time('fromTime', Req),
         <<"to_time"                  >> => get_time('toTime', Req),
         <<"invoice_status"           >> => genlib_map:get('invoiceStatus', Req),
@@ -381,7 +381,7 @@ process_request('SearchInvoices', Req, Context) ->
         <<"payment_email"            >> => genlib_map:get('payerEmail', Req),
         <<"payment_ip"               >> => genlib_map:get('payerIP', Req),
         <<"payment_fingerprint"      >> => genlib_map:get('payerFingerprint', Req),
-        <<"payment_pan_mask"         >> => genlib_map:get('cardNumberMask', Req),
+        <<"payment_pan_mask"         >> => genlib_map:get('lastDigits', Req),
         <<"payment_amount"           >> => genlib_map:get('paymentAmount', Req),
         <<"invoice_amount"           >> => genlib_map:get('invoiceAmount', Req)
     },
@@ -395,7 +395,7 @@ process_request('SearchPayments', Req, Context) ->
     Query = #{
         <<"merchant_id"              >> => get_party_id(Context),
         <<"shop_id"                  >> => genlib_map:get('shopID', Req),
-        <<"invoice_id"               >> =>  genlib_map:get('invoiceID', Req),
+        <<"invoice_id"               >> => genlib_map:get('invoiceID', Req),
         <<"from_time"                >> => get_time('fromTime', Req),
         <<"to_time"                  >> => get_time('toTime', Req),
         <<"payment_status"           >> => genlib_map:get('paymentStatus', Req),
@@ -407,7 +407,7 @@ process_request('SearchPayments', Req, Context) ->
         <<"payment_email"            >> => genlib_map:get('payerEmail', Req),
         <<"payment_ip"               >> => genlib_map:get('payerIP', Req),
         <<"payment_fingerprint"      >> => genlib_map:get('payerFingerprint', Req),
-        <<"payment_pan_mask"         >> => genlib_map:get('cardNumberMask', Req),
+        <<"payment_pan_mask"         >> => genlib_map:get('lastDigits', Req),
         <<"payment_amount"           >> => genlib_map:get('paymentAmount', Req)
     },
     Opts = #{
@@ -2113,9 +2113,12 @@ decode_payment_tool_details({digital_wallet, V}) ->
     decode_digital_wallet_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsDigitalWallet">>}).
 
 decode_bank_card_details(BankCard, V) ->
+    LastDigits = decode_last_digits(BankCard#domain_BankCard.masked_pan),
+    Bin = BankCard#domain_BankCard.bin,
     V#{
-        <<"cardNumberMask">> => decode_masked_pan(BankCard#domain_BankCard.masked_pan),
-        <<"cardBin">>        => BankCard#domain_BankCard.bin,
+        <<"lastDigits">>     => LastDigits,
+        <<"bin">>            => Bin,
+        <<"cardNumberMask">> => decode_masked_pan(Bin, LastDigits),
         <<"paymentSystem" >> => genlib:to_binary (BankCard#domain_BankCard.payment_system)
     }.
 
@@ -2132,10 +2135,14 @@ decode_digital_wallet_details(#domain_DigitalWallet{provider = qiwi, id = ID}, V
 
 -define(MASKED_PAN_MAX_LENGTH, 4).
 
-decode_masked_pan(MaskedPan) when byte_size(MaskedPan) > ?MASKED_PAN_MAX_LENGTH ->
+decode_last_digits(MaskedPan) when byte_size(MaskedPan) > ?MASKED_PAN_MAX_LENGTH ->
     binary:part(MaskedPan, {byte_size(MaskedPan), -?MASKED_PAN_MAX_LENGTH});
-decode_masked_pan(MaskedPan) ->
+decode_last_digits(MaskedPan) ->
     MaskedPan.
+
+decode_masked_pan(Bin, LastDigits) ->
+    Mask = binary:copy(<<"*">>, 16 - byte_size(Bin) - byte_size(LastDigits)),
+    <<Bin/binary, Mask/binary, LastDigits/binary>>.
 
 mask_phone_number(PhoneNumber) ->
     capi_utils:redact(PhoneNumber, <<"^\\+\\d(\\d{1,10}?)\\d{2,4}$">>).
