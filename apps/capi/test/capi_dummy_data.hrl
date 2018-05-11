@@ -86,8 +86,8 @@
 -define(BANK_CARD, #domain_BankCard{
     token = ?STRING,
     payment_system = visa,
-    bin = ?STRING,
-    masked_pan = <<"TEST1234">>
+    bin = <<"411111">>,
+    masked_pan = <<"411111******1111">>
 }).
 
 -define(CONTACT_INFO, #domain_ContactInfo{
@@ -468,15 +468,16 @@
 -define(STAT_BANK_CARD, #merchstat_BankCard{
     token = ?STRING,
     payment_system = visa,
-    bin = ?STRING,
-    masked_pan = <<"TEST1234">>
+    bin = <<"411111">>,
+    masked_pan = <<"411111******1111">>
+
 }).
 
 -define(STAT_BANK_CARD_WITH_TP, #merchstat_BankCard{
     token = ?STRING,
     payment_system = visa,
-    bin = ?STRING,
-    masked_pan = <<"TEST1234">>,
+    bin = <<"411111">>,
+    masked_pan = <<"411111******1111">>,
     token_provider = applepay
 }).
 
