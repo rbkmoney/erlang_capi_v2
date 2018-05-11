@@ -2709,13 +2709,14 @@ decode_payment_tool_details({payment_terminal, V}) ->
 decode_payment_tool_details({digital_wallet, V}) ->
     decode_digital_wallet_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsDigitalWallet">>}).
 
-decode_bank_card_details(#domain_BankCard{
-    'payment_system' = PaymentSystem,
-    'masked_pan' = MaskedPan
-}, V) ->
+decode_bank_card_details(BankCard, V) ->
+    LastDigits = decode_last_digits(BankCard#domain_BankCard.masked_pan),
+    Bin = BankCard#domain_BankCard.bin,
     V#{
-        <<"cardNumberMask">> => decode_masked_pan(MaskedPan),
-        <<"paymentSystem">> => genlib:to_binary(PaymentSystem)
+        <<"lastDigits">>     => LastDigits,
+        <<"bin">>            => Bin,
+        <<"cardNumberMask">> => decode_masked_pan(Bin, LastDigits),
+        <<"paymentSystem" >> => genlib:to_binary (BankCard#domain_BankCard.payment_system)
     }.
 
 decode_payment_terminal_details(#domain_PaymentTerminal{
@@ -2736,10 +2737,16 @@ decode_digital_wallet_details(#domain_DigitalWallet{
 
 -define(MASKED_PAN_MAX_LENGTH, 4).
 
-decode_masked_pan(MaskedPan) when byte_size(MaskedPan) > ?MASKED_PAN_MAX_LENGTH ->
+decode_last_digits(MaskedPan) when byte_size(MaskedPan) > ?MASKED_PAN_MAX_LENGTH ->
     binary:part(MaskedPan, {byte_size(MaskedPan), -?MASKED_PAN_MAX_LENGTH});
-decode_masked_pan(MaskedPan) ->
+decode_last_digits(MaskedPan) ->
     MaskedPan.
+
+-define(PAN_LENGTH, 16).
+
+decode_masked_pan(Bin, LastDigits) ->
+    Mask = binary:copy(<<"*">>, ?PAN_LENGTH - byte_size(Bin) - byte_size(LastDigits)),
+    <<Bin/binary, Mask/binary, LastDigits/binary>>.
 
 mask_phone_number(PhoneNumber) ->
     capi_utils:redact(PhoneNumber, <<"^\\+\\d(\\d{1,10}?)\\d{2,4}$">>).

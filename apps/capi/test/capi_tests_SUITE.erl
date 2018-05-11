@@ -798,7 +798,9 @@ create_visa_payment_resource_ok_test(Config) ->
     {ok, #{<<"paymentToolDetails">> := #{
         <<"detailsType">> := <<"PaymentToolDetailsBankCard">>,
         <<"paymentSystem">> := <<"visa">>,
-        <<"cardNumberMask">> := <<"1111">>
+        <<"lastDigits">> := <<"1111">>,
+        <<"bin">> := <<"411111">>,
+        <<"cardNumberMask">> := <<"411111******1111">>
     }}} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
         <<"paymentTool">> => #{
             <<"paymentToolType">> => <<"CardData">>,
@@ -838,7 +840,9 @@ create_nspkmir_payment_resource_ok_test(Config) ->
     {ok, #{<<"paymentToolDetails">> := #{
         <<"detailsType">> := <<"PaymentToolDetailsBankCard">>,
         <<"paymentSystem">> := <<"nspkmir">>,
-        <<"cardNumberMask">> := <<"11">>
+        <<"cardNumberMask">> := <<"22001111******11">>,
+        <<"lastDigits">> := <<"11">>,
+        <<"bin">> := <<"22001111">>
     }}} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
         <<"paymentTool">> => #{
             <<"paymentToolType">> => <<"CardData">>,
