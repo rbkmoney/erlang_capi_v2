@@ -24,7 +24,7 @@
 
 -define(LIFETIME_INTERVAL, #domain_LifetimeInterval{
     years = ?INTEGER,
-    months =?INTEGER,
+    months = ?INTEGER,
     days = ?INTEGER
 }).
 
@@ -86,8 +86,8 @@
 -define(BANK_CARD, #domain_BankCard{
     token = ?STRING,
     payment_system = visa,
-    bin = ?STRING,
-    masked_pan = <<"TEST1234">>
+    bin = <<"411111">>,
+    masked_pan = <<"411111******1111">>
 }).
 
 -define(CONTACT_INFO, #domain_ContactInfo{
@@ -367,15 +367,23 @@
 
 -define(STAT_RESPONSE_INVOICES, ?STAT_RESPONSE({invoices, [?STAT_INVOICE]})).
 
--define(STAT_RESPONSE_PAYMENTS, ?STAT_RESPONSE({payments, [?STAT_PAYMENT]})).
+-define(STAT_RESPONSE_PAYMENTS, ?STAT_RESPONSE({payments,
+    [
+        ?STAT_PAYMENT(?STAT_PAYER({bank_card, ?STAT_BANK_CARD})),
+        ?STAT_PAYMENT(?STAT_PAYER({bank_card, ?STAT_BANK_CARD_WITH_TP}))
+    ]
+})).
 
 -define(STAT_RESPONSE_RECORDS, ?STAT_RESPONSE({records, [?STAT_RECORD]})).
 
--define(STAT_RESPONSE_PAYOUTS, ?STAT_RESPONSE({payouts, [
-    ?STAT_PAYOUT({bank_card, #merchstat_PayoutCard{card = ?STAT_BANK_CARD}}, [?PAYOUT_SUMMARY_ITEM]),
-    ?STAT_PAYOUT({bank_account, ?STAT_PAYOUT_BANK_ACCOUNT_RUS}, undefined),
-    ?STAT_PAYOUT({bank_account, ?STAT_PAYOUT_BANK_ACCOUNT_INT}, [?PAYOUT_SUMMARY_ITEM])
-]})).
+-define(STAT_RESPONSE_PAYOUTS, ?STAT_RESPONSE({payouts,
+    [
+        ?STAT_PAYOUT({bank_card, #merchstat_PayoutCard{card = ?STAT_BANK_CARD}}, [?PAYOUT_SUMMARY_ITEM]),
+        ?STAT_PAYOUT({bank_card, #merchstat_PayoutCard{card = ?STAT_BANK_CARD_WITH_TP}}, [?PAYOUT_SUMMARY_ITEM]),
+        ?STAT_PAYOUT({bank_account, ?STAT_PAYOUT_BANK_ACCOUNT_RUS}, undefined),
+        ?STAT_PAYOUT({bank_account, ?STAT_PAYOUT_BANK_ACCOUNT_INT}, [?PAYOUT_SUMMARY_ITEM])
+    ]
+})).
 
 -define(STAT_INVOICE, #merchstat_StatInvoice{
     id = ?STRING,
@@ -391,7 +399,7 @@
     context = ?CONTENT
 }).
 
--define(STAT_PAYMENT, #merchstat_StatPayment{
+-define(STAT_PAYMENT(Payer), #merchstat_StatPayment{
     id = ?STRING,
     invoice_id = ?STRING,
     owner_id = ?STRING,
@@ -402,16 +410,18 @@
     flow = {instant, #merchstat_InvoicePaymentFlowInstant{}},
     fee = ?INTEGER,
     currency_symbolic_code = ?RUB,
-    payer = {payment_resource, #merchstat_PaymentResourcePayer{
-            payment_tool = {bank_card, ?STAT_BANK_CARD},
-        ip_address = ?STRING,
-        fingerprint = ?STRING,
-        phone_number = ?STRING,
-        email = <<"test@test.ru">>,
-        session_id = ?STRING
-    }},
+    payer = Payer,
     context = ?CONTENT
 }).
+
+-define (STAT_PAYER(PaymentTool), {payment_resource, #merchstat_PaymentResourcePayer{
+    payment_tool = PaymentTool,
+    ip_address = ?STRING,
+    fingerprint = ?STRING,
+    phone_number = ?STRING,
+    email = <<"test@test.ru">>,
+    session_id = ?STRING
+}}).
 
 -define(STAT_RECORD, #{
     <<"offset">> => ?INTEGER_BINARY,
@@ -464,8 +474,16 @@
 -define(STAT_BANK_CARD, #merchstat_BankCard{
     token = ?STRING,
     payment_system = visa,
-    bin = ?STRING,
-    masked_pan = <<"TEST1234">>
+    bin = <<"411111">>,
+    masked_pan = <<"411111******1111">>
+}).
+
+-define(STAT_BANK_CARD_WITH_TP, #merchstat_BankCard{
+    token = ?STRING,
+    payment_system = visa,
+    bin = <<"411111">>,
+    masked_pan = <<"411111******1111">>,
+    token_provider = applepay
 }).
 
 -define(PAYOUT_SUMMARY_ITEM, #merchstat_PayoutSummaryItem{
@@ -595,9 +613,37 @@
     source =  {invoice_id, ?STRING}
 }).
 
--define(TERM_SET, #domain_TermSet{payouts = ?PAYOUTS_SERVICE_TERMS}).
+-define(TERM_SET, #domain_TermSet{
+    payouts = ?PAYOUTS_SERVICE_TERMS,
+    payments = ?PAYMENTS_SERVICE_TERMS
+ }).
 
 -define(PAYOUTS_SERVICE_TERMS, #domain_PayoutsServiceTerms{}).
+
+-define(PAYMENTS_SERVICE_TERMS, #domain_PaymentsServiceTerms{
+    payment_methods = {value,
+        [
+            #domain_PaymentMethodRef{
+                id = {bank_card, mastercard}
+            },
+            #domain_PaymentMethodRef{
+                id = {bank_card, visa}
+            },
+            #domain_PaymentMethodRef{
+                id = {tokenized_bank_card, #domain_TokenizedBankCard{
+                    payment_system = mastercard,
+                    token_provider = applepay
+                }}
+            },
+            #domain_PaymentMethodRef{
+                id = {tokenized_bank_card, #domain_TokenizedBankCard{
+                    payment_system = visa,
+                    token_provider = applepay
+                }}
+            }
+        ]
+    }
+}).
 
 -define(CUSTOMER, #payproc_Customer{
     id = ?STRING,
@@ -620,4 +666,31 @@
 -define(PUT_CARD_DATA_RESULT, #'PutCardDataResult'{
     bank_card = ?BANK_CARD,
     session_id = ?STRING
+}).
+
+-define(UNWRAPPED_PAYMENT_TOOL, #paytoolprv_UnwrappedPaymentTool{
+    payment_data = {tokenized_card, #paytoolprv_TokenizedCard{
+        dpan = ?STRING,
+        exp_date = #paytoolprv_ExpDate{
+            month = 10,
+            year = 2018
+        },
+        auth_data = {auth_3ds, #paytoolprv_Auth3DS{
+            cryptogram = ?STRING,
+            eci = ?STRING
+        }}
+    }},
+    card_info = #paytoolprv_CardInfo{
+        display_name = <<"Visa 1234">>,
+        cardholder_name = ?STRING,
+        last_4_digits = <<"1234">>,
+        card_class = debit,
+        payment_system = mastercard
+    },
+    details = {apple, #paytoolprv_ApplePayDetails{
+        transaction_id = ?STRING,
+        amount = ?INTEGER,
+        currency_numeric_code = 643,
+        device_id = ?STRING
+    }}
 }).

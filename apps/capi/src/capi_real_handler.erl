@@ -8,6 +8,7 @@
 -include_lib("dmsl/include/dmsl_user_interaction_thrift.hrl").
 -include_lib("dmsl/include/dmsl_geo_ip_thrift.hrl").
 -include_lib("dmsl/include/dmsl_reporting_thrift.hrl").
+-include_lib("dmsl/include/dmsl_payment_tool_provider_thrift.hrl").
 
 -behaviour(swag_server_logic_handler).
 
@@ -168,7 +169,9 @@ process_request('CreatePaymentResource', Req, Context, ReqCtx) ->
             #{<<"paymentToolType">> := <<"PaymentTerminalData">>} ->
                 process_payment_terminal_data(V, ReqCtx);
             #{<<"paymentToolType">> := <<"DigitalWalletData">>} ->
-                process_digital_wallet_data(V, ReqCtx)
+                process_digital_wallet_data(V, ReqCtx);
+            #{<<"paymentToolType">> := <<"TokenizedCardData">>} ->
+                process_tokenized_card_data(V, ReqCtx)
         end,
         {ok, {201, [], decode_disposable_payment_resource(#domain_DisposablePaymentResource{
             payment_tool = PaymentTool,
@@ -335,9 +338,7 @@ process_request('GetInvoicePaymentMethods', Req, Context, ReqCtx) ->
                 #payproc_InvalidUser{} ->
                     {ok, {404, [], general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [],  general_error(<<"Invoice not found">>)}};
-                #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
+                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
             end
     end;
 
@@ -596,7 +597,7 @@ process_request('CreateRefund', Req, Context, ReqCtx) ->
                 #payproc_OperationNotPermitted{} ->
                     {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
                 #payproc_InvalidPaymentStatus{} ->
-                    {ok, {400, [], logic_error(invalidInvoicePaymentStatus, <<"Invalid invoice payment status">>)}};
+                    {ok, {400, [], logic_error(invalidPaymentStatus, <<"Invalid invoice payment status">>)}};
                 #payproc_InsufficientAccountBalance{} ->
                     {ok, {400, [], logic_error(
                         insufficentAccountBalance,
@@ -708,15 +709,12 @@ process_request('GetInvoiceTemplateByID', Req, Context, ReqCtx) ->
     case Result of
         {ok, InvoiceTpl} ->
             {ok, {200, [], decode_invoice_tpl(InvoiceTpl)}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
-                #payproc_InvoiceTemplateNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
-                #payproc_InvoiceTemplateRemoved{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}}
-            end
+        {exception, E} when
+            E == #payproc_InvalidUser{};
+            E == #payproc_InvoiceTemplateNotFound{};
+            E == #payproc_InvoiceTemplateRemoved{}
+        ->
+            {ok, {404, [], general_error(<<"Invoice template not found">>)}}
     end;
 
 process_request('UpdateInvoiceTemplate', Req, Context, ReqCtx) ->
@@ -861,17 +859,12 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context, ReqCtx) ->
     case Result of
         {ok, PaymentMethods} when is_list(PaymentMethods) ->
             {ok, {200, [], PaymentMethods}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
-                #payproc_InvoiceTemplateNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
-                #payproc_InvoiceTemplateRemoved{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
-                #payproc_PartyNotExistsYet{} ->
-                    {ok, {400, [], logic_error(partyNotExistsYet, <<"Party not exists yet">>)}}
-            end
+        {exception, E} when
+            E == #payproc_InvalidUser{};
+            E == #payproc_InvoiceTemplateNotFound{};
+            E == #payproc_InvoiceTemplateRemoved{}
+        ->
+            {ok, {404, [], general_error(<<"Invoice template not found">>)}}
     end;
 
 process_request('ActivateShop', Req, Context, ReqCtx) ->
@@ -1982,15 +1975,17 @@ decode_bank_card(#domain_BankCard{
     'token'  = Token,
     'payment_system' = PaymentSystem,
     'bin' = Bin,
-    'masked_pan' = MaskedPan
+    'masked_pan' = MaskedPan,
+    'token_provider' = TokenProvider
 }) ->
-    capi_utils:map_to_base64url(#{
+    capi_utils:map_to_base64url(genlib_map:compact(#{
         <<"type">> => <<"bank_card">>,
         <<"token">> => Token,
         <<"payment_system">> => PaymentSystem,
         <<"bin">> => Bin,
-        <<"masked_pan">> => MaskedPan
-    }).
+        <<"masked_pan">> => MaskedPan,
+        <<"token_provider">> => TokenProvider
+    })).
 
 decode_payment_terminal(#domain_PaymentTerminal{
     terminal_type = Type
@@ -2094,10 +2089,13 @@ encode_invoice_context(Params) ->
     encode_invoice_context(Params, ?DEFAULT_INVOICE_META).
 
 encode_invoice_context(Params, DefaultMeta) ->
-    Context = jsx:encode(genlib_map:get(<<"metadata">>, Params, DefaultMeta)),
+    Context = genlib_map:get(<<"metadata">>, Params, DefaultMeta),
+    encode_content(json, Context).
+
+encode_content(json, Data) ->
     #'Content'{
         type = <<"application/json">>,
-        data = Context
+        data = jsx:encode(Data)
     }.
 
 encode_invoice_tpl_cost(#{<<"invoiceTemplateCostType">> := CostType} = Cost) ->
@@ -2431,12 +2429,13 @@ encode_bank_card(#{
     <<"payment_system">> := PaymentSystem,
     <<"bin">> := Bin,
     <<"masked_pan">> := MaskedPan
-}) ->
+} = BankCard) ->
     {bank_card, #domain_BankCard{
         'token'  = Token,
         'payment_system' = binary_to_existing_atom(PaymentSystem, utf8),
         'bin' = Bin,
-        'masked_pan' = MaskedPan
+        'masked_pan' = MaskedPan,
+        'token_provider' = encode_token_provider(genlib_map:get(<<"token_provider">>, BankCard))
     }}.
 
 encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
@@ -2449,6 +2448,11 @@ encode_digital_wallet(#{<<"provider">> := Provider, <<"id">> := ID}) ->
         provider = binary_to_existing_atom(Provider, utf8),
         id = ID
     }}.
+
+encode_token_provider(TokenProvider) when TokenProvider /= undefined ->
+    binary_to_existing_atom(TokenProvider, utf8);
+encode_token_provider(undefined) ->
+    undefined.
 
 encode_customer_params(PartyID, Params) ->
     #payproc_CustomerParams{
@@ -2729,13 +2733,14 @@ decode_payment_tool_details({payment_terminal, V}) ->
 decode_payment_tool_details({digital_wallet, V}) ->
     decode_digital_wallet_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsDigitalWallet">>}).
 
-decode_bank_card_details(#domain_BankCard{
-    'payment_system' = PaymentSystem,
-    'masked_pan' = MaskedPan
-}, V) ->
+decode_bank_card_details(BankCard, V) ->
+    LastDigits = decode_last_digits(BankCard#domain_BankCard.masked_pan),
+    Bin = BankCard#domain_BankCard.bin,
     V#{
-        <<"cardNumberMask">> => decode_masked_pan(MaskedPan),
-        <<"paymentSystem">> => genlib:to_binary(PaymentSystem)
+        <<"lastDigits">>     => LastDigits,
+        <<"bin">>            => Bin,
+        <<"cardNumberMask">> => decode_masked_pan(Bin, LastDigits),
+        <<"paymentSystem" >> => genlib:to_binary (BankCard#domain_BankCard.payment_system)
     }.
 
 decode_payment_terminal_details(#domain_PaymentTerminal{
@@ -2756,10 +2761,16 @@ decode_digital_wallet_details(#domain_DigitalWallet{
 
 -define(MASKED_PAN_MAX_LENGTH, 4).
 
-decode_masked_pan(MaskedPan) when byte_size(MaskedPan) > ?MASKED_PAN_MAX_LENGTH ->
+decode_last_digits(MaskedPan) when byte_size(MaskedPan) > ?MASKED_PAN_MAX_LENGTH ->
     binary:part(MaskedPan, {byte_size(MaskedPan), -?MASKED_PAN_MAX_LENGTH});
-decode_masked_pan(MaskedPan) ->
+decode_last_digits(MaskedPan) ->
     MaskedPan.
+
+-define(PAN_LENGTH, 16).
+
+decode_masked_pan(Bin, LastDigits) ->
+    Mask = binary:copy(<<"*">>, ?PAN_LENGTH - byte_size(Bin) - byte_size(LastDigits)),
+    <<Bin/binary, Mask/binary, LastDigits/binary>>.
 
 mask_phone_number(PhoneNumber) ->
     capi_utils:redact(PhoneNumber, <<"^\\+\\d(\\d{1,10}?)\\d{2,4}$">>).
@@ -2880,13 +2891,15 @@ merchstat_to_domain({bank_card, #merchstat_BankCard{
     'token' = Token,
     'payment_system' = PaymentSystem,
     'bin' = Bin,
-    'masked_pan' = MaskedPan
+    'masked_pan' = MaskedPan,
+    'token_provider' = TokenProvider
 }}) ->
     {bank_card, #domain_BankCard{
         'token' = Token,
         'payment_system' = PaymentSystem,
         'bin' = Bin,
-        'masked_pan' = MaskedPan
+        'masked_pan' = MaskedPan,
+        'token_provider' = TokenProvider
     }};
 
 merchstat_to_domain({payment_terminal, #merchstat_PaymentTerminal{
@@ -4640,20 +4653,42 @@ decode_payment_methods(undefined) ->
     [];
 decode_payment_methods({value, PaymentMethodRefs}) ->
     PaymentMethods = [ID || #domain_PaymentMethodRef{id = ID} <- PaymentMethodRefs],
-    lists:map(
-        fun(Method) ->
+    lists:foldl(
+        fun(Method, Acc) ->
             {_, MethodTerms} = lists:unzip(proplists:lookup_all(Method, PaymentMethods)),
-            decode_payment_method(Method, MethodTerms)
+            decode_payment_method(Method, MethodTerms) ++ Acc
         end,
+        [],
         proplists:get_keys(PaymentMethods)
     ).
 
 decode_payment_method(bank_card, PaymentSystems) ->
-    #{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems)};
+    [#{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems)}];
 decode_payment_method(payment_terminal, Providers) ->
-    #{<<"method">> => <<"PaymentTerminal">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)};
+    [#{<<"method">> => <<"PaymentTerminal">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}];
 decode_payment_method(digital_wallet, Providers) ->
-    #{<<"method">> => <<"DigitalWallet">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}.
+    [#{<<"method">> => <<"DigitalWallet">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}];
+decode_payment_method(tokenized_bank_card, TokenizedBankCards) ->
+   decode_tokenized_bank_cards(TokenizedBankCards).
+
+decode_tokenized_bank_cards(TokenizedBankCards) ->
+    PropTokenizedBankCards = [
+        {TP, PS} || #domain_TokenizedBankCard{payment_system = PS, token_provider = TP} <- TokenizedBankCards
+    ],
+    lists:map(
+        fun(TokenProvider) ->
+            {_, PaymentSystems} = lists:unzip(proplists:lookup_all(TokenProvider, PropTokenizedBankCards)),
+            decode_tokenized_bank_card(TokenProvider, PaymentSystems)
+        end,
+        proplists:get_keys(PropTokenizedBankCards)
+    ).
+
+ decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
+   #{
+        <<"method">> => <<"BankCard">>,
+        <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems),
+        <<"tokenProviders">> => [genlib:to_binary(TokenProvider)]
+    }.
 
 compute_terms(ServiceName, Args, Context) ->
     service_call(
@@ -4667,30 +4702,7 @@ reply_5xx(Code) when Code >= 500 andalso Code < 600 ->
     {Code, [], <<>>}.
 
 process_card_data(Data, ReqCtx) ->
-    Result = service_call(
-        cds_storage,
-        'PutCardData',
-        [encode_card_data(Data)],
-        ReqCtx
-    ),
-    case Result of
-        {ok, #'PutCardDataResult'{
-            session_id = SessionID,
-            bank_card = BankCard
-        }} ->
-            {{bank_card, BankCard}, SessionID};
-        {exception, Exception} ->
-            case Exception of
-                #'InvalidCardData'{} ->
-                    throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}});
-                #'KeyringLocked'{} ->
-                    % TODO
-                    % It's better for the cds to signal woody-level unavailability when the
-                    % keyring is locked, isn't it? It could always mention keyring lock as a
-                    % reason in a woody error definition.
-                    throw({error, reply_5xx(503)})
-            end
-    end.
+    put_card_data_to_cds(encode_card_data(Data), encode_session_data(Data), ReqCtx).
 
 encode_card_data(CardData) ->
     {Month, Year} = parse_exp_date(genlib_map:get(<<"expDate">>, CardData)),
@@ -4701,8 +4713,14 @@ encode_card_data(CardData) ->
             month = Month,
             year = Year
         },
-        cardholder_name = genlib_map:get(<<"cardHolder">>, CardData),
-        cvv = genlib_map:get(<<"cvv">>, CardData)
+        cardholder_name = genlib_map:get(<<"cardHolder">>, CardData)
+    }.
+
+encode_session_data(CardData) ->
+    #'SessionData'{
+        auth_data = {card_security_code, #'CardSecurityCode'{
+            value = genlib_map:get(<<"cvv">>, CardData)
+        }}
     }.
 
 process_payment_terminal_data(Data, _ReqCtx) ->
@@ -4723,6 +4741,116 @@ process_digital_wallet_data(Data, _ReqCtx) ->
             }
     end,
     {{digital_wallet, DigitalWallet}, <<>>}.
+
+process_tokenized_card_data(Data, ReqCtx) ->
+    {ok, UnwrappedPaymentTool} = service_call(
+        payment_tool_provider,
+        'Unwrap',
+        [encode_wrapped_payment_tool(Data)],
+        ReqCtx
+    ),
+    process_put_card_data_result(
+        put_card_data_to_cds(
+            encode_tokenized_card_data(UnwrappedPaymentTool),
+            encode_tokenized_session_data(UnwrappedPaymentTool),
+            ReqCtx
+        ),
+        UnwrappedPaymentTool
+    ).
+
+process_put_card_data_result(
+    {{bank_card, BankCard}, SessionID},
+    #paytoolprv_UnwrappedPaymentTool{
+        card_info = #paytoolprv_CardInfo{
+            payment_system = PaymentSystem,
+            last_4_digits  = Last4
+        },
+        details = PaymentDetails
+    }
+) ->
+    {
+        {bank_card, BankCard#domain_BankCard{
+            payment_system = PaymentSystem,
+            masked_pan     = capi_utils:define(Last4, BankCard#domain_BankCard.masked_pan),
+            token_provider = get_payment_token_provider(PaymentDetails)
+        }},
+        SessionID
+    }.
+
+get_payment_token_provider({apple, _}) ->
+    applepay;
+get_payment_token_provider({samsung, _}) ->
+    samsungpay.
+
+encode_wrapped_payment_tool(Data) ->
+    #paytoolprv_WrappedPaymentTool{
+        request = encode_payment_request(Data)
+    }.
+
+encode_payment_request(#{<<"provider" >> := <<"ApplePay">>} = Data) ->
+    PaymentToken = genlib_map:get(<<"paymentToken">>, Data),
+    {apple, #paytoolprv_ApplePayRequest{
+        merchant_id = genlib_map:get(<<"merchantID">>, Data),
+        payment_token = encode_content(json, PaymentToken)
+    }};
+encode_payment_request(#{<<"provider" >> := <<"SamsungPay">>} = Data) ->
+    {samsung, #paytoolprv_SamsungPayRequest{
+        service_id = genlib_map:get(<<"serviceID">>, Data),
+        reference_id = genlib_map:get(<<"referenceID">>, Data)
+    }}.
+
+encode_tokenized_card_data(#paytoolprv_UnwrappedPaymentTool{
+    payment_data = {tokenized_card, #paytoolprv_TokenizedCard{
+        dpan = DPAN,
+        exp_date = #paytoolprv_ExpDate{
+            month = Month,
+            year = Year
+        }
+    }},
+    card_info = #paytoolprv_CardInfo{
+        cardholder_name = CardholderName
+    }
+}) ->
+    #'CardData'{
+        pan  = DPAN,
+        exp_date = #'ExpDate'{
+            month = Month,
+            year = Year
+        },
+        cardholder_name = CardholderName
+    }.
+
+encode_tokenized_session_data(#paytoolprv_UnwrappedPaymentTool{
+    payment_data = {tokenized_card, #paytoolprv_TokenizedCard{
+        auth_data = {auth_3ds, #paytoolprv_Auth3DS{
+            cryptogram = Cryptogram,
+            eci = ECI
+        }}
+    }}
+}) ->
+    #'SessionData'{
+        auth_data = {auth_3ds, #'Auth3DS'{
+            cryptogram = Cryptogram,
+            eci = ECI
+        }}
+    }.
+
+put_card_data_to_cds(CardData, SessionData, ReqCtx) ->
+    case service_call(cds_storage, 'PutCardData', [CardData, SessionData], ReqCtx) of
+        {ok, #'PutCardDataResult'{session_id = SessionID, bank_card = BankCard}} ->
+            {{bank_card, BankCard}, SessionID};
+        {exception, Exception} ->
+            case Exception of
+                #'InvalidCardData'{} ->
+                    throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}});
+                #'KeyringLocked'{} ->
+                    % TODO
+                    % It's better for the cds to signal woody-level unavailability when the
+                    % keyring is locked, isn't it? It could always mention keyring lock as a
+                    % reason in a woody error definition.
+                    throw({error, reply_5xx(503)})
+            end
+    end.
 
 enrich_client_info(ClientInfo, Context) ->
     ClientInfo#{<<"ip">> => prepare_client_ip(Context)}.
