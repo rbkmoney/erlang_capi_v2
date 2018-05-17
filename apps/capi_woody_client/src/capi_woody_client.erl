@@ -3,6 +3,8 @@
 -export([call_service/4]).
 -export([call_service/5]).
 
+-export([get_service_modname/1]).
+
 %%
 
 -type service_name() :: atom().
@@ -27,6 +29,8 @@ get_service_spec(ServiceName) ->
 get_service_url(ServiceName) ->
     maps:get(ServiceName, genlib_app:env(?MODULE, service_urls)).
 
+-spec get_service_modname(service_name()) -> woody:service().
+
 get_service_modname(invoicing) ->
     {dmsl_payment_processing_thrift, 'Invoicing'};
 get_service_modname(invoice_templating) ->
@@ -37,8 +41,6 @@ get_service_modname(merchant_stat) ->
     {dmsl_merch_stat_thrift, 'MerchantStatistics'};
 get_service_modname(reporting) ->
     {dmsl_reporting_thrift, 'Reporting'};
-get_service_modname(repository) ->
-    {dmsl_domain_config_thrift, 'Repository'};
 get_service_modname(accounter) ->
     {dmsl_accounter_thrift, 'Accounter'};
 get_service_modname(geo_ip_service) ->
