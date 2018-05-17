@@ -59,7 +59,7 @@ get(Ref, Context) ->
     case dmt_domain:get_object(Ref, Domain) of
         {ok, {_Type, C}} ->
             {ok, C};
-        undefined ->
+        error ->
             {error, not_found}
     end.
 
