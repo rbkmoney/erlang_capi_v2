@@ -13,6 +13,7 @@
         woody,
         capi_woody_client,
         dmsl,
+        dmt_client,
         swag_server,
         jose,
         cowboy_cors,
