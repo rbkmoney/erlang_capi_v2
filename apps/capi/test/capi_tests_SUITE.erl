@@ -1233,10 +1233,11 @@ search_invoices_ok_test(Config) ->
         {paymentMethod, <<"bankCard">>},
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
-        {payerEmail, <<"test@test_rbk.ru">>},
-        {payerIP, <<"192.168.0.1">>},
         {payerFingerprint, <<"blablablalbalbal">>},
-        %%{cardNumberMask, <<"2222">>},  %%@FIXME cannot be used until getting the newest api client
+        % {lastDigits, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
+        % {bin, <<"424242">>},
+        {bankCardTokenProvider, <<"applepay">>},
+        {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000}
     ],
 
@@ -1258,10 +1259,11 @@ search_payments_ok_test(Config) ->
         {paymentMethod, <<"bankCard">>},
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
-        {payerEmail, <<"test@test_rbk.ru">>},
-        {payerIP, <<"192.168.0.1">>},
         {payerFingerprint, <<"blablablalbalbal">>},
-        %% {cardNumberMask, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
+        % {lastDigits, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
+        % {bin, <<"424242">>},
+        {bankCardTokenProvider, <<"applepay">>},
+        {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000}
     ],
 
