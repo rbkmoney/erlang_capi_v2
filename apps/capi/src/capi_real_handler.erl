@@ -472,7 +472,10 @@ process_request('SearchInvoices', Req, Context, ReqCtx) ->
         <<"payment_fingerprint">> => genlib_map:get('payerFingerprint', Req),
         <<"payment_pan_mask">> => genlib_map:get('cardNumberMask', Req),
         <<"payment_amount">> => genlib_map:get('paymentAmount', Req),
-        <<"invoice_amount">> => genlib_map:get('invoiceAmount', Req)
+        <<"invoice_amount">> => genlib_map:get('invoiceAmount', Req),
+        <<"payment_token_provider"   >> => genlib_map:get('bankCardTokenProvider', Req),
+        <<"payment_system"           >> => genlib_map:get('bankCardPaymentSystem', Req),
+        <<"payment_bin"              >> => genlib_map:get('bin', Req)
     },
     Opts = #{
         thrift_fun => 'GetInvoices',
@@ -482,22 +485,25 @@ process_request('SearchInvoices', Req, Context, ReqCtx) ->
 
 process_request('SearchPayments', Req, Context, ReqCtx) ->
     Query = #{
-        <<"merchant_id">> => get_party_id(Context),
-        <<"shop_id">> => genlib_map:get('shopID', Req),
-        <<"invoice_id">> =>  genlib_map:get('invoiceID', Req),
-        <<"from_time">> => get_time('fromTime', Req),
-        <<"to_time">> => get_time('toTime', Req),
-        <<"payment_status">> => genlib_map:get('paymentStatus', Req),
-        <<"payment_flow">> => genlib_map:get('paymentFlow', Req),
+        <<"merchant_id">>   => get_party_id(Context),
+        <<"shop_id">>       => genlib_map:get('shopID', Req),
+        <<"invoice_id">>    => genlib_map:get('invoiceID', Req),
+        <<"from_time">>     => get_time('fromTime', Req),
+        <<"to_time">>       => get_time('toTime', Req),
+        <<"payment_status">>            => genlib_map:get('paymentStatus', Req),
+        <<"payment_flow">>              => genlib_map:get('paymentFlow', Req),
         <<"payment_method">> => encode_payment_method(genlib_map:get('paymentMethod', Req)),
         <<"payment_terminal_provider">> => genlib_map:get('paymentTerminalProvider', Req),
-        <<"payment_customer_id">> => genlib_map:get('customerID', Req),
-        <<"payment_id">> => genlib_map:get('paymentID', Req),
-        <<"payment_email">> => genlib_map:get('payerEmail', Req),
-        <<"payment_ip">> => genlib_map:get('payerIP', Req),
-        <<"payment_fingerprint">> => genlib_map:get('payerFingerprint', Req),
-        <<"payment_pan_mask">> => genlib_map:get('cardNumberMask', Req),
-        <<"payment_amount">> => genlib_map:get('paymentAmount', Req)
+        <<"payment_customer_id">>       => genlib_map:get('customerID', Req),
+        <<"payment_id">>                => genlib_map:get('paymentID', Req),
+        <<"payment_email">>             => genlib_map:get('payerEmail', Req),
+        <<"payment_ip">>                => genlib_map:get('payerIP', Req),
+        <<"payment_fingerprint">>       => genlib_map:get('payerFingerprint', Req),
+        <<"payment_pan_mask">>          => genlib_map:get('cardNumberMask', Req),
+        <<"payment_amount">>            => genlib_map:get('paymentAmount', Req),
+        <<"payment_token_provider">>    => genlib_map:get('bankCardTokenProvider', Req),
+        <<"payment_system">>            => genlib_map:get('bankCardPaymentSystem', Req),
+        <<"payment_bin">>               => genlib_map:get('bin', Req)
     },
     Opts = #{
         thrift_fun => 'GetPayments',
@@ -2736,12 +2742,18 @@ decode_payment_tool_details({digital_wallet, V}) ->
 decode_bank_card_details(BankCard, V) ->
     LastDigits = decode_last_digits(BankCard#domain_BankCard.masked_pan),
     Bin = BankCard#domain_BankCard.bin,
-    V#{
+    merge_and_compact(V, #{
         <<"lastDigits">>     => LastDigits,
         <<"bin">>            => Bin,
         <<"cardNumberMask">> => decode_masked_pan(Bin, LastDigits),
-        <<"paymentSystem" >> => genlib:to_binary (BankCard#domain_BankCard.payment_system)
-    }.
+        <<"paymentSystem" >> => genlib:to_binary(BankCard#domain_BankCard.payment_system),
+        <<"tokenProvider" >> => decode_token_provider(BankCard#domain_BankCard.token_provider)
+    }).
+
+decode_token_provider(Provider) when Provider /= undefined ->
+    genlib:to_binary(Provider);
+decode_token_provider(undefined) ->
+    undefined.
 
 decode_payment_terminal_details(#domain_PaymentTerminal{
     terminal_type = Type
@@ -2806,6 +2818,7 @@ decode_operation_failure({failure, #domain_Failure{
 
 decode_stat_payment(#merchstat_StatPayment{
     id = PaymentID,
+    short_id = ShortID,
     invoice_id = InvoiceID,
     shop_id = ShopID,
     created_at = CreatedAt,
@@ -2818,8 +2831,9 @@ decode_stat_payment(#merchstat_StatPayment{
     context = RawContext,
     location_info = Location
 }) ->
-    genlib_map:compact(maps:merge(#{
+    merge_and_compact(#{
         <<"id">> =>  PaymentID,
+        <<"shortID">> => ShortID,
         <<"invoiceID">> => InvoiceID,
         <<"shopID">> => ShopID,
         <<"createdAt">> => CreatedAt,
@@ -2830,7 +2844,7 @@ decode_stat_payment(#merchstat_StatPayment{
         <<"payer">> => decode_stat_payer(Payer),
         <<"geoLocationInfo">> => decode_geo_location_info(Location),
         <<"metadata">> =>  decode_context(RawContext)
-    }, decode_stat_payment_status(Status))).
+    }, decode_stat_payment_status(Status)).
 
 decode_stat_payer({customer, #merchstat_CustomerPayer{
     customer_id = ID
