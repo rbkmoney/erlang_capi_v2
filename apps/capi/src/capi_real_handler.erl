@@ -381,9 +381,12 @@ process_request('SearchInvoices', Req, Context) ->
         <<"payment_email"            >> => genlib_map:get('payerEmail', Req),
         <<"payment_ip"               >> => genlib_map:get('payerIP', Req),
         <<"payment_fingerprint"      >> => genlib_map:get('payerFingerprint', Req),
-        <<"payment_pan_mask"         >> => genlib_map:get('lastDigits', Req),
+        <<"payment_last_digits"      >> => genlib_map:get('lastDigits', Req),
         <<"payment_amount"           >> => genlib_map:get('paymentAmount', Req),
-        <<"invoice_amount"           >> => genlib_map:get('invoiceAmount', Req)
+        <<"invoice_amount"           >> => genlib_map:get('invoiceAmount', Req),
+        <<"payment_token_provider"   >> => genlib_map:get('bankCardTokenProvider', Req),
+        <<"payment_system"           >> => genlib_map:get('bankCardPaymentSystem', Req),
+        <<"payment_bin"              >> => genlib_map:get('bin', Req)
     },
     Opts = #{
         thrift_fun => 'GetInvoices',
@@ -407,8 +410,11 @@ process_request('SearchPayments', Req, Context) ->
         <<"payment_email"            >> => genlib_map:get('payerEmail', Req),
         <<"payment_ip"               >> => genlib_map:get('payerIP', Req),
         <<"payment_fingerprint"      >> => genlib_map:get('payerFingerprint', Req),
-        <<"payment_pan_mask"         >> => genlib_map:get('lastDigits', Req),
-        <<"payment_amount"           >> => genlib_map:get('paymentAmount', Req)
+        <<"payment_last_digits"      >> => genlib_map:get('lastDigits', Req),
+        <<"payment_amount"           >> => genlib_map:get('paymentAmount', Req),
+        <<"payment_token_provider"   >> => genlib_map:get('bankCardTokenProvider', Req),
+        <<"payment_system"           >> => genlib_map:get('bankCardPaymentSystem', Req),
+        <<"payment_bin"              >> => genlib_map:get('bin', Req)
     },
     Opts = #{
         thrift_fun => 'GetPayments',
@@ -2143,12 +2149,18 @@ decode_payment_tool_details({digital_wallet, V}) ->
 decode_bank_card_details(BankCard, V) ->
     LastDigits = decode_last_digits(BankCard#domain_BankCard.masked_pan),
     Bin = BankCard#domain_BankCard.bin,
-    V#{
+    merge_and_compact(V, #{
         <<"lastDigits">>     => LastDigits,
         <<"bin">>            => Bin,
         <<"cardNumberMask">> => decode_masked_pan(Bin, LastDigits),
-        <<"paymentSystem" >> => genlib:to_binary (BankCard#domain_BankCard.payment_system)
-    }.
+        <<"paymentSystem" >> => genlib:to_binary(BankCard#domain_BankCard.payment_system),
+        <<"tokenProvider" >> => decode_token_provider(BankCard#domain_BankCard.token_provider)
+    }).
+
+decode_token_provider(Provider) when Provider /= undefined ->
+    genlib:to_binary(Provider);
+decode_token_provider(undefined) ->
+    undefined.
 
 decode_payment_terminal_details(#domain_PaymentTerminal{terminal_type = Type}, V) ->
     V#{
@@ -2244,6 +2256,7 @@ payment_error_client_maping(_) ->
 decode_stat_payment(Stat, Context) ->
     merge_and_compact(#{
         <<"id"             >> => Stat#merchstat_StatPayment.id,
+        <<"shortID"        >> => Stat#merchstat_StatPayment.short_id,
         <<"invoiceID"      >> => Stat#merchstat_StatPayment.invoice_id,
         <<"shopID"         >> => Stat#merchstat_StatPayment.shop_id,
         <<"createdAt"      >> => Stat#merchstat_StatPayment.created_at,
