@@ -308,15 +308,26 @@ groups() ->
 -spec init_per_suite(config()) ->
     config().
 init_per_suite(Config) ->
-    Apps =
+    SupPid = start_mocked_service_sup(),
+    Apps1 =
         capi_ct_helper:start_app(lager) ++
-        capi_ct_helper:start_app(woody) ++
+        capi_ct_helper:start_app(woody),
+    ServiceURLs = mock_services_([
+        {
+            'Repository',
+            {dmsl_domain_config_thrift, 'Repository'},
+            fun('Checkout', _) -> {ok, ?SNAPSHOT} end
+        }
+    ], SupPid),
+    Apps2 =
+        capi_ct_helper:start_app(dmt_client, [{max_cache_size, #{}}, {service_urls, ServiceURLs}]) ++
         start_capi(Config),
-    [{apps, lists:reverse(Apps)} | Config].
+    [{apps, lists:reverse(Apps2 ++ Apps1)}, {suite_test_sup, SupPid} | Config].
 
 -spec end_per_suite(config()) ->
     _.
 end_per_suite(C) ->
+    _ = stop_mocked_service_sup(?config(suite_test_sup, C)),
     [application:stop(App) || App <- proplists:get_value(apps, C)],
     ok.
 
@@ -324,7 +335,7 @@ end_per_suite(C) ->
     config().
 init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config) ->
     MockServiceSup = start_mocked_service_sup(),
-    {ok, Token} = get_token([{[invoices], write}], unlimited),
+    {ok, Token} = issue_token([{[invoices], write}], unlimited),
     mock_services([{invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end}], MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
@@ -345,7 +356,7 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
 
 init_per_group(operations_by_invoice_access_token_after_token_creation, Config) ->
     MockServiceSup = start_mocked_service_sup(),
-    {ok, Token} = get_token([{[invoices], write}], unlimited),
+    {ok, Token} = issue_token([{[invoices], write}], unlimited),
     mock_services([{invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}], MockServiceSup),
     {ok, #{<<"payload">> := InvAccToken}
     } = capi_client_invoices:create_invoice_access_token(get_context(Token), ?STRING),
@@ -354,7 +365,7 @@ init_per_group(operations_by_invoice_access_token_after_token_creation, Config) 
 
 init_per_group(operations_by_invoice_template_access_token, Config) ->
     MockServiceSup = start_mocked_service_sup(),
-    {ok, Token} = get_token([{[party], write}], unlimited),
+    {ok, Token} = issue_token([{[party], write}], unlimited),
     mock_services([{invoice_templating, fun('Create', _) -> {ok, ?INVOICE_TPL} end}], MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
@@ -377,7 +388,7 @@ init_per_group(operations_by_invoice_template_access_token, Config) ->
 
 init_per_group(operations_by_customer_access_token_after_customer_creation, Config) ->
     MockServiceSup = start_mocked_service_sup(),
-    {ok, Token} = get_token([{[customers], write}], unlimited),
+    {ok, Token} = issue_token([{[customers], write}], unlimited),
     mock_services([{customer_management, fun('Create', _) -> {ok, ?CUSTOMER} end}], MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
@@ -393,7 +404,7 @@ init_per_group(operations_by_customer_access_token_after_customer_creation, Conf
 
 init_per_group(operations_by_customer_access_token_after_token_creation, Config) ->
     MockServiceSup = start_mocked_service_sup(),
-    {ok, Token} = get_token([{[customers], write}], unlimited),
+    {ok, Token} = issue_token([{[customers], write}], unlimited),
     mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], MockServiceSup),
     {ok,
         #{<<"payload">> := CustAccToken}
@@ -414,7 +425,7 @@ init_per_group(GroupName, Config) when
         {[invoices, payments], read},
         {[customers], write}
     ],
-    {ok, Token} = get_token(BasePermissions, unlimited),
+    {ok, Token} = issue_token(BasePermissions, unlimited),
     Context = get_context(Token),
     [{context, Context} | Config];
 
@@ -464,42 +475,39 @@ woody_unknown_test(Config) ->
 
 -spec authorization_positive_lifetime_ok_test(config()) ->
     _.
-authorization_positive_lifetime_ok_test(Config) ->
-    mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
-    {ok, Token} = get_token([], {lifetime, 10}),
+authorization_positive_lifetime_ok_test(_Config) ->
+    {ok, Token} = issue_token([], {lifetime, 10}),
     {ok, _} = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_unlimited_lifetime_ok_test(config()) ->
     _.
-authorization_unlimited_lifetime_ok_test(Config) ->
-    mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
-    {ok, Token} = get_token([], unlimited),
+authorization_unlimited_lifetime_ok_test(_Config) ->
+    {ok, Token} = issue_token([], unlimited),
     {ok, _} = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_far_future_deadline_ok_test(config()) ->
     _.
-authorization_far_future_deadline_ok_test(Config) ->
-    mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
-    {ok, Token} = get_token([], {deadline, 4102444800}), % 01/01/2100 @ 12:00am (UTC)
+authorization_far_future_deadline_ok_test(_Config) ->
+    {ok, Token} = issue_token([], {deadline, 4102444800}), % 01/01/2100 @ 12:00am (UTC)
     {ok, _} = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_permission_ok_test(config()) ->
     _.
 authorization_permission_ok_test(Config) ->
     mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
-    {ok, Token} = get_token([{[party], read}], unlimited),
+    {ok, Token} = issue_token([{[party], read}], unlimited),
     {ok, _} = capi_client_parties:get_my_party(get_context(Token)).
 
 -spec authorization_negative_lifetime_error_test(config()) ->
     _.
 authorization_negative_lifetime_error_test(_Config) ->
-    {ok, Token} = get_token([], {lifetime, -10}),
+    {ok, Token} = issue_token([], {lifetime, -10}),
     ?badresp(401) = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_bad_deadline_error_test(config()) ->
     _.
 authorization_bad_deadline_error_test(_Config) ->
-    {ok, Token} = get_token([], {deadline, -10}),
+    {ok, Token} = issue_token([], {deadline, -10}),
     ?badresp(401) = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_error_no_header_test(config()) ->
@@ -511,13 +519,13 @@ authorization_error_no_header_test(_Config) ->
 -spec authorization_error_no_permission_test(config()) ->
     _.
 authorization_error_no_permission_test(_Config) ->
-    {ok, Token} = get_token([], {lifetime, 10}),
+    {ok, Token} = issue_token([], {lifetime, 10}),
     ?badresp(401) = capi_client_parties:get_my_party(get_context(Token)).
 
 -spec authorization_bad_token_error_test(config()) ->
     _.
 authorization_bad_token_error_test(Config) ->
-    {ok, Token} = get_dummy_token([{[party], read}], Config),
+    {ok, Token} = issue_dummy_token([{[party], read}], Config),
     ?badresp(401) = capi_client_parties:get_my_party(get_context(Token)).
 
 -spec create_invoice_ok_test(config()) ->
@@ -1149,10 +1157,11 @@ search_invoices_ok_test(Config) ->
         {paymentMethod, <<"bankCard">>},
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
-        {payerEmail, <<"test@test_rbk.ru">>},
-        {payerIP, <<"192.168.0.1">>},
         {payerFingerprint, <<"blablablalbalbal">>},
-        %%{cardNumberMask, <<"2222">>},  %%@FIXME cannot be used until getting the newest api client
+        % {lastDigits, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
+        % {bin, <<"424242">>},
+        {bankCardTokenProvider, <<"applepay">>},
+        {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000}
     ],
 
@@ -1174,10 +1183,11 @@ search_payments_ok_test(Config) ->
         {paymentMethod, <<"bankCard">>},
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
-        {payerEmail, <<"test@test_rbk.ru">>},
-        {payerIP, <<"192.168.0.1">>},
         {payerFingerprint, <<"blablablalbalbal">>},
-        %% {cardNumberMask, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
+        % {lastDigits, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
+        % {bin, <<"424242">>},
+        {bankCardTokenProvider, <<"applepay">>},
+        {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000}
     ],
 
@@ -1285,25 +1295,21 @@ download_report_file_ok_test(Config) ->
 -spec get_categories_ok_test(config()) ->
     _.
 get_categories_ok_test(Config) ->
-    mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
     {ok, _} = capi_client_categories:get_categories(?config(context, Config)).
 
 -spec get_category_by_ref_ok_test(config()) ->
     _.
 get_category_by_ref_ok_test(Config) ->
-    mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
     {ok, _} = capi_client_categories:get_category_by_ref(?config(context, Config), ?INTEGER).
 
 -spec get_schedule_by_ref_ok_test(config()) ->
     _.
 get_schedule_by_ref_ok_test(Config) ->
-    mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
     {ok, _} = capi_client_payouts:get_schedule_by_ref(?config(context, Config), ?INTEGER).
 
 -spec get_payment_institutions(config()) ->
     _.
 get_payment_institutions(Config) ->
-    mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
     {ok, [_Something]} = capi_client_payment_institutions:get_payment_institutions(?config(context, Config)),
     {ok, []} = capi_client_payment_institutions:get_payment_institutions(?config(context, Config), <<"RUS">>, <<"live">>),
     {ok, [#{<<"realm">> := <<"test">>}]} =
@@ -1312,7 +1318,6 @@ get_payment_institutions(Config) ->
 -spec get_payment_institution_by_ref(config()) ->
     _.
 get_payment_institution_by_ref(Config) ->
-    mock_services([{repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end}], Config),
     {ok, _} = capi_client_payment_institutions:get_payment_institution_by_ref(?config(context, Config), ?INTEGER).
 
 -spec get_payment_institution_payment_terms(config()) ->
@@ -1320,7 +1325,6 @@ get_payment_institution_by_ref(Config) ->
 get_payment_institution_payment_terms(Config) ->
     mock_services(
         [
-            {repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end},
             {party_management, fun('ComputePaymentInstitutionTerms', _) -> {ok, ?TERM_SET} end}
         ],
         Config
@@ -1332,7 +1336,6 @@ get_payment_institution_payment_terms(Config) ->
 get_payment_institution_payout_terms(Config) ->
     mock_services(
         [
-            {repository, fun('Checkout', _) -> {ok, ?SNAPSHOT} end},
             {party_management, fun('ComputePaymentInstitutionTerms', _) -> {ok, ?TERM_SET} end}
         ],
         Config
@@ -1433,12 +1436,12 @@ delete_customer_ok_test(Config) ->
 
 %%
 
-get_token(ACL, LifeTime) ->
+issue_token(ACL, LifeTime) ->
     PartyID = ?STRING,
     Claims = #{?STRING => ?STRING},
     capi_authorizer_jwt:issue({{PartyID, capi_acl:from_list(ACL)}, Claims}, LifeTime).
 
-get_dummy_token(ACL, Config) ->
+issue_dummy_token(ACL, Config) ->
     Claims = #{
         <<"jti">> => unique_id(),
         <<"sub">> => ?STRING,
@@ -1477,6 +1480,7 @@ start_capi(Config) ->
     ],
     capi_ct_helper:start_app(capi, CapiEnv).
 
+% TODO move it to `capi_dummy_service`, looks more appropriate
 start_mocked_service_sup() ->
     {ok, SupPid} = supervisor:start_link(?MODULE, []),
     _ = unlink(SupPid),
@@ -1485,42 +1489,59 @@ start_mocked_service_sup() ->
 stop_mocked_service_sup(SupPid) ->
     exit(SupPid, shutdown).
 
-mock_services(Services, SupPid) when is_pid(SupPid) ->
-    mock_services(Services, [{test_sup, SupPid}]);
+mock_services(Services, SupOrConfig) ->
+    start_woody_client(mock_services_(Services, SupOrConfig)).
 
-mock_services(Services, Config) when is_list(Config) ->
-    Module = capi_dummy_service,
+% TODO need a better name
+mock_services_(Services, Config) when is_list(Config) ->
+    mock_services_(Services, ?config(test_sup, Config));
+
+mock_services_(Services, SupPid) when is_pid(SupPid) ->
+    Name = lists:map(fun get_service_name/1, Services),
     Port = get_random_port(),
     {ok, IP} = inet:parse_address(?CAPI_IP),
     ChildSpec = woody_server:child_spec(
-        {dummy, Module},
+        {dummy, Name},
         #{
             ip => IP,
             port => Port,
             event_handler => capi_woody_event_handler,
-            handlers => lists:map(
-                fun({Service, Fun}) ->
-                    WoodyService = capi_woody_client:get_service_modname(Service),
-                    {make_path(Service), {WoodyService, {Module, #{function => Fun}}}}
-                end,
-                Services
-            )
+            handlers => lists:map(fun mock_service_handler/1, Services)
         }
     ),
-    {ok, _} = supervisor:start_child(?config(test_sup, Config), ChildSpec),
-    ServiceURLs = lists:foldl(
-        fun({Service, _}, Acc) ->
-            URL = iolist_to_binary(["http://", ?CAPI_HOST_NAME, ":", integer_to_list(Port), make_path(Service)]),
-            Acc#{Service => URL}
+    {ok, _} = supervisor:start_child(SupPid, ChildSpec),
+    lists:foldl(
+        fun (Service, Acc) ->
+            ServiceName = get_service_name(Service),
+            Acc#{ServiceName => make_url(ServiceName, Port)}
         end,
         #{},
         Services
-    ),
+    ).
+
+get_service_name({ServiceName, _Fun}) ->
+    ServiceName;
+get_service_name({ServiceName, _WoodyService, _Fun}) ->
+    ServiceName.
+
+mock_service_handler({ServiceName, Fun}) ->
+    mock_service_handler(ServiceName, capi_woody_client:get_service_modname(ServiceName), Fun);
+mock_service_handler({ServiceName, WoodyService, Fun}) ->
+    mock_service_handler(ServiceName, WoodyService, Fun).
+
+mock_service_handler(ServiceName, WoodyService, Fun) ->
+    {make_path(ServiceName), {WoodyService, {capi_dummy_service, #{function => Fun}}}}.
+
+start_woody_client(ServiceURLs) ->
     capi_ct_helper:start_app(capi_woody_client, [{service_urls, ServiceURLs}]).
+
+make_url(ServiceName, Port) ->
+    iolist_to_binary(["http://", ?CAPI_HOST_NAME, ":", integer_to_list(Port), make_path(ServiceName)]).
 
 make_path(ServiceName) ->
     "/" ++ atom_to_list(ServiceName).
 
+% TODO not so failproof, ideally we need to bind socket first and then give to a ranch listener
 get_random_port() ->
     rand:uniform(32768) + 32767.
 
