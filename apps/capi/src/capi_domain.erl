@@ -88,14 +88,8 @@ get_shapshot(Reference, _Context) ->
 head() ->
     {'head', #'Head'{}}.
 
-checkout_object(Context, ObjectRef) ->
-    checkout_object(head(), ObjectRef, Context).
-
-checkout_object(Reference, ObjectRef, Context) ->
-    capi_woody_client:call_service(repository_client, 'checkoutObject', [Reference, ObjectRef], Context).
-
-checkout_globals(Context) ->
-    {ok, #'VersionedObject'{
+checkout_globals(_Context) ->
+    #'VersionedObject'{
         object = {globals, #domain_GlobalsObject{data = Globals}}
-    }} = checkout_object(Context, {globals, #domain_GlobalsRef{}}),
+    } = dmt_client:checkout_object(head(), {globals, #domain_GlobalsRef{}}),
     Globals.
