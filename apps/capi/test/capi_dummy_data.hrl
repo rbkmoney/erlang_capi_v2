@@ -668,7 +668,7 @@
     session_id = ?STRING
 }).
 
--define(UNWRAPPED_PAYMENT_TOOL, #paytoolprv_UnwrappedPaymentTool{
+-define(UNWRAPPED_PAYMENT_TOOL(Details), #paytoolprv_UnwrappedPaymentTool{
     payment_data = {tokenized_card, #paytoolprv_TokenizedCard{
         dpan = ?STRING,
         exp_date = #paytoolprv_ExpDate{
@@ -687,10 +687,17 @@
         card_class = debit,
         payment_system = mastercard
     },
-    details = {apple, #paytoolprv_ApplePayDetails{
-        transaction_id = ?STRING,
-        amount = ?INTEGER,
-        currency_numeric_code = 643,
-        device_id = ?STRING
-    }}
+    details = Details
 }).
+
+-define(APPLE_PAY_DETAILS, {apple, #paytoolprv_ApplePayDetails{
+    transaction_id = ?STRING,
+    amount = ?INTEGER,
+    currency_numeric_code = 643,
+    device_id = ?STRING
+}}).
+
+-define(GOOGLE_PAY_DETAILS, {google, #paytoolprv_GooglePayDetails{
+    message_id = ?STRING,
+    message_expiration = ?TIMESTAMP
+}}).

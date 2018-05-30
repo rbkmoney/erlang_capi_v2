@@ -72,6 +72,7 @@
     create_euroset_payment_resource_ok_test/1,
     create_qw_payment_resource_ok_test/1,
     create_applepay_payment_resource_ok_test/1,
+    create_googlepay_payment_resource_ok_test/1,
 
     get_my_party_ok_test/1,
     suspend_my_party_ok_test/1,
@@ -205,7 +206,8 @@ groups() ->
                 create_nspkmir_payment_resource_ok_test,
                 create_euroset_payment_resource_ok_test,
                 create_qw_payment_resource_ok_test,
-                create_applepay_payment_resource_ok_test
+                create_applepay_payment_resource_ok_test,
+                create_googlepay_payment_resource_ok_test
             ]
         },
         {operations_by_base_api_token, [],
@@ -898,7 +900,7 @@ create_qw_payment_resource_ok_test(Config) ->
     _.
 create_applepay_payment_resource_ok_test(Config) ->
     mock_services([
-        {payment_tool_provider, fun('Unwrap', _) -> {ok, ?UNWRAPPED_PAYMENT_TOOL} end},
+        {payment_tool_provider, fun('Unwrap', _) -> {ok, ?UNWRAPPED_PAYMENT_TOOL(?APPLE_PAY_DETAILS)} end},
         {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
@@ -907,6 +909,25 @@ create_applepay_payment_resource_ok_test(Config) ->
             <<"paymentTool">> => #{
                 <<"paymentToolType">> => <<"TokenizedCardData">>,
                 <<"provider">> => <<"ApplePay">>,
+                <<"merchantID">> => <<"SomeMerchantID">>,
+                <<"paymentToken">> => #{}
+            },
+            <<"clientInfo">> => ClientInfo
+        }).
+
+-spec create_googlepay_payment_resource_ok_test(_) ->
+    _.
+create_googlepay_payment_resource_ok_test(Config) ->
+    mock_services([
+        {payment_tool_provider, fun('Unwrap', _) -> {ok, ?UNWRAPPED_PAYMENT_TOOL(?GOOGLE_PAY_DETAILS)} end},
+        {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end}
+    ], Config),
+    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
+    {ok, #{<<"paymentToolDetails">> := #{<<"paymentSystem">> := <<"mastercard">>}}} =
+        capi_client_tokens:create_payment_resource(?config(context, Config), #{
+            <<"paymentTool">> => #{
+                <<"paymentToolType">> => <<"TokenizedCardData">>,
+                <<"provider">> => <<"GooglePay">>,
                 <<"merchantID">> => <<"SomeMerchantID">>,
                 <<"paymentToken">> => #{}
             },
