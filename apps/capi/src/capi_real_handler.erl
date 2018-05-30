@@ -3715,6 +3715,8 @@ process_put_card_data_result(
 
 get_payment_token_provider({apple, _}) ->
     applepay;
+get_payment_token_provider({google, _}) ->
+    googlepay;
 get_payment_token_provider({samsung, _}) ->
     samsungpay.
 
@@ -3724,10 +3726,14 @@ encode_wrapped_payment_tool(Data) ->
     }.
 
 encode_payment_request(#{<<"provider" >> := <<"ApplePay">>} = Data) ->
-    PaymentToken = genlib_map:get(<<"paymentToken">>, Data),
     {apple, #paytoolprv_ApplePayRequest{
-        merchant_id = genlib_map:get(<<"merchantID">>, Data),
-        payment_token = encode_content(json, PaymentToken)
+        merchant_id = maps:get(<<"merchantID">>, Data),
+        payment_token = encode_content(json, maps:get(<<"paymentToken">>, Data))
+    }};
+encode_payment_request(#{<<"provider" >> := <<"GooglePay">>} = Data) ->
+    {google, #paytoolprv_GooglePayRequest{
+        gateway_merchant_id = maps:get(<<"merchantID">>, Data),
+        payment_token = encode_content(json, maps:get(<<"paymentToken">>, Data))
     }};
 encode_payment_request(#{<<"provider" >> := <<"SamsungPay">>} = Data) ->
     {samsung, #paytoolprv_SamsungPayRequest{
