@@ -980,10 +980,6 @@ create_claim_ok_test(Config) ->
         {party_management, fun
             ('CreateClaim', _) ->
                 {ok, ?CLAIM}
-        end},
-        {repository_client, fun
-            ('checkoutObject', [_, {globals, _}]) ->
-                {ok, #'VersionedObject'{version = ?INTEGER, object = ?GLOBALS}}
         end}
     ], Config),
     Changeset = [
