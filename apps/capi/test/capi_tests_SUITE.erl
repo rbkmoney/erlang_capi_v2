@@ -984,7 +984,7 @@ create_qw_payment_resource_ok_test(Config) ->
     _.
 create_applepay_payment_resource_ok_test(Config) ->
     mock_services([
-        {payment_tool_provider, fun('Unwrap', _) -> {ok, ?UNWRAPPED_PAYMENT_TOOL(?APPLE_PAY_DETAILS)} end},
+        {payment_tool_provider_apple_pay, fun('Unwrap', _) -> {ok, ?UNWRAPPED_PAYMENT_TOOL(?APPLE_PAY_DETAILS)} end},
         {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
@@ -1003,7 +1003,7 @@ create_applepay_payment_resource_ok_test(Config) ->
     _.
 create_googlepay_payment_resource_ok_test(Config) ->
     mock_services([
-        {payment_tool_provider, fun('Unwrap', _) -> {ok, ?UNWRAPPED_PAYMENT_TOOL(?GOOGLE_PAY_DETAILS)} end},
+        {payment_tool_provider_google_pay, fun('Unwrap', _) -> {ok, ?UNWRAPPED_PAYMENT_TOOL(?GOOGLE_PAY_DETAILS)} end},
         {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
