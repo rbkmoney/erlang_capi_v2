@@ -3770,6 +3770,26 @@ encode_tokenized_card_data(#paytoolprv_UnwrappedPaymentTool{
             year = Year
         },
         cardholder_name = CardholderName
+    };
+encode_tokenized_card_data(#paytoolprv_UnwrappedPaymentTool{
+    payment_data = {card, #paytoolprv_Card{
+        pan = PAN,
+        exp_date = #paytoolprv_ExpDate{
+            month = Month,
+            year = Year
+        }
+    }},
+    card_info = #paytoolprv_CardInfo{
+        cardholder_name = CardholderName
+    }
+}) ->
+    #'CardData'{
+        pan  = PAN,
+        exp_date = #'ExpDate'{
+            month = Month,
+            year = Year
+        },
+        cardholder_name = CardholderName
     }.
 
 encode_tokenized_session_data(#paytoolprv_UnwrappedPaymentTool{
@@ -3784,6 +3804,15 @@ encode_tokenized_session_data(#paytoolprv_UnwrappedPaymentTool{
         auth_data = {auth_3ds, #'Auth3DS'{
             cryptogram = Cryptogram,
             eci = ECI
+        }}
+    };
+encode_tokenized_session_data(#paytoolprv_UnwrappedPaymentTool{
+    payment_data = {card, #paytoolprv_Card{}}
+}) ->
+    #'SessionData'{
+        auth_data = {card_security_code, #'CardSecurityCode'{
+            %% TODO dirty hack for test GooglePay card data
+            value = <<"">>
         }}
     }.
 
