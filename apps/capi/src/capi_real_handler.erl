@@ -4756,13 +4756,9 @@ process_digital_wallet_data(Data, _ReqCtx) ->
     end,
     {{digital_wallet, DigitalWallet}, <<>>}.
 
-process_tokenized_card_data(Data, ReqCtx) ->
-    {ok, UnwrappedPaymentTool} = service_call(
-        payment_tool_provider,
-        'Unwrap',
-        [encode_wrapped_payment_tool(Data)],
-        ReqCtx
-    ),
+process_tokenized_card_data(Data, Context) ->
+    Call = {get_token_provider_service_name(Data), 'Unwrap', [encode_wrapped_payment_tool(Data)]},
+    {ok, UnwrappedPaymentTool} = service_call(Call, Context),
     process_put_card_data_result(
         put_card_data_to_cds(
             encode_tokenized_card_data(UnwrappedPaymentTool),
@@ -4771,6 +4767,16 @@ process_tokenized_card_data(Data, ReqCtx) ->
         ),
         UnwrappedPaymentTool
     ).
+
+get_token_provider_service_name(Data) ->
+    case Data of
+        #{<<"provider">> := <<"ApplePay">>} ->
+            payment_tool_provider_apple_pay;
+        #{<<"provider">> := <<"GooglePay">>} ->
+            payment_tool_provider_google_pay;
+        #{<<"provider">> := <<"SamsungPay">>} ->
+            payment_tool_provider_samsung_pay
+    end.
 
 process_put_card_data_result(
     {{bank_card, BankCard}, SessionID},

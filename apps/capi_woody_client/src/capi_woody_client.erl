@@ -56,5 +56,9 @@ get_service_modname(customer_management) ->
     {dmsl_payment_processing_thrift, 'CustomerManagement'};
 get_service_modname(party_management) ->
     {dmsl_payment_processing_thrift, 'PartyManagement'};
-get_service_modname(payment_tool_provider) ->
+get_service_modname(payment_tool_provider_apple_pay) ->
+    {dmsl_payment_tool_provider_thrift, 'PaymentToolProvider'};
+get_service_modname(payment_tool_provider_google_pay) ->
+    {dmsl_payment_tool_provider_thrift, 'PaymentToolProvider'};
+get_service_modname(payment_tool_provider_samsung_pay) ->
     {dmsl_payment_tool_provider_thrift, 'PaymentToolProvider'}.
