@@ -928,7 +928,7 @@ create_googlepay_payment_resource_ok_test(Config) ->
             <<"paymentTool">> => #{
                 <<"paymentToolType">> => <<"TokenizedCardData">>,
                 <<"provider">> => <<"GooglePay">>,
-                <<"merchantID">> => <<"SomeMerchantID">>,
+                <<"gatewayMerchantID">> => <<"SomeMerchantID">>,
                 <<"paymentToken">> => #{}
             },
             <<"clientInfo">> => ClientInfo
