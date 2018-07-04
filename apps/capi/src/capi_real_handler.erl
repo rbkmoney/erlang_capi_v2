@@ -4820,7 +4820,7 @@ encode_payment_request(#{<<"provider" >> := <<"ApplePay">>} = Data) ->
     }};
 encode_payment_request(#{<<"provider" >> := <<"GooglePay">>} = Data) ->
     {google, #paytoolprv_GooglePayRequest{
-        gateway_merchant_id = maps:get(<<"merchantID">>, Data),
+        gateway_merchant_id = maps:get(<<"gatewayMerchantID">>, Data),
         payment_token = encode_content(json, maps:get(<<"paymentToken">>, Data))
     }};
 encode_payment_request(#{<<"provider" >> := <<"SamsungPay">>} = Data) ->
