@@ -24,7 +24,7 @@ call_service(ServiceName, Function, Args, Context, EventHandler) ->
     woody_client:call(
         Request,
         #{url => Url, event_handler => EventHandler},
-        woody_context:set_deadline(Deadline, Context)
+        set_deadline(Deadline, Context)
     ).
 
 get_service_spec(ServiceName) ->
@@ -73,4 +73,12 @@ get_service_deadline(ServiceName) ->
             woody_deadline:from_timeout(Timeout);
         undefined ->
             undefined
+    end.
+
+set_deadline(Deadline, Context) ->
+    case woody_context:get_deadline(Context) of
+        undefined ->
+            woody_context:set_deadline(Deadline, Context);
+        _AlreadySet ->
+            Context
     end.
