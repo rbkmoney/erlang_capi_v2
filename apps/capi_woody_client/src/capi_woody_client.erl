@@ -28,7 +28,7 @@ call_service(ServiceName, Function, Args, Context, EventHandler) ->
     ).
 
 -spec get_service_spec(service_name()) ->
-    {woody:url(), woody:service()}.
+    {woody:url(), woody:service(), woody:deadline()}.
 
 get_service_spec(ServiceName) ->
     {
