@@ -19,12 +19,20 @@ call_service(ServiceName, Function, Args, Context) ->
     woody:result().
 
 call_service(ServiceName, Function, Args, Context, EventHandler) ->
-    {Url, Service} = get_service_spec(ServiceName),
+    {Url, Service, Deadline} = get_service_spec(ServiceName),
     Request = {Service, Function, Args},
-    woody_client:call(Request, #{url => Url, event_handler => EventHandler}, Context).
+    woody_client:call(
+        Request,
+        #{url => Url, event_handler => EventHandler},
+        woody_context:set_deadline(Deadline, Context)
+    ).
 
 get_service_spec(ServiceName) ->
-    {get_service_url(ServiceName), get_service_modname(ServiceName)}.
+    {
+        get_service_url(ServiceName),
+        get_service_modname(ServiceName),
+        get_service_deadline(ServiceName)
+    }.
 
 get_service_url(ServiceName) ->
     maps:get(ServiceName, genlib_app:env(?MODULE, service_urls)).
@@ -57,3 +65,12 @@ get_service_modname(payment_tool_provider_google_pay) ->
     {dmsl_payment_tool_provider_thrift, 'PaymentToolProvider'};
 get_service_modname(payment_tool_provider_samsung_pay) ->
     {dmsl_payment_tool_provider_thrift, 'PaymentToolProvider'}.
+
+get_service_deadline(ServiceName) ->
+    ServiceDeadlines = genlib_app:env(?MODULE, service_deadlines, #{}),
+    case maps:get(ServiceName, ServiceDeadlines, undefined) of
+        Timeout when is_integer(Timeout) andalso Timeout >= 0 ->
+            woody_deadline:from_timeout(Timeout);
+        undefined ->
+            undefined
+    end.
