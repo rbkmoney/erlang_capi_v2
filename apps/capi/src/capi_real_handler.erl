@@ -3391,11 +3391,17 @@ decode_webhook(Hook) ->
         <<"publicKey">> => Hook#webhooker_Webhook.pub_key
     }.
 
-encode_stat_request(Dsl) when is_map(Dsl) ->
-    encode_stat_request(jsx:encode(Dsl));
+encode_stat_request(Dsl) ->
+    encode_stat_request(Dsl, undefined).
 
-encode_stat_request(Dsl) when is_binary(Dsl) ->
-    #merchstat_StatRequest{dsl = Dsl}.
+encode_stat_request(Dsl, ContinuationToken) when is_map(Dsl) ->
+    encode_stat_request(jsx:encode(Dsl), ContinuationToken);
+
+encode_stat_request(Dsl, ContinuationToken) when is_binary(Dsl) ->
+    #merchstat_StatRequest{
+        dsl = Dsl,
+        continuation_token = ContinuationToken
+    }.
 
 create_stat_dsl(StatType, Req, Context) ->
     FromTime = get_time('fromTime', Req),
@@ -3444,17 +3450,27 @@ process_search_request(QueryType, Query, Req, Context, Opts = #{thrift_fun := Th
         <<"size">> => genlib_map:get('limit', Req),
         <<"from">> => genlib_map:get('offset', Req)
     },
-    Call = {merchant_stat, ThriftFun, [encode_stat_request(create_dsl(QueryType, Query, QueryParams))]},
+    ContinuationToken = genlib_map:get('continuationToken', Req),
+    Call = {
+        merchant_stat,
+        ThriftFun,
+        [encode_stat_request(create_dsl(QueryType, Query, QueryParams), ContinuationToken)]
+    },
     process_search_request_result(QueryType, service_call(Call, Context), Context, Opts).
 
 process_search_request_result(QueryType, Result, Context, #{decode_fun := DecodeFun}) ->
     case Result of
-        {ok, #merchstat_StatResponse{data = {QueryType, Data}, total_count = TotalCount}} ->
+        {ok, #merchstat_StatResponse{
+            data = {QueryType, Data},
+            total_count = TotalCount,
+            continuation_token = ContinuationToken
+        }} ->
             DecodedData = [DecodeFun(D, Context) || D <- Data],
-            Resp = #{
+            Resp = genlib_map:compact(#{
                 <<"result">> => DecodedData,
-                <<"totalCount">> => TotalCount
-            },
+                <<"totalCount">> => TotalCount,
+                <<"continuationToken">> => ContinuationToken
+            }),
             {ok, {200, [], Resp}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
             {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
