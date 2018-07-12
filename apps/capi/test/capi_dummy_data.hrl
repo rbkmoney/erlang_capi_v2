@@ -369,8 +369,9 @@
 
 -define (STAT_RESPONSE(Data), #merchstat_StatResponse{
     data = Data,
-    total_count = ?INTEGER}
-).
+    total_count = ?INTEGER,
+    continuation_token = ?STRING
+}).
 
 -define(STAT_RESPONSE_INVOICES, ?STAT_RESPONSE({invoices, [?STAT_INVOICE]})).
 
