@@ -1243,7 +1243,6 @@ search_invoices_ok_test(Config) ->
     mock_services([{merchant_stat, fun('GetInvoices', _) -> {ok, ?STAT_RESPONSE_INVOICES} end}], Config),
     Query = [
         {limit, 2},
-        {offset, 2},
         {from_time, {{2015, 08, 11},{19, 42, 35}}},
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
         {invoiceStatus, <<"fulfilled">>},
@@ -1259,7 +1258,8 @@ search_invoices_ok_test(Config) ->
         % {bin, <<"424242">>},
         {bankCardTokenProvider, <<"applepay">>},
         {bankCardPaymentSystem, <<"visa">>},
-        {paymentAmount, 10000}
+        {paymentAmount, 10000},
+        {continuationToken, <<"come_back_next_time">>}
     ],
 
     {ok, _, _} = capi_client_searches:search_invoices(?config(context, Config), ?STRING, Query).
@@ -1270,7 +1270,6 @@ search_payments_ok_test(Config) ->
     mock_services([{merchant_stat, fun('GetPayments', _) -> {ok, ?STAT_RESPONSE_PAYMENTS} end}], Config),
     Query = [
         {limit, 2},
-        {offset, 2},
         {from_time, {{2015, 08, 11},{19, 42, 35}}},
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
         {payerEmail, <<"test@test.ru">>},
@@ -1285,7 +1284,8 @@ search_payments_ok_test(Config) ->
         % {bin, <<"424242">>},
         {bankCardTokenProvider, <<"applepay">>},
         {bankCardPaymentSystem, <<"visa">>},
-        {paymentAmount, 10000}
+        {paymentAmount, 10000},
+        {continuationToken, <<"come_back_next_time">>}
     ],
 
     {ok, _, _} = capi_client_searches:search_payments(?config(context, Config), ?STRING, Query).
