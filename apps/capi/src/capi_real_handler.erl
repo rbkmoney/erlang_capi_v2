@@ -4409,10 +4409,10 @@ process_search_request_result(QueryType, Result, #{decode_fun := DecodeFun}) ->
     case Result of
         {ok, #merchstat_StatResponse{data = {QueryType, Data}, total_count = TotalCount}} ->
             DecodedData = [DecodeFun(D) || D <- Data],
-            Resp = #{
+            Resp = genlib_map:compact(#{
                 <<"result">> => DecodedData,
                 <<"totalCount">> => TotalCount
-            },
+            }),
             {ok, {200, [], Resp}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
             {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
