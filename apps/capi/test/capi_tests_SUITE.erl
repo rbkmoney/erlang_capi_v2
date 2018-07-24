@@ -39,6 +39,7 @@
     authorization_error_no_header_test/1,
     authorization_error_no_permission_test/1,
     authorization_bad_token_error_test/1,
+    authorization_blacklisted_token_error_test/1,
 
     create_invoice_ok_test/1,
     get_invoice_ok_test/1,
@@ -304,7 +305,8 @@ groups() ->
                 authorization_bad_deadline_error_test,
                 authorization_error_no_header_test,
                 authorization_error_no_permission_test,
-                authorization_bad_token_error_test
+                authorization_bad_token_error_test,
+                authorization_blacklisted_token_error_test
             ]
         }
     ].
@@ -536,6 +538,16 @@ authorization_error_no_permission_test(_Config) ->
     _.
 authorization_bad_token_error_test(Config) ->
     {ok, Token} = issue_dummy_token([{[party], read}], Config),
+    ?badresp(401) = capi_client_parties:get_my_party(get_context(Token)).
+
+-spec authorization_blacklisted_token_error_test(config()) ->
+    _.
+authorization_blacklisted_token_error_test(Config) ->
+    {ok, Token} = issue_token(<<"BlackListedToken">>, [{[party], read}], unlimited),
+    DataDir = get_blacklisted_keys_dir(Config),
+    Filename = filename:join(DataDir, "1.key"),
+    ok = file:write_file(Filename, Token),
+    ok = capi_api_key_blacklist:update(),
     ?badresp(401) = capi_client_parties:get_my_party(get_context(Token)).
 
 -spec create_invoice_ok_test(config()) ->
@@ -1534,7 +1546,9 @@ delete_customer_ok_test(Config) ->
 %%
 
 issue_token(ACL, LifeTime) ->
-    PartyID = ?STRING,
+    issue_token(?STRING, ACL, LifeTime).
+
+issue_token(PartyID, ACL, LifeTime) ->
     Claims = #{?STRING => ?STRING},
     capi_authorizer_jwt:issue({{PartyID, capi_acl:from_list(ACL)}, Claims}, LifeTime).
 
@@ -1573,6 +1587,10 @@ start_capi(Config) ->
                     capi => {pem_file, get_keysource("keys/local/private.pem", Config)}
                 }
             }
+        }},
+        {api_key_blacklist, #{
+            update_interval => 50000, % milliseconds
+            blacklisted_keys_dir => get_blacklisted_keys_dir(Config)
         }}
     ],
     capi_ct_helper:start_app(capi, CapiEnv).
@@ -1647,6 +1665,9 @@ get_context(Token) ->
 
 get_keysource(Key, Config) ->
     filename:join(?config(data_dir, Config), Key).
+
+get_blacklisted_keys_dir(Config) ->
+    filename:join(?config(data_dir, Config), "blacklisted_keys").
 
 get_lifetime() ->
     get_lifetime(0, 0, 7).
