@@ -545,7 +545,6 @@ authorization_bad_token_error_test(Config) ->
 authorization_blacklisted_token_error_test(Config) ->
     {ok, Token} = issue_token(<<"BlackListedToken">>, [{[party], read}], unlimited),
     DataDir = get_blacklisted_keys_dir(Config),
-    ok = filelib:ensure_dir(DataDir),
     ok = file:write_file(filename:join(DataDir, "1.key"), Token),
     ok = file:write_file(filename:join(DataDir, "2.key"), Token),
     ok = file:write_file(filename:join(DataDir, "3.key"), Token),
@@ -1578,6 +1577,8 @@ issue_dummy_token(ACL, Config) ->
     {ok, Token}.
 
 start_capi(Config) ->
+    BlacklistedKeysDir = get_blacklisted_keys_dir(Config),
+    ok = filelib:ensure_dir(BlacklistedKeysDir),
     CapiEnv = [
         {ip, ?CAPI_IP},
         {port, ?CAPI_PORT},
@@ -1592,7 +1593,7 @@ start_capi(Config) ->
         }},
         {api_key_blacklist, #{
             update_interval => 50000, % milliseconds
-            blacklisted_keys_dir => get_blacklisted_keys_dir(Config)
+            blacklisted_keys_dir => BlacklistedKeysDir
         }}
     ],
     capi_ct_helper:start_app(capi, CapiEnv).
