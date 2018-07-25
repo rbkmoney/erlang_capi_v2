@@ -1578,7 +1578,7 @@ issue_dummy_token(ACL, Config) ->
 
 start_capi(Config) ->
     BlacklistedKeysDir = get_blacklisted_keys_dir(Config),
-    ok = filelib:ensure_dir(BlacklistedKeysDir),
+    ok = file:make_dir(BlacklistedKeysDir),
     CapiEnv = [
         {ip, ?CAPI_IP},
         {port, ?CAPI_PORT},
