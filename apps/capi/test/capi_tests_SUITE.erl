@@ -545,9 +545,10 @@ authorization_bad_token_error_test(Config) ->
 authorization_blacklisted_token_error_test(Config) ->
     {ok, Token} = issue_token(<<"BlackListedToken">>, [{[party], read}], unlimited),
     DataDir = get_blacklisted_keys_dir(Config),
-    _ = file:make_dir(DataDir),
-    Filename = filename:join(DataDir, "1.key"),
-    ok = file:write_file(Filename, Token),
+    ok = filelib:ensure_dir(DataDir),
+    ok = file:write_file(filename:join(DataDir, "1.key"), Token),
+    ok = file:write_file(filename:join(DataDir, "2.key"), Token),
+    ok = file:write_file(filename:join(DataDir, "3.key"), Token),
     ok = capi_api_key_blacklist:update(),
     ?badresp(401) = capi_client_parties:get_my_party(get_context(Token)).
 

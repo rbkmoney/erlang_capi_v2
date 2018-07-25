@@ -336,10 +336,9 @@ get_consumer(Claims) ->
     end.
 
 check_blacklist(Context, ApiKey) ->
-    SubjectID = get_subject_id(Context),
-    case capi_api_key_blacklist:check(SubjectID, ApiKey) of
+    case capi_api_key_blacklist:check(ApiKey) of
         true ->
-            _ = lager:warning("Blacklisted API Key usage detected for subject_id: ~p", [SubjectID]),
+            _ = lager:warning("Blacklisted API Key usage detected for subject_id: ~p", [get_subject_id(Context)]),
             false;
         false ->
             {true, Context}

@@ -3,7 +3,7 @@
 
 %% interface
 
--export([check/2]).
+-export([check/1]).
 -export([update/0]).
 -export([start_link/0]).
 -export([child_spec/0]).
@@ -34,22 +34,23 @@
 }).
 
 -record(rec, {
-    id :: binary(),
-    key :: binary()
+    key :: key()
 }).
 
 -type state() :: #state{}.
+-type key() :: swag_server:api_key().
 
 %%
 
--spec check(binary(), binary()) -> boolean().
+-spec check(key()) -> boolean().
 
-check(SubjectID, <<"Bearer ", Token/binary>>) ->
-    check(SubjectID, Token);
-
-check(SubjectID, Token) ->
-    BlacklistedKeys = get_blacklisted_keys(SubjectID),
-    lists:member(Token, BlacklistedKeys).
+check(Token) ->
+    case ets:lookup(?TABLE, clean_token(Token)) of
+        [#rec{}] ->
+            true;
+        [] ->
+            false
+    end.
 
 -spec update() -> ok.
 
@@ -72,10 +73,10 @@ child_spec() ->
 init(_Args) ->
     EtsOpts = [
         named_table,
-        duplicate_bag, %FIXME
+        set,
         protected,
         {read_concurrency, true},
-        {keypos, #rec.id}
+        {keypos, #rec.key}
     ],
     ?TABLE = ets:new(?TABLE, EtsOpts),
     {ok, #state{}, 0}.
@@ -136,34 +137,18 @@ update_blacklist() ->
 
 get_key_files() ->
     Path = get_dir(),
+    true = filelib:is_dir(Path),
     filelib:wildcard(filename:join(Path, "*.key")).
 
 put(Filename) ->
     {ok, Binary} = file:read_file(Filename),
-    {ok, SubjectId} = get_subject_id(Binary),
-    case check(SubjectId, Binary) of
-        true ->
-            ok;
-        false ->
-            true = ets:insert(?TABLE, #rec{id = SubjectId, key = Binary}),
-            ok
-    end.
+    true = ets:insert(?TABLE, #rec{key = clean_token(Binary)}),
+    ok.
 
-get_blacklisted_keys(SubjectId) ->
-    BlacklistedKeys = ets:lookup(?TABLE, SubjectId),
-    [Key || #rec{key = Key} <- BlacklistedKeys].
-
-get_subject_id(<<"Bearer ", Token/binary>>) ->
-    get_subject_id(Token);
-
-get_subject_id(Token) ->
-    %% TODO less hardcoded implementation requiered
-    case capi_authorizer_jwt:verify(Token) of
-        {ok, Context} ->
-            {ok, capi_auth:get_subject_id(Context)};
-        {error, _} = Error ->
-            Error
-    end.
+clean_token(<<"Bearer ", Token/binary>>) ->
+    Token;
+clean_token(Token) ->
+    Token.
 
 get_update_interval() ->
     maps:get(update_interval, get_settings(), ?DEFAULT_INTERVAL).
