@@ -30,7 +30,7 @@ authorize_api_key(OperationID, ApiKey) ->
         {ok, {Type, Credentials}} ->
             case authorize_api_key(OperationID, Type, Credentials) of
                 {ok, Context} ->
-                    check_blacklist(Context, ApiKey);
+                    {true, Context};
                 {error, Error} ->
                     _ = log_auth_error(OperationID, Error),
                     false
@@ -333,13 +333,4 @@ get_consumer(Claims) ->
         <<"merchant">> -> merchant;
         <<"client"  >> -> client;
         <<"provider">> -> provider
-    end.
-
-check_blacklist(Context, ApiKey) ->
-    case capi_api_key_blacklist:check(ApiKey) of
-        true ->
-            _ = lager:warning("Blacklisted API Key usage detected for subject_id: ~p", [get_subject_id(Context)]),
-            false;
-        false ->
-            {true, Context}
     end.
