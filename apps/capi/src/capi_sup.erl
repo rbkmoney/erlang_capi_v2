@@ -26,10 +26,9 @@ init([]) ->
     {LogicHandler, LogicHandlerSpecs} = get_logic_handler_info(),
     HealthRoutes = [{'_', [erl_health_handle:get_route(genlib_app:env(capi, health_checkers, []))]}],
     SwaggerSpec = capi_swagger_server:child_spec({HealthRoutes, LogicHandler}),
-    BlacklistSpecs = [capi_api_key_blacklist:child_spec()],
     {ok, {
         {one_for_all, 0, 1},
-            AuthorizerSpecs ++ BlacklistSpecs ++ LogicHandlerSpecs ++ [SwaggerSpec]
+            AuthorizerSpecs ++ LogicHandlerSpecs ++ [SwaggerSpec]
     }}.
 
 -spec get_authorizer_child_specs() -> [supervisor:child_spec()].
