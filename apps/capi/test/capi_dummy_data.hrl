@@ -201,6 +201,8 @@
     suspension = ?SUSPENTION,
     contracts = #{?STRING => ?CONTRACT},
     shops = #{?STRING => ?SHOP},
+    contractors = #{},
+    wallets = #{},
     revision = 0
 }).
 
