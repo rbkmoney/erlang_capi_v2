@@ -3594,7 +3594,17 @@ filter_claims(ClaimStatus, Claims) ->
     [Claim ||  Claim = #payproc_Claim{status = {Status, _}} <- Claims, Status =:= ClaimStatus].
 
 decode_claims(Claims) ->
-    lists:map(fun decode_claim/1, Claims).
+    lists:filtermap(
+        fun(C) ->
+            case decode_claim(C) of
+                #{<<"changeset">> := []} ->
+                    false;
+                Claim ->
+                    {true, Claim}
+            end
+        end,
+        Claims
+    ).
 
 decode_claim(#payproc_Claim{
     id = ID,
@@ -3642,7 +3652,7 @@ decode_claim_status({'revoked', #payproc_ClaimRevoked{
     }.
 
 decode_party_changeset(PartyChangeset) ->
-    [decode_party_modification(PartyModification) || PartyModification <- PartyChangeset].
+    lists:filtermap(fun decode_party_modification/1, PartyChangeset).
 
 decode_party_modification({
     contract_modification,
@@ -3651,10 +3661,13 @@ decode_party_modification({
         modification = Modification
     }
 }) ->
-    maps:merge(#{
-        <<"partyModificationType">> => <<"ContractModification">>,
-        <<"contractID">> => ContractID
-    }, decode_contract_modification(Modification));
+    {true, maps:merge(
+        #{
+            <<"partyModificationType">> => <<"ContractModification">>,
+            <<"contractID">> => ContractID
+        },
+        decode_contract_modification(Modification)
+    )};
 
 decode_party_modification({
     shop_modification,
@@ -3663,10 +3676,15 @@ decode_party_modification({
         modification = ShopModification
     }
 }) ->
-    maps:merge(#{
-        <<"partyModificationType">> => <<"ShopModification">>,
-        <<"shopID">> => ShopID
-    }, decode_shop_modification(ShopModification)).
+    {true, maps:merge(
+        #{
+            <<"partyModificationType">> => <<"ShopModification">>,
+            <<"shopID">> => ShopID
+        },
+        decode_shop_modification(ShopModification)
+    )};
+decode_party_modification(_) ->
+    false.
 
 decode_contract_modification({creation, #payproc_ContractParams{
     contractor = Contractor,
