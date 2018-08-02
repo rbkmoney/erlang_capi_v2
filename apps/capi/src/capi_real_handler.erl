@@ -2842,7 +2842,17 @@ filter_claims(ClaimStatus, Claims) ->
     [Claim ||  Claim = #payproc_Claim{status = {Status, _}} <- Claims, Status =:= ClaimStatus].
 
 decode_claims(Claims) ->
-    lists:map(fun decode_claim/1, Claims).
+    lists:filtermap(
+        fun(C) ->
+            case decode_claim(C) of
+                #{<<"changeset">> := []} ->
+                    false;
+                Claim ->
+                    {true, Claim}
+            end
+        end,
+        Claims
+    ).
 
 decode_claim(Claim) ->
     merge_and_compact(
@@ -2866,18 +2876,26 @@ decode_claim_status({'revoked', #payproc_ClaimRevoked{reason = Reason}}) ->
     #{<<"status">> => <<"ClaimRevoked">>, <<"reason">> => Reason}.
 
 decode_party_changeset(PartyChangeset) ->
-    [decode_party_modification(PartyModification) || PartyModification <- PartyChangeset].
+    lists:filtermap(fun decode_party_modification/1, PartyChangeset).
 
 decode_party_modification({contract_modification, ContractModification}) ->
-    maps:merge(#{
-        <<"partyModificationType">> => <<"ContractModification">>,
-        <<"contractID"           >> => ContractModification#payproc_ContractModificationUnit.id
-    }, decode_contract_modification(ContractModification#payproc_ContractModificationUnit.modification));
+    {true, maps:merge(
+        #{
+            <<"partyModificationType">> => <<"ContractModification">>,
+            <<"contractID"           >> => ContractModification#payproc_ContractModificationUnit.id
+        },
+        decode_contract_modification(ContractModification#payproc_ContractModificationUnit.modification)
+    )};
 decode_party_modification({shop_modification, ShopModification}) ->
-    maps:merge(#{
-        <<"partyModificationType">> => <<"ShopModification">>,
-        <<"shopID"               >> => ShopModification#payproc_ShopModificationUnit.id
-    }, decode_shop_modification(ShopModification#payproc_ShopModificationUnit.modification)).
+    {true, maps:merge(
+        #{
+            <<"partyModificationType">> => <<"ShopModification">>,
+            <<"shopID"               >> => ShopModification#payproc_ShopModificationUnit.id
+        },
+        decode_shop_modification(ShopModification#payproc_ShopModificationUnit.modification)
+    )};
+decode_party_modification(_) ->
+    false.
 
 decode_contract_modification({creation, ContractParams}) ->
     #{
