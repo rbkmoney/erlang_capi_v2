@@ -450,13 +450,17 @@
 }).
 
 -define(STAT_REFUND, #merchstat_StatRefund{
-    invoice_id = ?STRING,
-    payment_id = ?STRING,
     id = ?STRING,
+    payment_id = ?STRING,
+    invoice_id = ?STRING,
+    owner_id = ?STRING,
+    shop_id = ?STRING,
+    status = {succeeded, #merchstat_InvoicePaymentRefundSucceeded{at = ?TIMESTAMP}},
     created_at = ?TIMESTAMP,
     amount = ?INTEGER,
-    currency_symbolic_code = ?RUB,
-    status = {succeeded, #merchstat_InvoicePaymentRefundSucceeded{}}
+    fee = ?INTEGER,
+    currency_symbolic_code = ?RUB
+
 }).
 
 -define(STAT_PAYOUT(Type, PayoutSummary), #merchstat_StatPayout{
