@@ -109,6 +109,7 @@
 
     search_invoices_ok_test/1,
     search_payments_ok_test/1,
+    search_refunds_ok_test/1,
     search_payouts_ok_test/1,
 
     get_payment_conversion_stats_ok_test/1,
@@ -257,6 +258,7 @@ groups() ->
                 get_locations_names_ok_test,
                 search_invoices_ok_test,
                 search_payments_ok_test,
+                search_refunds_ok_test,
                 search_payouts_ok_test,
                 get_payment_conversion_stats_ok_test,
                 get_payment_revenue_stats_ok_test,
@@ -1289,6 +1291,24 @@ search_payments_ok_test(Config) ->
     ],
 
     {ok, _, _} = capi_client_searches:search_payments(?config(context, Config), ?STRING, Query).
+
+-spec search_refunds_ok_test(config()) ->
+    _.
+search_refunds_ok_test(Config) ->
+    mock_services([{merchant_stat, fun('GetPayments', _) -> {ok, ?STAT_RESPONSE_REFUNDS} end}], Config),
+    Query = [
+        {limit, 2},
+        {offset, 2},
+        {from_time, {{2015, 08, 11},{19, 42, 35}}},
+        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {shopID, <<"testShopID">>},
+        {invoiceID, <<"testInvoiceID">>},
+        {paymentID, <<"testPaymentID">>},
+        {refundID, <<"testRefundID">>},
+        {refundStatus, <<"succeeded">>}
+    ],
+
+    {ok, _, _} = capi_client_searches:search_refunds(?config(context, Config), ?STRING, Query).
 
 -spec search_payouts_ok_test(config()) ->
     _.

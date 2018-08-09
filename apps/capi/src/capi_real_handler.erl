@@ -438,6 +438,25 @@ process_request('SearchPayouts', Req, Context) ->
     },
     process_search_request(payouts, Query, Req, Context, Opts);
 
+process_request('SearchRefunds', Req, Context) ->
+    Query = #{
+        <<"merchant_id"              >> => get_party_id(Context),
+        <<"shop_id"                  >> => genlib_map:get('shopID', Req),
+        <<"invoice_id"               >> => genlib_map:get('invoiceID', Req),
+        <<"payment_id"               >> => genlib_map:get('paymentID', Req),
+        <<"refund_id"                >> => genlib_map:get('refundID', Req),
+        <<"from_time"                >> => get_time('fromTime', Req),
+        <<"to_time"                  >> => get_time('toTime', Req),
+        <<"refund_status"            >> => genlib_map:get('refundStatus', Req)
+    },
+    Opts = #{
+        %% TODO no special fun for refunds so we can use any
+        %% should be fixed in new magista
+        thrift_fun => 'GetPayments',
+        decode_fun => fun decode_stat_refund/2
+    },
+    process_search_request(refunds, Query, Req, Context, Opts);
+
 process_request('GetPaymentConversionStats', Req, Context) ->
     process_merchant_stat(payments_conversion_stat, Req, Context);
 
@@ -2365,7 +2384,6 @@ merchstat_to_domain({Status, #merchstat_InvoicePaymentCancelled{}}) ->
     {Status, #domain_InvoicePaymentCancelled{}};
 merchstat_to_domain({Status, #merchstat_InvoicePaymentRefunded{}}) ->
     {Status, #domain_InvoicePaymentRefunded{}};
-
 merchstat_to_domain({Status, #merchstat_InvoicePaymentFailed{failure = Failure}}) ->
     NewFailure =
         case Failure of
@@ -2375,6 +2393,7 @@ merchstat_to_domain({Status, #merchstat_InvoicePaymentFailed{failure = Failure}}
                 {operation_timeout, #domain_OperationTimeout{}}
         end,
     {Status, #domain_InvoicePaymentFailed{failure = NewFailure}};
+
 merchstat_to_domain({Status, #merchstat_InvoiceUnpaid{}}) ->
     {Status, #domain_InvoiceUnpaid{}};
 merchstat_to_domain({Status, #merchstat_InvoicePaid{}}) ->
@@ -2383,6 +2402,21 @@ merchstat_to_domain({Status, #merchstat_InvoiceCancelled{details = Details}}) ->
     {Status, #domain_InvoiceCancelled{details = Details}};
 merchstat_to_domain({Status, #merchstat_InvoiceFulfilled{details = Details}}) ->
     {Status, #domain_InvoiceFulfilled{details = Details}};
+
+merchstat_to_domain({Status, #merchstat_InvoicePaymentRefundPending{}}) ->
+    {Status, #domain_InvoicePaymentRefundPending{}};
+merchstat_to_domain({Status, #merchstat_InvoicePaymentRefundSucceeded{}}) ->
+    {Status, #domain_InvoicePaymentRefundSucceeded{}};
+merchstat_to_domain({Status, #merchstat_InvoicePaymentRefundFailed{failure = Failure}}) ->
+    NewFailure =
+        case Failure of
+            {failure, _} ->
+                Failure;
+            {operation_timeout, #merchstat_OperationTimeout{}} ->
+                {operation_timeout, #domain_OperationTimeout{}}
+        end,
+    {Status, #domain_InvoicePaymentRefundFailed{failure = NewFailure}};
+
 merchstat_to_domain({instant, #merchstat_InvoicePaymentFlowInstant{}}) ->
     {instant, #domain_InvoicePaymentFlowInstant{}};
 merchstat_to_domain({hold, Hold}) ->
@@ -2773,6 +2807,23 @@ decode_operation_failure({operation_timeout, _}, _) ->
     logic_error(timeout, <<"timeout">>);
 decode_operation_failure({failure, #domain_Failure{code = Code, reason = Reason}}, _) ->
     logic_error(Code, Reason).
+
+decode_stat_refund(Refund, Context) ->
+    merge_and_compact(
+        #{
+            <<"invoiceID">> => Refund#merchstat_StatRefund.invoice_id,
+            <<"paymentID">> => Refund#merchstat_StatRefund.payment_id,
+            <<"id">>        => Refund#merchstat_StatRefund.id,
+            <<"createdAt">> => Refund#merchstat_StatRefund.created_at,
+            <<"amount">>    => Refund#merchstat_StatRefund.amount,
+            <<"currency">>  => Refund#merchstat_StatRefund.currency_symbolic_code,
+            <<"reason">>    => Refund#merchstat_StatRefund.reason
+        },
+        decode_stat_refund_status(Refund#merchstat_StatRefund.status, Context)
+    ).
+
+decode_stat_refund_status(RefundStatus, Context) ->
+    decode_refund_status(merchstat_to_domain(RefundStatus), Context).
 
 decode_stat_payout(Payout, _Context) ->
     merge_and_compact(#{
