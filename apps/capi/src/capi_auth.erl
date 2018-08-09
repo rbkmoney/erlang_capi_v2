@@ -205,6 +205,8 @@ get_operation_access('SearchInvoices'            , _) ->
     [{[invoices], read}];
 get_operation_access('SearchPayments'            , _) ->
     [{[invoices, payments], read}];
+get_operation_access('SearchRefunds'             , _) ->
+    [{[invoices, payments], read}];
 get_operation_access('SearchPayouts'             , _) ->
     [{[party], read}];
 get_operation_access('CreatePaymentResource'     , _) ->
