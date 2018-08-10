@@ -386,6 +386,8 @@
 
 -define(STAT_RESPONSE_RECORDS, ?STAT_RESPONSE({records, [?STAT_RECORD]})).
 
+-define(STAT_RESPONSE_REFUNDS, ?STAT_RESPONSE({refunds, [?STAT_REFUND]})).
+
 -define(STAT_RESPONSE_PAYOUTS, ?STAT_RESPONSE({payouts,
     [
         ?STAT_PAYOUT({bank_card, #merchstat_PayoutCard{card = ?STAT_BANK_CARD}}, [?PAYOUT_SUMMARY_ITEM]),
@@ -445,6 +447,20 @@
     <<"unic_count">> => ?INTEGER_BINARY,
     <<"total_count">> => ?INTEGER_BINARY,
     <<"payment_system">> => <<"visa">>
+}).
+
+-define(STAT_REFUND, #merchstat_StatRefund{
+    id = ?STRING,
+    payment_id = ?STRING,
+    invoice_id = ?STRING,
+    owner_id = ?STRING,
+    shop_id = ?STRING,
+    status = {succeeded, #merchstat_InvoicePaymentRefundSucceeded{at = ?TIMESTAMP}},
+    created_at = ?TIMESTAMP,
+    amount = ?INTEGER,
+    fee = ?INTEGER,
+    currency_symbolic_code = ?RUB
+
 }).
 
 -define(STAT_PAYOUT(Type, PayoutSummary), #merchstat_StatPayout{
