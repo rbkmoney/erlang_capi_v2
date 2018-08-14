@@ -973,11 +973,12 @@ process_request('GetClaimByID', Req, Context) ->
     Call = {party_management, 'GetClaim', [get_party_id(Context), genlib:to_int(maps:get('claimID', Req))]},
     case service_call_with([user_info, party_creation], Call, Context) of
         {ok, Claim} ->
-            try
-                {ok, {200, [], decode_claim(Claim)}}
-            catch
-                throw:wallet_claim ->
-                    {ok, {404, [], general_error(<<"Claim not found">>)}}
+            case is_wallet_claim(Claim) of
+                true ->
+                    %% filter this out
+                    {ok, {404, [], general_error(<<"Claim not found">>)}};
+                false ->
+                    {ok, {200, [], decode_claim(Claim)}}
             end;
         {exception, #payproc_ClaimNotFound{}} ->
             {ok, {404, [], general_error(<<"Claim not found">>)}}
@@ -2902,26 +2903,23 @@ encode_payment_method('bankCard'       ) -> <<"bank_card">>;
 encode_payment_method('paymentTerminal') -> <<"payment_terminal">>;
 encode_payment_method(undefined        ) -> undefined.
 
-filter_claims(undefined, Claims) ->
-    Claims;
 filter_claims(ClaimStatus, Claims) ->
-    [Claim ||  Claim = #payproc_Claim{status = {Status, _}} <- Claims, Status =:= ClaimStatus].
-
-decode_claims(Claims) ->
-    lists:filtermap(
+    lists:filter(
         fun(C) ->
-            try decode_claim(C) of
-                #{<<"changeset">> := []} ->
-                    false;
-                Claim ->
-                    {true, Claim}
-            catch
-                throw:wallet_claim ->
-                    false
-            end
+            is_claim_status_equals(ClaimStatus, C)
+            andalso
+            (not is_wallet_claim(C))
         end,
         Claims
     ).
+
+is_claim_status_equals(undefined, _) ->
+    true;
+is_claim_status_equals(ClaimStatus, #payproc_Claim{status = {Status, _}}) ->
+    Status =:= ClaimStatus.
+
+decode_claims(Claims) ->
+    lists:map(fun decode_claim/1, Claims).
 
 decode_claim(Claim) ->
     merge_and_compact(
@@ -2934,6 +2932,26 @@ decode_claim(Claim) ->
         },
         decode_claim_status(Claim#payproc_Claim.status)
     ).
+
+is_wallet_claim(#payproc_Claim{changeset = Changeset}) ->
+    lists:any(fun is_wallet_change/1, Changeset).
+
+is_wallet_change({contractor_modification, _}) ->
+    true;
+is_wallet_change({wallet_modification, _}) ->
+    true;
+is_wallet_change({contract_modification, #payproc_ContractModificationUnit{
+    modification = {creation, #payproc_ContractParams{
+        contractor = undefined
+    }}
+}}) ->
+    true;
+is_wallet_change({contract_modification, #payproc_ContractModificationUnit{
+    modification = {contractor_modification, _}
+}}) ->
+    true;
+is_wallet_change(_) ->
+    false.
 
 decode_claim_status({'pending', _}) ->
     #{<<"status">> => <<"ClaimPending">>};
@@ -2962,13 +2980,8 @@ decode_party_modification({shop_modification, ShopModification}) ->
             <<"shopID"               >> => ShopModification#payproc_ShopModificationUnit.id
         },
         decode_shop_modification(ShopModification#payproc_ShopModificationUnit.modification)
-    )};
-decode_party_modification(_) ->
-    throw(wallet_claim).
+    )}.
 
-decode_contract_modification({creation, #payproc_ContractParams{contractor = undefined}}) ->
-    %% we don't have contractors on swag-api, so it can be only in case of wallet claim
-    throw(wallet_claim);
 decode_contract_modification({creation, ContractParams}) ->
     #{
         <<"contractModificationType">> => <<"ContractCreation">>,
