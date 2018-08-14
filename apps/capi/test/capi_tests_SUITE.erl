@@ -1158,7 +1158,7 @@ update_claim_by_id_test(_) ->
 -spec get_contract_by_id_ok_test(config()) ->
     _.
 get_contract_by_id_ok_test(Config) ->
-    mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
+    mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
     {ok, _} = capi_client_contracts:get_contract_by_id(?config(context, Config), ?STRING).
 
 -spec get_contracts_ok_test(config()) ->

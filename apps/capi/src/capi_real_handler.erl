@@ -798,14 +798,16 @@ process_request('GetShopByID', Req, Context) ->
 
 process_request('GetContracts', _Req, Context) ->
     Party = capi_utils:unwrap(get_my_party(Context)),
-    {ok, {200, [], decode_contracts_map(Party#domain_Party.contracts)}};
+    {ok, {200, [], decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
 
 process_request('GetContractByID', Req, Context) ->
-    case get_contract_by_id(maps:get('contractID', Req), Context) of
-        {ok, Contract} ->
-            {ok, {200, [], decode_contract(Contract)}};
-        {exception, #payproc_ContractNotFound{}} ->
-            {ok, {404, [], general_error(<<"Contract not found">>)}}
+    ContractID = maps:get('contractID', Req),
+    Party = capi_utils:unwrap(get_my_party(Context)),
+    case genlib_map:get(ContractID, Party#domain_Party.contracts) of
+        undefined ->
+            {ok, {404, [], general_error(<<"Contract not found">>)}};
+        Contract ->
+            {ok, {200, [], decode_contract(Contract, Party#domain_Party.contractors)}}
     end;
 
 process_request('GetPayoutTools', Req, Context) ->
@@ -971,7 +973,12 @@ process_request('GetClaimByID', Req, Context) ->
     Call = {party_management, 'GetClaim', [get_party_id(Context), genlib:to_int(maps:get('claimID', Req))]},
     case service_call_with([user_info, party_creation], Call, Context) of
         {ok, Claim} ->
-            {ok, {200, [], decode_claim(Claim)}};
+            try
+                {ok, {200, [], decode_claim(Claim)}}
+            catch
+                throw:wallet_claim ->
+                    {ok, {404, [], general_error(<<"Claim not found">>)}}
+            end;
         {exception, #payproc_ClaimNotFound{}} ->
             {ok, {404, [], general_error(<<"Claim not found">>)}}
     end;
@@ -2555,8 +2562,8 @@ decode_party(#domain_Party{id = PartyID, blocking = Blocking, suspension = Suspe
         <<"isSuspended">> => is_suspended(Suspension)
     }.
 
-decode_contracts_map(Contracts) ->
-    decode_map(Contracts, fun decode_contract/1).
+decode_contracts_map(Contracts, Contractors) ->
+    decode_map(Contracts, fun(C) -> decode_contract(C, Contractors) end).
 
 decode_shops_map(Shops) ->
     decode_map(Shops, fun decode_shop/1).
@@ -2564,11 +2571,11 @@ decode_shops_map(Shops) ->
 decode_map(Items, Fun) ->
     lists:map(Fun, maps:values(Items)).
 
-decode_contract(Contract) ->
+decode_contract(Contract, Contractors) ->
     merge_and_compact(#{
         <<"id"                  >> => Contract#domain_Contract.id,
         <<"createdAt"           >> => Contract#domain_Contract.created_at,
-        <<"contractor"          >> => decode_contractor(Contract#domain_Contract.contractor),
+        <<"contractor"          >> => decode_contractor(get_contractor(Contract, Contractors)),
         <<"paymentInstitutionID">> => decode_payment_institution_ref(Contract#domain_Contract.payment_institution),
         <<"validSince"          >> => Contract#domain_Contract.valid_since,
         <<"validUntil"          >> => Contract#domain_Contract.valid_until,
@@ -2592,6 +2599,14 @@ decode_contract_status({terminated, #domain_ContractTerminated{terminated_at = T
         <<"status">> => <<"terminated">>,
         <<"terminatedAt">> => TerminatedAt
     }.
+
+get_contractor(#domain_Contract{contractor = Contractor}, _) when Contractor =/= undefined ->
+    Contractor;
+get_contractor(#domain_Contract{contractor_id = ContractorID}, Contractors) ->
+    #domain_PartyContractor{
+        contractor = Contractor
+    } = maps:get(ContractorID, Contractors),
+    Contractor.
 
 decode_payout_tool(#domain_PayoutTool{id = ID, currency = Currency, payout_tool_info = Info}) ->
     maps:merge(
@@ -2895,11 +2910,14 @@ filter_claims(ClaimStatus, Claims) ->
 decode_claims(Claims) ->
     lists:filtermap(
         fun(C) ->
-            case decode_claim(C) of
+            try decode_claim(C) of
                 #{<<"changeset">> := []} ->
                     false;
                 Claim ->
                     {true, Claim}
+            catch
+                throw:wallet_claim ->
+                    false
             end
         end,
         Claims
@@ -2946,8 +2964,11 @@ decode_party_modification({shop_modification, ShopModification}) ->
         decode_shop_modification(ShopModification#payproc_ShopModificationUnit.modification)
     )};
 decode_party_modification(_) ->
-    false.
+    throw(wallet_claim).
 
+decode_contract_modification({creation, #payproc_ContractParams{contractor = undefined}}) ->
+    %% we don't have contractors on swag-api, so it can be only in case of wallet claim
+    throw(wallet_claim);
 decode_contract_modification({creation, ContractParams}) ->
     #{
         <<"contractModificationType">> => <<"ContractCreation">>,
