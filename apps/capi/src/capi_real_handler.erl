@@ -1015,31 +1015,20 @@ process_request('DownloadFile', Req, Context, ReqCtx) ->
 process_request('GetContracts', _Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
-    Result = get_my_party(Context, ReqCtx, UserInfo, PartyID),
-
-    case Result of
-        {ok, #domain_Party{
-            contracts = Contracts
-        }} ->
-            Resp = decode_contracts_map(Contracts),
-            {ok, {200, [], Resp}}
-    end;
+    {ok, Party} = get_my_party(Context, ReqCtx, UserInfo, PartyID),
+    {ok, {200, [], decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
 
 process_request('GetContractByID', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     ContractID = maps:get('contractID', Req),
 
-    Result = get_contract_by_id(Context, ReqCtx, UserInfo, PartyID, ContractID),
-    case Result of
-        {ok, Contract} ->
-            Resp = decode_contract(Contract),
-            {ok, {200, [], Resp}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_ContractNotFound{} ->
-                    {ok, {404, [], general_error(<<"Contract not found">>)}}
-            end
+    {ok, Party} = get_my_party(Context, ReqCtx, UserInfo, PartyID),
+    case genlib_map:get(ContractID, Party#domain_Party.contracts) of
+        undefined ->
+            {ok, {404, [], general_error(<<"Contract not found">>)}};
+        Contract ->
+            {ok, {200, [], decode_contract(Contract, Party#domain_Party.contractors)}}
     end;
 
 process_request('GetPayoutTools', Req, Context, ReqCtx) ->
@@ -1318,8 +1307,13 @@ process_request('GetClaimByID', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, Claim} ->
-            Resp = decode_claim(Claim),
-            {ok, {200, [], Resp}};
+            case is_wallet_claim(Claim) of
+                true ->
+                    %% filter this out
+                    {ok, {404, [], general_error(<<"Claim not found">>)}};
+                false ->
+                    {ok, {200, [], decode_claim(Claim)}}
+            end;
         {exception, #payproc_ClaimNotFound{}} ->
             {ok, {404, [], general_error(<<"Claim not found">>)}}
     end;
@@ -3159,8 +3153,8 @@ decode_party(#domain_Party{
         <<"isSuspended">> => is_suspended(Suspension)
     }.
 
-decode_contracts_map(Contracts) ->
-    decode_map(Contracts, fun decode_contract/1).
+decode_contracts_map(Contracts, Contractors) ->
+    decode_map(Contracts, fun(C) -> decode_contract(C, Contractors) end).
 
 decode_shops_map(Shops) ->
     decode_map(Shops, fun (S) -> decode_shop(S) end).
@@ -3168,11 +3162,11 @@ decode_shops_map(Shops) ->
 decode_map(Items, Fun) ->
     lists:map(Fun, maps:values(Items)).
 
-decode_contract(Contract) ->
+decode_contract(Contract, Contractors) ->
     merge_and_compact(#{
         <<"id"                  >> => Contract#domain_Contract.id,
         <<"createdAt"           >> => Contract#domain_Contract.created_at,
-        <<"contractor"          >> => decode_contractor(Contract#domain_Contract.contractor),
+        <<"contractor"          >> => decode_contractor(get_contractor(Contract, Contractors)),
         <<"paymentInstitutionID">> => decode_payment_institution_ref(Contract#domain_Contract.payment_institution),
         <<"validSince"          >> => Contract#domain_Contract.valid_since,
         <<"validUntil"          >> => Contract#domain_Contract.valid_until,
@@ -3199,11 +3193,15 @@ decode_contract_status({terminated, #domain_ContractTerminated{
         <<"terminatedAt">> => TerminatedAt
     }.
 
-decode_payout_tool(#domain_PayoutTool{
-    id = ID,
-    currency = Currency,
-    payout_tool_info = Info
-}) ->
+get_contractor(#domain_Contract{contractor = Contractor}, _) when Contractor =/= undefined ->
+    Contractor;
+get_contractor(#domain_Contract{contractor_id = ContractorID}, Contractors) ->
+    #domain_PartyContractor{
+        contractor = Contractor
+    } = maps:get(ContractorID, Contractors),
+    Contractor.
+
+decode_payout_tool(#domain_PayoutTool{id = ID, currency = Currency, payout_tool_info = Info}) ->
     maps:merge(
         #{<<"id">> => ID},
         decode_payout_tool_params(Currency, Info)
@@ -3588,23 +3586,23 @@ encode_payment_method('paymentTerminal') ->
 encode_payment_method(undefined) ->
     undefined.
 
-filter_claims(undefined, Claims) ->
-    Claims;
 filter_claims(ClaimStatus, Claims) ->
-    [Claim ||  Claim = #payproc_Claim{status = {Status, _}} <- Claims, Status =:= ClaimStatus].
-
-decode_claims(Claims) ->
-    lists:filtermap(
+    lists:filter(
         fun(C) ->
-            case decode_claim(C) of
-                #{<<"changeset">> := []} ->
-                    false;
-                Claim ->
-                    {true, Claim}
-            end
+            is_claim_status_equals(ClaimStatus, C)
+            andalso
+            (not is_wallet_claim(C))
         end,
         Claims
     ).
+
+is_claim_status_equals(undefined, _) ->
+    true;
+is_claim_status_equals(ClaimStatus, #payproc_Claim{status = {Status, _}}) ->
+    Status =:= ClaimStatus.
+
+decode_claims(Claims) ->
+    lists:map(fun decode_claim/1, Claims).
 
 decode_claim(#payproc_Claim{
     id = ID,
@@ -3614,7 +3612,7 @@ decode_claim(#payproc_Claim{
     status = Status,
     changeset = ChangeSet
 }) ->
-    genlib_map:compact(maps:merge(
+    merge_and_compact(
         #{
             <<"id">> => ID,
             <<"revision">> => Revision,
@@ -3623,7 +3621,27 @@ decode_claim(#payproc_Claim{
             <<"changeset">> => decode_party_changeset(ChangeSet)
         },
         decode_claim_status(Status)
-    )).
+    ).
+
+is_wallet_claim(#payproc_Claim{changeset = Changeset}) ->
+    lists:any(fun is_wallet_change/1, Changeset).
+
+is_wallet_change({contractor_modification, _}) ->
+    true;
+is_wallet_change({wallet_modification, _}) ->
+    true;
+is_wallet_change({contract_modification, #payproc_ContractModificationUnit{
+    modification = {creation, #payproc_ContractParams{
+        contractor = undefined
+    }}
+}}) ->
+    true;
+is_wallet_change({contract_modification, #payproc_ContractModificationUnit{
+    modification = {contractor_modification, _}
+}}) ->
+    true;
+is_wallet_change(_) ->
+    false.
 
 decode_claim_status({'pending', _}) ->
     #{
@@ -3682,9 +3700,7 @@ decode_party_modification({
             <<"shopID">> => ShopID
         },
         decode_shop_modification(ShopModification)
-    )};
-decode_party_modification(_) ->
-    false.
+    )}.
 
 decode_contract_modification({creation, #payproc_ContractParams{
     contractor = Contractor,
