@@ -193,26 +193,59 @@
 
 -define(SHOP_DETAILS, #domain_ShopDetails{name = ?STRING}).
 
+-define(PARTY_CONTRACTOR, #domain_PartyContractor{
+    id = ?STRING,
+    contractor = ?CONTRACTOR,
+    status = none,
+    identity_documents = []
+}).
+
+-define(WALLET_CONTRACT_ID, <<"WALLET_CONTRACT_ID">>).
+
+-define(WALLET_CONTRACT, #domain_Contract{
+    id = ?WALLET_CONTRACT_ID,
+    contractor_id = ?STRING,
+    payment_institution = #domain_PaymentInstitutionRef{id = ?INTEGER},
+    created_at = ?TIMESTAMP,
+    valid_since = ?TIMESTAMP,
+    valid_until = ?TIMESTAMP,
+    status = {active, #domain_ContractActive{}},
+    terms = #domain_TermSetHierarchyRef{id = ?INTEGER},
+    adjustments = [],
+    payout_tools = []
+}).
+
+-define(WALLET, #domain_Wallet{
+    id = ?STRING,
+    created_at = ?TIMESTAMP,
+    blocking = ?BLOCKING,
+    suspension = ?SUSPENTION,
+    contract = ?WALLET_CONTRACT_ID
+}).
+
 -define(PARTY, #domain_Party{
     id = ?STRING,
     contact_info = #domain_PartyContactInfo{email = ?STRING},
     created_at = ?TIMESTAMP,
     blocking = ?BLOCKING,
     suspension = ?SUSPENTION,
-    contracts = #{?STRING => ?CONTRACT},
+    contracts = #{
+        ?STRING => ?CONTRACT,
+        ?WALLET_CONTRACT_ID => ?WALLET_CONTRACT
+    },
     shops = #{?STRING => ?SHOP},
-    contractors = #{},
-    wallets = #{},
+    contractors = #{?STRING => ?PARTY_CONTRACTOR},
+    wallets = #{?STRING => ?WALLET},
     revision = 0
 }).
 
--define(CLAIM, #payproc_Claim{
+-define(CLAIM(Changeset), #payproc_Claim{
     id = ?INTEGER,
     revision = ?INTEGER,
     created_at = ?TIMESTAMP,
     updated_at = ?TIMESTAMP,
     status = {pending, #payproc_ClaimPending{}},
-    changeset = ?CLAIM_CHANGESET
+    changeset = Changeset
 }).
 
 -define(CLAIM_CHANGESET, [
@@ -313,6 +346,35 @@
         id = ?STRING,
         modification = {payout_schedule_modification, #payproc_ScheduleModification{
             schedule = #domain_BusinessScheduleRef{id = ?INTEGER}
+        }}
+    }}
+]).
+
+-define(CONTRACTOR_CLAIM_CHANGESET, [
+    %% contractor modifications
+    {contractor_modification, #payproc_ContractorModificationUnit{
+        id = ?STRING,
+        modification = {creation, ?CONTRACTOR}
+    }},
+    {contractor_modification, #payproc_ContractorModificationUnit{
+        id = ?STRING,
+        modification = {identification_level_modification, partial}
+    }},
+    {contractor_modification, #payproc_ContractorModificationUnit{
+        id = ?STRING,
+        modification = {identity_documents_modification, #payproc_ContractorIdentityDocumentsModification{
+            identity_documents = []
+        }}
+    }}
+]).
+
+-define(WALLET_CLAIM_CHANGESET, [
+    %% wallet modifications
+    {wallet_modification, #payproc_WalletModificationUnit{
+        id = ?STRING,
+        modification = {creation, #payproc_WalletParams{
+            name = ?STRING,
+            contract_id = ?WALLET_CONTRACT_ID
         }}
     }}
 ]).

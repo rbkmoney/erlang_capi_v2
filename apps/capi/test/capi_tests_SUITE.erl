@@ -1030,19 +1030,19 @@ get_my_party_ok_test(Config) ->
     _.
 suspend_my_party_ok_test(Config) ->
     mock_services([{party_management, fun('Suspend', _) -> {ok, ok} end}], Config),
-    capi_client_parties:suspend_my_party(?config(context, Config)).
+    ok = capi_client_parties:suspend_my_party(?config(context, Config)).
 
 -spec activate_my_party_ok_test(config()) ->
     _.
 activate_my_party_ok_test(Config) ->
     mock_services([{party_management, fun('Activate', _) -> {ok, ok} end}], Config),
-    capi_client_parties:activate_my_party(?config(context, Config)).
+    ok = capi_client_parties:activate_my_party(?config(context, Config)).
 
 -spec get_shop_by_id_ok_test(config()) ->
     _.
 get_shop_by_id_ok_test(Config) ->
     mock_services([{party_management, fun('GetShop', _) -> {ok, ?SHOP} end}], Config),
-    capi_client_shops:get_shop_by_id(?config(context, Config), ?STRING).
+    {ok, _} = capi_client_shops:get_shop_by_id(?config(context, Config), ?STRING).
 
 -spec get_shops_ok_test(config()) ->
     _.
@@ -1054,25 +1054,31 @@ get_shops_ok_test(Config) ->
     _.
 suspend_shop_ok_test(Config) ->
     mock_services([{party_management, fun('SuspendShop', _) -> {ok, ok} end}], Config),
-    capi_client_shops:suspend_shop(?config(context, Config), ?STRING).
+    ok = capi_client_shops:suspend_shop(?config(context, Config), ?STRING).
 
 -spec activate_shop_ok_test(config()) ->
     _.
 activate_shop_ok_test(Config) ->
     mock_services([{party_management, fun('ActivateShop', _) -> {ok, ok} end}], Config),
-    capi_client_shops:activate_shop(?config(context, Config), ?STRING).
+    ok = capi_client_shops:activate_shop(?config(context, Config), ?STRING).
 
 -spec get_claim_by_id_ok_test(config()) ->
     _.
 get_claim_by_id_ok_test(Config) ->
-    mock_services([{party_management, fun('GetClaim', _) -> {ok, ?CLAIM} end}], Config),
+    mock_services([{party_management, fun('GetClaim', _) -> {ok, ?CLAIM(?CLAIM_CHANGESET)} end}], Config),
     {ok, _} = capi_client_claims:get_claim_by_id(?config(context, Config), ?INTEGER).
 
 -spec get_claims_ok_test(config()) ->
     _.
 get_claims_ok_test(Config) ->
-    mock_services([{party_management, fun('GetClaims', _) -> {ok, [?CLAIM]} end}], Config),
-    {ok, _} = capi_client_claims:get_claims(?config(context, Config)).
+    mock_services([
+        {party_management, fun('GetClaims', _) -> {ok, [
+            ?CLAIM(?CLAIM_CHANGESET),
+            ?CLAIM(?CONTRACTOR_CLAIM_CHANGESET),
+            ?CLAIM(?WALLET_CLAIM_CHANGESET)
+        ]} end}
+    ], Config),
+    {ok, [_OnlyOneClaim]} = capi_client_claims:get_claims(?config(context, Config)).
 
 -spec revoke_claim_ok_test(config()) ->
     _.
@@ -1083,7 +1089,7 @@ revoke_claim_ok_test(Config) ->
 -spec create_claim_ok_test(config()) ->
     _.
 create_claim_ok_test(Config) ->
-    mock_services([{party_management, fun('CreateClaim', _) -> {ok, ?CLAIM} end}], Config),
+    mock_services([{party_management, fun('CreateClaim', _) -> {ok, ?CLAIM(?CLAIM_CHANGESET)} end}], Config),
     Changeset = [
         #{
             <<"partyModificationType">> => <<"ContractModification">>,
@@ -1158,14 +1164,15 @@ update_claim_by_id_test(_) ->
 -spec get_contract_by_id_ok_test(config()) ->
     _.
 get_contract_by_id_ok_test(Config) ->
-    mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
-    {ok, _} = capi_client_contracts:get_contract_by_id(?config(context, Config), ?STRING).
+    mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
+    {ok, _} = capi_client_contracts:get_contract_by_id(?config(context, Config), ?STRING),
+    {ok, _} = capi_client_contracts:get_contract_by_id(?config(context, Config), ?WALLET_CONTRACT_ID).
 
 -spec get_contracts_ok_test(config()) ->
     _.
 get_contracts_ok_test(Config) ->
     mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
-    {ok, _} = capi_client_contracts:get_contracts(?config(context, Config)).
+    {ok, [_First, _Second]} = capi_client_contracts:get_contracts(?config(context, Config)).
 
 -spec get_contract_adjustments_ok_test(config()) ->
     _.
