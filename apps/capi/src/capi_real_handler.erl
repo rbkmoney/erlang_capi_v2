@@ -1861,11 +1861,22 @@ encode_international_bank_account(Acc) ->
         local_bank_code = genlib_map:get(<<"localBankCode">>, Acc)
     }.
 
+encode_contractor(#{<<"contractorType">> := <<"PrivateEntity">>} = Contractor) ->
+    {private_entity, encode_private_entity(Contractor)};
+
 encode_contractor(#{<<"contractorType">> := <<"LegalEntity">>} = Contractor) ->
     {legal_entity, encode_legal_entity(Contractor)};
 
 encode_contractor(#{<<"contractorType">> := <<"RegisteredUser">>} = Contractor) ->
     {registered_user, encode_registered_user(Contractor)}.
+
+encode_private_entity(#{<<"entityType">> := <<"RussianPrivateEntity">>} = Entity) ->
+    {russian_private_entity, #domain_RussianPrivateEntity{
+        first_name = maps:get(<<"firstName">>, Entity),
+        second_name = maps:get(<<"secondName">>, Entity),
+        middle_name = maps:get(<<"middleName">>, Entity),
+        contact_info = encode_contact_info(maps:get(<<"contactInfo">>, Entity))
+    }}.
 
 encode_legal_entity(#{<<"entityType">> := <<"RussianLegalEntity">>} = Entity) ->
     {russian_legal_entity , #domain_RussianLegalEntity{
@@ -2683,6 +2694,9 @@ decode_shop_location({url, Location}) ->
 decode_contractor({legal_entity, LegalEntity}) ->
     maps:merge(#{<<"contractorType">> => <<"LegalEntity">>}, decode_legal_entity(LegalEntity));
 
+decode_contractor({private_entity, PrivateEntity}) ->
+    maps:merge(#{<<"contractorType">> => <<"PrivateEntity">>}, decode_private_entity(PrivateEntity));
+
 decode_contractor({registered_user, RegisteredUser}) ->
     maps:merge(#{<<"contractorType">> => <<"RegisteredUser">>}, decode_registered_user(RegisteredUser)).
 
@@ -2709,6 +2723,15 @@ decode_legal_entity({international_legal_entity, LegalEntity}) ->
         <<"principalPlaceOfBusiness">> => LegalEntity#domain_InternationalLegalEntity.actual_address,
         <<"registeredNumber"        >> => LegalEntity#domain_InternationalLegalEntity.registered_number
     }).
+
+decode_private_entity({russian_private_entity, PrivateEntity}) ->
+    #{
+        <<"entityType">>    => <<"RussianPrivateEntity">>,
+        <<"firstName">>     => PrivateEntity#domain_RussianPrivateEntity.first_name,
+        <<"secondName">>    => PrivateEntity#domain_RussianPrivateEntity.second_name,
+        <<"middleName">>    => PrivateEntity#domain_RussianPrivateEntity.middle_name,
+        <<"contactInfo">>   => decode_contact_info(PrivateEntity#domain_RussianPrivateEntity.contact_info)
+    }.
 
 decode_registered_user(#domain_RegisteredUser{email = Email}) ->
     #{<<"email">> => Email}.
