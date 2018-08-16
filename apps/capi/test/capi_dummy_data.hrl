@@ -188,7 +188,12 @@
 
 -define(PARTY_CONTRACTOR, #domain_PartyContractor{
     id = ?STRING,
-    contractor = ?CONTRACTOR,
+    contractor = {private_entity, {russian_private_entity, #domain_RussianPrivateEntity{
+        first_name = ?STRING,
+        second_name = ?STRING,
+        middle_name = ?STRING,
+        contact_info = #domain_ContactInfo{}
+    }}},
     status = none,
     identity_documents = []
 }).
