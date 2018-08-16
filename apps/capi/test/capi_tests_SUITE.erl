@@ -1030,6 +1030,20 @@ create_claim_ok_test(Config) ->
         },
         #{
             <<"partyModificationType">> => <<"ContractModification">>,
+            <<"contractID">> => <<"PrivateEntityContract">>,
+            <<"contractModificationType">> => <<"ContractCreation">>,
+            <<"contractor">> => #{
+                <<"contractorType">> => <<"PrivateEntity">>,
+                <<"entityType">> => <<"RussianPrivateEntity">>,
+                <<"firstName">> => ?STRING,
+                <<"secondName">> => ?STRING,
+                <<"middleName">> => ?STRING,
+                <<"contactInfo">> => #{}
+            },
+            <<"paymentInstitutionID">> => ?INTEGER
+        },
+        #{
+            <<"partyModificationType">> => <<"ContractModification">>,
             <<"contractID">> => ?STRING,
             <<"contractModificationType">> => <<"ContractPayoutToolCreation">>,
             <<"payoutToolID">> => ?STRING,
