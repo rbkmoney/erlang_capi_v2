@@ -1861,11 +1861,22 @@ encode_international_bank_account(Acc) ->
         local_bank_code = genlib_map:get(<<"localBankCode">>, Acc)
     }.
 
+encode_contractor(#{<<"contractorType">> := <<"PrivateEntity">>} = Contractor) ->
+    {private_entity, encode_private_entity(Contractor)};
+
 encode_contractor(#{<<"contractorType">> := <<"LegalEntity">>} = Contractor) ->
     {legal_entity, encode_legal_entity(Contractor)};
 
 encode_contractor(#{<<"contractorType">> := <<"RegisteredUser">>} = Contractor) ->
     {registered_user, encode_registered_user(Contractor)}.
+
+encode_private_entity(#{<<"entityType">> := <<"RussianPrivateEntity">>} = Entity) ->
+    {russian_private_entity, #domain_RussianPrivateEntity{
+        first_name = maps:get(<<"firstName">>, Entity),
+        second_name = maps:get(<<"secondName">>, Entity),
+        middle_name = maps:get(<<"middleName">>, Entity),
+        contact_info = encode_contact_info(maps:get(<<"contactInfo">>, Entity))
+    }}.
 
 encode_legal_entity(#{<<"entityType">> := <<"RussianLegalEntity">>} = Entity) ->
     {russian_legal_entity , #domain_RussianLegalEntity{
