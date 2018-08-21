@@ -446,8 +446,8 @@
 
 -define(STAT_RESPONSE_PAYMENTS, ?STAT_RESPONSE({payments,
     [
-        ?STAT_PAYMENT(?STAT_PAYER({bank_card, ?STAT_BANK_CARD})),
-        ?STAT_PAYMENT(?STAT_PAYER({bank_card, ?STAT_BANK_CARD_WITH_TP}))
+        ?STAT_PAYMENT(?STAT_PAYER({bank_card, ?STAT_BANK_CARD}), ?STAT_PAYMENT_STATUS_CAPTURED),
+        ?STAT_PAYMENT(?STAT_PAYER({bank_card, ?STAT_BANK_CARD_WITH_TP}), ?STAT_PAYMENT_STATUS_PENDING)
     ]
 })).
 
@@ -478,13 +478,13 @@
     context = ?CONTENT
 }).
 
--define(STAT_PAYMENT(Payer), #merchstat_StatPayment{
+-define(STAT_PAYMENT(Payer, Status), #merchstat_StatPayment{
     id = ?STRING,
     invoice_id = ?STRING,
     owner_id = ?STRING,
     shop_id = ?STRING,
     created_at = ?TIMESTAMP,
-    status = {pending, #merchstat_InvoicePaymentPending{}},
+    status = Status,
     amount = ?INTEGER,
     flow = {instant, #merchstat_InvoicePaymentFlowInstant{}},
     fee = ?INTEGER,
@@ -501,6 +501,10 @@
     email = <<"test@test.ru">>,
     session_id = ?STRING
 }}).
+
+-define(STAT_PAYMENT_STATUS_PENDING, {pending, #merchstat_InvoicePaymentPending{}}).
+
+-define(STAT_PAYMENT_STATUS_CAPTURED, {captured, #merchstat_InvoicePaymentCaptured{at = ?TIMESTAMP}}).
 
 -define(STAT_RECORD, #{
     <<"offset">> => ?INTEGER_BINARY,
