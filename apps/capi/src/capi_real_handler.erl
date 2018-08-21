@@ -2304,7 +2304,8 @@ decode_stat_payment(Stat, Context) ->
         <<"currency"       >> => Stat#merchstat_StatPayment.currency_symbolic_code,
         <<"payer"          >> => decode_stat_payer(Stat#merchstat_StatPayment.payer),
         <<"geoLocationInfo">> => decode_geo_location_info(Stat#merchstat_StatPayment.location_info),
-        <<"metadata"       >> => decode_context(Stat#merchstat_StatPayment.context)
+        <<"metadata"       >> => decode_context(Stat#merchstat_StatPayment.context),
+        <<"statusChangedAt">> => decode_status_changed_at(Stat#merchstat_StatPayment.status)
     }, decode_stat_payment_status(Stat#merchstat_StatPayment.status, Context)).
 
 decode_stat_payer({customer, #merchstat_CustomerPayer{customer_id = ID}}) ->
@@ -2347,6 +2348,19 @@ decode_stat_payment_status(PaymentStatus, Context) ->
 
 decode_stat_payment_flow(Flow) ->
     decode_flow(merchstat_to_domain(Flow)).
+
+decode_status_changed_at({_, #merchstat_InvoicePaymentPending{}}) ->
+    undefined;
+decode_status_changed_at({_, #merchstat_InvoicePaymentProcessed{at = ChangedAt}}) ->
+    ChangedAt;
+decode_status_changed_at({_, #merchstat_InvoicePaymentCaptured{at = ChangedAt}}) ->
+    ChangedAt;
+decode_status_changed_at({_, #merchstat_InvoicePaymentCancelled{at = ChangedAt}}) ->
+    ChangedAt;
+decode_status_changed_at({_, #merchstat_InvoicePaymentRefunded{at = ChangedAt}}) ->
+    ChangedAt;
+decode_status_changed_at({_, #merchstat_InvoicePaymentFailed{at = ChangedAt}}) ->
+    ChangedAt.
 
 decode_flow({instant, _}) ->
     #{<<"type">> => <<"PaymentFlowInstant">>};
