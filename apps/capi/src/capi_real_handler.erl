@@ -3840,7 +3840,12 @@ process_digital_wallet_data(Data) ->
 
 process_tokenized_card_data(Data, Context) ->
     Call = {get_token_provider_service_name(Data), 'Unwrap', [encode_wrapped_payment_tool(Data)]},
-    {ok, UnwrappedPaymentTool} = service_call(Call, Context),
+    UnwrappedPaymentTool = case service_call(Call, Context) of
+        {ok, Tool} ->
+            Tool;
+        {exception, #'InvalidRequest'{}} ->
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Tokenized card data is invalid">>)}})
+    end,
     process_put_card_data_result(
         put_card_data_to_cds(
             encode_tokenized_card_data(UnwrappedPaymentTool),
