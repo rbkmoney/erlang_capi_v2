@@ -105,14 +105,21 @@ process_request('CreatePayment', Req, Context) ->
     Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
     Result =
         try
+            PayerParams = genlib_map:get(<<"payer">>, PaymentParams),
             Params =  #payproc_InvoicePaymentParams{
-                'payer' = encode_payer_params(genlib_map:get(<<"payer">>, PaymentParams)),
-                'flow' = encode_flow(Flow)
+                'payer' = encode_payer_params(PayerParams),
+                'flow' = encode_flow(Flow),
+                'make_recurrent' = genlib_map:get(<<"makeRecurrent">>, PayerParams, false),
+                'recurrent_parent' = encode_recurrent_parent(PayerParams)
             },
             Call = {invoicing, 'StartPayment', [InvoiceID, Params]},
             service_call_with([user_info], Call, Context)
         catch
-            throw:Error when Error =:= invalid_token orelse Error =:= invalid_payment_session ->
+            throw:Error when
+                Error =:= invalid_token orelse
+                Error =:= invalid_payment_session orelse
+                Error =:= invalid_recurring_session
+            ->
                 {error, Error}
         end,
 
@@ -131,6 +138,8 @@ process_request('CreatePayment', Req, Context) ->
                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
                     {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                #payproc_InvalidRecurrentParentPayment{} ->
+                    {ok, {400, [], logic_error(invalidRecurrentParent, <<"Specified recurrent parent is invalid">>)}};
                 #payproc_InvalidUser{} ->
                     {ok, {404, [], general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
@@ -1540,7 +1549,35 @@ encode_payer_params(#{
             client_info = encode_client_info(ClientInfo)
         },
         contact_info = encode_contact_info(ContactInfo)
+    }};
+
+encode_payer_params(#{
+    <<"payerType"       >> := <<"PaymentResourcePayer">>,
+    <<"paymentToolToken">> := Token,
+    <<"contactInfo"     >> := ContactInfo
+}) ->
+    PaymentTool = encode_payment_tool_token(Token),
+    {payment_resource, #payproc_PaymentResourcePayerParams{
+        resource = #domain_DisposablePaymentResource{
+            payment_tool = PaymentTool
+        },
+        contact_info = encode_contact_info(ContactInfo)
     }}.
+
+encode_recurrent_parent(#{
+    <<"payerType">> := <<"PaymentResourcePayer">>,
+    <<"recurrentParentPayment">> := RecurrentParent
+}) ->
+    #{
+        <<"invoiceID">> := InvoiceID,
+        <<"paymentID">> := PaymentID
+    } = RecurrentParent,
+    #domain_RecurrentParentPayment{
+        invoice_id = InvoiceID,
+        payment_id = PaymentID
+    };
+encode_recurrent_parent(_Other) ->
+    undefined.
 
 encode_payment_tool_token(Token) ->
     try capi_utils:base64url_to_map(Token) of
@@ -1589,6 +1626,8 @@ decode_digital_wallet(#domain_DigitalWallet{
         <<"id"      >> => ID
     }).
 
+decode_client_info(undefined) ->
+    undefined;
 decode_client_info(ClientInfo) ->
     #{
         <<"fingerprint">> => ClientInfo#domain_ClientInfo.fingerprint,
@@ -2127,14 +2166,16 @@ decode_payment(InvoiceID, Payment, Context) ->
         currency = Currency
     } = Payment#domain_InvoicePayment.cost,
     merge_and_compact(#{
-        <<"id"       >> => Payment#domain_InvoicePayment.id,
-        <<"invoiceID">> => InvoiceID,
-        <<"createdAt">> => Payment#domain_InvoicePayment.created_at,
+        <<"id"                    >> => Payment#domain_InvoicePayment.id,
+        <<"invoiceID"             >> => InvoiceID,
+        <<"createdAt"             >> => Payment#domain_InvoicePayment.created_at,
         % TODO whoops, nothing to get it from yet
-        <<"flow"     >> => decode_flow(Payment#domain_InvoicePayment.flow),
-        <<"amount"   >> => Amount,
-        <<"currency" >> => decode_currency(Currency),
-        <<"payer"    >> => decode_payer(Payment#domain_InvoicePayment.payer)
+        <<"flow"                  >> => decode_flow(Payment#domain_InvoicePayment.flow),
+        <<"amount"                >> => Amount,
+        <<"currency"              >> => decode_currency(Currency),
+        <<"payer"                 >> => decode_payer(Payment#domain_InvoicePayment.payer),
+        <<"makeRecurrent"         >> => decode_make_recurrent(Payment#domain_InvoicePayment.make_recurrent),
+        <<"recurrentParentPayment">> => decode_recurrent_parent(Payment#domain_InvoicePayment.recurrent_parent)
     }, decode_payment_status(Payment#domain_InvoicePayment.status, Context)).
 
 decode_payer({customer, #domain_CustomerPayer{customer_id = ID}}) ->
@@ -2248,6 +2289,24 @@ decode_payment_operation_failure_([H|T]) ->
         _  -> R#{<<"subError">> => decode_payment_operation_failure_(T)}
     end.
 
+decode_make_recurrent(undefined) ->
+    false;
+decode_make_recurrent(Value) when is_boolean(Value) ->
+    Value.
+
+decode_recurrent_parent(undefined) ->
+    undefined;
+decode_recurrent_parent(#domain_RecurrentParentPayment{invoice_id = InvoiceID, payment_id = PaymentID}) ->
+    #{
+        <<"invoiceID">> => InvoiceID,
+        <<"paymentID">> => PaymentID
+    };
+decode_recurrent_parent(#merchstat_RecurrentParentPayment{invoice_id = InvoiceID, payment_id = PaymentID}) ->
+    #{
+        <<"invoiceID">> => InvoiceID,
+        <<"paymentID">> => PaymentID
+    }.
+
 payment_error(Code) ->
     #{<<"code">> => Code}.
 
@@ -2274,18 +2333,20 @@ payment_error_client_maping(_) ->
 
 decode_stat_payment(Stat, Context) ->
     merge_and_compact(#{
-        <<"id"             >> => Stat#merchstat_StatPayment.id,
-        <<"shortID"        >> => Stat#merchstat_StatPayment.short_id,
-        <<"invoiceID"      >> => Stat#merchstat_StatPayment.invoice_id,
-        <<"shopID"         >> => Stat#merchstat_StatPayment.shop_id,
-        <<"createdAt"      >> => Stat#merchstat_StatPayment.created_at,
-        <<"amount"         >> => Stat#merchstat_StatPayment.amount,
-        <<"flow"           >> => decode_stat_payment_flow(Stat#merchstat_StatPayment.flow),
-        <<"fee"            >> => Stat#merchstat_StatPayment.fee,
-        <<"currency"       >> => Stat#merchstat_StatPayment.currency_symbolic_code,
-        <<"payer"          >> => decode_stat_payer(Stat#merchstat_StatPayment.payer),
-        <<"geoLocationInfo">> => decode_geo_location_info(Stat#merchstat_StatPayment.location_info),
-        <<"metadata"       >> => decode_context(Stat#merchstat_StatPayment.context)
+        <<"id"                    >> => Stat#merchstat_StatPayment.id,
+        <<"shortID"               >> => Stat#merchstat_StatPayment.short_id,
+        <<"invoiceID"             >> => Stat#merchstat_StatPayment.invoice_id,
+        <<"shopID"                >> => Stat#merchstat_StatPayment.shop_id,
+        <<"createdAt"             >> => Stat#merchstat_StatPayment.created_at,
+        <<"amount"                >> => Stat#merchstat_StatPayment.amount,
+        <<"flow"                  >> => decode_stat_payment_flow(Stat#merchstat_StatPayment.flow),
+        <<"fee"                   >> => Stat#merchstat_StatPayment.fee,
+        <<"currency"              >> => Stat#merchstat_StatPayment.currency_symbolic_code,
+        <<"payer"                 >> => decode_stat_payer(Stat#merchstat_StatPayment.payer),
+        <<"geoLocationInfo"       >> => decode_geo_location_info(Stat#merchstat_StatPayment.location_info),
+        <<"metadata"              >> => decode_context(Stat#merchstat_StatPayment.context),
+        <<"makeRecurrent"         >> => decode_make_recurrent(Stat#merchstat_StatPayment.make_recurrent),
+        <<"recurrentParentPayment">> => decode_recurrent_parent(Stat#merchstat_StatPayment.recurrent_parent)
     }, decode_stat_payment_status(Stat#merchstat_StatPayment.status, Context)).
 
 decode_stat_payer({customer, #merchstat_CustomerPayer{customer_id = ID}}) ->
