@@ -2288,12 +2288,16 @@ encode_russian_bank_account(#{
 
 encode_international_bank_account(Acc) ->
     #domain_InternationalBankAccount{
-        account_holder  = genlib_map:get(<<"accountHolder">>, Acc),
-        bank_name       = genlib_map:get(<<"bankName">>, Acc),
-        bank_address    = genlib_map:get(<<"bankAddress">>, Acc),
-        iban            = genlib_map:get(<<"iban">>, Acc),
-        bic             = genlib_map:get(<<"bic">>, Acc),
-        local_bank_code = genlib_map:get(<<"localBankCode">>, Acc)
+        iban           = genlib_map:get(<<"iban">>, Acc),
+        bank           = encode_international_bank_details(Acc),
+        account_holder = genlib_map:get(<<"accountHolder">>, Acc)
+     }.
+
+encode_international_bank_details(Acc) ->
+    #domain_InternationalBankDetails{
+        bic     = genlib_map:get(<<"bic">>, Acc),
+        name    = genlib_map:get(<<"bankName">>, Acc),
+        address = genlib_map:get(<<"bankAddress">>, Acc)
     }.
 
 encode_contractor(#{<<"contractorType">> := <<"PrivateEntity">>} = Contractor) ->
@@ -2949,26 +2953,34 @@ merchstat_to_domain({bank_account,
         bank_post_account = BankPostAccount,
         bank_bik = BankBik
     }};
-merchstat_to_domain({bank_account,
-    {international_payout_account, #merchstat_InternationalPayoutAccount{
-        bank_account = #merchstat_InternationalBankAccount{
-            account_holder = AccountHolder,
-            bank_name = BankName,
-            bank_address = BankAddress,
-            iban = Iban,
-            bic = Bic,
-            local_bank_code = LocalBankCode
-        }
-    }}
-}) ->
-    {international_bank_account, #domain_InternationalBankAccount{
-        account_holder = AccountHolder,
-        bank_name = BankName,
-        bank_address = BankAddress,
-        iban = Iban,
-        bic = Bic,
-        local_bank_code = LocalBankCode
-    }};
+
+merchstat_to_domain({bank_account, {international_payout_account, PayoutAccount}}) ->
+    #merchstat_InternationalPayoutAccount{bank_account = BankAccount} = PayoutAccount,
+    {international_bank_account, merchstat_to_domain({international_bank_account, BankAccount})};
+merchstat_to_domain({international_bank_account, undefined}) ->
+    undefined;
+merchstat_to_domain({international_bank_account, BankAccount = #merchstat_InternationalBankAccount{}}) ->
+    #domain_InternationalBankAccount{
+        number         = BankAccount#merchstat_InternationalBankAccount.number,
+        iban           = BankAccount#merchstat_InternationalBankAccount.iban,
+        account_holder = BankAccount#merchstat_InternationalBankAccount.account_holder,
+        bank           = merchstat_to_domain(
+            {international_bank_details, BankAccount#merchstat_InternationalBankAccount.bank}
+        ),
+        correspondent_account = merchstat_to_domain(
+            {international_bank_account, BankAccount#merchstat_InternationalBankAccount.correspondent_account}
+        )
+    };
+merchstat_to_domain({international_bank_details, undefined}) ->
+    undefined;
+merchstat_to_domain({international_bank_details, Bank = #merchstat_InternationalBankDetails{}}) ->
+    #domain_InternationalBankDetails{
+            bic     = Bank#merchstat_InternationalBankDetails.bic,
+            name    = Bank#merchstat_InternationalBankDetails.name,
+            address = Bank#merchstat_InternationalBankDetails.address,
+            country = Bank#merchstat_InternationalBankDetails.country,
+            aba_rtn = Bank#merchstat_InternationalBankDetails.aba_rtn
+    };
 
 merchstat_to_domain({Status, #merchstat_InvoicePaymentPending{}}) ->
     {Status, #domain_InvoicePaymentPending{}};
@@ -3241,21 +3253,13 @@ decode_russian_bank_account(#domain_RussianBankAccount{
         <<"bankBik">> => BankBik
     }.
 
-decode_international_bank_account(#domain_InternationalBankAccount{
-    account_holder = AccountHolder,
-    bank_name = BankName,
-    bank_address = BankAddress,
-    iban = Iban,
-    bic = Bic,
-    local_bank_code = LocalBankCode
-}, V) ->
+decode_international_bank_account(BankAccount = #domain_InternationalBankAccount{bank = Bank}, V) ->
     genlib_map:compact(V#{
-        <<"accountHolder">> => AccountHolder,
-        <<"bankName">> => BankName,
-        <<"bankAddress">> => BankAddress,
-        <<"iban">> => Iban,
-        <<"bic">> => Bic,
-        <<"localBankCode">> => LocalBankCode
+        <<"accountHolder">> => BankAccount#domain_InternationalBankAccount.account_holder,
+        <<"iban">> => BankAccount#domain_InternationalBankAccount.iban,
+        <<"bankName">> => Bank#domain_InternationalBankDetails.name,
+        <<"bankAddress">> => Bank#domain_InternationalBankDetails.address,
+        <<"bic">> => Bank#domain_InternationalBankDetails.bic
     }).
 
 decode_contract_adjustment(#domain_ContractAdjustment{

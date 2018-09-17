@@ -1,5 +1,8 @@
 -define(STRING, <<"TEST">>).
 -define(RUB, <<"RUB">>).
+-define(USD, <<"USD">>).
+-define(BANKID_RU, <<"PUTIN">>).
+-define(BANKID_US, <<"TRAMP">>).
 -define(JSON, <<"{}">>).
 -define(INTEGER, 10000).
 -define(INTEGER_BINARY, <<"10000">>).
@@ -159,7 +162,7 @@
     status = {active, #domain_ContractActive{}},
     terms = #domain_TermSetHierarchyRef{id = ?INTEGER},
     adjustments = [?CONTRACT_ADJUSTMENT],
-    payout_tools = [?PAYOUT_TOOL(?RUSSIAN_BANK_ACCOUNT), ?PAYOUT_TOOL(?INTERNATIONAL_BANK_ACCOUNT)]
+    payout_tools = [?PAYOUT_TOOL(?BANKID_RU, ?RUSSIAN_BANK_ACCOUNT), ?PAYOUT_TOOL(?BANKID_US, ?INTERNATIONAL_BANK_ACCOUNT)]
 }).
 
 -define(CONTRACTOR, {registered_user, #domain_RegisteredUser{email = ?STRING}}).
@@ -395,8 +398,8 @@
     terms = #domain_TermSetHierarchyRef{id = ?INTEGER}
 }).
 
--define(PAYOUT_TOOL(ToolInfo), #domain_PayoutTool{
-    id = ?STRING,
+-define(PAYOUT_TOOL(ID, ToolInfo), #domain_PayoutTool{
+    id = ID,
     created_at = ?TIMESTAMP,
     currency = #domain_CurrencyRef{symbolic_code = ?RUB},
     payout_tool_info = ToolInfo
@@ -410,12 +413,21 @@
 }}).
 
 -define(INTERNATIONAL_BANK_ACCOUNT, {international_bank_account, #domain_InternationalBankAccount{
-    account_holder = ?STRING,
-    bank_name = ?STRING,
-    bank_address = ?STRING,
+    number = <<"12345678901234567890">>,
+    bank = ?INTERNATIONAL_BANK_DETAILS,
+    correspondent_account = #domain_InternationalBankAccount{number = <<"00000000000000000000">>},
     iban = <<"GR1601101250000000012300695">>,
-    bic = <<"DEUTDEFF500">>
+    account_holder = ?STRING
 }}).
+
+-define(INTERNATIONAL_BANK_DETAILS, #domain_InternationalBankDetails{
+    %% In reality either bic or aba_rtn should be used, not both.
+    bic = <<"DEUTDEFF500">>,
+    country = usa,
+    name = ?STRING,
+    address = ?STRING,
+    aba_rtn = <<"129131673">>
+ }).
 
 -define(WEBHOOK, #webhooker_Webhook{
     id = ?INTEGER,
@@ -530,14 +542,23 @@
 
 -define(STAT_PAYOUT_BANK_ACCOUNT_INT, {international_payout_account, #merchstat_InternationalPayoutAccount{
     bank_account = #merchstat_InternationalBankAccount{
-        account_holder = ?STRING,
-        bank_name = ?STRING,
-        bank_address = ?STRING,
+        number = <<"12345678901234567890">>,
+        bank = ?STAT_PAYOUT_BANK_DETAILS_INT,
+        correspondent_account = #merchstat_InternationalBankAccount{number = <<"00000000000000000000">>},
         iban = <<"GR1601101250000000012300695">>,
-        bic = <<"DEUTDEFF500">>
+        account_holder = ?STRING
     },
     purpose = ?STRING
 }}).
+
+-define(STAT_PAYOUT_BANK_DETAILS_INT, #merchstat_InternationalBankDetails{
+    %% In reality either bic or aba_rtn should be used, not both.
+    bic = <<"DEUTDEFF500">>,
+    country = usa,
+    name = ?STRING,
+    address = ?STRING,
+    aba_rtn = <<"129131673">>
+}).
 
 -define(STAT_BANK_CARD, #merchstat_BankCard{
     token = ?STRING,

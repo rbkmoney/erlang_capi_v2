@@ -11,6 +11,8 @@ erl_crash.dump
 # rebar
 /_checkouts/
 
+*.beam
+
 # generated
 apps/swag_server/*
 apps/swag_client/*
