@@ -2953,17 +2953,34 @@ merchstat_to_domain({bank_account,
         bank_post_account = BankPostAccount,
         bank_bik = BankBik
     }};
+
 merchstat_to_domain({bank_account, {international_payout_account, PayoutAccount}}) ->
-    #merchstat_InternationalPayoutAccount{bank_account = BankAccout} = PayoutAccount,
-        {international_bank_account, #domain_InternationalBankAccount{
-            iban           = BankAccout#merchstat_InternationalBankAccount.iban,
-            account_holder = BankAccout#merchstat_InternationalBankAccount.account_holder,
-            bank = #domain_InternationalBankDetails{
-                bic     = BankAccout#merchstat_InternationalBankAccount.bic,
-                name    = BankAccout#merchstat_InternationalBankAccount.bank_name,
-                address = BankAccout#merchstat_InternationalBankAccount.bank_address
-         }
-}};
+    #merchstat_InternationalPayoutAccount{bank_account = BankAccount} = PayoutAccount,
+    {international_bank_account, merchstat_to_domain({international_bank_account, BankAccount})};
+merchstat_to_domain({international_bank_account, undefined}) ->
+    undefined;
+merchstat_to_domain({international_bank_account, BankAccount = #merchstat_InternationalBankAccount{}}) ->
+    #domain_InternationalBankAccount{
+        number         = BankAccount#merchstat_InternationalBankAccount.number,
+        iban           = BankAccount#merchstat_InternationalBankAccount.iban,
+        account_holder = BankAccount#merchstat_InternationalBankAccount.account_holder,
+        bank           = merchstat_to_domain(
+            {international_bank_details, BankAccount#merchstat_InternationalBankAccount.bank}
+        ),
+        correspondent_account = merchstat_to_domain(
+            {international_bank_account, BankAccount#merchstat_InternationalBankAccount.correspondent_account}
+        )
+    };
+merchstat_to_domain({international_bank_details, undefined}) ->
+    undefined;
+merchstat_to_domain({international_bank_details, Bank = #merchstat_InternationalBankDetails{}}) ->
+    #domain_InternationalBankDetails{
+            bic     = Bank#merchstat_InternationalBankDetails.bic,
+            name    = Bank#merchstat_InternationalBankDetails.name,
+            address = Bank#merchstat_InternationalBankDetails.address,
+            country = Bank#merchstat_InternationalBankDetails.country,
+            aba_rtn = Bank#merchstat_InternationalBankDetails.aba_rtn
+    };
 
 merchstat_to_domain({Status, #merchstat_InvoicePaymentPending{}}) ->
     {Status, #domain_InvoicePaymentPending{}};

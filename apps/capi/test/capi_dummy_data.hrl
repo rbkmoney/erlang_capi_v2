@@ -542,14 +542,23 @@
 
 -define(STAT_PAYOUT_BANK_ACCOUNT_INT, {international_payout_account, #merchstat_InternationalPayoutAccount{
     bank_account = #merchstat_InternationalBankAccount{
-        account_holder = ?STRING,
-        bank_name = ?STRING,
-        bank_address = ?STRING,
+        number = <<"12345678901234567890">>,
+        bank = ?STAT_PAYOUT_BANK_DETAILS_INT,
+        correspondent_account = #merchstat_InternationalBankAccount{number = <<"00000000000000000000">>},
         iban = <<"GR1601101250000000012300695">>,
-        bic = <<"DEUTDEFF500">>
+        account_holder = ?STRING
     },
     purpose = ?STRING
 }}).
+
+-define(STAT_PAYOUT_BANK_DETAILS_INT, #merchstat_InternationalBankDetails{
+    %% In reality either bic or aba_rtn should be used, not both.
+    bic = <<"DEUTDEFF500">>,
+    country = usa,
+    name = ?STRING,
+    address = ?STRING,
+    aba_rtn = <<"129131673">>
+}).
 
 -define(STAT_BANK_CARD, #merchstat_BankCard{
     token = ?STRING,
