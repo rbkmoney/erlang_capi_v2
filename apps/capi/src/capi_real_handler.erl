@@ -1783,6 +1783,11 @@ encode_contract_modification(#{<<"contractID">> := ContractID} = Modification) -
                 payout_tool_id = maps:get(<<"payoutToolID">>, Modification),
                 modification   = {creation, encode_payout_tool_params(Modification)}
             }};
+        <<"ContractPayoutToolInfoModification">> ->
+            {payout_tool_modification, #payproc_PayoutToolModificationUnit{
+                payout_tool_id = maps:get(<<"payoutToolID">>, Modification),
+                modification   = {info_modification, encode_payout_tool_info(maps:get(<<"details">>, Modification))}
+            }};
         <<"ContractReportingPreferencesChange">> ->
             {report_preferences_modification, encode_report_preferences(Modification)}
     end,
@@ -1851,14 +1856,23 @@ encode_russian_bank_account(BankAccount) ->
         bank_bik          = maps:get(<<"bankBik"        >>, BankAccount)
     }.
 
+encode_international_bank_account(undefined) ->
+    undefined;
 encode_international_bank_account(Acc) ->
     #domain_InternationalBankAccount{
-        account_holder  = genlib_map:get(<<"accountHolder">>, Acc),
-        bank_name       = genlib_map:get(<<"bankName">>, Acc),
-        bank_address    = genlib_map:get(<<"bankAddress">>, Acc),
-        iban            = genlib_map:get(<<"iban">>, Acc),
-        bic             = genlib_map:get(<<"bic">>, Acc),
-        local_bank_code = genlib_map:get(<<"localBankCode">>, Acc)
+        number = genlib_map:get(<<"number">>, Acc),
+        bank   = encode_international_bank_details(Acc),
+        correspondent_account = encode_international_bank_account(genlib_map:get(<<"correspondentBankAccount">>, Acc)),
+        iban   = genlib_map:get(<<"iban">>, Acc)
+    }.
+
+encode_international_bank_details(Acc) ->
+    #domain_InternationalBankDetails{
+        bic     = genlib_map:get(<<"bic">>, Acc),
+        country = encode_residence(genlib_map:get(<<"countryCode">>, Acc)),
+        name    = genlib_map:get(<<"name">>, Acc),
+        address = genlib_map:get(<<"address">>, Acc),
+        aba_rtn = genlib_map:get(<<"abartn">>, Acc)
     }.
 
 encode_contractor(#{<<"contractorType">> := <<"PrivateEntity">>} = Contractor) ->
@@ -1905,11 +1919,13 @@ encode_registered_user(#{<<"email">> := Email}) ->
 encode_payment_institution_ref(Ref) ->
     #domain_PaymentInstitutionRef{id = Ref}.
 
-encode_residence(Residence) when is_binary(Residence) ->
-    list_to_existing_atom(string:to_lower(binary_to_list(Residence)));
 encode_residence(undefined) ->
-    undefined.
+    undefined;
+encode_residence(Residence) when is_binary(Residence) ->
+    list_to_existing_atom(string:to_lower(binary_to_list(Residence))).
 
+decode_residence(undefined) ->
+    undefined;
 decode_residence(Residence) when is_atom(Residence) ->
     list_to_binary(string:to_upper(atom_to_list(Residence))).
 
@@ -2395,16 +2411,31 @@ merchstat_to_domain({bank_account, {russian_payout_account, PayoutAccount}}) ->
         bank_bik          = BankAccount#merchstat_RussianBankAccount.bank_bik
     }};
 merchstat_to_domain({bank_account, {international_payout_account, PayoutAccount}}) ->
-    #merchstat_InternationalPayoutAccount{bank_account = BankAccout} = PayoutAccount,
-    {international_bank_account,
-        #domain_InternationalBankAccount{
-            account_holder  = BankAccout#merchstat_InternationalBankAccount.account_holder,
-            bank_name       = BankAccout#merchstat_InternationalBankAccount.bank_name,
-            bank_address    = BankAccout#merchstat_InternationalBankAccount.bank_address,
-            iban            = BankAccout#merchstat_InternationalBankAccount.iban,
-            bic             = BankAccout#merchstat_InternationalBankAccount.bic,
-            local_bank_code = BankAccout#merchstat_InternationalBankAccount.local_bank_code
-        }
+    #merchstat_InternationalPayoutAccount{bank_account = BankAccount} = PayoutAccount,
+    {international_bank_account, merchstat_to_domain({international_bank_account, BankAccount})};
+merchstat_to_domain({international_bank_account, undefined}) ->
+    undefined;
+merchstat_to_domain({international_bank_account, BankAccount = #merchstat_InternationalBankAccount{}}) ->
+    #domain_InternationalBankAccount{
+        number         = BankAccount#merchstat_InternationalBankAccount.number,
+        iban           = BankAccount#merchstat_InternationalBankAccount.iban,
+        account_holder = BankAccount#merchstat_InternationalBankAccount.account_holder,
+        bank           = merchstat_to_domain(
+            {international_bank_details, BankAccount#merchstat_InternationalBankAccount.bank}
+        ),
+        correspondent_account = merchstat_to_domain(
+            {international_bank_account, BankAccount#merchstat_InternationalBankAccount.correspondent_account}
+        )
+    };
+merchstat_to_domain({international_bank_details, undefined}) ->
+    undefined;
+merchstat_to_domain({international_bank_details, Bank = #merchstat_InternationalBankDetails{}}) ->
+    #domain_InternationalBankDetails{
+            bic     = Bank#merchstat_InternationalBankDetails.bic,
+            name    = Bank#merchstat_InternationalBankDetails.name,
+            address = Bank#merchstat_InternationalBankDetails.address,
+            country = Bank#merchstat_InternationalBankDetails.country,
+            aba_rtn = Bank#merchstat_InternationalBankDetails.aba_rtn
     };
 
 merchstat_to_domain({Status, #merchstat_InvoicePaymentPending{}}) ->
@@ -2656,15 +2687,29 @@ decode_russian_bank_account(BankAccount, V) ->
         <<"bankPostAccount">> => BankAccount#domain_RussianBankAccount.bank_post_account,
         <<"bankBik"        >> => BankAccount#domain_RussianBankAccount.bank_bik
     }.
-
+decode_international_bank_account(undefined, _) ->
+    undefined;
 decode_international_bank_account(BankAccount, V) ->
     genlib_map:compact(V#{
-        <<"accountHolder">> => BankAccount#domain_InternationalBankAccount.account_holder,
-        <<"bankName"     >> => BankAccount#domain_InternationalBankAccount.bank_name,
-        <<"bankAddress"  >> => BankAccount#domain_InternationalBankAccount.bank_address,
-        <<"iban"         >> => BankAccount#domain_InternationalBankAccount.iban,
-        <<"bic"          >> => BankAccount#domain_InternationalBankAccount.bic,
-        <<"localBankCode">> => BankAccount#domain_InternationalBankAccount.local_bank_code
+        <<"number">>                   => BankAccount#domain_InternationalBankAccount.number,
+        <<"iban">>                     => BankAccount#domain_InternationalBankAccount.iban,
+        <<"bankDetails">>              => decode_international_bank_details(
+            BankAccount#domain_InternationalBankAccount.bank
+        ),
+        <<"correspondentBankAccount">> => decode_international_bank_account(
+            BankAccount#domain_InternationalBankAccount.correspondent_account, #{}
+        )
+    }).
+
+decode_international_bank_details(undefined) ->
+    undefined;
+decode_international_bank_details(Bank) ->
+    genlib_map:compact(#{
+         <<"bic">>         => Bank#domain_InternationalBankDetails.bic,
+         <<"abartn">>      => Bank#domain_InternationalBankDetails.aba_rtn,
+         <<"name">>        => Bank#domain_InternationalBankDetails.name,
+         <<"countryCode">> => decode_residence(Bank#domain_InternationalBankDetails.country),
+         <<"address">>     => Bank#domain_InternationalBankDetails.address
     }).
 
 decode_contract_adjustment(ContractAdjustment) ->
@@ -3048,15 +3093,23 @@ decode_contract_modification({termination, #payproc_ContractTermination{reason =
         <<"contractModificationType">> => <<"ContractTermination">>,
         <<"reason"                  >> => Reason
     });
-decode_contract_modification({payout_tool_modification, PaymentToolMod}) ->
-    #payproc_PayoutToolModificationUnit{
-        payout_tool_id = PayoutToolID,
-        modification = {creation, PayoutToolParams}
-    } = PaymentToolMod,
+decode_contract_modification({payout_tool_modification, #payproc_PayoutToolModificationUnit{
+    payout_tool_id = PayoutToolID,
+    modification   = {creation, PayoutToolParams}
+}}) ->
     maps:merge(#{
         <<"contractModificationType">> => <<"ContractPayoutToolCreation">>,
         <<"payoutToolID"            >> => PayoutToolID
     }, decode_payout_tool_params(PayoutToolParams));
+decode_contract_modification({payout_tool_modification, #payproc_PayoutToolModificationUnit{
+    payout_tool_id = PayoutToolID,
+    modification   = {info_modification, ToolInfo}
+}}) ->
+    #{
+        <<"contractModificationType">> => <<"ContractPayoutToolInfoModification">>,
+        <<"payoutToolID"            >> => PayoutToolID,
+        <<"details"                 >> => decode_payout_tool_details(ToolInfo)
+    };
 decode_contract_modification({report_preferences_modification, ReportPreferences}) ->
     maps:merge(
         #{<<"contractModificationType">> => <<"ContractReportingPreferencesChange">>},
