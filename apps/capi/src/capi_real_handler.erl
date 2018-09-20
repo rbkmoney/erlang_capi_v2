@@ -713,7 +713,15 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
 %% reports
 %%
 process_request('GetReports', Req, Context) ->
-    ReportRequest = make_report_request(Req, Context),
+    ReportRequest = #reports_ReportRequest{
+        party_id   = get_party_id(Context),
+        shop_id    = maps:get(shopID, Req),
+        time_range =
+            #reports_ReportTimeRange{
+                from_time = get_time('fromTime', Req),
+                to_time   = get_time('toTime'  , Req)
+            }
+    },
     ReportTypes = [],
     Call = {reporting, 'GetReports', [ReportRequest, ReportTypes]},
     case service_call(Call, Context) of
@@ -741,8 +749,16 @@ process_request('GetReport', Req, Context) ->
     end;
 
 process_request('CreateReport', Req, Context) ->
-    ReportRequest = make_report_request(Req, Context),
     ReportParams = maps:get('ReportParams', Req),
+    ReportRequest = #reports_ReportRequest{
+        party_id   = get_party_id(Context),
+        shop_id    = maps:get(shopID, Req),
+        time_range =
+            #reports_ReportTimeRange{
+                from_time = get_time(<<"fromTime">>, ReportParams),
+                to_time   = get_time(<<"toTime">>  , ReportParams)
+            }
+    },
     ReportType = encode_report_type(maps:get(<<"reportType">>, ReportParams)),
     Call = {reporting, 'GenerateReport', [ReportRequest, ReportType]},
     case service_call(Call, Context) of
@@ -4121,14 +4137,3 @@ decode_optional(Arg, DecodeFun) when Arg /= undefined ->
     DecodeFun(Arg);
 decode_optional(undefined, _) ->
     undefined.
-
-make_report_request(Request, Context) ->
-    #reports_ReportRequest{
-        party_id   = get_party_id(Context),
-        shop_id    = maps:get(shopID, Request),
-        time_range =
-            #reports_ReportTimeRange{
-                from_time = get_time('fromTime', Request),
-                to_time   = get_time('toTime'  , Request)
-            }
-    }.
