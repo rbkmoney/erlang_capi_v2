@@ -742,8 +742,9 @@ process_request('GetReport', Req, Context) ->
 
 process_request('CreateReport', Req, Context) ->
     ReportRequest = make_report_request(Req, Context),
-    ReportTypes = [],
-    Call = {reporting, 'GenerateReport', [ReportRequest, ReportTypes]},
+    ReportParams = maps:get('ReportParams', Req),
+    ReportType = encode_report_type(maps:get(<<"reportType">>, ReportParams)),
+    Call = {reporting, 'GenerateReport', [ReportRequest, ReportType]},
     case service_call(Call, Context) of
         {ok, Report} ->
             {ok, {200, [], decode_report(Report)}};
@@ -3344,6 +3345,9 @@ decode_report(Report) ->
         <<"type"     >> => decode_report_type(Report#reports_Report.report_type),
         <<"files"    >> => [decode_report_file(F) || F <- Report#reports_Report.files]
     }.
+
+encode_report_type(<<"provisionOfService">>) -> provision_of_service;
+encode_report_type(<<"paymentRegistry">>) -> payment_registry.
 
 decode_report_type(provision_of_service) -> <<"provisionOfService">>;
 decode_report_type(payment_registry) -> <<"paymentRegistry">>.
