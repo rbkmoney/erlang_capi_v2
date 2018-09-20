@@ -732,7 +732,7 @@ process_request('GetReport', Req, Context) ->
     PartyId  = get_party_id(Context),
     ShopId   = maps:get(shopID, Req),
     ReportId = maps:get(reportID, Req),
-    Call     = {reporting, 'GetReport', [PartyId, ShopId, ReportId]},
+    Call = {reporting, 'GetReport', [PartyId, ShopId, ReportId]},
     case service_call(Call, Context) of
         {ok, Report} ->
             {ok, {200, [], decode_report(Report)}};

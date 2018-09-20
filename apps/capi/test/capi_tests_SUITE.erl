@@ -1480,7 +1480,7 @@ get_report_ok_test(Config) ->
     _.
 create_report_ok_test(Config) ->
     mock_services([{reporting, fun('GenerateReport', _) -> {ok, ?REPORT} end}], Config),
-    {ok, _} = capi_client_reports:create_report(?config(context, Config), ?STRING, ?STRING, ?TIMESTAMP, ?TIMESTAMP).
+    {ok, _} = capi_client_reports:create_report(?config(context, Config), ?STRING, ?REPORT_TYPE, ?TIMESTAMP, ?TIMESTAMP).
 
 -spec download_report_file_ok_test(_) ->
     _.
