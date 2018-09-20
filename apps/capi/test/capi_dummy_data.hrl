@@ -7,6 +7,8 @@
 -define(INTEGER, 10000).
 -define(INTEGER_BINARY, <<"10000">>).
 -define(TIMESTAMP, <<"2016-03-22T06:12:27Z">>).
+-define(MD5, <<"033BD94B1168D7E4F0D644C3C95E35BF">>).
+-define(SHA256, <<"94EE059335E587E501CC4BF90613E0814F00A7B08BC7C648FD865A2AF6A22CC2">>).
 
 -define(DETAILS, #domain_InvoiceDetails{
         product = ?STRING,
@@ -630,8 +632,8 @@
             file_id = ?STRING,
             filename = ?STRING,
             signature = #reports_Signature{
-                md5 = ?STRING,
-                sha256 = ?STRING
+                md5 = ?MD5,
+                sha256 = ?SHA256
             }
         }
     ]
