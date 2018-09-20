@@ -70,6 +70,10 @@
     cancel_payment_ok_test/1,
     capture_payment_ok_test/1,
 
+    create_first_recurrent_payment_ok_test/1,
+    create_second_recurrent_payment_ok_test/1,
+    get_recurrent_payments_ok_test/1,
+
     create_visa_payment_resource_ok_test/1,
     create_nspkmir_payment_resource_ok_test/1,
     create_euroset_payment_resource_ok_test/1,
@@ -182,6 +186,9 @@ invoice_access_token_tests() ->
         get_payment_by_id_ok_test,
         cancel_payment_ok_test,
         capture_payment_ok_test,
+        create_first_recurrent_payment_ok_test,
+        create_second_recurrent_payment_ok_test,
+        get_recurrent_payments_ok_test,
         {group, payment_resources}
     ].
 
@@ -754,10 +761,83 @@ create_payment_ok_test(Config) ->
     },
     {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
 
+-spec create_first_recurrent_payment_ok_test(config()) ->
+    _.
+create_first_recurrent_payment_ok_test(Config) ->
+    mock_services(
+        [
+            {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
+            {invoicing, fun('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}
+        ],
+        Config
+    ),
+    Req1 = #{
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"CardData">>,
+            <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
+            <<"cardNumber">> => <<"4111111111111111">>,
+            <<"expDate">> => <<"08/27">>,
+            <<"cvv">> => <<"232">>
+        },
+        <<"clientInfo">> => #{
+            <<"fingerprint">> => <<"test fingerprint">>
+        }
+    },
+    {ok, #{
+        <<"paymentToolToken">> := Token,
+        <<"paymentSession">> := Session
+    }} = capi_client_tokens:create_payment_resource(?config(context, Config), Req1),
+    Req2 = #{
+        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
+        <<"makeRecurrent">> => true,
+        <<"payer">> => #{
+            <<"payerType">> => <<"PaymentResourcePayer">>,
+            <<"paymentSession">> => Session,
+            <<"paymentToolToken">> => Token,
+            <<"contactInfo">> => #{
+                <<"email">> => <<"bla@bla.ru">>
+            }
+        }
+    },
+    {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
+
+-spec create_second_recurrent_payment_ok_test(config()) ->
+    _.
+create_second_recurrent_payment_ok_test(Config) ->
+    mock_services(
+        [
+            {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
+            {invoicing, fun('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}
+        ],
+        Config
+    ),
+    Req2 = #{
+        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
+        <<"makeRecurrent">> => true,
+        <<"payer">> => #{
+            <<"payerType">> => <<"RecurrentPayer">>,
+            <<"recurrentParentPayment">> => #{
+                <<"invoiceID">> => <<"1">>,
+                <<"paymentID">> => <<"2">>
+            },
+            <<"contactInfo">> => #{
+                <<"email">> => <<"bla@bla.ru">>
+            }
+        }
+    },
+    {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
+
 -spec get_payments_ok_test(config()) ->
     _.
 get_payments_ok_test(Config) ->
     mock_services([{invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}], Config),
+    {ok, _} = capi_client_payments:get_payments(?config(context, Config), ?STRING).
+
+-spec get_recurrent_payments_ok_test(config()) ->
+    _.
+get_recurrent_payments_ok_test(Config) ->
+    Invoice = ?PAYPROC_INVOICE([?PAYPROC_PAYMENT(?RECURRENT_PAYMENT, [?REFUND], [?ADJUSTMENT])]),
+    mock_services([{invoicing, fun('Get', _) -> {ok, Invoice} end}], Config),
     {ok, _} = capi_client_payments:get_payments(?config(context, Config), ?STRING).
 
 -spec get_payment_by_id_ok_test(config()) ->
