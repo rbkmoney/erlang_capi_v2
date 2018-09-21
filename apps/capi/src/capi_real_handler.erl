@@ -726,7 +726,7 @@ process_request('GetReports', Req, Context) ->
     Call = {reporting, 'GetReports', [ReportRequest, ReportTypes]},
     case service_call(Call, Context) of
         {ok, Reports} ->
-            {ok, {200, [], [decode_report(R) || #reports_Report{status = created} = R <- Reports]}};
+            {ok, {200, [], [decode_report(R) || R <- Reports]}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
