@@ -4059,9 +4059,12 @@ decode_report(#reports_Report{
         <<"createdAt">> => CreatedAt,
         <<"fromTime">> => FromTime,
         <<"toTime">> => ToTime,
-        <<"type">> => genlib:to_binary(Type),
+        <<"type">> => decode_report_type(Type),
         <<"files">> => [decode_report_file(F) || F <- Files]
     }.
+
+decode_report_type(provision_of_service) -> <<"provisionOfService">>;
+decode_report_type(payment_registry) -> <<"paymentRegistry">>.
 
 decode_report_file(#reports_FileMeta{
     file_id = ID,
