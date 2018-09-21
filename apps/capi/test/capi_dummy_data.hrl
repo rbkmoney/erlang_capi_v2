@@ -530,7 +530,6 @@
     <<"amount_with_fee">> => ?INTEGER_BINARY,
     <<"amount_without_fee">> => ?INTEGER_BINARY,
     <<"unic_count">> => ?INTEGER_BINARY,
-    <<"total_count">> => ?INTEGER_BINARY,
     <<"payment_system">> => <<"visa">>
 }).
 

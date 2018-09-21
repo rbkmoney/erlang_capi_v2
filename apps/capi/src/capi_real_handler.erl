@@ -749,10 +749,12 @@ process_request('GetReport', Req, Context) ->
     end;
 
 process_request('CreateReport', Req, Context) ->
+    PartyId = get_party_id(Context),
+    ShopId = maps:get(shopID, Req),
     ReportParams = maps:get('ReportParams', Req),
     ReportRequest = #reports_ReportRequest{
-        party_id   = get_party_id(Context),
-        shop_id    = maps:get(shopID, Req),
+        party_id   = PartyId,
+        shop_id    = ShopId,
         time_range =
             #reports_ReportTimeRange{
                 from_time = get_time(<<"fromTime">>, ReportParams),
@@ -760,10 +762,10 @@ process_request('CreateReport', Req, Context) ->
             }
     },
     ReportType = encode_report_type(maps:get(<<"reportType">>, ReportParams)),
-    Call = {reporting, 'GenerateReport', [ReportRequest, ReportType]},
-    case service_call(Call, Context) of
-        {ok, Report} ->
-            {ok, {200, [], decode_report(Report)}};
+    case service_call({reporting, 'GenerateReport', [ReportRequest, ReportType]}, Context) of
+        {ok, ReportId} ->
+            {ok, Report} = service_call({reporting, 'GetReport', [PartyId, ShopId, ReportId]}, Context),
+            {ok, {201, [], decode_report(Report)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
