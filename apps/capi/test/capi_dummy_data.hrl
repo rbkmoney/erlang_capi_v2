@@ -530,7 +530,6 @@
     <<"amount_with_fee">> => ?INTEGER_BINARY,
     <<"amount_without_fee">> => ?INTEGER_BINARY,
     <<"unic_count">> => ?INTEGER_BINARY,
-    <<"total_count">> => ?INTEGER_BINARY,
     <<"payment_system">> => <<"visa">>
 }).
 
@@ -617,6 +616,8 @@
     operation_type = payment,
     count = ?INTEGER
 }).
+
+-define(REPORT_TYPE, <<"paymentRegistry">>).
 
 -define(REPORT, #reports_Report{
     report_id = ?INTEGER,

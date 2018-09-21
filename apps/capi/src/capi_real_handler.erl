@@ -713,16 +713,15 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
 %% reports
 %%
 process_request('GetReports', Req, Context) ->
-    ReportRequest =
-        #reports_ReportRequest{
-            party_id   = get_party_id(Context),
-            shop_id    = maps:get(shopID, Req),
-            time_range =
-                #reports_ReportTimeRange{
-                    from_time = get_time('fromTime', Req),
-                    to_time   = get_time('toTime'  , Req)
-                }
-        },
+    ReportRequest = #reports_ReportRequest{
+        party_id   = get_party_id(Context),
+        shop_id    = maps:get(shopID, Req),
+        time_range =
+            #reports_ReportTimeRange{
+                from_time = get_time('fromTime', Req),
+                to_time   = get_time('toTime'  , Req)
+            }
+    },
     ReportTypes = [],
     Call = {reporting, 'GetReports', [ReportRequest, ReportTypes]},
     case service_call(Call, Context) of
@@ -734,6 +733,45 @@ process_request('GetReports', Req, Context) ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
                 #reports_DatasetTooBig{limit = Limit} ->
                     {ok, {400, [], limit_exceeded_error(Limit)}}
+            end
+    end;
+
+process_request('GetReport', Req, Context) ->
+    PartyId  = get_party_id(Context),
+    ShopId   = maps:get(shopID, Req),
+    ReportId = maps:get(reportID, Req),
+    Call = {reporting, 'GetReport', [PartyId, ShopId, ReportId]},
+    case service_call(Call, Context) of
+        {ok, Report} ->
+            {ok, {200, [], decode_report(Report)}};
+        {exception, #reports_ReportNotFound{}} ->
+            {ok, {404, [], general_error(<<"Report not found">>)}}
+    end;
+
+process_request('CreateReport', Req, Context) ->
+    PartyId = get_party_id(Context),
+    ShopId = maps:get(shopID, Req),
+    ReportParams = maps:get('ReportParams', Req),
+    ReportRequest = #reports_ReportRequest{
+        party_id   = PartyId,
+        shop_id    = ShopId,
+        time_range =
+            #reports_ReportTimeRange{
+                from_time = get_time(<<"fromTime">>, ReportParams),
+                to_time   = get_time(<<"toTime">>  , ReportParams)
+            }
+    },
+    ReportType = encode_report_type(maps:get(<<"reportType">>, ReportParams)),
+    case service_call({reporting, 'GenerateReport', [ReportRequest, ReportType]}, Context) of
+        {ok, ReportId} ->
+            {ok, Report} = service_call({reporting, 'GetReport', [PartyId, ShopId, ReportId]}, Context),
+            {ok, {201, [], decode_report(Report)}};
+        {exception, Exception} ->
+            case Exception of
+                #'InvalidRequest'{errors = Errors} ->
+                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                #reports_ShopNotFound{} ->
+                    {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}}
             end
     end;
 
@@ -3325,6 +3363,9 @@ decode_report(Report) ->
         <<"type"     >> => decode_report_type(Report#reports_Report.report_type),
         <<"files"    >> => [decode_report_file(F) || F <- Report#reports_Report.files]
     }.
+
+encode_report_type(<<"provisionOfService">>) -> provision_of_service;
+encode_report_type(<<"paymentRegistry">>) -> payment_registry.
 
 decode_report_type(provision_of_service) -> <<"provisionOfService">>;
 decode_report_type(payment_registry) -> <<"paymentRegistry">>.
