@@ -105,11 +105,10 @@ process_request('CreatePayment', Req, Context) ->
     Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
     Result =
         try
-            PayerParams = genlib_map:get(<<"payer">>, PaymentParams),
             Params =  #payproc_InvoicePaymentParams{
                 'payer' = encode_payer_params(genlib_map:get(<<"payer">>, PaymentParams)),
                 'flow' = encode_flow(Flow),
-                'make_recurrent' = genlib_map:get(<<"makeRecurrent">>, PayerParams, false)
+                'make_recurrent' = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false)
             },
             Call = {invoicing, 'StartPayment', [InvoiceID, Params]},
             service_call_with([user_info], Call, Context)
