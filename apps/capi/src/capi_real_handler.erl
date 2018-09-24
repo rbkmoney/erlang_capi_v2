@@ -1898,12 +1898,14 @@ encode_international_bank_account(undefined) ->
     undefined;
 encode_international_bank_account(Acc) ->
     #domain_InternationalBankAccount{
+        iban   = genlib_map:get(<<"iban">>, Acc),
         number = genlib_map:get(<<"number">>, Acc),
-        bank   = encode_international_bank_details(Acc),
-        correspondent_account = encode_international_bank_account(genlib_map:get(<<"correspondentBankAccount">>, Acc)),
-        iban   = genlib_map:get(<<"iban">>, Acc)
+        bank   = encode_international_bank_details(genlib_map:get(<<"bankDetails">>, Acc)),
+        correspondent_account = encode_international_bank_account(genlib_map:get(<<"correspondentBankAccount">>, Acc))
     }.
 
+encode_international_bank_details(undefined) ->
+    undefined;
 encode_international_bank_details(Acc) ->
     #domain_InternationalBankDetails{
         bic     = genlib_map:get(<<"bic">>, Acc),
