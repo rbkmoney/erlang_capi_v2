@@ -4,7 +4,7 @@
 -export([base64url_to_map/1]).
 -export([map_to_base64url/1]).
 
--export([parse_pretty/1]).
+-export([parse_deadline/1]).
 
 -export([to_universal_time/1]).
 
@@ -12,6 +12,8 @@
 
 -export([unwrap/1]).
 -export([define/2]).
+
+-define(MAX_DEADLINE_TIME, 1*60*1000). % 1 min
 
 -spec logtag_process(atom(), any()) -> ok.
 
@@ -84,12 +86,12 @@ define(undefined, V) ->
 define(V, _Default) ->
     V.
 
--spec parse_pretty
+-spec parse_deadline
     (binary()) -> {ok, woody:deadline()} | {error, bad_deadline};
     (undefined) -> {ok, undefined}.
-parse_pretty(undefined) ->
+parse_deadline(undefined) ->
     {ok, undefined};
-parse_pretty(DeadlineStr) ->
+parse_deadline(DeadlineStr) ->
     Parsers = [
         fun try_parse_woody_default/1,
         fun try_parse_relative/1
@@ -128,7 +130,7 @@ try_parse_relative(Number, Unit) ->
     case unit_factor(Unit) of
         {ok, Factor} ->
             Timeout = erlang:round(Number * Factor),
-            {ok, woody_deadline:from_timeout(Timeout)};
+            {ok, woody_deadline:from_timeout(clamp_max_deadline(Timeout))};
         {error, _Reason} ->
             {error, bad_deadline}
     end.
@@ -138,12 +140,16 @@ unit_factor(<<"s">>) ->
     {ok, 1000};
 unit_factor(<<"m">>) ->
     {ok, 1000 * 60};
-unit_factor(<<"h">>) ->
-    {ok, 1000 * 60 * 60};
-unit_factor(<<"d">>) ->
-    {ok, 1000 * 60 * 60 * 24};
 unit_factor(_Other) ->
     {error, unknown_unit}.
+
+clamp_max_deadline(Value) ->
+    case Value > ?MAX_DEADLINE_TIME of
+        true ->
+            ?MAX_DEADLINE_TIME;
+        false ->
+            Value
+    end.
 
 %%
 
