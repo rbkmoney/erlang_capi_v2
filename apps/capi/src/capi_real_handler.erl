@@ -1410,10 +1410,16 @@ create_processing_context(SwaggerContext, WoodyContext) ->
         swagger_context => SwaggerContext
     }.
 
-create_woody_context(#{'X-Request-ID' := RequestID}, AuthContext) ->
+create_woody_context(#{'X-Request-ID' := RequestID} = Req, AuthContext) ->
     RpcID = #{trace_id := TraceID} = woody_context:new_rpc_id(genlib:to_binary(RequestID)),
     _ = lager:debug("Created TraceID:~p for RequestID:~p", [TraceID , RequestID]),
-    woody_user_identity:put(collect_user_identity(AuthContext), woody_context:new(RpcID)).
+    Context = case maps:get(<<"X-Request-Deadline">>, Req, undefined) of
+        undefined ->
+            woody_context:new(RpcID);
+        DeadlineHeader ->
+            attach_deadline(DeadlineHeader, woody_context:new(RpcID))
+        end,
+    woody_user_identity:put(collect_user_identity(AuthContext), Context).
 
 collect_user_identity(AuthContext) ->
     genlib_map:compact(#{
@@ -1422,6 +1428,23 @@ collect_user_identity(AuthContext) ->
         email    => capi_auth:get_claim(<<"email">>, AuthContext, undefined),
         username => capi_auth:get_claim(<<"name">> , AuthContext, undefined)
     }).
+
+attach_deadline(Header, Context) ->
+    case get_deadline(Header) of
+        Deadline when Deadline /= undefined ->
+            woody_context:set_deadline(Deadline, Context);
+        undefined ->
+            Context
+    end.
+
+get_deadline(Header) ->
+    case capi_utils:parse_pretty(Header) of
+        {ok, Deadline} ->
+            Deadline;
+        {error, bad_deadline} ->
+            lager:warning("Invalid data in X-Request-Deadline header"),
+            undefined
+    end.
 
 logic_error(Code, Message) ->
     #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)}.

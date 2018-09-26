@@ -26,7 +26,8 @@ allowed_headers(Req, State) ->
         <<"content-type">>,
         <<"accept">>,
         <<"authorization">>,
-        <<"x-request-id">>
+        <<"x-request-id">>,
+        <<"x-request-deadline">>
     ], Req, State}.
 
 -spec allowed_methods(cowboy_req:req(), any()) -> {[binary()], cowboy_req:req(), any()}.
