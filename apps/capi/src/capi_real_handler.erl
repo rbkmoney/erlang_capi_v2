@@ -51,9 +51,8 @@ handle_request(OperationID, Req, SwagContext = #{auth_context := AuthContext}) -
     try
         case capi_auth:authorize_operation(OperationID, Req, AuthContext) of
             ok ->
-                WoodyContext = create_woody_context(Req, AuthContext),
-                Context = create_processing_context(SwagContext, WoodyContext),
-                process_request(OperationID, Req, Context);
+                handle_request(OperationID, Req, SwagContext,
+                    attach_deadline(Req, create_woody_context(Req, AuthContext)));
             {error, _} = Error ->
                 _ = lager:info("Operation ~p authorization failed due to ~p", [OperationID, Error]),
                 {error, {401, [], general_error(<<"Unauthorized operation">>)}}
@@ -62,6 +61,12 @@ handle_request(OperationID, Req, SwagContext = #{auth_context := AuthContext}) -
         error:{woody_error, {Source, Class, Details}} ->
             process_woody_error(Source, Class, Details)
     end.
+
+handle_request(_OperationID, _Req, _SwagContext, undefined) ->
+   {ok, {400, [], logic_error(invalidDeadline, <<"Invalid data in X-Request-Deadline header">>)}};
+handle_request(OperationID, Req, SwagContext, WoodyContext) ->
+    Context = create_processing_context(SwagContext, WoodyContext),
+    process_request(OperationID, Req, Context).
 
 -spec process_request(
     OperationID :: swag_server:operation_id(),
@@ -1410,10 +1415,10 @@ create_processing_context(SwaggerContext, WoodyContext) ->
         swagger_context => SwaggerContext
     }.
 
-create_woody_context(#{'X-Request-ID' := RequestID} = Req, AuthContext) ->
+create_woody_context(#{'X-Request-ID' := RequestID}, AuthContext) ->
     RpcID = #{trace_id := TraceID} = woody_context:new_rpc_id(genlib:to_binary(RequestID)),
     _ = lager:debug("Created TraceID:~p for RequestID:~p", [TraceID , RequestID]),
-    woody_user_identity:put(collect_user_identity(AuthContext), attach_deadline(Req, woody_context:new(RpcID))).
+    woody_user_identity:put(collect_user_identity(AuthContext), woody_context:new(RpcID)).
 
 collect_user_identity(AuthContext) ->
     genlib_map:compact(#{
@@ -1428,7 +1433,7 @@ attach_deadline(#{'X-Request-Deadline' := Header}, Context) ->
         Deadline when Deadline /= undefined ->
             woody_context:set_deadline(Deadline, Context);
         undefined ->
-            Context
+            undefined
     end;
 attach_deadline(_, Context) ->
     Context.
@@ -1438,7 +1443,6 @@ get_deadline(Header) ->
         {ok, Deadline} ->
             Deadline;
         {error, bad_deadline} ->
-            _ = lager:warning("Invalid data in X-Request-Deadline header - ~p", [Header]),
             undefined
     end.
 
