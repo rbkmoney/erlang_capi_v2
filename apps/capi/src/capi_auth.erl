@@ -261,6 +261,10 @@ get_operation_access('GetContractAdjustmentByID' , _) ->
     [{[party], read}];
 get_operation_access('GetReports'                , _) ->
     [{[party], read}];
+get_operation_access('GetReport'                 , _) ->
+    [{[party], read}];
+get_operation_access('CreateReport'              , _) ->
+    [{[party], write}];
 get_operation_access('DownloadFile'              , _) ->
     [{[party], read}];
 get_operation_access('GetWebhooks'               , _) ->

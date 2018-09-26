@@ -123,6 +123,8 @@
     get_payment_method_stats_ok_test/1,
 
     get_reports_ok_test/1,
+    get_report_ok_test/1,
+    create_report_ok_test/1,
     download_report_file_ok_test/1,
 
     get_categories_ok_test/1,
@@ -273,6 +275,8 @@ groups() ->
                 get_payment_rate_stats_ok_test,
                 get_payment_method_stats_ok_test,
                 get_reports_ok_test,
+                get_report_ok_test,
+                create_report_ok_test,
                 download_report_file_ok_test,
                 get_categories_ok_test,
                 get_category_by_ref_ok_test,
@@ -1545,6 +1549,23 @@ get_payment_method_stats_ok_test(Config) ->
 get_reports_ok_test(Config) ->
     mock_services([{reporting, fun('GetReports', _) -> {ok, [?REPORT]} end}], Config),
     {ok, _} = capi_client_reports:get_reports(?config(context, Config), ?STRING, ?TIMESTAMP, ?TIMESTAMP).
+
+-spec get_report_ok_test(config()) ->
+    _.
+get_report_ok_test(Config) ->
+    mock_services([{reporting, fun('GetReport', _) -> {ok, ?REPORT} end}], Config),
+    {ok, _} = capi_client_reports:get_report(?config(context, Config), ?STRING, ?INTEGER).
+
+-spec create_report_ok_test(config()) ->
+    _.
+create_report_ok_test(Config) ->
+    mock_services([
+        {reporting, fun
+            ('GenerateReport', _)           -> {ok, ?INTEGER};
+            ('GetReport', [_, _, ?INTEGER]) -> {ok, ?REPORT}
+        end}
+    ], Config),
+    {ok, _} = capi_client_reports:create_report(?config(context, Config), ?STRING, ?REPORT_TYPE, ?TIMESTAMP, ?TIMESTAMP).
 
 -spec download_report_file_ok_test(_) ->
     _.
