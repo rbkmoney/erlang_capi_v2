@@ -115,8 +115,7 @@ process_request('CreatePayment', Req, Context) ->
         catch
             throw:Error when
                 Error =:= invalid_token orelse
-                Error =:= invalid_payment_session orelse
-                Error =:= invalid_recurring_session
+                Error =:= invalid_payment_session
             ->
                 {error, Error}
         end,
