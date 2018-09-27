@@ -4146,11 +4146,11 @@ encode_tokenized_session_data(#paytoolprv_UnwrappedPaymentTool{
     }.
 
 put_card_data_to_cds(CardData, SessionData, Context) ->
-    BinData = binbase_lookup(CardData#'CardData'.pan, {'last', #binbase_Last{}}, Context),
+    BinData = lookup_bank_info(CardData#'CardData'.pan, Context),
     Call = {cds_storage, 'PutCardData', [CardData, SessionData]},
     case service_call(Call, Context) of
         {ok, #'PutCardDataResult'{session_id = SessionID, bank_card = BankCard}} ->
-            {{bank_card, binbase_expand(BankCard, BinData)}, SessionID};
+            {{bank_card, expand_card_info(BankCard, BinData)}, SessionID};
         {exception, Exception} ->
             case Exception of
                 #'InvalidCardData'{} ->
@@ -4164,21 +4164,30 @@ put_card_data_to_cds(CardData, SessionData, Context) ->
             end
     end.
 
-binbase_lookup(Pan, Version, Context) ->
-    Call = {binbase, 'Lookup', [Pan, Version]},
+lookup_bank_info(Pan, Context) ->
+    RequestVersion = {'last', #binbase_Last{}},
+    Call = {binbase, 'Lookup', [Pan, RequestVersion]},
     case service_call(Call, Context) of
-        {ok, #'binbase_ResponseData'{bin_data = BinData}} ->
-            BinData;
+        {ok, #'binbase_ResponseData'{bin_data = BinData, version = Version}} ->
+            {BinData, Version};
         {exception, #'binbase_BinNotFound'{}} ->
             throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}})
     end.
 
-binbase_expand(BankCard, BinData) ->
-    BankCard#'domain_BankCard'{
-        payment_system = binary_to_existing_atom(BinData#'binbase_BinData'.payment_system, utf8),
-        issuer_country = encode_residence(BinData#'binbase_BinData'.iso_country_code),
-        bank_name = BinData#'binbase_BinData'.bank_name
-    }.
+expand_card_info(BankCard, {BinData, _}) ->
+    try
+        BankCard#'domain_BankCard'{
+            payment_system = encode_payment_system(BinData#'binbase_BinData'.payment_system),
+            issuer_country = encode_residence(BinData#'binbase_BinData'.iso_country_code),
+            bank_name = BinData#'binbase_BinData'.bank_name
+        }
+    catch
+        error:badarg ->
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}})
+    end.
+
+encode_payment_system(PaymentSystem) ->
+    list_to_existing_atom(string:to_lower(binary_to_list(PaymentSystem))).
 
 enrich_client_info(ClientInfo, Context) ->
     ClientInfo#{<<"ip">> => prepare_client_ip(Context)}.
