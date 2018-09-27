@@ -773,7 +773,8 @@ create_first_recurrent_payment_ok_test(Config) ->
     mock_services(
         [
             {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
-            {invoicing, fun('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}
+            {invoicing, fun('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT} end},
+            {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end}
         ],
         Config
     ),
