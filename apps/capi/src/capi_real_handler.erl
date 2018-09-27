@@ -3964,32 +3964,11 @@ reply_5xx(Code) when Code >= 500 andalso Code < 600 ->
     {Code, [], <<>>}.
 
 process_card_data(Data, Context) ->
-    CardData = encode_card_data(Data),
-    BinData = binbase_lookup(CardData#'CardData'.pan, {'last', #binbase_Last{}}, Context),
-    %@todo
-    {{bank_card, BankCard}, SessionID} =
-        put_card_data_to_cds(
-            CardData,
-            encode_session_data(Data),
-            Context
-        ),
-    {{bank_card, binbase_expand(BankCard, BinData)}, SessionID}.
-
-binbase_lookup(Pan, Version, Context) ->
-    Call = {binbase, 'Lookup', [Pan, Version]},
-    case service_call(Call, Context) of
-        {ok, #'binbase_ResponseData'{bin_data = BinData}} ->
-            BinData;
-        {exception, #'binbase_BinNotFound'{}} ->
-            throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}})
-    end.
-
-binbase_expand(BankCard, BinData) ->
-    BankCard#'domain_BankCard'{
-        payment_system = binary_to_existing_atom(BinData#'binbase_BinData'.payment_system, utf8),
-        issuer_country = encode_residence(BinData#'binbase_BinData'.iso_country_code),
-        bank_name = BinData#'binbase_BinData'.bank_name
-    }.
+    put_card_data_to_cds(
+        encode_card_data(Data),
+        encode_session_data(Data),
+        Context
+    ).
 
 encode_card_data(CardData) ->
     {Month, Year} = parse_exp_date(genlib_map:get(<<"expDate">>, CardData)),
@@ -4035,17 +4014,12 @@ process_tokenized_card_data(Data, Context) ->
         {exception, #'InvalidRequest'{}} ->
             throw({ok, {400, [], logic_error(invalidRequest, <<"Tokenized card data is invalid">>)}})
     end,
-    %@todo
-    CardData = encode_tokenized_card_data(UnwrappedPaymentTool),
-    BinData = binbase_lookup(CardData#'CardData'.pan, {'last', #binbase_Last{}}, Context),
-    {{bank_card, BankCard}, SessionID} =
+    process_put_card_data_result(
         put_card_data_to_cds(
-            CardData,
+            encode_tokenized_card_data(UnwrappedPaymentTool),
             encode_tokenized_session_data(UnwrappedPaymentTool),
             Context
         ),
-    process_put_card_data_result(
-        {{bank_card, binbase_expand(BankCard, BinData)}, SessionID},
         UnwrappedPaymentTool
     ).
 
@@ -4172,10 +4146,11 @@ encode_tokenized_session_data(#paytoolprv_UnwrappedPaymentTool{
     }.
 
 put_card_data_to_cds(CardData, SessionData, Context) ->
+    BinData = binbase_lookup(CardData#'CardData'.pan, {'last', #binbase_Last{}}, Context),
     Call = {cds_storage, 'PutCardData', [CardData, SessionData]},
     case service_call(Call, Context) of
         {ok, #'PutCardDataResult'{session_id = SessionID, bank_card = BankCard}} ->
-            {{bank_card, BankCard}, SessionID};
+            {{bank_card, binbase_expand(BankCard, BinData)}, SessionID};
         {exception, Exception} ->
             case Exception of
                 #'InvalidCardData'{} ->
@@ -4188,6 +4163,22 @@ put_card_data_to_cds(CardData, SessionData, Context) ->
                     throw({error, reply_5xx(503)})
             end
     end.
+
+binbase_lookup(Pan, Version, Context) ->
+    Call = {binbase, 'Lookup', [Pan, Version]},
+    case service_call(Call, Context) of
+        {ok, #'binbase_ResponseData'{bin_data = BinData}} ->
+            BinData;
+        {exception, #'binbase_BinNotFound'{}} ->
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}})
+    end.
+
+binbase_expand(BankCard, BinData) ->
+    BankCard#'domain_BankCard'{
+        payment_system = binary_to_existing_atom(BinData#'binbase_BinData'.payment_system, utf8),
+        issuer_country = encode_residence(BinData#'binbase_BinData'.iso_country_code),
+        bank_name = BinData#'binbase_BinData'.bank_name
+    }.
 
 enrich_client_info(ClientInfo, Context) ->
     ClientInfo#{<<"ip">> => prepare_client_ip(Context)}.
