@@ -1631,7 +1631,10 @@ decode_bank_card(#domain_BankCard{
     'payment_system' = PaymentSystem,
     'bin'            = Bin,
     'masked_pan'     = MaskedPan,
-    'token_provider' = TokenProvider
+    'token_provider' = TokenProvider,
+    'issuer_country' = IssuerCountry,
+    'bank_name'      = BankName,
+    'metadata'       = Metadata
 }) ->
     capi_utils:map_to_base64url(genlib_map:compact(#{
         <<"type"          >> => <<"bank_card">>,
@@ -1639,8 +1642,26 @@ decode_bank_card(#domain_BankCard{
         <<"payment_system">> => PaymentSystem,
         <<"bin"           >> => Bin,
         <<"masked_pan"    >> => MaskedPan,
-        <<"token_provider">> => TokenProvider
+        <<"token_provider">> => TokenProvider,
+        <<"issuer_country">> => IssuerCountry,
+        <<"bank_name"     >> => BankName,
+        <<"metadata"      >> => decode_bank_card_metadata(Metadata)
     })).
+
+decode_bank_card_metadata(undefined) ->
+    undefined;
+decode_bank_card_metadata(
+    #{
+        <<"com.rbkmoney.capi">> :=
+            {obj, #{
+                {str, <<"version">>} := {i, Version}
+            }
+        }
+    }
+) ->
+    #{
+        <<"version">> => Version
+    }.
 
 decode_payment_terminal(#domain_PaymentTerminal{
     terminal_type = Type
@@ -2055,11 +2076,30 @@ issue_access_token(PartyID, TokenSpec) ->
 encode_bank_card(BankCard) ->
     {bank_card, #domain_BankCard{
         token          = maps:get(<<"token">>, BankCard),
-        payment_system = binary_to_existing_atom(maps:get(<<"payment_system">>, BankCard), utf8),
+        payment_system = encode_payment_system(maps:get(<<"payment_system">>, BankCard)),
         bin            = maps:get(<<"bin">>, BankCard),
         masked_pan     = maps:get(<<"masked_pan">>, BankCard),
-        token_provider = encode_token_provider(genlib_map:get(<<"token_provider">>, BankCard))
+        token_provider = encode_token_provider(genlib_map:get(<<"token_provider">>, BankCard)),
+        issuer_country = encode_residence(genlib_map:get(<<"issuer_country">>, BankCard)),
+        bank_name      = genlib_map:get(<<"bank_name">>, BankCard),
+        metadata       = encode_bank_card_metadata(genlib_map:get(<<"metadata">>, BankCard))
     }}.
+
+encode_bank_card_metadata(undefined) ->
+    undefined;
+encode_bank_card_metadata (
+    #{
+        <<"version">> := Version
+    }
+) ->
+    #{
+        <<"com.rbkmoney.capi">> =>
+            {obj, #{
+                {str, <<"version">>} => {i, Version}
+            }
+        }
+    }.
+
 
 encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
     {payment_terminal, #domain_PaymentTerminal{
@@ -4174,20 +4214,27 @@ lookup_bank_info(Pan, Context) ->
             throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}})
     end.
 
-expand_card_info(BankCard, {BinData, _}) ->
+expand_card_info(BankCard, {BinData, Version}) ->
     try
         BankCard#'domain_BankCard'{
             payment_system = encode_payment_system(BinData#'binbase_BinData'.payment_system),
             issuer_country = encode_residence(BinData#'binbase_BinData'.iso_country_code),
-            bank_name = BinData#'binbase_BinData'.bank_name
+            bank_name = BinData#'binbase_BinData'.bank_name,
+            metadata = #{
+                <<"com.rbkmoney.capi">> =>
+                    {obj, #{
+                        {str, <<"version">>} => {i, Version}
+                    }
+                }
+            }
         }
     catch
         error:badarg ->
-            throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}})
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Unsupported card">>)}})
     end.
 
 encode_payment_system(PaymentSystem) ->
-    list_to_existing_atom(string:to_lower(binary_to_list(PaymentSystem))).
+    binary_to_existing_atom(PaymentSystem, utf8).
 
 enrich_client_info(ClientInfo, Context) ->
     ClientInfo#{<<"ip">> => prepare_client_ip(Context)}.
