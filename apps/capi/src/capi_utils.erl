@@ -110,11 +110,13 @@ try_parse_deadline(DeadlineStr, [P | Parsers]) ->
             try_parse_deadline(DeadlineStr, Parsers)
     end.
 try_parse_woody_default(DeadlineStr) ->
-    try woody_deadline:from_binary(DeadlineStr) of
+    try woody_deadline:from_binary(to_universal_time(DeadlineStr)) of
         Deadline ->
             {ok, Deadline}
     catch
         error:{bad_deadline, _Reason} ->
+            {error, bad_deadline};
+        error:{badmatch, {error, baddate}} ->
             {error, bad_deadline}
     end.
 try_parse_relative(DeadlineStr) ->
@@ -171,5 +173,12 @@ redact_test() ->
     P1 = <<"^\\+\\d(\\d{1,10}?)\\d{2,4}$">>,
     ?assertEqual(<<"+7******3210">>, redact(<<"+79876543210">>, P1)),
     ?assertEqual(       <<"+1*11">>, redact(<<"+1111">>, P1)).
+
+-spec parse_deadline_test() -> _.
+parse_deadline_test() ->
+    ?assertEqual({ok, {{{2017, 4, 19}, {13, 56, 7}}, 530}}, parse_deadline(<<"2017-04-19T13:56:07.53Z">>)),
+    {ok, {_, _}} = parse_deadline(<<"15s">>),
+    {ok, {_, _}} = parse_deadline(<<"15m">>),
+    {error, bad_deadline} = parse_deadline(<<"15h">>).
 
 -endif.
