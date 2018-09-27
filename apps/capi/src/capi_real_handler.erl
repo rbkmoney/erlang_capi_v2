@@ -10,6 +10,8 @@
 -include_lib("dmsl/include/dmsl_reporting_thrift.hrl").
 -include_lib("dmsl/include/dmsl_payment_tool_provider_thrift.hrl").
 
+-include_lib("binbase_proto/include/binbase_binbase_thrift.hrl").
+
 -behaviour(swag_server_logic_handler).
 
 %% API callbacks
@@ -3899,7 +3901,32 @@ reply_5xx(Code) when Code >= 500 andalso Code < 600 ->
     {Code, [], <<>>}.
 
 process_card_data(Data, Context) ->
-    put_card_data_to_cds(encode_card_data(Data), encode_session_data(Data), Context).
+    CardData = encode_card_data(Data),
+    BinData = binbase_lookup(CardData#'CardData'.pan, {'last', #binbase_Last{}}, Context),
+    %@todo
+    {{bank_card, BankCard}, SessionID} =
+        put_card_data_to_cds(
+            CardData,
+            encode_session_data(Data),
+            Context
+        ),
+    {{bank_card, binbase_expand(BankCard, BinData)}, SessionID}.
+
+binbase_lookup(Pan, Version, Context) ->
+    Call = {binbase, 'Lookup', [Pan, Version]},
+    case service_call(Call, Context) of
+        {ok, #'binbase_ResponseData'{bin_data = BinData}} ->
+            BinData;
+        {exception, #'binbase_BinNotFound'{}} ->
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}})
+    end.
+
+binbase_expand(BankCard, BinData) ->
+    BankCard#'domain_BankCard'{
+        payment_system = binary_to_existing_atom(BinData#'binbase_BinData'.payment_system, utf8),
+        issuer_country = encode_residence(BinData#'binbase_BinData'.iso_country_code),
+        bank_name = BinData#'binbase_BinData'.bank_name
+    }.
 
 encode_card_data(CardData) ->
     {Month, Year} = parse_exp_date(genlib_map:get(<<"expDate">>, CardData)),
@@ -3945,12 +3972,17 @@ process_tokenized_card_data(Data, Context) ->
         {exception, #'InvalidRequest'{}} ->
             throw({ok, {400, [], logic_error(invalidRequest, <<"Tokenized card data is invalid">>)}})
     end,
-    process_put_card_data_result(
+    %@todo
+    CardData = encode_tokenized_card_data(UnwrappedPaymentTool),
+    BinData = binbase_lookup(CardData#'CardData'.pan, {'last', #binbase_Last{}}, Context),
+    {{bank_card, BankCard}, SessionID} =
         put_card_data_to_cds(
-            encode_tokenized_card_data(UnwrappedPaymentTool),
+            CardData,
             encode_tokenized_session_data(UnwrappedPaymentTool),
             Context
         ),
+    process_put_card_data_result(
+        {{bank_card, binbase_expand(BankCard, BinData)}, SessionID},
         UnwrappedPaymentTool
     ).
 
