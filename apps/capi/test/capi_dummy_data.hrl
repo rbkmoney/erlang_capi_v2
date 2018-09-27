@@ -62,10 +62,11 @@
     template_id = ?STRING
 }).
 
--define(PAYPROC_INVOICE, #payproc_Invoice{
+-define(PAYPROC_INVOICE(Payments), #payproc_Invoice{
     invoice = ?INVOICE,
-    payments = []
+    payments = Payments
 }).
+-define(PAYPROC_INVOICE, ?PAYPROC_INVOICE([])).
 
 -define(INVOICE_LINE, #domain_InvoiceLine{
     product = ?STRING,
@@ -114,19 +115,42 @@
     contact_info = ?CONTACT_INFO
 }).
 
+-define(RECURRENT_PAYER, {recurrent, #domain_RecurrentPayer{
+    payment_tool = {bank_card, ?BANK_CARD},
+    recurrent_parent = #domain_RecurrentParentPayment{
+        invoice_id = ?STRING,
+        payment_id = ?STRING
+    },
+    contact_info = ?CONTACT_INFO
+}}).
+
 -define(PAYER, {payment_resource, ?PAYMENT_RESOURCE_PAYER}).
 
 -define(PAYMENT(Status), #domain_InvoicePayment{
-    id              = ?STRING,
-    created_at      = ?TIMESTAMP,
-    domain_revision = ?INTEGER,
-    status          = Status,
-    payer           = ?PAYER,
-    cost            = ?CASH,
-    flow            = {instant, #domain_InvoicePaymentFlowInstant{}},
-    context         = ?CONTENT
+    id               = ?STRING,
+    created_at       = ?TIMESTAMP,
+    domain_revision  = ?INTEGER,
+    status           = Status,
+    payer            = ?PAYER,
+    cost             = ?CASH,
+    flow             = {instant, #domain_InvoicePaymentFlowInstant{}},
+    context          = ?CONTENT,
+    make_recurrent   = false
 }).
 -define(PAYMENT, ?PAYMENT({pending, #domain_InvoicePaymentPending{}})).
+
+-define(RECURRENT_PAYMENT(Status), #domain_InvoicePayment{
+    id               = ?STRING,
+    created_at       = ?TIMESTAMP,
+    domain_revision  = ?INTEGER,
+    status           = Status,
+    payer            = ?RECURRENT_PAYER,
+    cost             = ?CASH,
+    flow             = {instant, #domain_InvoicePaymentFlowInstant{}},
+    context          = ?CONTENT,
+    make_recurrent   = true
+}).
+-define(RECURRENT_PAYMENT, ?RECURRENT_PAYMENT({pending, #domain_InvoicePaymentPending{}})).
 
 -define(PAYPROC_PAYMENT(Payment, Refunds, Adjustments), #payproc_InvoicePayment{
     payment     = Payment,
