@@ -144,9 +144,10 @@ unit_factor(_Other) ->
     {error, unknown_unit}.
 
 clamp_max_deadline(Value) ->
-    case Value > ?MAX_DEADLINE_TIME of
+    MaxDeadline = genlib_app:env(capi, max_deadline, ?MAX_DEADLINE_TIME),
+    case Value > MaxDeadline of
         true ->
-            ?MAX_DEADLINE_TIME;
+            MaxDeadline;
         false ->
             Value
     end.

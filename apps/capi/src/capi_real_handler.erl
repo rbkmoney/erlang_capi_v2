@@ -51,22 +51,20 @@ handle_request(OperationID, Req, SwagContext = #{auth_context := AuthContext}) -
     try
         case capi_auth:authorize_operation(OperationID, Req, AuthContext) of
             ok ->
-                handle_request(OperationID, Req, SwagContext,
-                    attach_deadline(Req, create_woody_context(Req, AuthContext)));
+                WoodyContext = attach_deadline(Req, create_woody_context(Req, AuthContext)),
+                Context = create_processing_context(SwagContext, WoodyContext),
+                process_request(OperationID, Req, Context);
             {error, _} = Error ->
                 _ = lager:info("Operation ~p authorization failed due to ~p", [OperationID, Error]),
                 {error, {401, [], general_error(<<"Unauthorized operation">>)}}
         end
     catch
         error:{woody_error, {Source, Class, Details}} ->
-            process_woody_error(Source, Class, Details)
+            process_woody_error(Source, Class, Details);
+        throw:{bad_deadline, Deadline} ->
+            _ = lager:warning("Operation ~p failed due to invalid deadline ~p", [OperationID, Deadline]),
+            {ok, {400, [], logic_error(invalidDeadline, <<"Invalid data in X-Request-Deadline header">>)}}
     end.
-
-handle_request(_OperationID, _Req, _SwagContext, undefined) ->
-   {ok, {400, [], logic_error(invalidDeadline, <<"Invalid data in X-Request-Deadline header">>)}};
-handle_request(OperationID, Req, SwagContext, WoodyContext) ->
-    Context = create_processing_context(SwagContext, WoodyContext),
-    process_request(OperationID, Req, Context).
 
 -spec process_request(
     OperationID :: swag_server:operation_id(),
@@ -1434,22 +1432,14 @@ collect_user_identity(AuthContext) ->
         username => capi_auth:get_claim(<<"name">> , AuthContext, undefined)
     }).
 
+attach_deadline(#{'X-Request-Deadline' := undefined}, Context) ->
+    Context;
 attach_deadline(#{'X-Request-Deadline' := Header}, Context) ->
-    case get_deadline(Header) of
-        Deadline when Deadline /= undefined ->
-            woody_context:set_deadline(Deadline, Context);
-        undefined ->
-            undefined
-    end;
-attach_deadline(_, Context) ->
-    Context.
-
-get_deadline(Header) ->
     case capi_utils:parse_deadline(Header) of
-        {ok, Deadline} ->
-            Deadline;
-        {error, bad_deadline} ->
-            undefined
+        {ok, Deadline} when Deadline /= undefined ->
+            woody_context:set_deadline(Deadline, Context);
+        _ ->
+            throw({bad_deadline, Header})
     end.
 
 logic_error(Code, Message) ->

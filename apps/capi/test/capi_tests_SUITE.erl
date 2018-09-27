@@ -142,7 +142,11 @@
     get_bindings_ok_test/1,
     get_binding_ok_test/1,
     get_customer_events_ok_test/1,
-    delete_customer_ok_test/1
+    delete_customer_ok_test/1,
+
+    deadline_error_test/1,
+    deadline_absolute_ok_test/1,
+    deadline_relative_ok_test/1
 ]).
 
 -define(CAPI_IP                     , "::").
@@ -174,7 +178,8 @@ all() ->
         {group, operations_by_invoice_template_access_token},
         {group, operations_by_customer_access_token_after_customer_creation},
         {group, operations_by_customer_access_token_after_token_creation},
-        {group, authorization}
+        {group, authorization},
+        {group, deadline_header}
     ].
 
 invoice_access_token_tests() ->
@@ -319,6 +324,13 @@ groups() ->
                 authorization_error_no_permission_test,
                 authorization_bad_token_error_test
             ]
+        },
+        {deadline_header, [],
+            [
+                deadline_error_test,
+                deadline_absolute_ok_test,
+                deadline_relative_ok_test
+            ]
         }
     ].
 
@@ -340,7 +352,7 @@ init_per_suite(Config) ->
         }
     ], SupPid),
     Apps2 =
-        capi_ct_helper:start_app(dmt_client, [{max_cache_size, #{}}, {service_urls, ServiceURLs}]) ++
+        capi_ct_helper:start_app(dmt_client, [{max_cache_size, #{}}, {service_urls, ServiceURLs}, {cache_update_interval, 50000}]) ++
         start_capi(Config),
     [{apps, lists:reverse(Apps2 ++ Apps1)}, {suite_test_sup, SupPid} | Config].
 
@@ -437,7 +449,8 @@ init_per_group(operations_by_customer_access_token_after_token_creation, Config)
 
 init_per_group(GroupName, Config) when
     GroupName == operations_by_base_api_token;
-    GroupName == woody_errors
+    GroupName == woody_errors;
+    GroupName == deadline_header
 ->
     BasePermissions = [
         {[invoices], write},
@@ -449,8 +462,11 @@ init_per_group(GroupName, Config) when
         {[customers], write}
     ],
     {ok, Token} = issue_token(BasePermissions, unlimited),
+    {ok, Token2} = issue_token(BasePermissions, unlimited),
     Context = get_context(Token),
-    [{context, Context} | Config];
+    Config2 = [{context_with_relative_deadline, get_context(Token2, <<"3s">>)} | Config],
+    Config3 = [{context_with_absolute_deadline, Context} | Config2],
+    [{context, Context} | Config3];
 
 init_per_group(_, Config) ->
     Config.
@@ -1715,6 +1731,30 @@ delete_customer_ok_test(Config) ->
     mock_services([{customer_management, fun('Delete', _) -> {ok, ok} end}], Config),
     {ok, _} = capi_client_customers:delete_customer(?config(context, Config), ?STRING).
 
+-spec deadline_error_test(config()) ->
+    _.
+deadline_error_test(_Config) ->
+    {ok, Token} = issue_token([], {deadline, 4102444800}), % 01/01/2100 @ 12:00am (UTC)
+    {error, _} = capi_client_categories:get_categories(get_context(Token, <<"blabla">>)).
+
+-spec deadline_absolute_ok_test(config()) ->
+    _.
+deadline_absolute_ok_test(Config) ->
+    Context = ?config(context_with_absolute_deadline, Config),
+    _ = mock_services([{party_management, fun('Get', _) -> timer:sleep(5000), {ok, ?PARTY} end}], Config),
+    Deadline = woody_deadline:from_timeout(3000),
+    BinDeadline = woody_deadline:to_binary(Deadline),
+    ?badresp(504) = capi_client_parties:get_my_party(Context#{deadline => BinDeadline}),
+    {ok, _} = capi_client_categories:get_categories(Context#{deadline => BinDeadline}).
+
+-spec deadline_relative_ok_test(config()) ->
+    _.
+deadline_relative_ok_test(Config) ->
+    Context = ?config(context_with_relative_deadline, Config),
+    _ = mock_services([{party_management, fun('Get', _) -> timer:sleep(10000), {ok, ?PARTY} end}], Config),
+    ?badresp(504) = capi_client_parties:get_my_party(Context),
+    {ok, _} = capi_client_categories:get_categories(Context).
+
 %%
 
 issue_token(ACL, LifeTime) ->
@@ -1828,6 +1868,11 @@ get_random_port() ->
 
 get_context(Token) ->
     capi_client_lib:get_context(?CAPI_URL, Token, 10000, ipv4).
+
+get_context(Token, Deadline) ->
+    DefEvtHandler = capi_client_lib:default_event_handler(),
+    capi_client_lib:get_context(?CAPI_URL, Token, 10000, ipv4, DefEvtHandler, Deadline).
+
 
 get_keysource(Key, Config) ->
     filename:join(?config(data_dir, Config), Key).
