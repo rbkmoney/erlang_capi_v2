@@ -51,7 +51,7 @@ handle_request(OperationID, Req, SwagContext = #{auth_context := AuthContext}) -
     try
         case capi_auth:authorize_operation(OperationID, Req, AuthContext) of
             ok ->
-                WoodyContext = create_woody_context(Req, AuthContext),
+                WoodyContext = attach_deadline(Req, create_woody_context(Req, AuthContext)),
                 Context = create_processing_context(SwagContext, WoodyContext),
                 process_request(OperationID, Req, Context);
             {error, _} = Error ->
@@ -60,7 +60,10 @@ handle_request(OperationID, Req, SwagContext = #{auth_context := AuthContext}) -
         end
     catch
         error:{woody_error, {Source, Class, Details}} ->
-            process_woody_error(Source, Class, Details)
+            process_woody_error(Source, Class, Details);
+        throw:{bad_deadline, Deadline} ->
+            _ = lager:warning("Operation ~p failed due to invalid deadline ~p", [OperationID, Deadline]),
+            {ok, {400, [], logic_error(invalidDeadline, <<"Invalid data in X-Request-Deadline header">>)}}
     end.
 
 -spec process_request(
@@ -1428,6 +1431,16 @@ collect_user_identity(AuthContext) ->
         email    => capi_auth:get_claim(<<"email">>, AuthContext, undefined),
         username => capi_auth:get_claim(<<"name">> , AuthContext, undefined)
     }).
+
+attach_deadline(#{'X-Request-Deadline' := undefined}, Context) ->
+    Context;
+attach_deadline(#{'X-Request-Deadline' := Header}, Context) ->
+    case capi_utils:parse_deadline(Header) of
+        {ok, Deadline} when Deadline /= undefined ->
+            woody_context:set_deadline(Deadline, Context);
+        _ ->
+            throw({bad_deadline, Header})
+    end.
 
 logic_error(Code, Message) ->
     #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)}.
