@@ -110,13 +110,16 @@ try_parse_deadline(DeadlineStr, [P | Parsers]) ->
             try_parse_deadline(DeadlineStr, Parsers)
     end.
 try_parse_woody_default(DeadlineStr) ->
-    try woody_deadline:from_binary(to_universal_time(DeadlineStr)) of
-        Deadline ->
-            {ok, Deadline}
+    try
+        Deadline = woody_deadline:from_binary(to_universal_time(DeadlineStr)),
+        NewDeadline = clamp_max_deadline(woody_deadline:to_timeout(Deadline)),
+        {ok, woody_deadline:from_timeout(NewDeadline)}
     catch
-        error:{bad_deadline, _Reason} ->
+        error: {bad_deadline, _Reason} ->
             {error, bad_deadline};
-        error:{badmatch, {error, baddate}} ->
+        error: {badmatch, {error, baddate}} ->
+            {error, bad_deadline};
+        error: deadline_reached ->
             {error, bad_deadline}
     end.
 try_parse_relative(DeadlineStr) ->
@@ -145,7 +148,7 @@ unit_factor(<<"m">>) ->
 unit_factor(_Other) ->
     {error, unknown_unit}.
 
-clamp_max_deadline(Value) ->
+clamp_max_deadline(Value) when is_integer(Value)->
     MaxDeadline = genlib_app:env(capi, max_deadline, ?MAX_DEADLINE_TIME),
     case Value > MaxDeadline of
         true ->
@@ -176,7 +179,10 @@ redact_test() ->
 
 -spec parse_deadline_test() -> _.
 parse_deadline_test() ->
-    ?assertEqual({ok, {{{2017, 4, 19}, {13, 56, 7}}, 530}}, parse_deadline(<<"2017-04-19T13:56:07.53Z">>)),
+    Deadline = woody_deadline:from_timeout(3000),
+    BinDeadline = woody_deadline:to_binary(Deadline),
+    {ok, {_, _}} = parse_deadline(BinDeadline),
+    ?assertEqual({error, bad_deadline}, parse_deadline(<<"2017-04-19T13:56:07.53Z">>)),
     {ok, {_, _}} = parse_deadline(<<"15s">>),
     {ok, {_, _}} = parse_deadline(<<"15m">>),
     {error, bad_deadline} = parse_deadline(<<"15h">>).

@@ -1745,7 +1745,9 @@ deadline_absolute_ok_test(Config) ->
     Deadline = woody_deadline:from_timeout(3000),
     BinDeadline = woody_deadline:to_binary(Deadline),
     ?badresp(504) = capi_client_parties:get_my_party(Context#{deadline => BinDeadline}),
-    {ok, _} = capi_client_categories:get_categories(Context#{deadline => BinDeadline}).
+    Deadline2 = woody_deadline:from_timeout(3000),
+    BinDeadline2 = woody_deadline:to_binary(Deadline2),
+    {ok, _} = capi_client_categories:get_categories(Context#{deadline => BinDeadline2}).
 
 -spec deadline_relative_ok_test(config()) ->
     _.
