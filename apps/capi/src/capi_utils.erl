@@ -115,11 +115,11 @@ try_parse_woody_default(DeadlineStr) ->
         NewDeadline = clamp_max_deadline(woody_deadline:to_timeout(Deadline)),
         {ok, woody_deadline:from_timeout(NewDeadline)}
     catch
-        error: {bad_deadline, _Reason} ->
+        error:{bad_deadline, _Reason} ->
             {error, bad_deadline};
-        error: {badmatch, {error, baddate}} ->
+        error:{badmatch, {error, baddate}} ->
             {error, bad_deadline};
-        error: deadline_reached ->
+        error:deadline_reached ->
             {error, bad_deadline}
     end.
 try_parse_relative(DeadlineStr) ->
