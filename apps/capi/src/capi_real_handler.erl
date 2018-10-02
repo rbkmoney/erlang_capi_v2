@@ -3438,12 +3438,16 @@ decode_report(Report) ->
         <<"createdAt">> => Report#reports_Report.created_at,
         <<"fromTime" >> => FromTime,
         <<"toTime"   >> => ToTime,
+        <<"status"   >> => decode_report_status(Report#reports_Report.status),
         <<"type"     >> => decode_report_type(Report#reports_Report.report_type),
         <<"files"    >> => [decode_report_file(F) || F <- Report#reports_Report.files]
     }.
 
 encode_report_type(<<"provisionOfService">>) -> provision_of_service;
 encode_report_type(<<"paymentRegistry">>) -> payment_registry.
+
+decode_report_status(pending) -> <<"pending">>;
+decode_report_status(created) -> <<"created">>.
 
 decode_report_type(provision_of_service) -> <<"provisionOfService">>;
 decode_report_type(payment_registry) -> <<"paymentRegistry">>.
