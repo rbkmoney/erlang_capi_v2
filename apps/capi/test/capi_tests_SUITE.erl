@@ -63,6 +63,7 @@
     get_client_payment_status_test/1,
     get_merchant_payment_status_test/1,
     create_refund/1,
+    create_refund_error/1,
     create_partial_refund/1,
     create_partial_refund_without_currency/1,
     get_refund_by_id/1,
@@ -240,6 +241,7 @@ groups() ->
                 fulfill_invoice_ok_test,
                 get_merchant_payment_status_test,
                 create_refund,
+                create_refund_error,
                 create_partial_refund,
                 create_partial_refund_without_currency,
                 get_refund_by_id,
@@ -910,6 +912,25 @@ create_refund(Config) ->
     mock_services([{invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end}], Config),
     Req = #{<<"reason">> => ?STRING},
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
+
+-spec create_refund_error(config()) ->
+    _.
+create_refund_error(Config) ->
+    mock_services([
+        {invoicing, fun
+            ('RefundPayment', [_, <<"42">> | _]) ->
+                throw(#payproc_InvalidPartyStatus{
+                    status = {blocking, {blocked, #domain_Blocked{reason = ?STRING, since = ?TIMESTAMP}}}
+                });
+            ('RefundPayment', [_, <<"43">> | _]) ->
+                throw(#payproc_InvalidContractStatus{
+                    status = {expired, #domain_ContractExpired{}}
+                })
+        end}
+    ], Config),
+    Req = #{<<"reason">> => ?STRING},
+    {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"42">>, ?STRING),
+    {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"43">>, ?STRING).
 
 -spec create_partial_refund(config()) ->
     _.

@@ -138,6 +138,8 @@ process_request('CreatePayment', Req, Context) ->
                     {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
                     {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                #payproc_InvalidContractStatus{} ->
+                    {ok, {400, [], logic_error(invalidContractStatus, <<"Invalid contract status">>)}};
                 #payproc_InvalidRecurrentParentPayment{} ->
                     {ok, {400, [], logic_error(invalidRecurrentParent, <<"Specified recurrent parent is invalid">>)}};
                 #payproc_InvalidUser{} ->
@@ -519,6 +521,12 @@ process_request('CreateRefund', Req, Context) ->
                     {ok, {404, [], general_error(<<"Payment not found">>)}};
                 #payproc_InvoiceNotFound{} ->
                     {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                #payproc_InvalidPartyStatus{} ->
+                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                #payproc_InvalidShopStatus{} ->
+                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                #payproc_InvalidContractStatus{} ->
+                    {ok, {400, [], logic_error(invalidContractStatus, <<"Invalid contract status">>)}};
                 #payproc_OperationNotPermitted{} ->
                     {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
                 #payproc_InvalidPaymentStatus{} ->
