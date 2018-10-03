@@ -28,6 +28,8 @@
 -define(payment_institution_ref(PaymentInstitutionID),
     #domain_PaymentInstitutionRef{id = PaymentInstitutionID}).
 
+-define(CAPI_NS, <<"com.rbkmoney.capi">>).
+
 -spec authorize_api_key(swag_server:operation_id(), swag_server:api_key()) ->
     Result :: false | {true, capi_auth:context()}.
 
@@ -1671,8 +1673,8 @@ decode_bank_card(#domain_BankCard{
 
 decode_bank_card_metadata(undefined) ->
     undefined;
-decode_bank_card_metadata(#{<<"com.rbkmoney.capi">> := Meta}) ->
-    capi_msgp_marshalling:unmarshal(Meta).
+decode_bank_card_metadata(Meta) ->
+    maps:map(fun(_, Data) -> capi_msgp_marshalling:unmarshal(Data) end, Meta).
 
 decode_payment_terminal(#domain_PaymentTerminal{
     terminal_type = Type
@@ -2099,7 +2101,13 @@ encode_bank_card(BankCard) ->
 encode_bank_card_metadata(undefined) ->
     undefined;
 encode_bank_card_metadata(Meta) ->
-    #{<<"com.rbkmoney.capi">> => capi_msgp_marshalling:marshal(Meta)}.
+    maps:fold(
+        fun(K, V, Acc) ->
+            maps:put(K, capi_msgp_marshalling:marshal(V), Acc)
+        end,
+        #{},
+        Meta
+    ).
 
 encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
     {payment_terminal, #domain_PaymentTerminal{
@@ -4225,7 +4233,7 @@ expand_card_info(BankCard, {BinData, Version}) ->
             issuer_country = encode_residence(BinData#'binbase_BinData'.iso_country_code),
             bank_name = BinData#'binbase_BinData'.bank_name,
             metadata = #{
-                <<"com.rbkmoney.capi">> =>
+                ?CAPI_NS =>
                     {obj, #{
                         {str, <<"version">>} => {i, Version}
                     }
