@@ -1671,18 +1671,8 @@ decode_bank_card(#domain_BankCard{
 
 decode_bank_card_metadata(undefined) ->
     undefined;
-decode_bank_card_metadata(#{<<"com.rbkmoney.capi">> := {obj, Meta}}) ->
-    maps:fold(
-        fun(K, V, Acc) ->
-            maps:put(
-                capi_json_marshalling:unmarshal(K),
-                capi_json_marshalling:unmarshal(V),
-                Acc
-            )
-        end,
-        #{},
-        Meta
-    ).
+decode_bank_card_metadata(#{<<"com.rbkmoney.capi">> := Meta}) ->
+    capi_msgp_marshalling:unmarshal(Meta).
 
 decode_payment_terminal(#domain_PaymentTerminal{
     terminal_type = Type
@@ -2109,19 +2099,7 @@ encode_bank_card(BankCard) ->
 encode_bank_card_metadata(undefined) ->
     undefined;
 encode_bank_card_metadata(Meta) ->
-    #{<<"com.rbkmoney.capi">> =>
-        {obj,
-            maps:fold(fun(K, V, Acc) ->
-                maps:put(
-                    capi_json_marshalling:marshal(K),
-                    capi_json_marshalling:marshal(V),
-                    Acc
-                )
-            end,
-            #{},
-            Meta)
-        }
-    }.
+    #{<<"com.rbkmoney.capi">> => capi_msgp_marshalling:marshal(Meta)}.
 
 encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
     {payment_terminal, #domain_PaymentTerminal{
