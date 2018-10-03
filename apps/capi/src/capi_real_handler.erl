@@ -2109,7 +2109,7 @@ encode_bank_card(BankCard) ->
 encode_bank_card_metadata(undefined) ->
     undefined;
 encode_bank_card_metadata(Meta) ->
-    #{<<"com.rbkmoney.capi">> => 
+    #{<<"com.rbkmoney.capi">> =>
         {obj,
             maps:fold(fun(K, V, Acc) ->
                 maps:put(
