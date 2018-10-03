@@ -5005,6 +5005,7 @@ lookup_bank_info(Pan, ReqCtx) ->
         {exception, #'binbase_BinNotFound'{}} ->
             throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}})
     end.
+
 expand_card_info(BankCard, {BinData, Version}) ->
     try
         BankCard#'domain_BankCard'{
