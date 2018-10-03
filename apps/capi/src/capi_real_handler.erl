@@ -10,6 +10,8 @@
 -include_lib("dmsl/include/dmsl_reporting_thrift.hrl").
 -include_lib("dmsl/include/dmsl_payment_tool_provider_thrift.hrl").
 
+-include_lib("binbase_proto/include/binbase_binbase_thrift.hrl").
+
 -behaviour(swag_server_logic_handler).
 
 %% API callbacks
@@ -25,6 +27,8 @@
 
 -define(payment_institution_ref(PaymentInstitutionID),
     #domain_PaymentInstitutionRef{id = PaymentInstitutionID}).
+
+-define(CAPI_NS, <<"com.rbkmoney.capi">>).
 
 -spec authorize_api_key(swag_server:operation_id(), swag_server:api_key()) ->
     Result :: false | {true, capi_auth:context()}.
@@ -1650,7 +1654,10 @@ decode_bank_card(#domain_BankCard{
     'payment_system' = PaymentSystem,
     'bin'            = Bin,
     'masked_pan'     = MaskedPan,
-    'token_provider' = TokenProvider
+    'token_provider' = TokenProvider,
+    'issuer_country' = IssuerCountry,
+    'bank_name'      = BankName,
+    'metadata'       = Metadata
 }) ->
     capi_utils:map_to_base64url(genlib_map:compact(#{
         <<"type"          >> => <<"bank_card">>,
@@ -1658,8 +1665,16 @@ decode_bank_card(#domain_BankCard{
         <<"payment_system">> => PaymentSystem,
         <<"bin"           >> => Bin,
         <<"masked_pan"    >> => MaskedPan,
-        <<"token_provider">> => TokenProvider
+        <<"token_provider">> => TokenProvider,
+        <<"issuer_country">> => IssuerCountry,
+        <<"bank_name"     >> => BankName,
+        <<"metadata"      >> => decode_bank_card_metadata(Metadata)
     })).
+
+decode_bank_card_metadata(undefined) ->
+    undefined;
+decode_bank_card_metadata(Meta) ->
+    maps:map(fun(_, Data) -> capi_msgp_marshalling:unmarshal(Data) end, Meta).
 
 decode_payment_terminal(#domain_PaymentTerminal{
     terminal_type = Type
@@ -2074,11 +2089,19 @@ issue_access_token(PartyID, TokenSpec) ->
 encode_bank_card(BankCard) ->
     {bank_card, #domain_BankCard{
         token          = maps:get(<<"token">>, BankCard),
-        payment_system = binary_to_existing_atom(maps:get(<<"payment_system">>, BankCard), utf8),
+        payment_system = encode_payment_system(maps:get(<<"payment_system">>, BankCard)),
         bin            = maps:get(<<"bin">>, BankCard),
         masked_pan     = maps:get(<<"masked_pan">>, BankCard),
-        token_provider = encode_token_provider(genlib_map:get(<<"token_provider">>, BankCard))
+        token_provider = encode_token_provider(genlib_map:get(<<"token_provider">>, BankCard)),
+        issuer_country = encode_residence(genlib_map:get(<<"issuer_country">>, BankCard)),
+        bank_name      = genlib_map:get(<<"bank_name">>, BankCard),
+        metadata       = encode_bank_card_metadata(genlib_map:get(<<"metadata">>, BankCard))
     }}.
+
+encode_bank_card_metadata(undefined) ->
+    undefined;
+encode_bank_card_metadata(Meta) ->
+    maps:map(fun(_, Data) -> capi_msgp_marshalling:marshal(Data) end, Meta).
 
 encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
     {payment_terminal, #domain_PaymentTerminal{
@@ -3987,7 +4010,11 @@ reply_5xx(Code) when Code >= 500 andalso Code < 600 ->
     {Code, [], <<>>}.
 
 process_card_data(Data, Context) ->
-    put_card_data_to_cds(encode_card_data(Data), encode_session_data(Data), Context).
+    put_card_data_to_cds(
+        encode_card_data(Data),
+        encode_session_data(Data),
+        Context
+    ).
 
 encode_card_data(CardData) ->
     {Month, Year} = parse_exp_date(genlib_map:get(<<"expDate">>, CardData)),
@@ -4165,10 +4192,11 @@ encode_tokenized_session_data(#paytoolprv_UnwrappedPaymentTool{
     }.
 
 put_card_data_to_cds(CardData, SessionData, Context) ->
+    BinData = lookup_bank_info(CardData#'CardData'.pan, Context),
     Call = {cds_storage, 'PutCardData', [CardData, SessionData]},
     case service_call(Call, Context) of
         {ok, #'PutCardDataResult'{session_id = SessionID, bank_card = BankCard}} ->
-            {{bank_card, BankCard}, SessionID};
+            {{bank_card, expand_card_info(BankCard, BinData)}, SessionID};
         {exception, Exception} ->
             case Exception of
                 #'InvalidCardData'{} ->
@@ -4181,6 +4209,38 @@ put_card_data_to_cds(CardData, SessionData, Context) ->
                     throw({error, reply_5xx(503)})
             end
     end.
+
+lookup_bank_info(Pan, Context) ->
+    RequestVersion = {'last', #binbase_Last{}},
+    Call = {binbase, 'Lookup', [Pan, RequestVersion]},
+    case service_call(Call, Context) of
+        {ok, #'binbase_ResponseData'{bin_data = BinData, version = Version}} ->
+            {BinData, Version};
+        {exception, #'binbase_BinNotFound'{}} ->
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}})
+    end.
+
+expand_card_info(BankCard, {BinData, Version}) ->
+    try
+        BankCard#'domain_BankCard'{
+            payment_system = encode_payment_system(BinData#'binbase_BinData'.payment_system),
+            issuer_country = encode_residence(BinData#'binbase_BinData'.iso_country_code),
+            bank_name = BinData#'binbase_BinData'.bank_name,
+            metadata = #{
+                ?CAPI_NS =>
+                    {obj, #{
+                        {str, <<"version">>} => {i, Version}
+                    }
+                }
+            }
+        }
+    catch
+        error:badarg ->
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Unsupported card">>)}})
+    end.
+
+encode_payment_system(PaymentSystem) ->
+    binary_to_existing_atom(PaymentSystem, utf8).
 
 enrich_client_info(ClientInfo, Context) ->
     ClientInfo#{<<"ip">> => prepare_client_ip(Context)}.

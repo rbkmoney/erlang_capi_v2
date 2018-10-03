@@ -64,7 +64,10 @@ get_service_modname(payment_tool_provider_apple_pay) ->
 get_service_modname(payment_tool_provider_google_pay) ->
     {dmsl_payment_tool_provider_thrift, 'PaymentToolProvider'};
 get_service_modname(payment_tool_provider_samsung_pay) ->
-    {dmsl_payment_tool_provider_thrift, 'PaymentToolProvider'}.
+    {dmsl_payment_tool_provider_thrift, 'PaymentToolProvider'};
+get_service_modname(binbase) ->
+    {binbase_binbase_thrift, 'Binbase'}.
+
 
 get_service_deadline(ServiceName) ->
     ServiceDeadlines = genlib_app:env(?MODULE, service_deadlines, #{}),
