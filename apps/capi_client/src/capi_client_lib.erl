@@ -2,6 +2,7 @@
 
 -export([get_context/4]).
 -export([get_context/5]).
+-export([get_context/6]).
 
 -export([handle_response/1]).
 -export([make_request/2]).
@@ -14,7 +15,8 @@
     token         := term(),
     timeout       := integer(),
     event_handler := event_handler(),
-    protocol      := protocol()
+    protocol      := protocol(),
+    deadline      := iolist() | undefined
 }.
 -export_type([context/0]).
 
@@ -114,12 +116,18 @@ get_context(Url, Token, Timeout, Protocol) ->
 -spec get_context(string(), term(), integer(), protocol(), event_handler()) ->
     context().
 get_context(Url, Token, Timeout, Protocol, EventHandler) ->
+    get_context(Url, Token, Timeout, Protocol, EventHandler, undefined).
+
+-spec get_context(string(), term(), integer(), protocol(), event_handler(), iolist() | undefined) ->
+    context().
+get_context(Url, Token, Timeout, Protocol, EventHandler, Deadline) ->
     #{
         url           => Url,
         token         => Token,
         timeout       => Timeout,
         protocol      => Protocol,
-        event_handler => EventHandler
+        event_handler => EventHandler,
+        deadline      => Deadline
     }.
 
 -spec default_event_handler() ->
@@ -147,8 +155,8 @@ get_hackney_opts(Context) ->
 
 -spec headers(context()) ->
     list(header()).
-headers(Context) ->
-    RequiredHeaders = [x_request_id_header() | json_accept_headers()],
+headers(#{deadline := Deadline} = Context) ->
+    RequiredHeaders = x_request_deadline_header(Deadline, [x_request_id_header() | json_accept_headers()]),
     case maps:get(token, Context) of
         <<>> ->
             RequiredHeaders;
@@ -160,6 +168,13 @@ headers(Context) ->
     header().
 x_request_id_header() ->
     {<<"X-Request-ID">>, integer_to_binary(rand:uniform(100000))}.
+
+-spec x_request_deadline_header(iolist() | undefined, list()) ->
+    list().
+x_request_deadline_header(undefined, Headers) ->
+    Headers;
+x_request_deadline_header(Time, Headers) ->
+    [{<<"X-Request-Deadline">>, Time} | Headers].
 
 -spec auth_header(term()) ->
     header().
