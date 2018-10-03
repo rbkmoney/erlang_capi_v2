@@ -2101,13 +2101,7 @@ encode_bank_card(BankCard) ->
 encode_bank_card_metadata(undefined) ->
     undefined;
 encode_bank_card_metadata(Meta) ->
-    maps:fold(
-        fun(K, V, Acc) ->
-            maps:put(K, capi_msgp_marshalling:marshal(V), Acc)
-        end,
-        #{},
-        Meta
-    ).
+    maps:map(fun(_, Data) -> capi_msgp_marshalling:marshal(Data) end, Meta).
 
 encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
     {payment_terminal, #domain_PaymentTerminal{
