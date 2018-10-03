@@ -10,6 +10,7 @@
 -include_lib("dmsl/include/dmsl_merch_stat_thrift.hrl").
 -include_lib("dmsl/include/dmsl_reporting_thrift.hrl").
 -include_lib("dmsl/include/dmsl_payment_tool_provider_thrift.hrl").
+-include_lib("binbase_proto/include/binbase_binbase_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 -include_lib("jose/include/jose_jwk.hrl").
 
@@ -673,7 +674,8 @@ create_payment_ok_test(Config) ->
     mock_services(
         [
             {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
-            {invoicing, fun('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}
+            {invoicing, fun('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT} end},
+            {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end}
         ],
         Config
     ),
@@ -802,7 +804,18 @@ create_visa_payment_resource_ok_test(Config) ->
                     },
                     session_id = ?STRING
                 }}
-        end}
+        end},
+        {binbase, fun('Lookup', _) ->
+            {ok, #'binbase_ResponseData'{
+                bin_data = #'binbase_BinData' {
+                    payment_system = <<"visa">>,
+                    bank_name = ?STRING,
+                    iso_country_code = <<"KAZ">>,
+                    card_type = debit
+                },
+                version = ?INTEGER
+            }}
+         end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
     {ok, #{<<"paymentToolDetails">> := #{
@@ -844,7 +857,18 @@ create_nspkmir_payment_resource_ok_test(Config) ->
                     },
                     session_id = ?STRING
                 }}
-        end}
+        end},
+        {binbase, fun('Lookup', _) ->
+            {ok, #'binbase_ResponseData'{
+                bin_data = #'binbase_BinData' {
+                    payment_system = <<"nspkmir">>,
+                    bank_name = ?STRING,
+                    iso_country_code = <<"KAZ">>,
+                    card_type = debit
+                },
+                version = ?INTEGER
+            }}
+         end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
     {ok, #{<<"paymentToolDetails">> := #{
@@ -901,7 +925,8 @@ create_qw_payment_resource_ok_test(Config) ->
 create_applepay_payment_resource_ok_test(Config) ->
     mock_services([
         {payment_tool_provider_apple_pay, fun('Unwrap', _) -> {ok, ?UNWRAPPED_PAYMENT_TOOL(?APPLE_PAY_DETAILS)} end},
-        {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end}
+        {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
+        {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
     {ok, #{<<"paymentToolDetails">> := #{<<"paymentSystem">> := <<"mastercard">>}}} =
@@ -920,7 +945,8 @@ create_applepay_payment_resource_ok_test(Config) ->
 create_googlepay_payment_resource_ok_test(Config) ->
     mock_services([
         {payment_tool_provider_google_pay, fun('Unwrap', _) -> {ok, ?UNWRAPPED_PAYMENT_TOOL(?GOOGLE_PAY_DETAILS)} end},
-        {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end}
+        {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
+        {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
     {ok, #{<<"paymentToolDetails">> := #{<<"paymentSystem">> := <<"mastercard">>}}} =
@@ -1415,7 +1441,8 @@ create_binding_ok_test(Config) ->
     mock_services(
         [
             {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
-            {customer_management, fun('StartBinding', _) -> {ok, ?CUSTOMER_BINDING} end}
+            {customer_management, fun('StartBinding', _) -> {ok, ?CUSTOMER_BINDING} end},
+            {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end}
         ],
         Config
     ),
