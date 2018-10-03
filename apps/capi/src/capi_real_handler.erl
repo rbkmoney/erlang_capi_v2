@@ -1672,13 +1672,17 @@ decode_bank_card(#domain_BankCard{
 decode_bank_card_metadata(undefined) ->
     undefined;
 decode_bank_card_metadata(#{<<"com.rbkmoney.capi">> := {obj, Meta}}) ->
-    maps:fold(fun(K, V, Acc) -> 
-        maps:put(
-            capi_json_marshalling:unmarshal(K),
-            capi_json_marshalling:unmarshal(V),
-            Acc
-        )
-    end, #{}, Meta).
+    maps:fold(
+        fun(K, V, Acc) ->
+            maps:put(
+                capi_json_marshalling:unmarshal(K),
+                capi_json_marshalling:unmarshal(V),
+                Acc
+            )
+        end,
+        #{},
+        Meta
+    ).
 
 decode_payment_terminal(#domain_PaymentTerminal{
     terminal_type = Type
