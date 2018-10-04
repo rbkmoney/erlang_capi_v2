@@ -844,7 +844,7 @@
 
 -define(BINBASE_LOOKUP_RESULT, #'binbase_ResponseData'{
     bin_data = #'binbase_BinData' {
-        payment_system = <<"mastercard">>,
+        payment_system = <<"MASTERCARD">>,
         bank_name = ?STRING,
         iso_country_code = <<"KAZ">>,
         card_type = debit

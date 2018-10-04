@@ -1016,7 +1016,7 @@ create_visa_payment_resource_ok_test(Config) ->
         {binbase, fun('Lookup', _) ->
             {ok, #'binbase_ResponseData'{
                 bin_data = #'binbase_BinData' {
-                    payment_system = <<"visa">>,
+                    payment_system = <<"VISA">>,
                     bank_name = ?STRING,
                     iso_country_code = <<"KAZ">>,
                     card_type = debit
@@ -1069,7 +1069,7 @@ create_nspkmir_payment_resource_ok_test(Config) ->
         {binbase, fun('Lookup', _) ->
             {ok, #'binbase_ResponseData'{
                 bin_data = #'binbase_BinData' {
-                    payment_system = <<"nspkmir">>,
+                    payment_system = <<"NSPK MIR">>,
                     bank_name = ?STRING,
                     iso_country_code = <<"KAZ">>,
                     card_type = debit
