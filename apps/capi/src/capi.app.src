@@ -13,6 +13,7 @@
         woody,
         capi_woody_client,
         dmsl,
+        binbase_proto,
         dmt_client,
         swag_server,
         jose,
