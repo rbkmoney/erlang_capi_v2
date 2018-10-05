@@ -2460,7 +2460,7 @@ encode_bank_card(#{
 } = BankCard) ->
     {bank_card, #domain_BankCard{
         'token'  = Token,
-        'payment_system' = binary_to_existing_atom(PaymentSystem, utf8),
+        'payment_system' = encode_payment_system(PaymentSystem),
         'bin' = Bin,
         'masked_pan' = MaskedPan,
         'token_provider' = encode_token_provider(genlib_map:get(<<"token_provider">>, BankCard)),
@@ -2468,6 +2468,9 @@ encode_bank_card(#{
         'bank_name'      = genlib_map:get(<<"bank_name">>, BankCard),
         'metadata'       = encode_bank_card_metadata(genlib_map:get(<<"metadata">>, BankCard))
     }}.
+
+encode_payment_system(PaymentSystem) ->
+    binary_to_existing_atom(PaymentSystem, utf8).
 
 encode_bank_card_metadata(undefined) ->
     undefined;
@@ -5009,7 +5012,7 @@ lookup_bank_info(Pan, ReqCtx) ->
 expand_card_info(BankCard, {BinData, Version}) ->
     try
         BankCard#'domain_BankCard'{
-            payment_system = encode_payment_system(BinData#'binbase_BinData'.payment_system),
+            payment_system = encode_binbase_payment_system(BinData#'binbase_BinData'.payment_system),
             issuer_country = encode_residence(BinData#'binbase_BinData'.iso_country_code),
             bank_name = BinData#'binbase_BinData'.bank_name,
             metadata = #{
@@ -5025,8 +5028,20 @@ expand_card_info(BankCard, {BinData, Version}) ->
             throw({ok, {400, [], logic_error(invalidRequest, <<"Unsupported card">>)}})
     end.
 
-encode_payment_system(PaymentSystem) ->
-    binary_to_existing_atom(PaymentSystem, utf8).
+encode_binbase_payment_system(<<"VISA">>)                      -> visa;
+encode_binbase_payment_system(<<"VISA/DANKORT">>)              -> visa;         % supposedly 🤔
+encode_binbase_payment_system(<<"MASTERCARD">>)                -> mastercard;
+% encode_binbase_payment_system(<<"???">>)                       -> visaelectron;
+encode_binbase_payment_system(<<"MAESTRO">>)                   -> maestro;
+% encode_binbase_payment_system(<<"???">>)                       -> forbrugsforeningen;
+encode_binbase_payment_system(<<"DANKORT">>)                   -> dankort;
+encode_binbase_payment_system(<<"AMERICAN EXPRESS">>)          -> amex;
+encode_binbase_payment_system(<<"DINERS CLUB INTERNATIONAL">>) -> dinersclub;
+encode_binbase_payment_system(<<"DISCOVER">>)                  -> discover;
+encode_binbase_payment_system(<<"UNIONPAY">>)                  -> unionpay;
+encode_binbase_payment_system(<<"JCB">>)                       -> jcb;
+encode_binbase_payment_system(<<"NSPK MIR">>)                  -> nspkmir;
+encode_binbase_payment_system(_)                               -> error(badarg).
 
 enrich_client_info(ClientInfo, Context) ->
     ClientInfo#{<<"ip">> => prepare_client_ip(Context)}.
