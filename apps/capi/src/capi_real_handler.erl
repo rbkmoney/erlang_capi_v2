@@ -2460,7 +2460,7 @@ encode_bank_card(#{
 } = BankCard) ->
     {bank_card, #domain_BankCard{
         'token'  = Token,
-        'payment_system' = binary_to_existing_atom(PaymentSystem, utf8),
+        'payment_system' = encode_payment_system(PaymentSystem),
         'bin' = Bin,
         'masked_pan' = MaskedPan,
         'token_provider' = encode_token_provider(genlib_map:get(<<"token_provider">>, BankCard)),
