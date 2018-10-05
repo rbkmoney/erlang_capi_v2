@@ -842,9 +842,11 @@
     message_expiration = ?TIMESTAMP
 }}).
 
--define(BINBASE_LOOKUP_RESULT, #'binbase_ResponseData'{
+-define(BINBASE_LOOKUP_RESULT, ?BINBASE_LOOKUP_RESULT(<<"MASTERCARD">>)).
+
+-define(BINBASE_LOOKUP_RESULT(PaymentSystem), #'binbase_ResponseData'{
     bin_data = #'binbase_BinData' {
-        payment_system = <<"MASTERCARD">>,
+        payment_system = PaymentSystem,
         bank_name = ?STRING,
         iso_country_code = <<"KAZ">>,
         card_type = debit
