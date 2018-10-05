@@ -805,17 +805,7 @@ create_visa_payment_resource_ok_test(Config) ->
                     session_id = ?STRING
                 }}
         end},
-        {binbase, fun('Lookup', _) ->
-            {ok, #'binbase_ResponseData'{
-                bin_data = #'binbase_BinData' {
-                    payment_system = <<"visa">>,
-                    bank_name = ?STRING,
-                    iso_country_code = <<"KAZ">>,
-                    card_type = debit
-                },
-                version = ?INTEGER
-            }}
-         end}
+        {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT(<<"VISA">>)} end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
     {ok, #{<<"paymentToolDetails">> := #{
@@ -858,17 +848,7 @@ create_nspkmir_payment_resource_ok_test(Config) ->
                     session_id = ?STRING
                 }}
         end},
-        {binbase, fun('Lookup', _) ->
-            {ok, #'binbase_ResponseData'{
-                bin_data = #'binbase_BinData' {
-                    payment_system = <<"nspkmir">>,
-                    bank_name = ?STRING,
-                    iso_country_code = <<"KAZ">>,
-                    card_type = debit
-                },
-                version = ?INTEGER
-            }}
-         end}
+        {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT(<<"NSPK MIR">>)} end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
     {ok, #{<<"paymentToolDetails">> := #{
