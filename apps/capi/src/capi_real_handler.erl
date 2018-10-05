@@ -4239,19 +4239,20 @@ expand_card_info(BankCard, {BinData, Version}) ->
             throw({ok, {400, [], logic_error(invalidRequest, <<"Unsupported card">>)}})
     end.
 
-encode_payment_system(<<"VISA">>) -> visa;
-encode_payment_system(<<"MASTERCARD">>) -> mastercard;
-%encode_payment_system(<<"">>) -> visaelectron;
-encode_payment_system(<<"MAESTRO">>) -> maestro;
-%encode_payment_system(<<"">>) -> forbrugsforeningen;
-encode_payment_system(<<"DANKORT">>) -> dankort;
-encode_payment_system(<<"AMERICAN EXPRESS">>) -> amex;
+encode_payment_system(<<"VISA">>)                      -> visa;
+encode_payment_system(<<"VISA/DANKORT">>)              -> visa;                 % supposedly 🤔
+encode_payment_system(<<"MASTERCARD">>)                -> mastercard;
+% encode_payment_system(<<"???">>)                       -> visaelectron;
+encode_payment_system(<<"MAESTRO">>)                   -> maestro;
+% encode_payment_system(<<"???">>)                       -> forbrugsforeningen;
+encode_payment_system(<<"DANKORT">>)                   -> dankort;
+encode_payment_system(<<"AMERICAN EXPRESS">>)          -> amex;
 encode_payment_system(<<"DINERS CLUB INTERNATIONAL">>) -> dinersclub;
-encode_payment_system(<<"DISCOVER">>) -> discover;
-encode_payment_system(<<"UNIONPAY">>) -> unionpay;
-encode_payment_system(<<"JCB">>) -> jcb;
-encode_payment_system(<<"NSPK MIR">>) -> nspkmir;
-encode_payment_system(_) -> error(badarg).
+encode_payment_system(<<"DISCOVER">>)                  -> discover;
+encode_payment_system(<<"UNIONPAY">>)                  -> unionpay;
+encode_payment_system(<<"JCB">>)                       -> jcb;
+encode_payment_system(<<"NSPK MIR">>)                  -> nspkmir;
+encode_payment_system(_)                               -> error(badarg).
 
 enrich_client_info(ClientInfo, Context) ->
     ClientInfo#{<<"ip">> => prepare_client_ip(Context)}.
