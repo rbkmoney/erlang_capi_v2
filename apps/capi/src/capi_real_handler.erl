@@ -1185,11 +1185,11 @@ process_request('GetScheduleByRef', Req, Context, ReqCtx) ->
             {404, [], general_error(<<"Schedule not found">>)}
     end;
 
-process_request('GetPaymentInstitutions', Req, #{woody_context := WoodyContext}, ReqCtx) ->
+process_request('GetPaymentInstitutions', Req, _Context, ReqCtx) ->
     try
         Residence = encode_residence(genlib_map:get(residence, Req)),
         Realm = genlib_map:get(realm, Req),
-        {ok, PaymentInstObjects} = capi_domain:get_payment_institutions(WoodyContext),
+        {ok, PaymentInstObjects} = capi_domain:get_payment_institutions(ReqCtx),
         Resp =
             lists:filtermap(
                 fun(P) ->
