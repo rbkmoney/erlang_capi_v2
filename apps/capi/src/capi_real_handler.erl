@@ -4250,7 +4250,7 @@ expand_card_info(BankCard, {BinData, Version}) ->
             }
         }
     catch
-        error:badarg ->
+        throw:{encode_binbase_payment_system, invalid_payment_system} ->
             throw({ok, {400, [], logic_error(invalidRequest, <<"Unsupported card">>)}});
         throw:{encode_residence, invalid_residence} ->
             throw({ok, {400, [], logic_error(invalidRequest, <<"Unsupported card">>)}})
@@ -4269,7 +4269,8 @@ encode_binbase_payment_system(<<"DISCOVER">>)                  -> discover;
 encode_binbase_payment_system(<<"UNIONPAY">>)                  -> unionpay;
 encode_binbase_payment_system(<<"JCB">>)                       -> jcb;
 encode_binbase_payment_system(<<"NSPK MIR">>)                  -> nspkmir;
-encode_binbase_payment_system(_)                               -> error(badarg).
+encode_binbase_payment_system(_) ->
+    throw({encode_binbase_payment_system, invalid_payment_system}).
 
 enrich_client_info(ClientInfo, Context) ->
     ClientInfo#{<<"ip">> => prepare_client_ip(Context)}.
