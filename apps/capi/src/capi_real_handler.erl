@@ -975,7 +975,7 @@ process_request('GetPaymentInstitutions', Req, #{woody_context := WoodyContext})
             ),
         {ok, {200, [], Resp}}
     catch
-        error:badarg ->
+        throw:{encode_residence, invalid_residence} ->
             {ok, {400, [], logic_error(invalidRequest, <<"Invalid residence">>)}}
     end;
 
@@ -1070,7 +1070,7 @@ process_request('CreateClaim', Req, Context) ->
     catch
         throw:{encode_contract_modification, adjustment_creation_not_supported} ->
             {ok, {400, [], logic_error(invalidChangeset, <<"Contract adjustment creation not supported">>)}};
-        throw:invalid_residence ->
+        throw:{encode_residence, invalid_residence} ->
             {ok, {400, [], logic_error(invalidRequest, <<"Invalid residence">>)}}
     end;
 
@@ -1975,18 +1975,13 @@ encode_international_bank_account(Acc) ->
 encode_international_bank_details(undefined) ->
     undefined;
 encode_international_bank_details(Acc) ->
-    try
-        #domain_InternationalBankDetails{
-            bic     = genlib_map:get(<<"bic">>, Acc),
-            country = encode_residence(genlib_map:get(<<"countryCode">>, Acc)),
-            name    = genlib_map:get(<<"name">>, Acc),
-            address = genlib_map:get(<<"address">>, Acc),
-            aba_rtn = genlib_map:get(<<"abartn">>, Acc)
-        }
-    catch
-        error:badarg ->
-            throw(invalid_residence)
-    end.
+    #domain_InternationalBankDetails{
+        bic     = genlib_map:get(<<"bic">>, Acc),
+        country = encode_residence(genlib_map:get(<<"countryCode">>, Acc)),
+        name    = genlib_map:get(<<"name">>, Acc),
+        address = genlib_map:get(<<"address">>, Acc),
+        aba_rtn = genlib_map:get(<<"abartn">>, Acc)
+    }.
 
 encode_contractor(#{<<"contractorType">> := <<"PrivateEntity">>} = Contractor) ->
     {private_entity, encode_private_entity(Contractor)};
@@ -2035,7 +2030,12 @@ encode_payment_institution_ref(Ref) ->
 encode_residence(undefined) ->
     undefined;
 encode_residence(Residence) when is_binary(Residence) ->
-    list_to_existing_atom(string:to_lower(binary_to_list(Residence))).
+    try
+        list_to_existing_atom(string:to_lower(binary_to_list(Residence)))
+    catch
+        error:badarg ->
+            throw({encode_residence, invalid_residence})
+    end.
 
 decode_residence(undefined) ->
     undefined;
@@ -4251,6 +4251,8 @@ expand_card_info(BankCard, {BinData, Version}) ->
         }
     catch
         error:badarg ->
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Unsupported card">>)}});
+        throw:{encode_residence, invalid_residence} ->
             throw({ok, {400, [], logic_error(invalidRequest, <<"Unsupported card">>)}})
     end.
 
