@@ -957,22 +957,27 @@ process_request('GetScheduleByRef', Req, Context) ->
     end;
 
 process_request('GetPaymentInstitutions', Req, #{woody_context := WoodyContext}) ->
-    Residence = encode_residence(genlib_map:get(residence, Req)),
-    Realm = genlib_map:get(realm, Req),
-    {ok, PaymentInstObjects} = capi_domain:get_payment_institutions(WoodyContext),
-    Resp =
-        lists:filtermap(
-            fun(P) ->
-                case check_payment_institution(Realm, Residence, P) of
-                    true ->
-                        {true, decode_payment_institution_obj(P)};
-                    false ->
-                        false
-                end
-            end,
-            PaymentInstObjects
-        ),
-    {ok, {200, [], Resp}};
+    try
+        Residence = encode_residence(genlib_map:get(residence, Req)),
+        Realm = genlib_map:get(realm, Req),
+        {ok, PaymentInstObjects} = capi_domain:get_payment_institutions(WoodyContext),
+        Resp =
+            lists:filtermap(
+                fun(P) ->
+                    case check_payment_institution(Realm, Residence, P) of
+                        true ->
+                            {true, decode_payment_institution_obj(P)};
+                        false ->
+                            false
+                    end
+                end,
+                PaymentInstObjects
+            ),
+        {ok, {200, [], Resp}}
+    catch
+        throw:invalid_residence ->
+            {ok, {400, [], logic_error(invalidRequest, <<"Invalid residence">>)}}
+    end;
 
 process_request('GetPaymentInstitutionByRef', Req, #{woody_context := WoodyContext}) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
@@ -1064,7 +1069,9 @@ process_request('CreateClaim', Req, Context) ->
         end
     catch
         throw:{encode_contract_modification, adjustment_creation_not_supported} ->
-            {ok, {400, [], logic_error(invalidChangeset, <<"Contract adjustment creation not supported">>)}}
+            {ok, {400, [], logic_error(invalidChangeset, <<"Contract adjustment creation not supported">>)}};
+        throw:invalid_residence -> 
+            {ok, {400, [], logic_error(invalidRequest, <<"Invalid residence">>)}}
     end;
 
 % TODO disabled temporary, exception handling must be fixed befor enabling
@@ -2023,7 +2030,12 @@ encode_payment_institution_ref(Ref) ->
 encode_residence(undefined) ->
     undefined;
 encode_residence(Residence) when is_binary(Residence) ->
-    list_to_existing_atom(string:to_lower(binary_to_list(Residence))).
+    try
+        list_to_existing_atom(string:to_lower(binary_to_list(Residence)))
+    catch
+        error:badarg -> 
+            throw(invalid_residence)
+    end.
 
 decode_residence(undefined) ->
     undefined;
@@ -4239,6 +4251,8 @@ expand_card_info(BankCard, {BinData, Version}) ->
         }
     catch
         error:badarg ->
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Unsupported card">>)}});
+        throw:invalid_residence ->
             throw({ok, {400, [], logic_error(invalidRequest, <<"Unsupported card">>)}})
     end.
 
