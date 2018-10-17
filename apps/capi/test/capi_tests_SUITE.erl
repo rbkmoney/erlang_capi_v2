@@ -89,6 +89,7 @@
     revoke_claim_ok_test/1,
     create_claim_ok_test/1,
     update_claim_by_id_test/1,
+    create_claim_invalid_residence_test/1,
 
     get_contract_by_id_ok_test/1,
     get_contracts_ok_test/1,
@@ -240,6 +241,7 @@ groups() ->
                 revoke_claim_ok_test,
                 create_claim_ok_test,
                 update_claim_by_id_test,
+                create_claim_invalid_residence_test,
                 get_contract_by_id_ok_test,
                 get_contracts_ok_test,
                 get_contract_adjustments_ok_test,
@@ -1087,6 +1089,35 @@ create_claim_ok_test(Config) ->
         }
     ],
     {ok, _} = capi_client_claims:create_claim(?config(context, Config), Changeset).
+
+-spec create_claim_invalid_residence_test(config()) ->
+    _.
+create_claim_invalid_residence_test(Config) ->
+    mock_services([{party_management, fun('CreateClaim', _) -> {ok, ?CLAIM(?CLAIM_CHANGESET)} end}], Config),
+    Changeset = [
+        #{
+            <<"partyModificationType">> => <<"ContractModification">>,
+            <<"contractID">> => ?STRING,
+            <<"contractModificationType">> => <<"ContractPayoutToolCreation">>,
+            <<"payoutToolID">> => ?STRING,
+            <<"currency">> => ?USD,
+            <<"details">> => #{
+                <<"detailsType">> => <<"PayoutToolDetailsInternationalBankAccount">>,
+                <<"number">> => <<"12345678901234567890">>,
+                <<"iban">> => <<"GR1601101250000000012300695">>,
+                <<"bankDetails">> => #{
+                    <<"bik">> => <<"123456789">>,
+                    <<"countryCode">> => <<"EUR">>,
+                    <<"name">> => <<"testBankName">>,
+                    <<"address">> => ?STRING
+                },
+                <<"correspondentBankAccount">> => #{
+                    <<"number">> => <<"00000000000000000000">>
+                }
+            }
+        }
+    ],
+    {error, {400, _}} = capi_client_claims:create_claim(?config(context, Config), Changeset).
 
 -spec update_claim_by_id_test(config()) ->
     _.
