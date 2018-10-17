@@ -1070,7 +1070,7 @@ process_request('CreateClaim', Req, Context) ->
     catch
         throw:{encode_contract_modification, adjustment_creation_not_supported} ->
             {ok, {400, [], logic_error(invalidChangeset, <<"Contract adjustment creation not supported">>)}};
-        throw:invalid_residence -> 
+        throw:invalid_residence ->
             {ok, {400, [], logic_error(invalidRequest, <<"Invalid residence">>)}}
     end;
 
@@ -2033,7 +2033,7 @@ encode_residence(Residence) when is_binary(Residence) ->
     try
         list_to_existing_atom(string:to_lower(binary_to_list(Residence)))
     catch
-        error:badarg -> 
+        error:badarg ->
             throw(invalid_residence)
     end.
 
