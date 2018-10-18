@@ -2500,20 +2500,20 @@ decode_stat_payer({payment_resource, PaymentResource}) ->
         phone_number = PhoneNumber,
         email = Email
     } = PaymentResource,
-    #{
+    genlib_map:compact(#{
         <<"payerType"         >> => <<"PaymentResourcePayer">>,
         <<"paymentToolToken"  >> => decode_stat_payment_tool_token(PaymentTool),
         <<"paymentSession"    >> => PaymentSession,
         <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool),
-        <<"clientInfo"        >> => #{
+        <<"clientInfo"        >> => genlib_map:compact(#{
             <<"ip"         >> => IP,
             <<"fingerprint">> => Fingerprint
-        },
+        }),
         <<"contactInfo"       >> => genlib_map:compact(#{
             <<"phoneNumber">> => PhoneNumber,
             <<"email"      >> => Email
         })
-    }.
+    }).
 
 decode_stat_payment_tool_token(PaymentTool) ->
     decode_payment_tool_token(merchstat_to_domain(PaymentTool)).

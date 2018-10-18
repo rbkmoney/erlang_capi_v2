@@ -485,7 +485,8 @@
 -define(STAT_RESPONSE_PAYMENTS, ?STAT_RESPONSE({payments,
     [
         ?STAT_PAYMENT(?STAT_PAYER({bank_card, ?STAT_BANK_CARD}), ?STAT_PAYMENT_STATUS_CAPTURED),
-        ?STAT_PAYMENT(?STAT_PAYER({bank_card, ?STAT_BANK_CARD_WITH_TP}), ?STAT_PAYMENT_STATUS_PENDING)
+        ?STAT_PAYMENT(?STAT_PAYER({bank_card, ?STAT_BANK_CARD_WITH_TP}), ?STAT_PAYMENT_STATUS_PENDING),
+        ?STAT_PAYMENT(?STAT_PAYER({bank_card, ?STAT_BANK_CARD}, undefined), ?STAT_PAYMENT_STATUS_CAPTURED)
     ]
 })).
 
@@ -531,13 +532,15 @@
     context = ?CONTENT
 }).
 
--define (STAT_PAYER(PaymentTool), {payment_resource, #merchstat_PaymentResourcePayer{
+-define (STAT_PAYER(PaymentTool), ?STAT_PAYER(PaymentTool, ?STRING)).
+
+-define (STAT_PAYER(PaymentTool, SessionId), {payment_resource, #merchstat_PaymentResourcePayer{
     payment_tool = PaymentTool,
     ip_address = ?STRING,
     fingerprint = ?STRING,
     phone_number = ?STRING,
     email = <<"test@test.ru">>,
-    session_id = ?STRING
+    session_id = SessionId
 }}).
 
 -define(STAT_PAYMENT_STATUS_PENDING, {pending, #merchstat_InvoicePaymentPending{}}).
