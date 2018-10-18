@@ -2371,8 +2371,8 @@ encode_payment_institution_ref(Ref) ->
         id = Ref
     }.
 
-encode_residence(undefinded) ->
-    undefinded;
+encode_residence(undefined) ->
+    undefined;
 encode_residence(Residence) when is_binary(Residence) ->
     try
         list_to_existing_atom(string:to_lower(binary_to_list(Residence)))
