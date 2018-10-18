@@ -1186,21 +1186,27 @@ process_request('GetScheduleByRef', Req, Context, ReqCtx) ->
     end;
 
 process_request('GetPaymentInstitutions', Req, _Context, ReqCtx) ->
-    Residence = encode_residence(genlib_map:get(residence, Req)),
-    Realm = genlib_map:get(realm, Req),
-    {ok, PaymentInstObjects} = capi_domain:get_payment_institutions(ReqCtx),
-    Resp = lists:filtermap(
-        fun(P) ->
-            case check_payment_institution(Realm, Residence, P) of
-                true ->
-                    {true, decode_payment_institution_obj(P)};
-                false ->
-                    false
-            end
-        end,
-        PaymentInstObjects
-    ),
-    {ok, {200, [], Resp}};
+    try
+        Residence = encode_residence(genlib_map:get(residence, Req)),
+        Realm = genlib_map:get(realm, Req),
+        {ok, PaymentInstObjects} = capi_domain:get_payment_institutions(ReqCtx),
+        Resp =
+            lists:filtermap(
+                fun(P) ->
+                    case check_payment_institution(Realm, Residence, P) of
+                        true ->
+                            {true, decode_payment_institution_obj(P)};
+                        false ->
+                            false
+                    end
+                end,
+                PaymentInstObjects
+            ),
+        {ok, {200, [], Resp}}
+    catch
+        throw:{encode_residence, invalid_residence} ->
+            {ok, {400, [], logic_error(invalidRequest, <<"Invalid residence">>)}}
+    end;
 
 process_request('GetPaymentInstitutionByRef', Req, _Context, ReqCtx) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
@@ -1357,7 +1363,9 @@ process_request('CreateClaim', Req, Context, ReqCtx) ->
         end
     catch
         throw:{encode_contract_modification, adjustment_creation_not_supported} ->
-            {ok, {400, [], logic_error(invalidChangeset, <<"Contract adjustment creation not supported">>)}}
+            {ok, {400, [], logic_error(invalidChangeset, <<"Contract adjustment creation not supported">>)}};
+        throw:{encode_residence, invalid_residence} ->
+            {ok, {400, [], logic_error(invalidRequest, <<"Invalid residence">>)}}
     end;
 
 % TODO disabled temporary, exception handling must be fixed befor enabling
@@ -2363,10 +2371,15 @@ encode_payment_institution_ref(Ref) ->
         id = Ref
     }.
 
-encode_residence(Residence) when is_binary(Residence) ->
-    list_to_existing_atom(string:to_lower(binary_to_list(Residence)));
 encode_residence(undefined) ->
-    undefined.
+    undefined;
+encode_residence(Residence) when is_binary(Residence) ->
+    try
+        list_to_existing_atom(string:to_lower(binary_to_list(Residence)))
+    catch
+        error:badarg ->
+            throw({encode_residence, invalid_residence})
+    end.
 
 decode_residence(Residence) when is_atom(Residence) ->
     list_to_binary(string:to_upper(atom_to_list(Residence))).
@@ -5024,7 +5037,9 @@ expand_card_info(BankCard, {BinData, Version}) ->
             }
         }
     catch
-        error:badarg ->
+        throw:{encode_binbase_payment_system, invalid_payment_system} ->
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Unsupported card">>)}});
+        throw:{encode_residence, invalid_residence} ->
             throw({ok, {400, [], logic_error(invalidRequest, <<"Unsupported card">>)}})
     end.
 
@@ -5041,7 +5056,8 @@ encode_binbase_payment_system(<<"DISCOVER">>)                  -> discover;
 encode_binbase_payment_system(<<"UNIONPAY">>)                  -> unionpay;
 encode_binbase_payment_system(<<"JCB">>)                       -> jcb;
 encode_binbase_payment_system(<<"NSPK MIR">>)                  -> nspkmir;
-encode_binbase_payment_system(_)                               -> error(badarg).
+encode_binbase_payment_system(_) ->
+    throw({encode_binbase_payment_system, invalid_payment_system}).
 
 enrich_client_info(ClientInfo, Context) ->
     ClientInfo#{<<"ip">> => prepare_client_ip(Context)}.
