@@ -504,16 +504,14 @@ authorization_permission_ok_test(Config) ->
 -spec authorization_negative_lifetime_error_test(config()) ->
     _.
 authorization_negative_lifetime_error_test(_Config) ->
-    ok.
-    % {ok, Token} = issue_token([], {lifetime, -10}),
-    % ?badresp(401) = capi_client_categories:get_categories(get_context(Token)).
+    {ok, Token} = issue_token([], {lifetime, -10}),
+    ?badresp(401) = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_bad_deadline_error_test(config()) ->
     _.
 authorization_bad_deadline_error_test(_Config) ->
-    ok.
-    % {ok, Token} = issue_token([], {deadline, -10}),
-    % ?badresp(401) = capi_client_categories:get_categories(get_context(Token)).
+    {ok, Token} = issue_token([], {deadline, -10}),
+    ?badresp(401) = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_error_no_header_test(config()) ->
     _.

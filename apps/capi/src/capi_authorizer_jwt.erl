@@ -319,9 +319,6 @@ check_expiration(_, Exp) when is_integer(Exp) ->
     case genlib_time:unow() of
         Now when Exp > Now ->
             Exp;
-        %% FIXME: remove as soon as posible
-        _Now when Exp > 0 ->
-            Exp;
         _ ->
             throw({invalid_token, expired})
     end;
