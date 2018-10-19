@@ -316,12 +316,14 @@ check_presence(C, undefined) ->
 check_expiration(_, Exp = 0) ->
     Exp;
 check_expiration(_, Exp) when is_integer(Exp) ->
-    case genlib_time:unow() of
-        Now when Exp > Now ->
-            Exp;
-        _ ->
-            throw({invalid_token, expired})
-    end;
+    Exp;
+    %% Temporary disabled
+    % case genlib_time:unow() of
+    %     Now when Exp > Now ->
+    %         Exp;
+    %     _ ->
+    %         throw({invalid_token, expired})
+    % end;
 check_expiration(C, undefined) ->
     throw({invalid_token, {missing, C}});
 check_expiration(C, V) ->
