@@ -1795,7 +1795,7 @@ delete_customer_ok_test(Config) ->
     _.
 deadline_error_test(_Config) ->
     {ok, Token} = issue_token([], {deadline, 4102444800}), % 01/01/2100 @ 12:00am (UTC)
-    {error, _} = capi_client_categories:get_categories(get_context(Token, <<"blabla">>)).
+    {error, {400, _}} = capi_client_categories:get_categories(get_context(Token, <<"blabla">>)).
 
 -spec deadline_absolute_ok_test(config()) ->
     _.
