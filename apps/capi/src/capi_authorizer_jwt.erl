@@ -315,12 +315,12 @@ check_presence(C, undefined) ->
 
 check_expiration(_, Exp = 0) ->
     Exp;
-check_expiration(_, Exp) when is_integer(Exp),  ->
+check_expiration(_, Exp) when is_integer(Exp) ->
     case genlib_time:unow() of
         Now when Exp > Now ->
             Exp;
         %% FIXME: remove as soon as posible
-        Now when Exp > 0 ->
+        _Now when Exp > 0 ->
             Exp;
         _ ->
             throw({invalid_token, expired})
