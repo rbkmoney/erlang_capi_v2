@@ -158,6 +158,7 @@
 -define(CAPI_URL                    , ?CAPI_HOST_NAME ++ ":" ++ integer_to_list(?CAPI_PORT)).
 
 -define(badresp(Code), {error, {invalid_response_code, Code}}).
+-define(emptyresp(Code), {error,{Code, #{}}}).
 
 -type test_case_name()  :: atom().
 -type config()          :: [{atom(), any()}].
@@ -546,31 +547,31 @@ authorization_permission_ok_test(Config) ->
     _.
 authorization_negative_lifetime_error_test(_Config) ->
     {ok, Token} = issue_token([], {lifetime, -10}),
-    ?badresp(401) = capi_client_categories:get_categories(get_context(Token)).
+    ?emptyresp(401) = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_bad_deadline_error_test(config()) ->
     _.
 authorization_bad_deadline_error_test(_Config) ->
     {ok, Token} = issue_token([], {deadline, -10}),
-    ?badresp(401) = capi_client_categories:get_categories(get_context(Token)).
+    ?emptyresp(401) = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_error_no_header_test(config()) ->
     _.
 authorization_error_no_header_test(_Config) ->
     Token = <<>>,
-    ?badresp(401) = capi_client_categories:get_categories(get_context(Token)).
+    ?emptyresp(401) = capi_client_categories:get_categories(get_context(Token)).
 
 -spec authorization_error_no_permission_test(config()) ->
     _.
 authorization_error_no_permission_test(_Config) ->
     {ok, Token} = issue_token([], {lifetime, 10}),
-    ?badresp(401) = capi_client_parties:get_my_party(get_context(Token)).
+    ?emptyresp(401) = capi_client_parties:get_my_party(get_context(Token)).
 
 -spec authorization_bad_token_error_test(config()) ->
     _.
 authorization_bad_token_error_test(Config) ->
     {ok, Token} = issue_dummy_token([{[party], read}], Config),
-    ?badresp(401) = capi_client_parties:get_my_party(get_context(Token)).
+    ?emptyresp(401) = capi_client_parties:get_my_party(get_context(Token)).
 
 -spec create_invoice_ok_test(config()) ->
     _.
