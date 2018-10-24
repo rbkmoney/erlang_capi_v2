@@ -60,7 +60,7 @@ handle_request(OperationID, Req, SwagContext = #{auth_context := AuthContext}) -
                 process_request(OperationID, Req, Context);
             {error, _} = Error ->
                 _ = lager:info("Operation ~p authorization failed due to ~p", [OperationID, Error]),
-                {error, {401, [], general_error(<<"Unauthorized operation">>)}}
+                {ok, {401, [], undefined}}
         end
     catch
         error:{woody_error, {Source, Class, Details}} ->
