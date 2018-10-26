@@ -3807,7 +3807,9 @@ process_merchant_stat_result(StatType, Result) ->
             Resp = [decode_stat_info(StatType, S) || S <- Stats],
             {ok, {200, [], Resp}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
-            {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
+            {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+        {exception, #merchstat_BadToken{reason = Reason}} ->
+            {ok, {400, [], logic_error(invalidRequest, Reason)}}
     end.
 
 process_search_request(QueryType, Query, Req, Context, Opts = #{thrift_fun := ThriftFun}) ->
@@ -3840,7 +3842,7 @@ process_search_request_result(QueryType, Result, Context, #{decode_fun := Decode
         {exception, #'InvalidRequest'{errors = Errors}} ->
             {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
         {exception, #merchstat_BadToken{reason = Reason}} ->
-            {ok, {400, [], logic_error(invalidRequest, Reason)}} 
+            {ok, {400, [], logic_error(invalidRequest, Reason)}}
     end.
 
 get_time(Key, Req) ->
