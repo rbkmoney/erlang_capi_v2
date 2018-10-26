@@ -608,6 +608,12 @@ process_request('CreateRefund', Req, Context, ReqCtx) ->
                     {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
                 #payproc_InvalidPaymentStatus{} ->
                     {ok, {400, [], logic_error(invalidPaymentStatus, <<"Invalid invoice payment status">>)}};
+                #payproc_InvalidPartyStatus{} ->
+                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                #payproc_InvalidShopStatus{} ->
+                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                #payproc_InvalidContractStatus{} ->
+                    {ok, {400, [], logic_error(invalidContractStatus, <<"Invalid contract status">>)}};
                 #payproc_InsufficientAccountBalance{} ->
                     {ok, {400, [], logic_error(
                         insufficentAccountBalance,
