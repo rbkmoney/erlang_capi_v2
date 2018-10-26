@@ -3808,8 +3808,8 @@ process_merchant_stat_result(StatType, Result) ->
             {ok, {200, [], Resp}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
             {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-        {exception, #merchstat_BadToken{reason = Reason}} ->
-            {ok, {400, [], logic_error(invalidRequest, Reason)}}
+        {exception, #merchstat_BadToken{}} ->
+            {ok, {400, [], logic_error(invalidRequest, <<"Invalid token">>)}}
     end.
 
 process_search_request(QueryType, Query, Req, Context, Opts = #{thrift_fun := ThriftFun}) ->
@@ -3841,8 +3841,8 @@ process_search_request_result(QueryType, Result, Context, #{decode_fun := Decode
             {ok, {200, [], Resp}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
             {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
-        {exception, #merchstat_BadToken{reason = Reason}} ->
-            {ok, {400, [], logic_error(invalidRequest, Reason)}}
+        {exception, #merchstat_BadToken{}} ->
+            {ok, {400, [], logic_error(invalidRequest, <<"Invalid token">>)}}
     end.
 
 get_time(Key, Req) ->
