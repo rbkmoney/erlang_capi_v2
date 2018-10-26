@@ -4864,12 +4864,18 @@ process_digital_wallet_data(Data, _ReqCtx) ->
     {{digital_wallet, DigitalWallet}, <<>>}.
 
 process_tokenized_card_data(Data, ReqCtx) ->
-    {ok, UnwrappedPaymentTool} = service_call(
+    CallResult = service_call(
         get_token_provider_service_name(Data),
         'Unwrap',
         [encode_wrapped_payment_tool(Data)],
         ReqCtx
     ),
+    UnwrappedPaymentTool = case CallResult of
+        {ok, Tool} ->
+            Tool;
+        {exception, #'InvalidRequest'{}} ->
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Tokenized card data is invalid">>)}})
+    end,
     process_put_card_data_result(
         put_card_data_to_cds(
             encode_tokenized_card_data(UnwrappedPaymentTool),
