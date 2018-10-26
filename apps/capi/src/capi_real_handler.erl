@@ -1337,7 +1337,7 @@ generate_report_presigned_url(FileID, Context) ->
     Call = {reporting, 'GeneratePresignedUrl', [FileID, ExpiresAt]},
     case service_call(Call, Context) of
         {ok, URL} ->
-            {ok, {303, [{<<"Location">>, URL}], undefined}};
+            {ok, {200, [], #{<<"url">> => URL}}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
