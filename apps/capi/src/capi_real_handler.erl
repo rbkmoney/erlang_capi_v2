@@ -3838,7 +3838,10 @@ process_search_request_result(QueryType, Result, Context, #{decode_fun := Decode
             }),
             {ok, {200, [], Resp}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
-            {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
+            {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+        {exception, #merchstat_BadToken{}} ->
+            %or maybe return reason from the record?
+            {ok, {400, [], logic_error(invalidRequest, <<"Token is invalid">>)}} 
     end.
 
 get_time(Key, Req) ->
