@@ -608,6 +608,12 @@ process_request('CreateRefund', Req, Context, ReqCtx) ->
                     {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
                 #payproc_InvalidPaymentStatus{} ->
                     {ok, {400, [], logic_error(invalidPaymentStatus, <<"Invalid invoice payment status">>)}};
+                #payproc_InvalidPartyStatus{} ->
+                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                #payproc_InvalidShopStatus{} ->
+                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                #payproc_InvalidContractStatus{} ->
+                    {ok, {400, [], logic_error(invalidContractStatus, <<"Invalid contract status">>)}};
                 #payproc_InsufficientAccountBalance{} ->
                     {ok, {400, [], logic_error(
                         insufficentAccountBalance,
@@ -4487,7 +4493,9 @@ process_merchant_stat_result(StatType, Result) ->
             Resp = [decode_stat_info(StatType, S) || S <- Stats],
             {ok, {200, [], Resp}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
-            {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
+            {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+        {exception, #merchstat_BadToken{}} ->
+            {ok, {400, [], logic_error(invalidRequest, <<"Invalid token">>)}}
     end.
 
 process_search_request(QueryType, Query, Req, ReqCtx, Opts = #{thrift_fun := ThriftFun}) ->
@@ -4516,7 +4524,9 @@ process_search_request_result(QueryType, Result, #{decode_fun := DecodeFun}) ->
             }),
             {ok, {200, [], Resp}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
-            {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
+            {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+        {exception, #merchstat_BadToken{}} ->
+            {ok, {400, [], logic_error(invalidRequest, <<"Invalid token">>)}}
     end.
 
 get_time(Key, Req) ->
@@ -4858,12 +4868,18 @@ process_digital_wallet_data(Data, _ReqCtx) ->
     {{digital_wallet, DigitalWallet}, <<>>}.
 
 process_tokenized_card_data(Data, ReqCtx) ->
-    {ok, UnwrappedPaymentTool} = service_call(
+    CallResult = service_call(
         get_token_provider_service_name(Data),
         'Unwrap',
         [encode_wrapped_payment_tool(Data)],
         ReqCtx
     ),
+    UnwrappedPaymentTool = case CallResult of
+        {ok, Tool} ->
+            Tool;
+        {exception, #'InvalidRequest'{}} ->
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Tokenized card data is invalid">>)}})
+    end,
     process_put_card_data_result(
         put_card_data_to_cds(
             encode_tokenized_card_data(UnwrappedPaymentTool),
