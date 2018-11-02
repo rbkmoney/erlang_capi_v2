@@ -493,7 +493,8 @@
     fee = ?INTEGER,
     currency_symbolic_code = ?RUB,
     payer = Payer,
-    context = ?CONTENT
+    context = ?CONTENT,
+    domain_revision = ?INTEGER
 }).
 
 -define (STAT_PAYER(PaymentTool), {payment_resource, #merchstat_PaymentResourcePayer{
