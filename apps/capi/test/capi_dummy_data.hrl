@@ -760,18 +760,25 @@
     session_id = ?STRING
 }).
 
--define(UNWRAPPED_PAYMENT_TOOL(Details), #paytoolprv_UnwrappedPaymentTool{
-    payment_data = {tokenized_card, #paytoolprv_TokenizedCard{
-        dpan = ?STRING,
-        exp_date = #paytoolprv_ExpDate{
-            month = 10,
-            year = 2018
-        },
-        auth_data = {auth_3ds, #paytoolprv_Auth3DS{
-            cryptogram = ?STRING,
-            eci = ?STRING
+-define(UNWRAPPED_PAYMENT_TOOL(Details),
+    ?UNWRAPPED_PAYMENT_TOOL(
+        Details,
+        {tokenized_card, #paytoolprv_TokenizedCard{
+            dpan = ?STRING,
+            exp_date = #paytoolprv_ExpDate{
+                month = 10,
+                year = 2018
+            },
+            auth_data = {auth_3ds, #paytoolprv_Auth3DS{
+                cryptogram = ?STRING,
+                eci = ?STRING
+            }}
         }}
-    }},
+    )
+).
+
+-define(UNWRAPPED_PAYMENT_TOOL(Details, PaymentData), #paytoolprv_UnwrappedPaymentTool{
+    payment_data = PaymentData,
     card_info = #paytoolprv_CardInfo{
         display_name = <<"Visa 1234">>,
         cardholder_name = ?STRING,
