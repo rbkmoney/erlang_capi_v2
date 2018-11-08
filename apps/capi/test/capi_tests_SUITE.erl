@@ -80,8 +80,9 @@
     create_nspkmir_payment_resource_ok_test/1,
     create_euroset_payment_resource_ok_test/1,
     create_qw_payment_resource_ok_test/1,
-    create_applepay_payment_resource_ok_test/1,
-    create_googlepay_payment_resource_ok_test/1,
+    create_applepay_tokenized_payment_resource_ok_test/1,
+    create_googlepay_tokenized_payment_resource_ok_test/1,
+    create_googlepay_plain_payment_resource_ok_test/1,
 
     get_my_party_ok_test/1,
     suspend_my_party_ok_test/1,
@@ -229,8 +230,9 @@ groups() ->
                 create_nspkmir_payment_resource_ok_test,
                 create_euroset_payment_resource_ok_test,
                 create_qw_payment_resource_ok_test,
-                create_applepay_payment_resource_ok_test,
-                create_googlepay_payment_resource_ok_test
+                create_applepay_tokenized_payment_resource_ok_test,
+                create_googlepay_tokenized_payment_resource_ok_test,
+                create_googlepay_plain_payment_resource_ok_test
             ]
         },
         {operations_by_base_api_token, [],
@@ -1111,9 +1113,9 @@ create_qw_payment_resource_ok_test(Config) ->
         <<"clientInfo">> => ClientInfo
     }).
 
--spec create_applepay_payment_resource_ok_test(_) ->
+-spec create_applepay_tokenized_payment_resource_ok_test(_) ->
     _.
-create_applepay_payment_resource_ok_test(Config) ->
+create_applepay_tokenized_payment_resource_ok_test(Config) ->
     mock_services([
         {payment_tool_provider_apple_pay, fun('Unwrap', _) -> {ok, ?UNWRAPPED_PAYMENT_TOOL(?APPLE_PAY_DETAILS)} end},
         {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
@@ -1131,16 +1133,19 @@ create_applepay_payment_resource_ok_test(Config) ->
             <<"clientInfo">> => ClientInfo
         }).
 
--spec create_googlepay_payment_resource_ok_test(_) ->
+-spec create_googlepay_tokenized_payment_resource_ok_test(_) ->
     _.
-create_googlepay_payment_resource_ok_test(Config) ->
+create_googlepay_tokenized_payment_resource_ok_test(Config) ->
     mock_services([
         {payment_tool_provider_google_pay, fun('Unwrap', _) -> {ok, ?UNWRAPPED_PAYMENT_TOOL(?GOOGLE_PAY_DETAILS)} end},
         {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
         {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
-    {ok, #{<<"paymentToolDetails">> := #{<<"paymentSystem">> := <<"mastercard">>}}} =
+    {ok, #{<<"paymentToolDetails">> := #{
+        <<"paymentSystem">> := <<"mastercard">>,
+        <<"tokenProvider">> := <<"googlepay">>
+    }}} =
         capi_client_tokens:create_payment_resource(?config(context, Config), #{
             <<"paymentTool">> => #{
                 <<"paymentToolType">> => <<"TokenizedCardData">>,
@@ -1150,6 +1155,41 @@ create_googlepay_payment_resource_ok_test(Config) ->
             },
             <<"clientInfo">> => ClientInfo
         }).
+
+-spec create_googlepay_plain_payment_resource_ok_test(_) ->
+    _.
+create_googlepay_plain_payment_resource_ok_test(Config) ->
+    mock_services([
+        {payment_tool_provider_google_pay,
+            fun('Unwrap', _) ->
+                {ok, ?UNWRAPPED_PAYMENT_TOOL(
+                    ?GOOGLE_PAY_DETAILS,
+                    {card, #paytoolprv_Card{
+                        pan = <<"1234567890123456">>,
+                        exp_date = #paytoolprv_ExpDate{month = 10, year = 2018}
+                    }}
+                )}
+            end
+        },
+        {cds_storage,
+            fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end
+        },
+        {binbase,
+            fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end
+        }
+    ], Config),
+    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
+    {ok, #{<<"paymentToolDetails">> := Details = #{<<"paymentSystem">> := <<"mastercard">>}}} =
+        capi_client_tokens:create_payment_resource(?config(context, Config), #{
+            <<"paymentTool">> => #{
+                <<"paymentToolType">> => <<"TokenizedCardData">>,
+                <<"provider">> => <<"GooglePay">>,
+                <<"gatewayMerchantID">> => <<"SomeMerchantID">>,
+                <<"paymentToken">> => #{}
+            },
+            <<"clientInfo">> => ClientInfo
+        }),
+    false = maps:is_key(<<"tokenProvider">>, Details).
 
 -spec get_my_party_ok_test(config()) ->
     _.

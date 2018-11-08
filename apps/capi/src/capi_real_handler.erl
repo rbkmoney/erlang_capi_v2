@@ -4105,6 +4105,7 @@ process_put_card_data_result(
             payment_system = PaymentSystem,
             last_4_digits  = Last4
         },
+        payment_data = PaymentData,
         details = PaymentDetails
     }
 ) ->
@@ -4112,16 +4113,23 @@ process_put_card_data_result(
         {bank_card, BankCard#domain_BankCard{
             payment_system = PaymentSystem,
             masked_pan     = capi_utils:define(Last4, BankCard#domain_BankCard.masked_pan),
-            token_provider = get_payment_token_provider(PaymentDetails)
+            token_provider = get_payment_token_provider(PaymentDetails, PaymentData)
         }},
         SessionID
     }.
 
-get_payment_token_provider({apple, _}) ->
+get_payment_token_provider(_PaymentDetails, {card, _}) ->
+    % TODO
+    % We deliberately hide the fact that we've got that payment tool from the likes of Google Chrome browser
+    % in order to make our internal services think of it as if it was good ol' plain bank card. Without a
+    % CVV though. A better solution would be to distinguish between a _token provider_ and an _origin_.
+    undefined;
+
+get_payment_token_provider({apple, _}, _PaymentData) ->
     applepay;
-get_payment_token_provider({google, _}) ->
+get_payment_token_provider({google, _}, _PaymentData) ->
     googlepay;
-get_payment_token_provider({samsung, _}) ->
+get_payment_token_provider({samsung, _}, _PaymentData) ->
     samsungpay.
 
 encode_wrapped_payment_tool(Data) ->
