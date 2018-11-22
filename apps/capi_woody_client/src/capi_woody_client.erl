@@ -18,21 +18,33 @@ call_service(ServiceName, Function, Args, Context) ->
 -spec call_service(service_name(), woody:func(), [term()], woody_context:ctx(), woody:ev_handler()) ->
     woody:result().
 
-call_service(ServiceName, Function, Args, Context, EventHandler) ->
-    {Url, Service, Deadline} = get_service_spec(ServiceName),
-    Request = {Service, Function, Args},
-    woody_client:call(
-        Request,
-        #{url => Url, event_handler => EventHandler},
-        set_deadline(Deadline, Context)
-    ).
+call_service(ServiceName, Function, Args, Context0, EventHandler) ->
+    Deadline = get_service_deadline(ServiceName),
+    Context1 = set_deadline(Deadline, Context0),
+    Retry = get_service_retry(ServiceName, Function),
+    call_service(ServiceName, Function, Args, Context1, EventHandler, Retry).
 
-get_service_spec(ServiceName) ->
-    {
-        get_service_url(ServiceName),
-        get_service_modname(ServiceName),
-        get_service_deadline(ServiceName)
-    }.
+call_service(ServiceName, Function, Args, Context, EventHandler, Retry) ->
+    Url = get_service_url(ServiceName),
+    Service = get_service_modname(ServiceName),
+    Request = {Service, Function, Args},
+    try
+        woody_client:call(
+            Request,
+            #{url => Url, event_handler => EventHandler},
+            Context
+        )
+    catch
+        error:{woody_error, {_Source, resource_unavailable, _Details}} = Error ->
+            NextRetry = genlib_retry:next_step(Retry),
+            handle_retry(ServiceName, Function, Args, Context, EventHandler, NextRetry, Error)
+    end.
+
+handle_retry(_, _, _, _, _, finish, Error) ->
+    erlang:error(Error);
+handle_retry(ServiceName, Function, Args, Context, EventHandler, {wait, Timeout, Retry}, _) ->
+    ok = timer:sleep(Timeout),
+    call_service(ServiceName, Function, Args, Context, EventHandler, Retry).
 
 get_service_url(ServiceName) ->
     maps:get(ServiceName, genlib_app:env(?MODULE, service_urls)).
@@ -85,3 +97,9 @@ set_deadline(Deadline, Context) ->
         _AlreadySet ->
             Context
     end.
+
+get_service_retry(ServiceName, Function) ->
+    ServiceRetries = genlib_app:env(?MODULE, service_retries, #{}),
+    FunctionReties = maps:get(ServiceName, ServiceRetries, #{}),
+    DefaultRetry = maps:get('_', FunctionReties, finish),
+    maps:get(Function, FunctionReties, DefaultRetry).
