@@ -29,6 +29,7 @@
 -export([
     woody_unexpected_test/1,
     woody_unavailable_test/1,
+    woody_retry_test/1,
     woody_unknown_test/1,
 
     authorization_positive_lifetime_ok_test/1,
@@ -221,6 +222,7 @@ groups() ->
             [
                 woody_unexpected_test,
                 woody_unavailable_test,
+                woody_retry_test,
                 woody_unknown_test
             ]
         },
@@ -512,6 +514,24 @@ woody_unavailable_test(Config) ->
         party_management => <<"http://spanish.inquision/v1/partymgmt">>
     }}]),
     ?badresp(503) = capi_client_parties:get_my_party(?config(context, Config)).
+
+-spec woody_retry_test(config()) ->
+    _.
+
+woody_retry_test(Config) ->
+    _ = capi_ct_helper:start_app(capi_woody_client, [
+        {service_urls, #{
+            party_management => <<"http://spanish.inquision/v1/partymgmt">>
+        }},
+        {service_retries, #{
+            party_management    => #{
+                'Get'   => {linear, 3, 1000},
+                '_'     => finish
+            }
+        }}
+    ]),
+    {Time, ?badresp(503)} = timer:tc(capi_client_parties, get_my_party, [?config(context, Config)]),
+    true = (Time >= 3000000).
 
 -spec woody_unknown_test(config()) ->
     _.
