@@ -41,12 +41,14 @@ call_service(ServiceName, Function, Args, Context, EventHandler, Retry) ->
     end.
 
 apply_retry_strategy(Retry, Error, Context) ->
-    apply_retry_step(genlib_retry:next_step(Retry), Error, Context).
+    apply_retry_step(genlib_retry:next_step(Retry), woody_context:get_deadline(Context), Error).
 
-apply_retry_step(finish, Error, _) ->
+apply_retry_step(finish, _, Error) ->
     erlang:error(Error);
-apply_retry_step({wait, Timeout, Retry}, Error, Context) ->
-    Deadline0 = woody_context:get_deadline(Context),
+apply_retry_step({wait, Timeout, Retry}, undefined, _) ->
+    ok = timer:sleep(Timeout),
+    Retry;
+apply_retry_step({wait, Timeout, Retry}, Deadline0, Error) ->
     Deadline1 = woody_deadline:from_unixtime_ms(
         woody_deadline:to_unixtime_ms(Deadline0) - Timeout
     ),
