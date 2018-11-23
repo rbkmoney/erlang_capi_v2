@@ -36,15 +36,28 @@ call_service(ServiceName, Function, Args, Context, EventHandler, Retry) ->
         )
     catch
         error:{woody_error, {_Source, resource_unavailable, _Details}} = Error ->
-            NextRetry = genlib_retry:next_step(Retry),
-            handle_retry(ServiceName, Function, Args, Context, EventHandler, NextRetry, Error)
+            NextRetry = apply_retry_strategy(Retry, Error, Context),
+            call_service(ServiceName, Function, Args, Context, EventHandler, NextRetry)
     end.
 
-handle_retry(_, _, _, _, _, finish, Error) ->
+apply_retry_strategy(Retry, Error, Context) ->
+    apply_retry_step(genlib_retry:next_step(Retry), Error, Context).
+
+apply_retry_step(finish, Error, _) ->
     erlang:error(Error);
-handle_retry(ServiceName, Function, Args, Context, EventHandler, {wait, Timeout, Retry}, _) ->
-    ok = timer:sleep(Timeout),
-    call_service(ServiceName, Function, Args, Context, EventHandler, Retry).
+apply_retry_step({wait, Timeout, Retry}, Error, Context) ->
+    Deadline0 = woody_context:get_deadline(Context),
+    Deadline1 = woody_deadline:from_unixtime_ms(
+        woody_deadline:to_unixtime_ms(Deadline0) - Timeout
+    ),
+    case woody_deadline:is_reached(Deadline1) of
+        true ->
+            % no more time for retries
+            erlang:error(Error);
+        false ->
+            ok = timer:sleep(Timeout),
+            Retry
+    end.
 
 get_service_url(ServiceName) ->
     maps:get(ServiceName, genlib_app:env(?MODULE, service_urls)).
