@@ -483,13 +483,16 @@ woody_retry_test(Config) ->
         }},
         {service_retries, #{
             party_management    => #{
-                'Get'   => {linear, 3, 1000},
+                'Get'   => {linear, 30, 1000},
                 '_'     => finish
             }
+        }},
+        {service_deadlines, #{
+            party_management => 5000
         }}
     ]),
     {Time, ?badresp(503)} = timer:tc(capi_client_parties, get_my_party, [?config(context, Config)]),
-    true = (Time >= 3000000).
+    true = (Time > 4000000) and (Time < 6000000).
 
 -spec woody_unknown_test(config()) ->
     _.
