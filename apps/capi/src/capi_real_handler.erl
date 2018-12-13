@@ -1952,7 +1952,9 @@ encode_payout_tool_params(#{<<"currency">> := Currency, <<"details">> := Details
 encode_payout_tool_info(#{<<"detailsType">> := <<"PayoutToolDetailsBankAccount">>} = Tool) ->
    {russian_bank_account, encode_russian_bank_account(Tool)};
 encode_payout_tool_info(#{<<"detailsType">> := <<"PayoutToolDetailsInternationalBankAccount">>} = Tool) ->
-   {international_bank_account, encode_international_bank_account(Tool)}.
+   {international_bank_account, encode_international_bank_account(Tool)};
+encode_payout_tool_info(#{<<"detailsType">> := <<"PayoutToolDetailsWalletInfo">>} = Tool) ->
+   {wallet_info, #domain_WalletInfo{wallet_id = maps:get(<<"walletID">>, Tool)}}.
 
 encode_russian_bank_account(BankAccount) ->
     #domain_RussianBankAccount{
@@ -3115,7 +3117,12 @@ decode_payout_tool_details({bank_card, V}) ->
 decode_payout_tool_details({russian_bank_account, V}) ->
     decode_russian_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankAccount">>});
 decode_payout_tool_details({international_bank_account, V}) ->
-    decode_international_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsInternationalBankAccount">>}).
+    decode_international_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsInternationalBankAccount">>});
+decode_payout_tool_details({wallet_info, V}) ->
+    #{
+        <<"detailsType">> => <<"PayoutToolDetailsWalletInfo">>,
+        <<"walletID">> => V#domain_WalletInfo.wallet_id
+    }.
 
 decode_stat_payout_summary(PayoutSummary) when is_list(PayoutSummary) ->
     [decode_stat_payout_summary_item(PayoutSummaryItem) || PayoutSummaryItem <- PayoutSummary];
@@ -3607,13 +3614,17 @@ encode_optional_payout_method('BankAccount') ->
     #domain_PayoutMethodRef{id = russian_bank_account};
 encode_optional_payout_method('InternationalBankAccount') ->
     #domain_PayoutMethodRef{id = international_bank_account};
+encode_optional_payout_method('Wallet') ->
+    #domain_PayoutMethodRef{id = wallet_info};
 encode_optional_payout_method(undefined) ->
     undefined.
 
 decode_payout_method(#domain_PayoutMethodRef{id = russian_bank_account}) ->
     <<"BankAccount">>;
 decode_payout_method(#domain_PayoutMethodRef{id = international_bank_account}) ->
-    <<"InternationalBankAccount">>.
+    <<"InternationalBankAccount">>;
+decode_payout_method(#domain_PayoutMethodRef{id = wallet_info}) ->
+    <<"Wallet">>.
 
 decode_payout_methods_selector({value, Val}) when is_list(Val) ->
     lists:map(fun decode_payout_method/1, Val);
