@@ -1607,7 +1607,7 @@ search_payouts_ok_test(Config) ->
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
         {shopID, <<"testShopID">>},
         {payoutID, <<"testPayoutID">>},
-        {payoutToolType, <<"PayoutCard">>}
+        {payoutToolType, <<"Wallet">>}
     ],
 
     {ok, _, _} = capi_client_searches:search_payouts(?config(context, Config), ?STRING, Query).
