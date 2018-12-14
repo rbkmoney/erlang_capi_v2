@@ -3140,8 +3140,8 @@ decode_stat_payout_summary_item(PayoutSummary) ->
         <<"type"    >> => genlib:to_binary(PayoutSummary#merchstat_PayoutSummaryItem.operation_type)
     }).
 
-encode_payout_type('PayoutCard'   ) -> <<"bank_card">>;
 encode_payout_type('PayoutAccount') -> <<"bank_account">>;
+encode_payout_type('Wallet'       ) -> <<"wallet">>;
 encode_payout_type(undefined      ) -> undefined.
 
 create_dsl(QueryType, QueryBody, QueryParams) ->
