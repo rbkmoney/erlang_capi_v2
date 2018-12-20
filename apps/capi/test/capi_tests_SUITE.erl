@@ -1492,7 +1492,20 @@ create_webhook_ok_test(Config) ->
         <<"scope">> => #{
             <<"topic">> => <<"InvoicesTopic">>,
             <<"shopID">> => ?STRING,
-            <<"eventTypes">> => []
+            <<"eventTypes">> => [ <<"InvoiceCreated">>
+                                , <<"InvoicePaid">>
+                                , <<"InvoiceCancelled">>
+                                , <<"InvoiceFulfilled">>
+                                , <<"PaymentStarted">>
+                                , <<"PaymentProcessed">>
+                                , <<"PaymentCaptured">>
+                                , <<"PaymentCancelled">>
+                                , <<"PaymentRefunded">>
+                                , <<"PaymentFailed">>
+                                , <<"PaymentRefundCreated">>
+                                , <<"PaymentRefundFailed">>
+                                , <<"PaymentRefundSucceeded">>
+                                ]
         }
     },
     {ok, _} = capi_client_webhooks:create_webhook(?config(context, Config), Req).
