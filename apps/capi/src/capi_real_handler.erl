@@ -1319,7 +1319,7 @@ process_request('GetPayout', Req, Context) ->
     PayoutID = maps:get(payoutID, Req),
     case service_call({payouts, 'Get', [PayoutID]}, Context) of
         {ok, Payout} ->
-            {ok, {200, [], decode_pp_payout(Payout)}};
+            {ok, {200, [], decode_payout_proc_payout(Payout)}};
         {exception, #'payout_processing_PayoutNotFound'{}} ->
             {ok, {404, [], general_error(<<"Payout not found">>)}}
     end;
@@ -1337,7 +1337,7 @@ process_request('CreatePayout', Req, Context) ->
     },
     case service_call({payouts, 'CreatePayout', [CreateRequest]}, Context) of
         {ok, Payout} ->
-            {ok, {200, [], decode_pp_payout(Payout)}};
+            {ok, {201, [], decode_payout_proc_payout(Payout)}};
         {exception, Exception} ->
             case Exception of
                 #'payout_processing_InvalidPayoutTool'{} ->
@@ -4381,7 +4381,7 @@ decode_optional(Arg, DecodeFun) when Arg /= undefined ->
 decode_optional(undefined, _) ->
     undefined.
 
-decode_pp_payout(Payout) ->
+decode_payout_proc_payout(Payout) ->
     merge_and_compact(#{
         <<"id"               >> => Payout#payout_processing_Payout.id,
         <<"shopID"           >> => Payout#payout_processing_Payout.shop_id,
@@ -4389,11 +4389,11 @@ decode_pp_payout(Payout) ->
         <<"amount"           >> => Payout#payout_processing_Payout.amount,
         <<"fee"              >> => Payout#payout_processing_Payout.fee,
         <<"currency"         >> => decode_currency(Payout#payout_processing_Payout.currency),
-        <<"payoutToolDetails">> => decode_pp_payout_tool_details(Payout#payout_processing_Payout.type),
-        <<"payoutSummary"    >> => decode_pp_payout_summary(Payout#payout_processing_Payout.summary)
+        <<"payoutToolDetails">> => decode_payout_proc_payout_tool_details(Payout#payout_processing_Payout.type),
+        <<"payoutSummary"    >> => decode_payout_proc_payout_summary(Payout#payout_processing_Payout.summary)
     }, decode_stat_payout_status(Payout#payout_processing_Payout.status)).
 
-decode_pp_payout_tool_details(PayoutType) ->
+decode_payout_proc_payout_tool_details(PayoutType) ->
     decode_payout_tool_details(payout_proc_to_domain(PayoutType)).
 
 payout_proc_to_domain({bank_account, {russian_payout_account, PayoutAccount}}) ->
@@ -4405,12 +4405,12 @@ payout_proc_to_domain({bank_account, {international_payout_account, PayoutAccoun
 payout_proc_to_domain({wallet, #payout_processing_Wallet{wallet_id = WalletID}}) ->
     {wallet_info, #domain_WalletInfo{wallet_id = WalletID}}.
 
-decode_pp_payout_summary(PayoutSummary) when is_list(PayoutSummary) ->
-    [decode_pp_payout_summary_item(PayoutSummaryItem) || PayoutSummaryItem <- PayoutSummary];
-decode_pp_payout_summary(undefined) ->
+decode_payout_proc_payout_summary(PayoutSummary) when is_list(PayoutSummary) ->
+    [decode_payout_proc_payout_summary_item(PayoutSummaryItem) || PayoutSummaryItem <- PayoutSummary];
+decode_payout_proc_payout_summary(undefined) ->
     undefined.
 
-decode_pp_payout_summary_item(PayoutSummary) ->
+decode_payout_proc_payout_summary_item(PayoutSummary) ->
     genlib_map:compact(#{
         <<"amount"  >> => PayoutSummary#payout_processing_PayoutSummaryItem.amount,
         <<"fee"     >> => PayoutSummary#payout_processing_PayoutSummaryItem.fee,

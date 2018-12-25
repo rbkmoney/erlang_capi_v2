@@ -109,6 +109,9 @@
     get_payout_tools_ok_test/1,
     get_payout_tool_by_id/1,
 
+    create_payout/1,
+    get_payout/1,
+
     create_webhook_ok_test/1,
     get_webhooks/1,
     get_webhook_by_id/1,
@@ -275,6 +278,8 @@ groups() ->
                 get_contract_adjustment_by_id_ok_test,
                 get_payout_tools_ok_test,
                 get_payout_tool_by_id,
+                create_payout,
+                get_payout,
                 create_webhook_ok_test,
                 get_webhooks,
                 get_webhook_by_id,
@@ -1476,6 +1481,21 @@ get_payout_tool_by_id(Config) ->
     mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_RU),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_US).
+
+-spec create_payout(config()) ->
+    _.
+create_payout(Config) ->
+    mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
+    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_RU),
+    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_US).
+
+-spec get_payout(config()) ->
+    _.
+get_payout(Config) ->
+    mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
+    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_RU),
+    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_US).
+
 
 -spec create_webhook_ok_test(config()) ->
     _.

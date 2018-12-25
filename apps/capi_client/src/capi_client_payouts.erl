@@ -39,3 +39,13 @@ get_schedule_by_ref(Context, ScheduleRef) ->
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
     Response = swag_client_payouts_api:get_schedule_by_ref(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
+
+-spec get_payout(context(), binary()) -> {ok, term()} | {error, term()}.
+get_payout(Context, PayoutID) ->
+    Params = #{
+        binding => #{
+            <<"payoutID">> => PayoutID
+        }
+    },
+    {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
+    Response = swag_client_payouts_api:get_payout(Url, PreparedParams, Opts),
