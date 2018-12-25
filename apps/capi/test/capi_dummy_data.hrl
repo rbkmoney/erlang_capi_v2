@@ -3,6 +3,7 @@
 -define(USD, <<"USD">>).
 -define(BANKID_RU, <<"PUTIN">>).
 -define(BANKID_US, <<"TRAMP">>).
+-define(WALLET_TOOL, <<"TOOL">>).
 -define(JSON, <<"{}">>).
 -define(INTEGER, 10000).
 -define(INTEGER_BINARY, <<"10000">>).
@@ -195,7 +196,11 @@
     status = {active, #domain_ContractActive{}},
     terms = #domain_TermSetHierarchyRef{id = ?INTEGER},
     adjustments = [?CONTRACT_ADJUSTMENT],
-    payout_tools = [?PAYOUT_TOOL(?BANKID_RU, ?RUSSIAN_BANK_ACCOUNT), ?PAYOUT_TOOL(?BANKID_US, ?INTERNATIONAL_BANK_ACCOUNT)]
+    payout_tools = [
+        ?PAYOUT_TOOL(?BANKID_RU, ?RUSSIAN_BANK_ACCOUNT),
+        ?PAYOUT_TOOL(?BANKID_US, ?INTERNATIONAL_BANK_ACCOUNT),
+        ?PAYOUT_TOOL(?WALLET_TOOL, ?WALLET_INFO)
+    ]
 }).
 
 -define(CONTRACTOR, {registered_user, #domain_RegisteredUser{email = ?STRING}}).
@@ -461,6 +466,10 @@
     address = ?STRING,
     aba_rtn = <<"129131673">>
 }).
+
+-define(WALLET_INFO, {wallet_info, #domain_WalletInfo{
+    wallet_id = ?STRING
+}}).
 
 -define(WEBHOOK, #webhooker_Webhook{
     id = ?INTEGER,
@@ -864,3 +873,24 @@
     },
     version = ?INTEGER
 }).
+
+-define(PAYOUT(Type, PayoutSummary), #'payout_processing_Payout'{
+    id = ?STRING,
+    party_id = ?STRING,
+    shop_id = ?STRING,
+    contract_id = ?STRING,
+    created_at = ?TIMESTAMP,
+    status = {paid, #'payout_processing_PayoutPaid'{}},
+    amount = ?INTEGER,
+    fee = ?INTEGER,
+    currency = #domain_CurrencyRef{
+        symbolic_code = ?RUB
+    },
+    payout_flow = [],
+    type = Type,
+    summary = PayoutSummary
+}).
+
+-define(WALLET_PAYOUT_TYPE, {wallet, #payout_processing_Wallet{
+    wallet_id = ?STRING
+}}).

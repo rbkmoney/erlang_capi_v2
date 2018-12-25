@@ -11,6 +11,7 @@
 -include_lib("dmsl/include/dmsl_merch_stat_thrift.hrl").
 -include_lib("dmsl/include/dmsl_reporting_thrift.hrl").
 -include_lib("dmsl/include/dmsl_payment_tool_provider_thrift.hrl").
+-include_lib("dmsl/include/dmsl_payout_processing_thrift.hrl").
 -include_lib("binbase_proto/include/binbase_binbase_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 -include_lib("jose/include/jose_jwk.hrl").
@@ -1480,21 +1481,29 @@ get_payout_tools_ok_test(Config) ->
 get_payout_tool_by_id(Config) ->
     mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_RU),
-    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_US).
+    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_US),
+    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?WALLET_TOOL).
 
 -spec create_payout(config()) ->
     _.
 create_payout(Config) ->
-    mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
-    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_RU),
-    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_US).
+    Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, []),
+    mock_services([{payouts, fun('CreatePayout', _) -> {ok, Payout} end}], Config),
+    Req = #{
+        <<"id">> => ?STRING,
+        <<"shopID">> => ?STRING,
+        <<"payoutToolID">> => ?WALLET_TOOL,
+        <<"amount">> => 2,
+        <<"currency">> => <<"RUB">>
+    },
+    {ok, _} = capi_client_payouts:create_payout(?config(context, Config), Req, ?STRING).
 
 -spec get_payout(config()) ->
     _.
 get_payout(Config) ->
-    mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
-    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_RU),
-    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_US).
+    Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, []),
+    mock_services([{payouts, fun('Get', _) -> {ok, Payout} end}], Config),
+    {ok, _} = capi_client_payouts:get_payout(?config(context, Config), ?STRING).
 
 
 -spec create_webhook_ok_test(config()) ->

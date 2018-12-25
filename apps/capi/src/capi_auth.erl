@@ -320,7 +320,11 @@ get_operation_access('GetPaymentInstitutionPayoutMethods', _) ->
 get_operation_access('GetPaymentInstitutionPayoutSchedules', _) ->
     [{[party], read}];
 get_operation_access('GetLocationsNames'         , _) ->
-    [].
+    [];
+get_operation_access('CreatePayout'              , _) ->
+    [{[party], write}];
+get_operation_access('GetPayout'                 , _) ->
+    [{[party], read}].
 
 -spec get_resource_hierarchy() -> #{atom() => map()}.
 

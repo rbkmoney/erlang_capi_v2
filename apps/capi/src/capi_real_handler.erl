@@ -1325,16 +1325,7 @@ process_request('GetPayout', Req, Context) ->
     end;
 
 process_request('CreatePayout', Req, Context) ->
-    CreateRequest = #'payout_processing_PayoutParams'{
-        payout_id = maps:get(id, Req),
-        shop = #'payout_processing_ShopParams'{
-            party_id = get_party_id(Context),
-            shop_id = maps:get(shopID, Req)
-        },
-        payout_tool_id = maps:get(payoutToolID, Req),
-        amount = encode_cash(maps:get(amount, Req), maps:get(currency, Req)),
-        metadata = maps:get(metadata, Req, undefined)
-    },
+    CreateRequest = encode_payout_proc_payout_params(get_party_id(Context), maps:get('PayoutParams', Req)),
     case service_call({payouts, 'CreatePayout', [CreateRequest]}, Context) of
         {ok, Payout} ->
             {ok, {201, [], decode_payout_proc_payout(Payout)}};
@@ -4381,6 +4372,18 @@ decode_optional(Arg, DecodeFun) when Arg /= undefined ->
 decode_optional(undefined, _) ->
     undefined.
 
+encode_payout_proc_payout_params(PartyID, PayoutParams) ->
+    #'payout_processing_PayoutParams'{
+        payout_id = maps:get(<<"id">>, PayoutParams),
+        shop = #'payout_processing_ShopParams'{
+            party_id = PartyID,
+            shop_id = maps:get(<<"shopID">>, PayoutParams)
+        },
+        payout_tool_id = maps:get(<<"payoutToolID">>, PayoutParams),
+        amount = encode_cash(maps:get(<<"amount">>, PayoutParams), maps:get(<<"currency">>, PayoutParams)),
+        metadata = maps:get(<<"metadata">>, PayoutParams, undefined)
+    }.
+
 decode_payout_proc_payout(Payout) ->
     merge_and_compact(#{
         <<"id"               >> => Payout#payout_processing_Payout.id,
@@ -4391,7 +4394,17 @@ decode_payout_proc_payout(Payout) ->
         <<"currency"         >> => decode_currency(Payout#payout_processing_Payout.currency),
         <<"payoutToolDetails">> => decode_payout_proc_payout_tool_details(Payout#payout_processing_Payout.type),
         <<"payoutSummary"    >> => decode_payout_proc_payout_summary(Payout#payout_processing_Payout.summary)
-    }, decode_stat_payout_status(Payout#payout_processing_Payout.status)).
+    }, decode_payout_proc_payout_status(Payout#payout_processing_Payout.status)).
+
+decode_payout_proc_payout_status({cancelled, #payout_processing_PayoutCancelled{details = Details}}) ->
+    #{
+        <<"status"             >> => <<"cancelled">>,
+        <<"cancellationDetails">> => genlib:to_binary(Details)
+    };
+decode_payout_proc_payout_status({Status, _}) ->
+    #{
+        <<"status">> => genlib:to_binary(Status)
+    }.
 
 decode_payout_proc_payout_tool_details(PayoutType) ->
     decode_payout_tool_details(payout_proc_to_domain(PayoutType)).
