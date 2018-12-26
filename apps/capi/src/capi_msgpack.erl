@@ -11,8 +11,6 @@
 -export([wrap/1]).
 -export([unwrap/1]).
 
--export([nil/0]).
-
 -type t() :: dmsl_msgpack_thrift:'Value'().
 
 -export_type([t/0]).
@@ -20,7 +18,7 @@
 %%
 
 -spec wrap
-    (nil               ) -> t();
+    (null              ) -> t();
     (boolean()         ) -> t();
     (integer()         ) -> t();
     (float()           ) -> t();
@@ -29,7 +27,7 @@
     ([t()]             ) -> t();
     (#{t() => t()}     ) -> t().
 
-wrap(nil) ->
+wrap(null) ->
     {nl, #msgpack_Nil{}};
 wrap(V) when is_boolean(V) ->
     {b, V};
@@ -48,7 +46,7 @@ wrap(V) when is_map(V) ->
     {obj, maps:fold(fun(Key, Value, Map) -> Map#{wrap(Key) => wrap(Value)} end, #{}, V)}.
 
 -spec unwrap(t()) ->
-    nil                |
+    null               |
     boolean()          |
     integer()          |
     float()            |
@@ -58,7 +56,7 @@ wrap(V) when is_map(V) ->
     #{t() => t()}      .
 
 unwrap({nl, #msgpack_Nil{}}) ->
-    nil;
+    null;
 unwrap({b, V}) when is_boolean(V) ->
     V;
 unwrap({i, V}) when is_integer(V) ->
@@ -74,10 +72,3 @@ unwrap({arr, V}) when is_list(V) ->
     [unwrap(ListItem) || ListItem <- V];
 unwrap({obj, V}) when is_map(V) ->
     maps:fold(fun(Key, Value, Map) -> Map#{unwrap(Key) => unwrap(Value)} end, #{}, V).
-
-%%
-
--spec nil() -> t().
-
-nil() ->
-    wrap(nil).
