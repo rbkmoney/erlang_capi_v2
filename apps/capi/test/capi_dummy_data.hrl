@@ -965,7 +965,8 @@
         <<"someKey">>   => {str, <<"someBinary">>},
         <<"someInt">>   => {i, 5},
         <<"someList">>  => {arr, [{str, <<"list_1">>}, {str, <<"list_2">>}]},
-        <<"someMap">>   => {obj, #{{str, <<"someKey">>} => {i, 123}}}
+        <<"someMap">>   => {obj, #{{str, <<"someKey">>} => {i, 123}}},
+        <<"someNil">>   => {nl, #msgpack_Nil{}}
     }
 }).
 

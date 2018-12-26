@@ -1506,7 +1506,8 @@ create_payout(Config) ->
             ],
             <<"payoutMap">> => #{
                 <<"someKey">> => 234
-            }
+            },
+            <<"how_about_null">> => null
         }
     },
     {ok, _} = capi_client_payouts:create_payout(?config(context, Config), Req, ?STRING).
