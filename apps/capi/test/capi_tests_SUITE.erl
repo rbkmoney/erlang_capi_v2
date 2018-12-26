@@ -475,7 +475,9 @@ init_per_group(GroupName, Config) when
         {[party], read},
         {[invoices, payments], write},
         {[invoices, payments], read},
-        {[customers], write}
+        {[customers], write},
+        {[payouts], write},
+        {[payouts], read}
     ],
     {ok, Token} = issue_token(BasePermissions, unlimited),
     {ok, Token2} = issue_token(BasePermissions, unlimited),

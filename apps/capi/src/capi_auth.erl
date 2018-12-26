@@ -322,9 +322,9 @@ get_operation_access('GetPaymentInstitutionPayoutSchedules', _) ->
 get_operation_access('GetLocationsNames'         , _) ->
     [];
 get_operation_access('CreatePayout'              , _) ->
-    [{[party], write}];
+    [{[payouts], write}];
 get_operation_access('GetPayout'                 , _) ->
-    [{[party], read}].
+    [{[payouts], read}].
 
 -spec get_resource_hierarchy() -> #{atom() => map()}.
 
@@ -333,7 +333,8 @@ get_resource_hierarchy() ->
         party               => #{invoice_templates => #{invoice_template_invoices => #{}}},
         customers           => #{bindings => #{}},
         invoices            => #{payments => #{}},
-        payment_resources => #{}
+        payment_resources   => #{},
+        payouts             => #{}
     }.
 
 -spec get_consumer(claims()) ->

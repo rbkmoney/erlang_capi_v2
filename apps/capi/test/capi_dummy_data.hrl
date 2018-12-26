@@ -505,6 +505,7 @@
 
 -define(STAT_RESPONSE_PAYOUTS, ?STAT_RESPONSE({payouts,
     [
+        ?STAT_PAYOUT({wallet, #merchstat_Wallet{wallet_id = ?STRING}}, []),
         ?STAT_PAYOUT({bank_card, #merchstat_PayoutCard{card = ?STAT_BANK_CARD}}, [?PAYOUT_SUMMARY_ITEM]),
         ?STAT_PAYOUT({bank_card, #merchstat_PayoutCard{card = ?STAT_BANK_CARD_WITH_TP}}, [?PAYOUT_SUMMARY_ITEM]),
         ?STAT_PAYOUT({bank_account, ?STAT_PAYOUT_BANK_ACCOUNT_RUS}, undefined),
