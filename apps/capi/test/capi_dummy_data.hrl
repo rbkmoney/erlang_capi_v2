@@ -889,9 +889,25 @@
     },
     payout_flow = [],
     type = Type,
-    summary = PayoutSummary
+    summary = PayoutSummary,
+    metadata = #{
+        <<"someKey">>   => {str, <<"someBinary">>},
+        <<"someInt">>   => {i, 5},
+        <<"someList">>  => {arr, [{str, <<"list_1">>}, {str, <<"list_2">>}]},
+        <<"someMap">>   => {obj, #{{str, <<"someKey">>} => {i, 123}}}
+    }
 }).
 
 -define(WALLET_PAYOUT_TYPE, {wallet, #payout_processing_Wallet{
     wallet_id = ?STRING
 }}).
+
+-define(PAYOUT_PROC_PAYOUT_SUMMARY_ITEM, #payout_processing_PayoutSummaryItem{
+    amount = ?INTEGER,
+    fee = ?INTEGER,
+    currency_symbolic_code = ?RUB,
+    from_time = ?TIMESTAMP,
+    to_time = ?TIMESTAMP,
+    operation_type = payment,
+    count = ?INTEGER
+}).

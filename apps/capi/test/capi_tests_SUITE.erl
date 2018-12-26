@@ -542,7 +542,7 @@ woody_retry_test(Config) ->
         }}
     ]),
     {Time, ?badresp(503)} = timer:tc(capi_client_parties, get_my_party, [?config(context, Config)]),
-    true = (Time > 4000000) and (Time < 6000000).
+    true = (Time > 3000000) and (Time < 6000000).
 
 -spec woody_unknown_test(config()) ->
     _.
@@ -1496,14 +1496,25 @@ create_payout(Config) ->
         <<"shopID">> => ?STRING,
         <<"payoutToolID">> => ?WALLET_TOOL,
         <<"amount">> => 2,
-        <<"currency">> => <<"RUB">>
+        <<"currency">> => <<"RUB">>,
+        <<"metadata">> => #{
+            <<"payoutBinary">> => <<"sample data">>,
+            <<"payoutInt">> => 5,
+            <<"payoutList">> => [
+                <<"some_1">>,
+                <<"some_2">>
+            ],
+            <<"payoutMap">> => #{
+                <<"someKey">> => 234
+            }
+        }
     },
     {ok, _} = capi_client_payouts:create_payout(?config(context, Config), Req, ?STRING).
 
 -spec get_payout(config()) ->
     _.
 get_payout(Config) ->
-    Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, []),
+    Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, [?PAYOUT_PROC_PAYOUT_SUMMARY_ITEM]),
     mock_services([{payouts, fun('Get', _) -> {ok, Payout} end}], Config),
     {ok, _} = capi_client_payouts:get_payout(?config(context, Config), ?STRING).
 

@@ -4372,6 +4372,14 @@ decode_optional(Arg, DecodeFun) when Arg /= undefined ->
 decode_optional(undefined, _) ->
     undefined.
 
+encode_msgpack_value(_Key, Value) ->
+    capi_msgpack:wrap(Value).
+
+encode_payout_proc_metadata(undefined) ->
+    undefined;
+encode_payout_proc_metadata(Data) ->
+    maps:map(fun encode_msgpack_value/2, Data).
+
 encode_payout_proc_payout_params(PartyID, PayoutParams) ->
     #'payout_processing_PayoutParams'{
         payout_id = maps:get(<<"id">>, PayoutParams),
@@ -4381,7 +4389,7 @@ encode_payout_proc_payout_params(PartyID, PayoutParams) ->
         },
         payout_tool_id = maps:get(<<"payoutToolID">>, PayoutParams),
         amount = encode_cash(maps:get(<<"amount">>, PayoutParams), maps:get(<<"currency">>, PayoutParams)),
-        metadata = maps:get(<<"metadata">>, PayoutParams, undefined)
+        metadata = encode_payout_proc_metadata(maps:get(<<"metadata">>, PayoutParams, undefined))
     }.
 
 decode_payout_proc_payout(Payout) ->
@@ -4393,7 +4401,8 @@ decode_payout_proc_payout(Payout) ->
         <<"fee"              >> => Payout#payout_processing_Payout.fee,
         <<"currency"         >> => decode_currency(Payout#payout_processing_Payout.currency),
         <<"payoutToolDetails">> => decode_payout_proc_payout_tool_details(Payout#payout_processing_Payout.type),
-        <<"payoutSummary"    >> => decode_payout_proc_payout_summary(Payout#payout_processing_Payout.summary)
+        <<"payoutSummary"    >> => decode_payout_proc_payout_summary(Payout#payout_processing_Payout.summary),
+        <<"metadata"         >> => decode_payout_proc_metadata(Payout#payout_processing_Payout.metadata)
     }, decode_payout_proc_payout_status(Payout#payout_processing_Payout.status)).
 
 decode_payout_proc_payout_status({cancelled, #payout_processing_PayoutCancelled{details = Details}}) ->
@@ -4433,3 +4442,11 @@ decode_payout_proc_payout_summary_item(PayoutSummary) ->
         <<"toTime"  >> => PayoutSummary#payout_processing_PayoutSummaryItem.to_time,
         <<"type"    >> => genlib:to_binary(PayoutSummary#payout_processing_PayoutSummaryItem.operation_type)
     }).
+
+decode_payout_proc_metadata(undefined) ->
+    undefined;
+decode_payout_proc_metadata(Data) ->
+    maps:map(fun decode_msgpack_value/2, Data).
+
+decode_msgpack_value(_Key, Value) ->
+    capi_msgpack:unwrap(Value).
