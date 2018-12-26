@@ -3692,6 +3692,14 @@ decode_business_schedule_ref(undefined) ->
 -define(pmtrefunded()  , {refunded, #webhooker_InvoicePaymentRefunded{}}).
 -define(pmtfailed()    , {failed, #webhooker_InvoicePaymentFailed{}}).
 
+-define(pmtrfndcreated()     , {invoice_payment_refund_created, #webhooker_InvoicePaymentRefundCreated{}}).
+-define(pmtrfndstatus(Value) , {
+    invoice_payment_refund_status_changed,
+    #webhooker_InvoicePaymentRefundStatusChanged{value = Value}}).
+-define(pmtrfndfailed()      , {failed, #webhooker_InvoicePaymentRefundFailed{}}).
+-define(pmtrfndsucceeded()   , {succeeded, #webhooker_InvoicePaymentRefundSucceeded{}}).
+
+
 encode_invoice_event_type(<<"InvoiceCreated">>) ->
     {created, #webhooker_InvoiceCreated{}};
 encode_invoice_event_type(<<"InvoicePaid">>) ->
@@ -3711,7 +3719,13 @@ encode_invoice_event_type(<<"PaymentCancelled">>) ->
 encode_invoice_event_type(<<"PaymentRefunded">>) ->
     {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtrefunded()}}};
 encode_invoice_event_type(<<"PaymentFailed">>) ->
-    {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtfailed()}}}.
+    {payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = ?pmtfailed()}}};
+encode_invoice_event_type(<<"PaymentRefundCreated">>) ->
+    {payment, {invoice_payment_refund_change, ?pmtrfndcreated()}};
+encode_invoice_event_type(<<"PaymentRefundFailed">>) ->
+    {payment, {invoice_payment_refund_change, ?pmtrfndstatus(?pmtrfndfailed())}};
+encode_invoice_event_type(<<"PaymentRefundSucceeded">>) ->
+    {payment, {invoice_payment_refund_change, ?pmtrfndstatus(?pmtrfndsucceeded())}}.
 
 encode_customer_event_type(<<"CustomerCreated">>) ->
     {created, #webhooker_CustomerCreated{}};
@@ -3762,7 +3776,11 @@ decode_invoice_event_type({payment, {status_changed, #webhooker_InvoicePaymentSt
         ?pmtfailed()
     ]];
 decode_invoice_event_type({payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = Value}}}) ->
-    [decode_payment_status_event_type(Value)].
+    [decode_payment_status_event_type(Value)];
+decode_invoice_event_type({payment, {invoice_payment_refund_change, ?pmtrfndcreated()}}) ->
+    [<<"PaymentRefundCreated">>];
+decode_invoice_event_type({payment, {invoice_payment_refund_change, ?pmtrfndstatus(Value)}}) ->
+    [decode_payment_refund_status_event_type(Value)].
 
 decode_invoice_status_event_type(?invpaid())      -> <<"InvoicePaid">>;
 decode_invoice_status_event_type(?invcancelled()) -> <<"InvoiceCancelled">>;
@@ -3773,6 +3791,9 @@ decode_payment_status_event_type(?pmtcaptured())  -> <<"PaymentCaptured">>;
 decode_payment_status_event_type(?pmtcancelled()) -> <<"PaymentCancelled">>;
 decode_payment_status_event_type(?pmtrefunded())  -> <<"PaymentRefunded">>;
 decode_payment_status_event_type(?pmtfailed())    -> <<"PaymentFailed">>.
+
+decode_payment_refund_status_event_type(?pmtrfndfailed()) -> <<"PaymentRefundFailed">>;
+decode_payment_refund_status_event_type(?pmtrfndsucceeded()) -> <<"PaymentRefundSucceeded">>.
 
 decode_customer_event_type({created, #webhooker_CustomerCreated{}}) ->
     <<"CustomerCreated">>;

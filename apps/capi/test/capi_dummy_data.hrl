@@ -476,7 +476,78 @@
     party_id = ?STRING,
     event_filter = {invoice, #webhooker_InvoiceEventFilter{
         shop_id = ?STRING,
-        types = [{created, #webhooker_InvoiceCreated{}}]
+        types = ordsets:from_list([
+            {created,
+             #webhooker_InvoiceCreated{}} 
+
+          , {status_changed,
+             #webhooker_InvoiceStatusChanged{
+                value = {
+                    paid,
+                    #webhooker_InvoicePaid{}}}}
+          , {status_changed,
+             #webhooker_InvoiceStatusChanged{
+                value = {
+                    cancelled,
+                    #webhooker_InvoiceCancelled{}}}}
+          , {status_changed,
+             #webhooker_InvoiceStatusChanged{
+                value = {
+                    fulfilled,
+                    #webhooker_InvoiceFulfilled{}}}}
+
+          , {payment, {
+               created,
+               #webhooker_InvoicePaymentCreated{}}}
+          , {payment, {
+               status_changed,
+               #webhooker_InvoicePaymentStatusChanged{
+                  value = {
+                      processed,
+                      #webhooker_InvoicePaymentProcessed{}}}}}
+          , {payment, {
+               status_changed,
+               #webhooker_InvoicePaymentStatusChanged{
+                  value = {
+                      captured,
+                      #webhooker_InvoicePaymentCaptured{}}}}}
+          , {payment, {
+               status_changed,
+               #webhooker_InvoicePaymentStatusChanged{
+                  value = {
+                      cancelled,
+                      #webhooker_InvoicePaymentCancelled{}}}}}
+          , {payment, {
+               status_changed,
+               #webhooker_InvoicePaymentStatusChanged{
+                  value = {
+                      refunded,
+                      #webhooker_InvoicePaymentRefunded{}}}}}
+          , {payment, {
+               status_changed,
+               #webhooker_InvoicePaymentStatusChanged{
+                  value = {
+                      failed,
+                      #webhooker_InvoicePaymentFailed{}}}}}
+          , {payment, {
+               invoice_payment_refund_change, {
+                   invoice_payment_refund_created,
+                   #webhooker_InvoicePaymentRefundCreated{}}}}
+          , {payment, {
+               invoice_payment_refund_change, {
+                   invoice_payment_refund_status_changed,
+                   #webhooker_InvoicePaymentRefundStatusChanged{
+                      value = {
+                          failed,
+                          #webhooker_InvoicePaymentRefundFailed{}}}}}}
+          , {payment, {
+               invoice_payment_refund_change, {
+                   invoice_payment_refund_status_changed,
+                   #webhooker_InvoicePaymentRefundStatusChanged{
+                      value = {
+                          succeeded,
+                          #webhooker_InvoicePaymentRefundSucceeded{}}}}}}
+          ])
     }},
     url = ?STRING,
     pub_key = ?STRING,
