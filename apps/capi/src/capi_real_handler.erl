@@ -9,6 +9,7 @@
 -include_lib("dmsl/include/dmsl_geo_ip_thrift.hrl").
 -include_lib("dmsl/include/dmsl_reporting_thrift.hrl").
 -include_lib("dmsl/include/dmsl_payment_tool_provider_thrift.hrl").
+-include_lib("dmsl/include/dmsl_payout_processing_thrift.hrl").
 
 -include_lib("binbase_proto/include/binbase_binbase_thrift.hrl").
 
@@ -1312,6 +1313,31 @@ process_request('GetCustomerEvents', Req, Context) ->
                 #'InvalidRequest'{errors = Errors} ->
                     {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
             end
+    end;
+
+process_request('GetPayout', Req, Context) ->
+    PayoutID = maps:get(payoutID, Req),
+    case service_call({payouts, 'Get', [PayoutID]}, Context) of
+        {ok, Payout} ->
+            {ok, {200, [], decode_payout_proc_payout(Payout)}};
+        {exception, #'payout_processing_PayoutNotFound'{}} ->
+            {ok, {404, [], general_error(<<"Payout not found">>)}}
+    end;
+
+process_request('CreatePayout', Req, Context) ->
+    CreateRequest = encode_payout_proc_payout_params(get_party_id(Context), maps:get('PayoutParams', Req)),
+    case service_call({payouts, 'CreatePayout', [CreateRequest]}, Context) of
+        {ok, Payout} ->
+            {ok, {201, [], decode_payout_proc_payout(Payout)}};
+        {exception, Exception} ->
+            case Exception of
+                #'payout_processing_InvalidPayoutTool'{} ->
+                    {ok, {400, [], logic_error(invalidPayoutTool, <<"Invalid payout tool">>)}};
+                #'payout_processing_InsufficientFunds'{} ->
+                    {ok, {400, [], logic_error(invalidCash, <<"Invalid amount or currency">>)}};
+                #'InvalidRequest'{errors = Errors} ->
+                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
+            end
     end.
 
 check_payment_institution(Realm, Residence, PaymentInstitution) ->
@@ -2577,6 +2603,9 @@ merchstat_to_domain({bank_account, {russian_payout_account, PayoutAccount}}) ->
 merchstat_to_domain({bank_account, {international_payout_account, PayoutAccount}}) ->
     #merchstat_InternationalPayoutAccount{bank_account = BankAccount} = PayoutAccount,
     {international_bank_account, merchstat_to_domain({international_bank_account, BankAccount})};
+merchstat_to_domain({wallet, #merchstat_Wallet{wallet_id = WalletID}}) ->
+    {wallet_info, #domain_WalletInfo{wallet_id = WalletID}};
+
 merchstat_to_domain({international_bank_account, undefined}) ->
     undefined;
 merchstat_to_domain({international_bank_account, BankAccount = #merchstat_InternationalBankAccount{}}) ->
@@ -4363,3 +4392,82 @@ decode_optional(Arg, DecodeFun) when Arg /= undefined ->
     DecodeFun(Arg);
 decode_optional(undefined, _) ->
     undefined.
+
+encode_msgpack_value(_Key, Value) ->
+    capi_msgpack:wrap(Value).
+
+encode_payout_proc_metadata(undefined) ->
+    undefined;
+encode_payout_proc_metadata(Data) ->
+    maps:map(fun encode_msgpack_value/2, Data).
+
+encode_payout_proc_payout_params(PartyID, PayoutParams) ->
+    #'payout_processing_PayoutParams'{
+        payout_id = maps:get(<<"id">>, PayoutParams),
+        shop = #'payout_processing_ShopParams'{
+            party_id = PartyID,
+            shop_id = maps:get(<<"shopID">>, PayoutParams)
+        },
+        payout_tool_id = maps:get(<<"payoutToolID">>, PayoutParams),
+        amount = encode_cash(maps:get(<<"amount">>, PayoutParams), maps:get(<<"currency">>, PayoutParams)),
+        metadata = encode_payout_proc_metadata(maps:get(<<"metadata">>, PayoutParams, undefined))
+    }.
+
+decode_payout_proc_payout(Payout) ->
+    merge_and_compact(#{
+        <<"id"               >> => Payout#payout_processing_Payout.id,
+        <<"shopID"           >> => Payout#payout_processing_Payout.shop_id,
+        <<"createdAt"        >> => Payout#payout_processing_Payout.created_at,
+        <<"amount"           >> => Payout#payout_processing_Payout.amount,
+        <<"fee"              >> => Payout#payout_processing_Payout.fee,
+        <<"currency"         >> => decode_currency(Payout#payout_processing_Payout.currency),
+        <<"payoutToolDetails">> => decode_payout_proc_payout_tool_details(Payout#payout_processing_Payout.type),
+        <<"payoutSummary"    >> => decode_payout_proc_payout_summary(Payout#payout_processing_Payout.summary),
+        <<"metadata"         >> => decode_payout_proc_metadata(Payout#payout_processing_Payout.metadata)
+    }, decode_payout_proc_payout_status(Payout#payout_processing_Payout.status)).
+
+decode_payout_proc_payout_status({cancelled, #payout_processing_PayoutCancelled{details = Details}}) ->
+    #{
+        <<"status"             >> => <<"cancelled">>,
+        <<"cancellationDetails">> => genlib:to_binary(Details)
+    };
+decode_payout_proc_payout_status({Status, _}) ->
+    #{
+        <<"status">> => genlib:to_binary(Status)
+    }.
+
+decode_payout_proc_payout_tool_details(PayoutType) ->
+    decode_payout_tool_details(payout_proc_to_domain(PayoutType)).
+
+payout_proc_to_domain({bank_account, {russian_payout_account, PayoutAccount}}) ->
+    #payout_processing_RussianPayoutAccount{bank_account = BankAccount} = PayoutAccount,
+    {russian_bank_account, BankAccount};
+payout_proc_to_domain({bank_account, {international_payout_account, PayoutAccount}}) ->
+    #payout_processing_InternationalPayoutAccount{bank_account = BankAccount} = PayoutAccount,
+    {international_bank_account, BankAccount};
+payout_proc_to_domain({wallet, #payout_processing_Wallet{wallet_id = WalletID}}) ->
+    {wallet_info, #domain_WalletInfo{wallet_id = WalletID}}.
+
+decode_payout_proc_payout_summary(PayoutSummary) when is_list(PayoutSummary) ->
+    [decode_payout_proc_payout_summary_item(PayoutSummaryItem) || PayoutSummaryItem <- PayoutSummary];
+decode_payout_proc_payout_summary(undefined) ->
+    undefined.
+
+decode_payout_proc_payout_summary_item(PayoutSummary) ->
+    genlib_map:compact(#{
+        <<"amount"  >> => PayoutSummary#payout_processing_PayoutSummaryItem.amount,
+        <<"fee"     >> => PayoutSummary#payout_processing_PayoutSummaryItem.fee,
+        <<"currency">> => PayoutSummary#payout_processing_PayoutSummaryItem.currency_symbolic_code,
+        <<"count"   >> => PayoutSummary#payout_processing_PayoutSummaryItem.count,
+        <<"fromTime">> => PayoutSummary#payout_processing_PayoutSummaryItem.from_time,
+        <<"toTime"  >> => PayoutSummary#payout_processing_PayoutSummaryItem.to_time,
+        <<"type"    >> => genlib:to_binary(PayoutSummary#payout_processing_PayoutSummaryItem.operation_type)
+    }).
+
+decode_payout_proc_metadata(undefined) ->
+    undefined;
+decode_payout_proc_metadata(Data) ->
+    maps:map(fun decode_msgpack_value/2, Data).
+
+decode_msgpack_value(_Key, Value) ->
+    capi_msgpack:unwrap(Value).

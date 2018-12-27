@@ -3,6 +3,7 @@
 -define(USD, <<"USD">>).
 -define(BANKID_RU, <<"PUTIN">>).
 -define(BANKID_US, <<"TRAMP">>).
+-define(WALLET_TOOL, <<"TOOL">>).
 -define(JSON, <<"{}">>).
 -define(INTEGER, 10000).
 -define(INTEGER_BINARY, <<"10000">>).
@@ -195,7 +196,11 @@
     status = {active, #domain_ContractActive{}},
     terms = #domain_TermSetHierarchyRef{id = ?INTEGER},
     adjustments = [?CONTRACT_ADJUSTMENT],
-    payout_tools = [?PAYOUT_TOOL(?BANKID_RU, ?RUSSIAN_BANK_ACCOUNT), ?PAYOUT_TOOL(?BANKID_US, ?INTERNATIONAL_BANK_ACCOUNT)]
+    payout_tools = [
+        ?PAYOUT_TOOL(?BANKID_RU, ?RUSSIAN_BANK_ACCOUNT),
+        ?PAYOUT_TOOL(?BANKID_US, ?INTERNATIONAL_BANK_ACCOUNT),
+        ?PAYOUT_TOOL(?WALLET_TOOL, ?WALLET_INFO)
+    ]
 }).
 
 -define(CONTRACTOR, {registered_user, #domain_RegisteredUser{email = ?STRING}}).
@@ -462,6 +467,10 @@
     aba_rtn = <<"129131673">>
 }).
 
+-define(WALLET_INFO, {wallet_info, #domain_WalletInfo{
+    wallet_id = ?STRING
+}}).
+
 -define(WEBHOOK, #webhooker_Webhook{
     id = ?INTEGER,
     party_id = ?STRING,
@@ -567,6 +576,7 @@
 
 -define(STAT_RESPONSE_PAYOUTS, ?STAT_RESPONSE({payouts,
     [
+        ?STAT_PAYOUT({wallet, #merchstat_Wallet{wallet_id = ?STRING}}, []),
         ?STAT_PAYOUT({bank_card, #merchstat_PayoutCard{card = ?STAT_BANK_CARD}}, [?PAYOUT_SUMMARY_ITEM]),
         ?STAT_PAYOUT({bank_card, #merchstat_PayoutCard{card = ?STAT_BANK_CARD_WITH_TP}}, [?PAYOUT_SUMMARY_ITEM]),
         ?STAT_PAYOUT({bank_account, ?STAT_PAYOUT_BANK_ACCOUNT_RUS}, undefined),
@@ -934,4 +944,42 @@
         card_type = debit
     },
     version = ?INTEGER
+}).
+
+-define(PAYOUT(Type, PayoutSummary), #'payout_processing_Payout'{
+    id = ?STRING,
+    party_id = ?STRING,
+    shop_id = ?STRING,
+    contract_id = ?STRING,
+    created_at = ?TIMESTAMP,
+    status = {paid, #'payout_processing_PayoutPaid'{}},
+    amount = ?INTEGER,
+    fee = ?INTEGER,
+    currency = #domain_CurrencyRef{
+        symbolic_code = ?RUB
+    },
+    payout_flow = [],
+    type = Type,
+    summary = PayoutSummary,
+    metadata = #{
+        <<"someKey">>   => {str, <<"someBinary">>},
+        <<"someInt">>   => {i, 5},
+        <<"someList">>  => {arr, [{str, <<"list_1">>}, {str, <<"list_2">>}]},
+        <<"someMap">>   => {obj, #{{str, <<"someKey">>} => {i, 123}}},
+        <<"someNil">>   => {nl, #msgpack_Nil{}}
+    }
+}).
+
+-define(WALLET_PAYOUT_TYPE, {wallet, #payout_processing_Wallet{
+    wallet_id = ?STRING
+}}).
+
+-define(PAYOUT_PROC_PAYOUT_SUMMARY_ITEM, #payout_processing_PayoutSummaryItem{
+    amount = ?INTEGER,
+    fee = ?INTEGER,
+    currency_symbolic_code = ?RUB,
+    from_time = ?TIMESTAMP,
+    to_time = ?TIMESTAMP,
+    operation_type = payment,
+    count = ?INTEGER
 }).
