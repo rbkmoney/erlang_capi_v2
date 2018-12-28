@@ -1528,7 +1528,7 @@ get_payout(Config) ->
 get_payout_fail(Config) ->
     Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, [?PAYOUT_PROC_PAYOUT_SUMMARY_ITEM]),
     mock_services([{payouts, fun('Get', _) -> {ok, Payout} end}], Config),
-    {error, {400, _}} = capi_client_payouts:get_payout(?config(context_with_diff_party, Config), ?STRING).
+    {error, {404, _}} = capi_client_payouts:get_payout(?config(context_with_diff_party, Config), ?STRING).
 
 -spec create_webhook_ok_test(config()) ->
     _.
