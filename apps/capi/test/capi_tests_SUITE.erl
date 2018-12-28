@@ -1953,7 +1953,6 @@ issue_token(ACL, LifeTime) ->
     issue_token(?STRING, ACL, LifeTime).
 
 issue_token(PartyID, ACL, LifeTime) ->
-    PartyID = PartyID,
     Claims = #{?STRING => ?STRING},
     capi_authorizer_jwt:issue({{PartyID, capi_acl:from_list(ACL)}, Claims}, LifeTime).
 

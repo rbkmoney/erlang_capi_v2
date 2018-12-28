@@ -1323,7 +1323,7 @@ process_request('GetPayout', Req, Context) ->
                 true ->
                     {ok, {200, [], decode_payout_proc_payout(Payout)}};
                 false ->
-                    {ok, {400, [], logic_error(invalidRequest, <<"Access denied">>)}}
+                    {ok, {404, [], general_error(<<"Payout not found">>)}}
             end;
         {exception, #'payout_processing_PayoutNotFound'{}} ->
             {ok, {404, [], general_error(<<"Payout not found">>)}}
