@@ -112,6 +112,7 @@
 
     create_payout/1,
     get_payout/1,
+    get_payout_fail/1,
 
     create_webhook_ok_test/1,
     get_webhooks/1,
@@ -281,6 +282,7 @@ groups() ->
                 get_payout_tool_by_id,
                 create_payout,
                 get_payout,
+                get_payout_fail,
                 create_webhook_ok_test,
                 get_webhooks,
                 get_webhook_by_id,
@@ -481,10 +483,12 @@ init_per_group(GroupName, Config) when
     ],
     {ok, Token} = issue_token(BasePermissions, unlimited),
     {ok, Token2} = issue_token(BasePermissions, unlimited),
+    {ok, Token3} = issue_token(<<"TEST2">>, BasePermissions, unlimited),
     Context = get_context(Token),
     Config2 = [{context_with_relative_deadline, get_context(Token2, <<"3s">>)} | Config],
     Config3 = [{context_with_absolute_deadline, Context} | Config2],
-    [{context, Context} | Config3];
+    Config4 = [{context_with_diff_party, get_context(Token3)} | Config3],
+    [{context, Context} | Config4];
 
 init_per_group(_, Config) ->
     Config.
@@ -1519,6 +1523,12 @@ get_payout(Config) ->
     mock_services([{payouts, fun('Get', _) -> {ok, Payout} end}], Config),
     {ok, _} = capi_client_payouts:get_payout(?config(context, Config), ?STRING).
 
+-spec get_payout_fail(config()) ->
+    _.
+get_payout_fail(Config) ->
+    Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, [?PAYOUT_PROC_PAYOUT_SUMMARY_ITEM]),
+    mock_services([{payouts, fun('Get', _) -> {ok, Payout} end}], Config),
+    {error, {404, _}} = capi_client_payouts:get_payout(?config(context_with_diff_party, Config), ?STRING).
 
 -spec create_webhook_ok_test(config()) ->
     _.
@@ -1940,7 +1950,9 @@ deadline_relative_ok_test(Config) ->
 %%
 
 issue_token(ACL, LifeTime) ->
-    PartyID = ?STRING,
+    issue_token(?STRING, ACL, LifeTime).
+
+issue_token(PartyID, ACL, LifeTime) ->
     Claims = #{?STRING => ?STRING},
     capi_authorizer_jwt:issue({{PartyID, capi_acl:from_list(ACL)}, Claims}, LifeTime).
 

@@ -1319,7 +1319,12 @@ process_request('GetPayout', Req, Context) ->
     PayoutID = maps:get(payoutID, Req),
     case service_call({payouts, 'Get', [PayoutID]}, Context) of
         {ok, Payout} ->
-            {ok, {200, [], decode_payout_proc_payout(Payout)}};
+            case check_party_in_payout_proc_payout(get_party_id(Context), Payout) of
+                true ->
+                    {ok, {200, [], decode_payout_proc_payout(Payout)}};
+                false ->
+                    {ok, {404, [], general_error(<<"Payout not found">>)}}
+            end;
         {exception, #'payout_processing_PayoutNotFound'{}} ->
             {ok, {404, [], general_error(<<"Payout not found">>)}}
     end;
@@ -4412,6 +4417,11 @@ encode_payout_proc_payout_params(PartyID, PayoutParams) ->
         amount = encode_cash(maps:get(<<"amount">>, PayoutParams), maps:get(<<"currency">>, PayoutParams)),
         metadata = encode_payout_proc_metadata(maps:get(<<"metadata">>, PayoutParams, undefined))
     }.
+
+check_party_in_payout_proc_payout(PartyID, #payout_processing_Payout{party_id = PartyID}) ->
+    true;
+check_party_in_payout_proc_payout(_PartyID, _) ->
+    false.
 
 decode_payout_proc_payout(Payout) ->
     merge_and_compact(#{
