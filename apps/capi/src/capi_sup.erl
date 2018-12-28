@@ -56,7 +56,7 @@ get_logic_handler_info() ->
             ),
             {capi_mock_handler, [Spec]};
         real ->
-            {capi_real_handler, []};
+            {capi_handler, []};
         undefined ->
             exit(undefined_service_type)
     end.
