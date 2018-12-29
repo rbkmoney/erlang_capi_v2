@@ -492,7 +492,7 @@ decode_shop_modification({shop_account_creation, #payproc_ShopAccountParams{curr
 decode_shop_modification({category_modification, CategoryRef}) ->
     #{
         <<"shopModificationType">> => <<"ShopCategoryChange">>,
-        <<"categoryID"          >> => decode_category_ref(CategoryRef)
+        <<"categoryID"          >> => capi_handler:decode_category_ref(CategoryRef)
     };
 decode_shop_modification({location_modification, Location}) ->
     #{
@@ -550,16 +550,13 @@ decode_shop_params(ShopParams) ->
         <<"payoutToolID">> => ShopParams#payproc_ShopParams.payout_tool_id
     }.
 
-decode_category_ref(#domain_CategoryRef{id = CategoryRef}) ->
-    CategoryRef.
-
 decode_bank_card_details(BankCard, V) ->
-    LastDigits = decode_last_digits(BankCard#domain_BankCard.masked_pan),
+    LastDigits = capi_handler:decode_last_digits(BankCard#domain_BankCard.masked_pan),
     Bin = BankCard#domain_BankCard.bin,
     capi_handler_utils:merge_and_compact(V, #{
         <<"lastDigits">>     => LastDigits,
         <<"bin">>            => Bin,
-        <<"cardNumberMask">> => decode_masked_pan(Bin, LastDigits),
+        <<"cardNumberMask">> => capi_handler:decode_masked_pan(Bin, LastDigits),
         <<"paymentSystem" >> => genlib:to_binary(BankCard#domain_BankCard.payment_system),
         <<"tokenProvider" >> => decode_token_provider(BankCard#domain_BankCard.token_provider)
     }).
@@ -592,30 +589,11 @@ decode_international_bank_details(Bank) ->
          <<"bic">>         => Bank#domain_InternationalBankDetails.bic,
          <<"abartn">>      => Bank#domain_InternationalBankDetails.aba_rtn,
          <<"name">>        => Bank#domain_InternationalBankDetails.name,
-         <<"countryCode">> => decode_residence(Bank#domain_InternationalBankDetails.country),
+         <<"countryCode">> => capi_handler:decode_residence(Bank#domain_InternationalBankDetails.country),
          <<"address">>     => Bank#domain_InternationalBankDetails.address
     }).
-
--define(MASKED_PAN_MAX_LENGTH, 4).
-
-decode_last_digits(MaskedPan) when byte_size(MaskedPan) > ?MASKED_PAN_MAX_LENGTH ->
-    binary:part(MaskedPan, {byte_size(MaskedPan), -?MASKED_PAN_MAX_LENGTH});
-decode_last_digits(MaskedPan) ->
-    MaskedPan.
-
--define(PAN_LENGTH, 16).
-
-decode_masked_pan(Bin, LastDigits) ->
-    Mask = binary:copy(<<"*">>, ?PAN_LENGTH - byte_size(Bin) - byte_size(LastDigits)),
-    <<Bin/binary, Mask/binary, LastDigits/binary>>.
 
 decode_token_provider(Provider) when Provider /= undefined ->
     genlib:to_binary(Provider);
 decode_token_provider(undefined) ->
     undefined.
-
-decode_residence(undefined) ->
-    undefined;
-decode_residence(Residence) when is_atom(Residence) ->
-    list_to_binary(string:to_upper(atom_to_list(Residence))).
-

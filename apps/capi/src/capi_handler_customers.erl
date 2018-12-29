@@ -204,14 +204,14 @@ encode_customer_metadata(Meta) ->
 
 
 encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
-    PaymentTool = encode_payment_tool_token(maps:get(<<"paymentToolToken">>, PaymentResource)),
-    {ClientInfo, PaymentSession} = unwrap_payment_session(maps:get(<<"paymentSession">>, PaymentResource)),
+    PaymentTool = capi_handler:encode_payment_tool_token(maps:get(<<"paymentToolToken">>, PaymentResource)),
+    {ClientInfo, PaymentSession} = capi_handler_utils:unwrap_payment_session(maps:get(<<"paymentSession">>, PaymentResource)),
     #payproc_CustomerBindingParams{
         payment_resource =
             #domain_DisposablePaymentResource{
                 payment_tool       = PaymentTool,
                 payment_session_id = PaymentSession,
-                client_info        = encode_client_info(ClientInfo)
+                client_info        = capi_handler:encode_client_info(ClientInfo)
             }
     }.
 
@@ -241,26 +241,16 @@ decode_customer_binding(CustomerBinding, Context) ->
         #{
             <<"id"             >> => CustomerBinding#payproc_CustomerBinding.id,
             <<"paymentResource">> =>
-                decode_disposable_payment_resource(CustomerBinding#payproc_CustomerBinding.payment_resource)
+                capi_handler:decode_disposable_payment_resource(CustomerBinding#payproc_CustomerBinding.payment_resource)
         },
         decode_customer_binding_status(CustomerBinding#payproc_CustomerBinding.status, Context)
     ).
-
-decode_disposable_payment_resource(Resource) ->
-    #domain_DisposablePaymentResource{payment_tool = PaymentTool, payment_session_id = SessionID} = Resource,
-    ClientInfo = decode_client_info(Resource#domain_DisposablePaymentResource.client_info),
-    #{
-        <<"paymentToolToken"  >> => decode_payment_tool_token(PaymentTool),
-        <<"paymentSession"    >> => wrap_payment_session(ClientInfo, SessionID),
-        <<"paymentToolDetails">> => decode_payment_tool_details(PaymentTool),
-        <<"clientInfo"        >> => ClientInfo
-    }.
 
 decode_customer_binding_status({Status, StatusInfo}, Context) ->
     Error =
         case StatusInfo of
             #payproc_CustomerBindingFailed{failure = OperationFailure} ->
-                decode_operation_failure(OperationFailure, Context);
+                capi_handler:decode_operation_failure(OperationFailure, Context);
             _ ->
                 undefined
         end,
@@ -313,5 +303,5 @@ decode_customer_binding_change(BindingID, {interaction_requested, InteractionReq
     {true, #{
         <<"changeType">> => <<"CustomerBindingInteractionRequested">>,
         <<"customerBindingID">> => BindingID,
-        <<"userInteraction">> => decode_user_interaction(UserInteraction)
+        <<"userInteraction">> => capi_handler:decode_user_interaction(UserInteraction)
     }}.

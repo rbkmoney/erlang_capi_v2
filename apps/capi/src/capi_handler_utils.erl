@@ -20,6 +20,10 @@
 -export([get_time_diff/2]).
 -export([collect_events/5]).
 
+-export([unwrap_payment_session/1]).
+-export([wrap_payment_session/2]).
+-export([get_invoice_by_id/2]).
+-export([get_payment_by_id/3]).
 
 -type processing_context() :: capi_handler:processing_context().
 
@@ -219,3 +223,39 @@ get_events(Limit, After, GetterFun) ->
         'after' = After
     },
     GetterFun(EventRange).
+
+-spec unwrap_payment_session(_) ->
+    {_, _}.
+
+unwrap_payment_session(Encoded) ->
+    #{
+        <<"clientInfo">> := ClientInfo,
+        <<"paymentSession">> := PaymentSession
+     } = try
+            capi_utils:base64url_to_map(Encoded)
+        catch
+            error:badarg ->
+                erlang:throw(invalid_payment_session)
+        end,
+    {ClientInfo, PaymentSession}.
+
+-spec wrap_payment_session(_, _) ->
+    _.
+
+wrap_payment_session(ClientInfo, PaymentSession) ->
+    capi_utils:map_to_base64url(#{
+        <<"clientInfo"    >> => ClientInfo,
+        <<"paymentSession">> => PaymentSession
+    }).
+
+-spec get_invoice_by_id(_, _) ->
+    _.
+
+get_invoice_by_id(InvoiceID, Context) ->
+    service_call_with([user_info], {invoicing, 'Get', [InvoiceID]}, Context).
+
+-spec get_payment_by_id(_, _, _) ->
+    _.
+
+get_payment_by_id(InvoiceID, PaymentID, Context) ->
+    service_call_with([user_info], {invoicing, 'GetPayment', [InvoiceID, PaymentID]}, Context).

@@ -2,8 +2,17 @@
 
 -include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
+-include_lib("dmsl/include/dmsl_merch_stat_thrift.hrl").
 
 -behaviour(swag_server_logic_handler).
+
+-export([encode_contact_info/1]).
+-export([encode_client_info/1]).
+-export([encode_payment_tool_token/1]).
+-export([encode_cash/1]).
+-export([encode_currency/1]).
+-export([encode_invoice_cart/1]).
+-export([encode_invoice_context/1]).
 
 -export([decode_currency/1]).
 -export([decode_shop_location/1]).
@@ -15,10 +24,21 @@
 -export([decode_legal_agreement/1]).
 -export([decode_reporting_preferences/1]).
 -export([decode_payment_institution_ref/1]).
+-export([decode_payment_tool_token/1]).
+-export([decode_payment_tool_details/1]).
+-export([decode_last_digits/1]).
+-export([decode_masked_pan/2]).
+-export([decode_operation_failure/2]).
+-export([decode_user_interaction_form/1]).
+-export([decode_payment/3]).
+-export([decode_user_interaction/1]).
+-export([decode_refund/2]).
+-export([decode_residence/1]).
+-export([decode_category_ref/1]).
 -export([decode_optional/2]).
 
--export([encode_currency/1]).
--export([encode_contact_info/1]).
+-export([construct_payment_methods/3]).
+-export([make_invoice_and_token/2]).
 
 %% API callbacks
 -export([authorize_api_key/2]).
@@ -41,13 +61,7 @@
 
 %% @WARNING Must be refactored in case of different classes of users using this API
 -define(REALM, <<"external">>).
-
--define(DEFAULT_INVOICE_META, #{}).
--define(DEFAULT_INVOICE_LINE_META, #{}).
 -define(DEFAULT_URL_LIFETIME, 60). % seconds
-
--define(payment_institution_ref(PaymentInstitutionID),
-    #domain_PaymentInstitutionRef{id = PaymentInstitutionID}).
 
 -define(CAPI_NS, <<"com.rbkmoney.capi">>).
 
@@ -169,12 +183,6 @@ process_woody_error(_Source, result_unknown      , _Details) ->
 
 %%
 
--spec encode_currency(binary()) ->
-    tuple().
-
-encode_currency(SymbolicCode) ->
-    #domain_CurrencyRef{symbolic_code = SymbolicCode}.
-
 -spec encode_contact_info(map()) ->
     tuple().
 
@@ -182,6 +190,157 @@ encode_contact_info(ContactInfo) ->
     #domain_ContactInfo{
         phone_number = genlib_map:get(<<"phoneNumber">>, ContactInfo),
         email        = genlib_map:get(<<"email">>, ContactInfo)
+    }.
+
+-spec encode_client_info(map()) ->
+    tuple().
+encode_client_info(ClientInfo) ->
+    #domain_ClientInfo{
+        fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
+        ip_address  = maps:get(<<"ip"         >>, ClientInfo)
+    }.
+
+-spec encode_payment_tool_token(_) ->
+    tuple().
+
+encode_payment_tool_token(Token) ->
+    try capi_utils:base64url_to_map(Token) of
+        #{<<"type">> := <<"bank_card">>} = Encoded ->
+            encode_bank_card(Encoded);
+        #{<<"type">> := <<"payment_terminal">>} = Encoded ->
+            encode_payment_terminal(Encoded);
+        #{<<"type">> := <<"digital_wallet">>} = Encoded ->
+            encode_digital_wallet(Encoded)
+    catch
+        error:badarg ->
+            erlang:throw(invalid_token)
+    end.
+
+encode_bank_card(BankCard) ->
+    {bank_card, #domain_BankCard{
+        token          = maps:get(<<"token">>, BankCard),
+        payment_system = encode_payment_system(maps:get(<<"payment_system">>, BankCard)),
+        bin            = maps:get(<<"bin">>, BankCard),
+        masked_pan     = maps:get(<<"masked_pan">>, BankCard),
+        token_provider = encode_token_provider(genlib_map:get(<<"token_provider">>, BankCard)),
+        issuer_country = encode_residence(genlib_map:get(<<"issuer_country">>, BankCard)),
+        bank_name      = genlib_map:get(<<"bank_name">>, BankCard),
+        metadata       = encode_bank_card_metadata(genlib_map:get(<<"metadata">>, BankCard))
+    }}.
+
+encode_payment_system(PaymentSystem) ->
+    binary_to_existing_atom(PaymentSystem, utf8).
+
+encode_bank_card_metadata(undefined) ->
+    undefined;
+encode_bank_card_metadata(Meta) ->
+    maps:map(fun(_, Data) -> capi_msgp_marshalling:marshal(Data) end, Meta).
+
+encode_token_provider(TokenProvider) when TokenProvider /= undefined ->
+    binary_to_existing_atom(TokenProvider, utf8);
+encode_token_provider(undefined) ->
+    undefined.
+
+encode_residence(undefined) ->
+    undefined;
+encode_residence(Residence) when is_binary(Residence) ->
+    try
+        list_to_existing_atom(string:to_lower(binary_to_list(Residence)))
+    catch
+        error:badarg ->
+            throw({encode_residence, invalid_residence})
+    end.
+
+encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
+    {payment_terminal, #domain_PaymentTerminal{
+        terminal_type = binary_to_existing_atom(Type, utf8)
+    }}.
+
+encode_digital_wallet(#{<<"provider">> := Provider, <<"id">> := ID}) ->
+    {digital_wallet, #domain_DigitalWallet{
+        provider = binary_to_existing_atom(Provider, utf8),
+        id       = ID
+    }}.
+
+-spec encode_cash(_) ->
+    _.
+
+encode_cash(Params) ->
+    Amount   = genlib_map:get(<<"amount"  >>, Params),
+    Currency = genlib_map:get(<<"currency">>, Params),
+    encode_cash(Amount, Currency).
+
+encode_cash(Amount, Currency) ->
+    #domain_Cash{
+        amount   = Amount,
+        currency = encode_currency(Currency)
+    }.
+
+-spec encode_currency(binary()) ->
+    tuple().
+
+encode_currency(SymbolicCode) ->
+    #domain_CurrencyRef{symbolic_code = SymbolicCode}.
+
+-spec encode_invoice_cart(_) ->
+    _.
+
+encode_invoice_cart(Params) ->
+    Cart     = genlib_map:get(<<"cart"    >>, Params),
+    Currency = genlib_map:get(<<"currency">>, Params),
+    encode_invoice_cart(Cart, Currency).
+
+encode_invoice_cart(Cart, Currency) when Cart =/= undefined, Cart =/= [] ->
+    #domain_InvoiceCart{
+        lines = [encode_invoice_line(Line, Currency) || Line <- Cart]
+    };
+encode_invoice_cart([], _) ->
+    throw(invoice_cart_empty);
+encode_invoice_cart(undefined, _) ->
+    undefined.
+
+encode_invoice_line(Line, Currency) ->
+    Metadata = encode_invoice_line_meta(Line),
+    Price = capi_handler:encode_cash(genlib_map:get(<<"price">>, Line), Currency),
+    #domain_InvoiceLine{
+        product  = genlib_map:get(<<"product" >>, Line),
+        quantity = genlib_map:get(<<"quantity">>, Line),
+        price    = Price,
+        metadata = Metadata
+    }.
+
+-define(DEFAULT_INVOICE_LINE_META, #{}).
+
+encode_invoice_line_meta(Line) ->
+    case genlib_map:get(<<"taxMode">>, Line) of
+        TaxMode when TaxMode =/= undefined ->
+            TM = encode_invoice_line_tax_mode(TaxMode),
+            #{<<"TaxMode">> => {str, TM}};
+        undefined ->
+            ?DEFAULT_INVOICE_LINE_META
+    end.
+
+encode_invoice_line_tax_mode(#{<<"type">> := <<"InvoiceLineTaxVAT">>} = TaxMode)  ->
+    %% for more info about taxMode look here:
+    %% https://github.com/rbkmoney/starrys/blob/master/docs/settings.md
+    genlib_map:get(<<"rate">>, TaxMode).
+
+-spec encode_invoice_context(_) ->
+    _.
+
+-define(DEFAULT_INVOICE_META, #{}).
+
+encode_invoice_context(Params) ->
+    encode_invoice_context(Params, ?DEFAULT_INVOICE_META).
+
+encode_invoice_context(Params, DefaultMeta) ->
+    Context = genlib_map:get(<<"metadata">>, Params, DefaultMeta),
+    encode_content(json, Context).
+
+encode_content(json, Data) ->
+    #'Content'{
+        type = <<"application/json">>,
+        data = jsx:encode(Data)
     }.
 
 %%
@@ -338,10 +497,491 @@ decode_representative_document({power_of_attorney, LegalAgreement}) ->
 decode_payment_institution_ref(#domain_PaymentInstitutionRef{id = Ref}) ->
     Ref.
 
+-spec decode_payment_tool_token(tuple()) ->
+    _.
+
+decode_payment_tool_token({bank_card, BankCard}) ->
+    decode_bank_card(BankCard);
+decode_payment_tool_token({payment_terminal, PaymentTerminal}) ->
+    decode_payment_terminal(PaymentTerminal);
+decode_payment_tool_token({digital_wallet, DigitalWallet}) ->
+    decode_digital_wallet(DigitalWallet).
+
+decode_bank_card(#domain_BankCard{
+    'token'          = Token,
+    'payment_system' = PaymentSystem,
+    'bin'            = Bin,
+    'masked_pan'     = MaskedPan,
+    'token_provider' = TokenProvider,
+    'issuer_country' = IssuerCountry,
+    'bank_name'      = BankName,
+    'metadata'       = Metadata
+}) ->
+    capi_utils:map_to_base64url(genlib_map:compact(#{
+        <<"type"          >> => <<"bank_card">>,
+        <<"token"         >> => Token,
+        <<"payment_system">> => PaymentSystem,
+        <<"bin"           >> => Bin,
+        <<"masked_pan"    >> => MaskedPan,
+        <<"token_provider">> => TokenProvider,
+        <<"issuer_country">> => IssuerCountry,
+        <<"bank_name"     >> => BankName,
+        <<"metadata"      >> => decode_bank_card_metadata(Metadata)
+    })).
+
+decode_bank_card_metadata(undefined) ->
+    undefined;
+decode_bank_card_metadata(Meta) ->
+    maps:map(fun(_, Data) -> capi_msgp_marshalling:unmarshal(Data) end, Meta).
+
+decode_payment_terminal(#domain_PaymentTerminal{
+    terminal_type = Type
+}) ->
+    capi_utils:map_to_base64url(#{
+        <<"type"         >> => <<"payment_terminal">>,
+        <<"terminal_type">> => Type
+    }).
+
+decode_digital_wallet(#domain_DigitalWallet{
+    provider = Provider,
+    id = ID
+}) ->
+    capi_utils:map_to_base64url(#{
+        <<"type"    >> => <<"digital_wallet">>,
+        <<"provider">> => atom_to_binary(Provider, utf8),
+        <<"id"      >> => ID
+    }).
+
+decode_payment_tool_details({bank_card, V}) ->
+    decode_bank_card_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsBankCard">>});
+decode_payment_tool_details({payment_terminal, V}) ->
+    decode_payment_terminal_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsPaymentTerminal">>});
+decode_payment_tool_details({digital_wallet, V}) ->
+    decode_digital_wallet_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsDigitalWallet">>}).
+
+decode_bank_card_details(BankCard, V) ->
+    LastDigits = decode_last_digits(BankCard#domain_BankCard.masked_pan),
+    Bin = BankCard#domain_BankCard.bin,
+    capi_handler_utils:merge_and_compact(V, #{
+        <<"lastDigits">>     => LastDigits,
+        <<"bin">>            => Bin,
+        <<"cardNumberMask">> => decode_masked_pan(Bin, LastDigits),
+        <<"paymentSystem" >> => genlib:to_binary(BankCard#domain_BankCard.payment_system),
+        <<"tokenProvider" >> => decode_token_provider(BankCard#domain_BankCard.token_provider)
+    }).
+
+decode_token_provider(Provider) when Provider /= undefined ->
+    genlib:to_binary(Provider);
+decode_token_provider(undefined) ->
+    undefined.
+
+decode_payment_terminal_details(#domain_PaymentTerminal{terminal_type = Type}, V) ->
+    V#{
+        <<"provider">> => genlib:to_binary(Type)
+    }.
+
+decode_digital_wallet_details(#domain_DigitalWallet{provider = qiwi, id = ID}, V) ->
+    V#{
+        <<"digitalWalletDetailsType">> => <<"DigitalWalletDetailsQIWI">>,
+        <<"phoneNumberMask"         >> => mask_phone_number(ID)
+    }.
+
+-define(PAN_LENGTH, 16).
+
+-spec decode_masked_pan(_, _) ->
+    _.
+
+decode_masked_pan(Bin, LastDigits) ->
+    Mask = binary:copy(<<"*">>, ?PAN_LENGTH - byte_size(Bin) - byte_size(LastDigits)),
+    <<Bin/binary, Mask/binary, LastDigits/binary>>.
+
+-define(MASKED_PAN_MAX_LENGTH, 4).
+
+-spec decode_last_digits(_) ->
+    _.
+
+decode_last_digits(MaskedPan) when byte_size(MaskedPan) > ?MASKED_PAN_MAX_LENGTH ->
+    binary:part(MaskedPan, {byte_size(MaskedPan), -?MASKED_PAN_MAX_LENGTH});
+decode_last_digits(MaskedPan) ->
+    MaskedPan.
+
+mask_phone_number(PhoneNumber) ->
+    capi_utils:redact(PhoneNumber, <<"^\\+\\d(\\d{1,10}?)\\d{2,4}$">>).
+
+-spec decode_operation_failure(_, _) ->
+    _.
+
+decode_operation_failure({operation_timeout, _}, _) ->
+    capi_handler_utils:logic_error(timeout, <<"timeout">>);
+decode_operation_failure({failure, #domain_Failure{code = Code, reason = Reason}}, _) ->
+    capi_handler_utils:logic_error(Code, Reason).
+
+-spec decode_payment(_, _, _) ->
+    _.
+
+decode_payment(InvoiceID, Payment, Context) ->
+    #domain_Cash{
+        amount   = Amount,
+        currency = Currency
+    } = Payment#domain_InvoicePayment.cost,
+    capi_handler_utils:merge_and_compact(#{
+        <<"id"                    >> => Payment#domain_InvoicePayment.id,
+        <<"invoiceID"             >> => InvoiceID,
+        <<"createdAt"             >> => Payment#domain_InvoicePayment.created_at,
+        % TODO whoops, nothing to get it from yet
+        <<"flow"                  >> => decode_flow(Payment#domain_InvoicePayment.flow),
+        <<"amount"                >> => Amount,
+        <<"currency"              >> => decode_currency(Currency),
+        <<"payer"                 >> => decode_payer(Payment#domain_InvoicePayment.payer),
+        <<"makeRecurrent"         >> => decode_make_recurrent(Payment#domain_InvoicePayment.make_recurrent)
+    }, decode_payment_status(Payment#domain_InvoicePayment.status, Context)).
+
+decode_payer({customer, #domain_CustomerPayer{customer_id = ID}}) ->
+    #{
+        <<"payerType" >> => <<"CustomerPayer">>,
+        <<"customerID">> => ID
+    };
+decode_payer({recurrent, #domain_RecurrentPayer{recurrent_parent = RecurrentParent, contact_info = ContactInfo}}) ->
+    #{
+        <<"payerType">> => <<"RecurrentPayer">>,
+        <<"contactInfo">> => decode_contact_info(ContactInfo),
+        <<"recurrentParentPayment">> => decode_recurrent_parent(RecurrentParent)
+    };
+decode_payer({payment_resource, #domain_PaymentResourcePayer{resource = Resource, contact_info = ContactInfo}}) ->
+    maps:merge(
+        #{
+            <<"payerType"  >> => <<"PaymentResourcePayer">>,
+            <<"contactInfo">> => decode_contact_info(ContactInfo)
+        },
+        decode_disposable_payment_resource(Resource)
+    ).
+
+decode_payment_status({Status, StatusInfo}, Context) ->
+    Error =
+        case StatusInfo of
+            #domain_InvoicePaymentFailed{failure = OperationFailure} ->
+                decode_payment_operation_failure(OperationFailure, Context);
+            _ ->
+                undefined
+        end,
+    #{
+        <<"status">> => genlib:to_binary(Status),
+        <<"error" >> => Error
+    }.
+
+decode_payment_operation_failure({operation_timeout, _}, _) ->
+    payment_error(<<"timeout">>);
+decode_payment_operation_failure({failure, Failure}, Context) ->
+    case capi_auth:get_consumer(capi_auth:get_claims(capi_handler_utils:get_auth_context(Context))) of
+        client ->
+            payment_error(payproc_errors:match('PaymentFailure', Failure, fun payment_error_client_maping/1));
+        merchant ->
+            % чтобы не городить ещё один обход дерева как в payproc_errors проще отформатировать в текст,
+            % а потом уже в json
+            decode_payment_operation_failure_(
+                binary:split(erlang:list_to_binary(payproc_errors:format_raw(Failure)), <<":">>, [global])
+            )
+    end.
+
+decode_payment_operation_failure_([H|T]) ->
+    R = payment_error(H),
+    case T of
+        [] -> R;
+        _  -> R#{<<"subError">> => decode_payment_operation_failure_(T)}
+    end.
+
+decode_flow({instant, _}) ->
+    #{<<"type">> => <<"PaymentFlowInstant">>};
+
+decode_flow({hold, #domain_InvoicePaymentFlowHold{on_hold_expiration = OnHoldExpiration, held_until = HeldUntil}}) ->
+    #{
+        <<"type"            >> => <<"PaymentFlowHold">>,
+        <<"onHoldExpiration">> => atom_to_binary(OnHoldExpiration, utf8),
+        <<"heldUntil"       >> => HeldUntil
+    }.
+
+decode_make_recurrent(undefined) ->
+    false;
+decode_make_recurrent(Value) when is_boolean(Value) ->
+    Value.
+
+decode_recurrent_parent(#domain_RecurrentParentPayment{invoice_id = InvoiceID, payment_id = PaymentID}) ->
+    #{
+        <<"invoiceID">> => InvoiceID,
+        <<"paymentID">> => PaymentID
+    };
+decode_recurrent_parent(#merchstat_RecurrentParentPayment{invoice_id = InvoiceID, payment_id = PaymentID}) ->
+    #{
+        <<"invoiceID">> => InvoiceID,
+        <<"paymentID">> => PaymentID
+    }.
+
+payment_error(Code) ->
+    #{<<"code">> => Code}.
+
+%% client error mapping
+%% @see https://github.com/petrkozorezov/swag/blob/master/spec/definitions/PaymentError.yaml
+-spec payment_error_client_maping(dmsl_payment_processing_errors_thrift:'PaymentFailure'()) ->
+    binary().
+payment_error_client_maping({preauthorization_failed, _})->
+    <<"PreauthorizationFailed">>;
+payment_error_client_maping({authorization_failed, {account_blocked, _}}) ->
+    <<"RejectedByIssuer">>;
+payment_error_client_maping({authorization_failed, {rejected_by_issuer, _}}) ->
+    <<"RejectedByIssuer">>;
+payment_error_client_maping({authorization_failed, {payment_tool_rejected, _}}) ->
+    <<"InvalidPaymentTool">>;
+payment_error_client_maping({authorization_failed, {account_not_found, _}}) ->
+    <<"InvalidPaymentTool">>;
+payment_error_client_maping({authorization_failed, {account_limit_exceeded, _}}) ->
+    <<"AccountLimitsExceeded">>;
+payment_error_client_maping({authorization_failed, {insufficient_funds, _}}) ->
+    <<"InsufficientFunds">>;
+payment_error_client_maping(_) ->
+    <<"PaymentRejected">>.
+
+-spec decode_disposable_payment_resource(_) ->
+    _.
+
+decode_disposable_payment_resource(Resource) ->
+    #domain_DisposablePaymentResource{payment_tool = PaymentTool, payment_session_id = SessionID} = Resource,
+    ClientInfo = decode_client_info(Resource#domain_DisposablePaymentResource.client_info),
+    #{
+        <<"paymentToolToken"  >> => decode_payment_tool_token(PaymentTool),
+        <<"paymentSession"    >> => capi_handler_utils:wrap_payment_session(ClientInfo, SessionID),
+        <<"paymentToolDetails">> => decode_payment_tool_details(PaymentTool),
+        <<"clientInfo"        >> => ClientInfo
+    }.
+
+decode_client_info(undefined) ->
+    undefined;
+decode_client_info(ClientInfo) ->
+    #{
+        <<"fingerprint">> => ClientInfo#domain_ClientInfo.fingerprint,
+        <<"ip"         >> => ClientInfo#domain_ClientInfo.ip_address
+    }.
+
+-spec decode_user_interaction(_) ->
+    _.
+
+decode_user_interaction({payment_terminal_reciept, TerminalReceipt}) ->
+    #{
+        <<"interactionType">> => <<"PaymentTerminalReceipt">>,
+        <<"shortPaymentID" >> => TerminalReceipt#'PaymentTerminalReceipt'.short_payment_id,
+        <<"dueDate"        >> => TerminalReceipt#'PaymentTerminalReceipt'.due
+    };
+decode_user_interaction({redirect, BrowserRequest}) ->
+    #{
+        <<"interactionType">> => <<"Redirect">>,
+        <<"request">> => decode_browser_request(BrowserRequest)
+    }.
+
+decode_browser_request({get_request, #'BrowserGetRequest'{uri = UriTemplate}}) ->
+    #{
+        <<"requestType">> => <<"BrowserGetRequest">>,
+        <<"uriTemplate">> => UriTemplate
+    };
+decode_browser_request({post_request, #'BrowserPostRequest'{uri = UriTemplate, form = UserInteractionForm}}) ->
+    #{
+        <<"requestType">> => <<"BrowserPostRequest">>,
+        <<"uriTemplate">> => UriTemplate,
+        <<"form">> => decode_user_interaction_form(UserInteractionForm)
+    }.
+
+-spec decode_user_interaction_form(_) ->
+    _.
+
+decode_user_interaction_form(Form) ->
+    maps:fold(
+        fun(K, V, Acc) ->
+            F = #{
+                <<"key">> => K,
+                <<"template">> => V
+            },
+            [F | Acc]
+        end,
+        [],
+        Form
+    ).
+
+-spec decode_refund(_, _) ->
+    _.
+
+decode_refund(Refund, Context) ->
+    #domain_Cash{amount = Amount, currency = Currency} = Refund#domain_InvoicePaymentRefund.cash,
+    capi_handler_utils:merge_and_compact(
+        #{
+            <<"id"       >> => Refund#domain_InvoicePaymentRefund.id,
+            <<"createdAt">> => Refund#domain_InvoicePaymentRefund.created_at,
+            <<"reason"   >> => Refund#domain_InvoicePaymentRefund.reason,
+            <<"amount"   >> => Amount,
+            <<"currency" >> => decode_currency(Currency)
+        },
+        decode_refund_status(Refund#domain_InvoicePaymentRefund.status, Context)
+    ).
+
+decode_refund_status({Status, StatusInfo}, Context) ->
+    Error =
+        case StatusInfo of
+            #domain_InvoicePaymentRefundFailed{failure = OperationFailure} ->
+                decode_operation_failure(OperationFailure, Context);
+            _ ->
+                undefined
+        end,
+    #{
+        <<"status">> => genlib:to_binary(Status),
+        <<"error" >> => Error
+    }.
+
+-spec decode_residence(_) ->
+    _.
+
+decode_residence(undefined) ->
+    undefined;
+decode_residence(Residence) when is_atom(Residence) ->
+    list_to_binary(string:to_upper(atom_to_list(Residence))).
+
+-spec decode_category_ref(_) ->
+    _.
+
+decode_category_ref(#domain_CategoryRef{id = CategoryRef}) ->
+    CategoryRef.
+
 -spec decode_optional(_, _) ->
     _.
 
 decode_optional(Arg, DecodeFun) when Arg /= undefined ->
     DecodeFun(Arg);
 decode_optional(undefined, _) ->
+    undefined.
+
+%%
+
+-spec construct_payment_methods(_, _, _) ->
+    _.
+
+construct_payment_methods(ServiceName, Args, Context) ->
+    case compute_terms(ServiceName, Args, Context) of
+        {ok, #domain_TermSet{payments = undefined}} ->
+            {ok, []};
+        {ok, #domain_TermSet{
+            payments = #domain_PaymentsServiceTerms{
+                payment_methods = PaymentMethodRefs
+            }
+        }} ->
+            {ok, decode_payment_methods(PaymentMethodRefs)};
+        Error ->
+            Error
+    end.
+decode_payment_methods(undefined) ->
+    [];
+decode_payment_methods({value, PaymentMethodRefs}) ->
+    PaymentMethods = [ID || #domain_PaymentMethodRef{id = ID} <- PaymentMethodRefs],
+    lists:foldl(
+        fun(Method, Acc) ->
+            {_, MethodTerms} = lists:unzip(proplists:lookup_all(Method, PaymentMethods)),
+            decode_payment_method(Method, MethodTerms) ++ Acc
+        end,
+        [],
+        proplists:get_keys(PaymentMethods)
+    ).
+
+decode_payment_method(bank_card, PaymentSystems) ->
+    [#{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems)}];
+decode_payment_method(payment_terminal, Providers) ->
+    [#{<<"method">> => <<"PaymentTerminal">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}];
+decode_payment_method(digital_wallet, Providers) ->
+    [#{<<"method">> => <<"DigitalWallet">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}];
+decode_payment_method(tokenized_bank_card, TokenizedBankCards) ->
+    decode_tokenized_bank_cards(TokenizedBankCards).
+
+decode_tokenized_bank_cards(TokenizedBankCards) ->
+    PropTokenizedBankCards = [
+        {TP, PS} || #domain_TokenizedBankCard{payment_system = PS, token_provider = TP} <- TokenizedBankCards
+    ],
+    lists:map(
+        fun(TokenProvider) ->
+            {_, PaymentSystems} = lists:unzip(proplists:lookup_all(TokenProvider, PropTokenizedBankCards)),
+            decode_tokenized_bank_card(TokenProvider, PaymentSystems)
+        end,
+        proplists:get_keys(PropTokenizedBankCards)
+    ).
+
+decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
+    #{
+        <<"method">> => <<"BankCard">>,
+        <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems),
+        <<"tokenProviders">> => [genlib:to_binary(TokenProvider)]
+    }.
+
+compute_terms(ServiceName, Args, Context) ->
+    capi_handler_utils:service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
+
+-spec make_invoice_and_token(_, _) ->
+    _.
+
+make_invoice_and_token(Invoice, PartyID) ->
+    #{
+        <<"invoice"           >> => decode_invoice(Invoice),
+        <<"invoiceAccessToken">> => capi_handler_utils:issue_access_token(PartyID, {invoice, Invoice#domain_Invoice.id})
+    }.
+
+decode_invoice(Invoice) ->
+    #domain_Cash{amount = Amount, currency = Currency} = Invoice#domain_Invoice.cost,
+    #domain_InvoiceDetails{product = Product, description = Description, cart = Cart} =
+        Invoice#domain_Invoice.details,
+    capi_handler_utils:merge_and_compact(#{
+        <<"id"               >> => Invoice#domain_Invoice.id,
+        <<"shopID"           >> => Invoice#domain_Invoice.shop_id,
+        <<"createdAt"        >> => Invoice#domain_Invoice.created_at,
+        <<"dueDate"          >> => Invoice#domain_Invoice.due,
+        <<"amount"           >> => Amount,
+        <<"currency"         >> => decode_currency(Currency),
+        <<"metadata"         >> => decode_context(Invoice#domain_Invoice.context),
+        <<"product"          >> => Product,
+        <<"description"      >> => Description,
+        <<"cart"             >> => decode_invoice_cart(Cart),
+        <<"invoiceTemplateID">> => Invoice#domain_Invoice.template_id
+    }, decode_invoice_status(Invoice#domain_Invoice.status)).
+
+decode_invoice_status({Status, StatusInfo}) ->
+    Reason =
+        case StatusInfo of
+            #domain_InvoiceCancelled{details = Details} -> Details;
+            #domain_InvoiceFulfilled{details = Details} -> Details;
+            _ -> undefined
+        end,
+    #{
+        <<"status">> => genlib:to_binary(Status),
+        <<"reason">> => Reason
+    }.
+
+decode_invoice_cart(#domain_InvoiceCart{lines = Lines}) ->
+    [decode_invoice_line(L) || L <- Lines];
+decode_invoice_cart(undefined) ->
+    undefined.
+
+decode_invoice_line(InvoiceLine = #domain_InvoiceLine{quantity = Quantity, price = #domain_Cash{amount = Price}}) ->
+    genlib_map:compact(#{
+        <<"product" >> => InvoiceLine#domain_InvoiceLine.product,
+        <<"quantity">> => Quantity,
+        <<"price"   >> => Price,
+        <<"cost"    >> => Price * Quantity,
+        <<"taxMode" >> => decode_invoice_line_tax_mode(InvoiceLine#domain_InvoiceLine.metadata)
+    }).
+
+decode_invoice_line_tax_mode(#{<<"TaxMode">> := {str, TM}}) ->
+    %% for more info about taxMode look here:
+    %% https://github.com/rbkmoney/starrys/blob/master/docs/settings.md
+    #{
+       <<"type">> => <<"InvoiceLineTaxVAT">>,
+       <<"rate">> => TM
+    };
+decode_invoice_line_tax_mode(_) ->
+    undefined.
+
+decode_context(#'Content'{type = <<"application/json">>, data = InvoiceContext}) ->
+    % @TODO deal with non json contexts
+    jsx:decode(InvoiceContext,  [return_maps]);
+decode_context(undefined) ->
     undefined.

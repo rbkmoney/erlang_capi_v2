@@ -1,5 +1,7 @@
 -module(capi_handler_geo).
 
+-include_lib("dmsl/include/dmsl_domain_thrift.hrl").
+
 -behaviour(capi_handler).
 -export([process_request/4]).
 
@@ -14,7 +16,7 @@
 process_request('GetLocationsNames', Req, Context, _) ->
     CallArgs = [ordsets:from_list(maps:get('geoIDs', Req)), maps:get('language', Req)],
     Call = {geo_ip_service, 'GetLocationName', CallArgs},
-    case service_call(Call, Context) of
+    case capi_handler_utils:service_call(Call, Context) of
         {ok, LocationNames = #{}} ->
             PreparedLocationNames =
                 maps:fold(
@@ -24,9 +26,16 @@ process_request('GetLocationsNames', Req, Context, _) ->
                 ),
             {ok, {200, [], PreparedLocationNames}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
-            {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
+            FormattedErrors = capi_handler_utils:format_request_errors(Errors),
+            {ok, {400, [], capi_handler_utils:logic_error(invalidRequest, FormattedErrors)}}
     end;
 %%
 
 process_request(OperationID, Req, Context, Handlers) ->
     capi_handler:process_request(OperationID, Req, Context, Handlers).
+
+decode_location_name(GeoID, Name) ->
+    #{
+        <<"geoID">> => GeoID,
+        <<"name">> => Name
+    }.
