@@ -471,7 +471,7 @@ decode_contract_modification({payout_tool_modification, #payproc_PayoutToolModif
     #{
         <<"contractModificationType">> => <<"ContractPayoutToolInfoModification">>,
         <<"payoutToolID"            >> => PayoutToolID,
-        <<"details"                 >> => decode_payout_tool_details(ToolInfo)
+        <<"details"                 >> => capi_handler:decode_payout_tool_details(ToolInfo)
     };
 decode_contract_modification({report_preferences_modification, ReportPreferences}) ->
     maps:merge(
@@ -522,25 +522,7 @@ decode_shop_modification({payout_schedule_modification, #payproc_ScheduleModific
     }).
 
 decode_payout_tool_params(#payproc_PayoutToolParams{currency = Currency, tool_info = ToolInfo}) ->
-    decode_payout_tool_params(Currency, ToolInfo).
-
-decode_payout_tool_params(Currency, Info) ->
-    #{
-        <<"currency">> => capi_handler:decode_currency(Currency),
-        <<"details">> => decode_payout_tool_details(Info)
-    }.
-
-decode_payout_tool_details({bank_card, V}) ->
-    decode_bank_card_details(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankCard">>});
-decode_payout_tool_details({russian_bank_account, V}) ->
-    decode_russian_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankAccount">>});
-decode_payout_tool_details({international_bank_account, V}) ->
-    decode_international_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsInternationalBankAccount">>});
-decode_payout_tool_details({wallet_info, V}) ->
-    #{
-        <<"detailsType">> => <<"PayoutToolDetailsWalletInfo">>,
-        <<"walletID">> => V#domain_WalletInfo.wallet_id
-    }.
+    capi_handler:decode_payout_tool_params(Currency, ToolInfo).
 
 decode_shop_params(ShopParams) ->
     #{
@@ -549,51 +531,3 @@ decode_shop_params(ShopParams) ->
         <<"contractID"  >> => ShopParams#payproc_ShopParams.contract_id,
         <<"payoutToolID">> => ShopParams#payproc_ShopParams.payout_tool_id
     }.
-
-decode_bank_card_details(BankCard, V) ->
-    LastDigits = capi_handler:decode_last_digits(BankCard#domain_BankCard.masked_pan),
-    Bin = BankCard#domain_BankCard.bin,
-    capi_handler_utils:merge_and_compact(V, #{
-        <<"lastDigits">>     => LastDigits,
-        <<"bin">>            => Bin,
-        <<"cardNumberMask">> => capi_handler:decode_masked_pan(Bin, LastDigits),
-        <<"paymentSystem" >> => genlib:to_binary(BankCard#domain_BankCard.payment_system),
-        <<"tokenProvider" >> => decode_token_provider(BankCard#domain_BankCard.token_provider)
-    }).
-
-decode_russian_bank_account(BankAccount, V) ->
-    V#{
-        <<"account"        >> => BankAccount#domain_RussianBankAccount.account,
-        <<"bankName"       >> => BankAccount#domain_RussianBankAccount.bank_name,
-        <<"bankPostAccount">> => BankAccount#domain_RussianBankAccount.bank_post_account,
-        <<"bankBik"        >> => BankAccount#domain_RussianBankAccount.bank_bik
-    }.
-decode_international_bank_account(undefined, _) ->
-    undefined;
-decode_international_bank_account(BankAccount, V) ->
-    genlib_map:compact(V#{
-        <<"number">>                   => BankAccount#domain_InternationalBankAccount.number,
-        <<"iban">>                     => BankAccount#domain_InternationalBankAccount.iban,
-        <<"bankDetails">>              => decode_international_bank_details(
-            BankAccount#domain_InternationalBankAccount.bank
-        ),
-        <<"correspondentBankAccount">> => decode_international_bank_account(
-            BankAccount#domain_InternationalBankAccount.correspondent_account, #{}
-        )
-    }).
-
-decode_international_bank_details(undefined) ->
-    undefined;
-decode_international_bank_details(Bank) ->
-    genlib_map:compact(#{
-         <<"bic">>         => Bank#domain_InternationalBankDetails.bic,
-         <<"abartn">>      => Bank#domain_InternationalBankDetails.aba_rtn,
-         <<"name">>        => Bank#domain_InternationalBankDetails.name,
-         <<"countryCode">> => capi_handler:decode_residence(Bank#domain_InternationalBankDetails.country),
-         <<"address">>     => Bank#domain_InternationalBankDetails.address
-    }).
-
-decode_token_provider(Provider) when Provider /= undefined ->
-    genlib:to_binary(Provider);
-decode_token_provider(undefined) ->
-    undefined.

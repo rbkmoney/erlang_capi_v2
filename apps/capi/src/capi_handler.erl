@@ -12,8 +12,10 @@
 -export([encode_cash/1]).
 -export([encode_currency/1]).
 -export([encode_invoice_cart/1]).
+-export([encode_stat_request/1]).
 -export([encode_invoice_context/1]).
 
+-export([decode_map/2]).
 -export([decode_currency/1]).
 -export([decode_shop_location/1]).
 -export([decode_shop_details/1]).
@@ -35,6 +37,8 @@
 -export([decode_refund/2]).
 -export([decode_residence/1]).
 -export([decode_category_ref/1]).
+-export([decode_payout_tool_params/2]).
+-export([decode_payout_tool_details/1]).
 -export([decode_optional/2]).
 
 -export([construct_payment_methods/3]).
@@ -61,9 +65,6 @@
 
 %% @WARNING Must be refactored in case of different classes of users using this API
 -define(REALM, <<"external">>).
--define(DEFAULT_URL_LIFETIME, 60). % seconds
-
--define(CAPI_NS, <<"com.rbkmoney.capi">>).
 
 -spec authorize_api_key(swag_server:operation_id(), swag_server:api_key()) ->
     Result :: false | {true, capi_auth:context()}.
@@ -343,7 +344,28 @@ encode_content(json, Data) ->
         data = jsx:encode(Data)
     }.
 
+-spec encode_stat_request(_) ->
+    _.
+
+encode_stat_request(Dsl) ->
+    encode_stat_request(Dsl, undefined).
+
+encode_stat_request(Dsl, ContinuationToken) when is_map(Dsl) ->
+    encode_stat_request(jsx:encode(Dsl), ContinuationToken);
+
+encode_stat_request(Dsl, ContinuationToken) when is_binary(Dsl) ->
+    #merchstat_StatRequest{
+        dsl = Dsl,
+        continuation_token = ContinuationToken
+    }.
+
 %%
+
+-spec decode_map(_, _) ->
+    _.
+
+decode_map(Items, Fun) ->
+    lists:map(Fun, maps:values(Items)).
 
 -spec decode_currency(tuple()) ->
     binary().
@@ -847,6 +869,62 @@ decode_residence(Residence) when is_atom(Residence) ->
 decode_category_ref(#domain_CategoryRef{id = CategoryRef}) ->
     CategoryRef.
 
+-spec decode_payout_tool_params(_, _) ->
+    _.
+
+decode_payout_tool_params(Currency, Info) ->
+    #{
+        <<"currency">> => decode_currency(Currency),
+        <<"details">> => decode_payout_tool_details(Info)
+    }.
+
+-spec decode_payout_tool_details(_) ->
+    _.
+
+decode_payout_tool_details({bank_card, V}) ->
+    decode_bank_card_details(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankCard">>});
+decode_payout_tool_details({russian_bank_account, V}) ->
+    decode_russian_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankAccount">>});
+decode_payout_tool_details({international_bank_account, V}) ->
+    decode_international_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsInternationalBankAccount">>});
+decode_payout_tool_details({wallet_info, V}) ->
+    #{
+        <<"detailsType">> => <<"PayoutToolDetailsWalletInfo">>,
+        <<"walletID">> => V#domain_WalletInfo.wallet_id
+    }.
+
+decode_russian_bank_account(BankAccount, V) ->
+    V#{
+        <<"account"        >> => BankAccount#domain_RussianBankAccount.account,
+        <<"bankName"       >> => BankAccount#domain_RussianBankAccount.bank_name,
+        <<"bankPostAccount">> => BankAccount#domain_RussianBankAccount.bank_post_account,
+        <<"bankBik"        >> => BankAccount#domain_RussianBankAccount.bank_bik
+    }.
+decode_international_bank_account(undefined, _) ->
+    undefined;
+decode_international_bank_account(BankAccount, V) ->
+    genlib_map:compact(V#{
+        <<"number">>                   => BankAccount#domain_InternationalBankAccount.number,
+        <<"iban">>                     => BankAccount#domain_InternationalBankAccount.iban,
+        <<"bankDetails">>              => decode_international_bank_details(
+            BankAccount#domain_InternationalBankAccount.bank
+        ),
+        <<"correspondentBankAccount">> => decode_international_bank_account(
+            BankAccount#domain_InternationalBankAccount.correspondent_account, #{}
+        )
+    }).
+
+decode_international_bank_details(undefined) ->
+    undefined;
+decode_international_bank_details(Bank) ->
+    genlib_map:compact(#{
+         <<"bic">>         => Bank#domain_InternationalBankDetails.bic,
+         <<"abartn">>      => Bank#domain_InternationalBankDetails.aba_rtn,
+         <<"name">>        => Bank#domain_InternationalBankDetails.name,
+         <<"countryCode">> => decode_residence(Bank#domain_InternationalBankDetails.country),
+         <<"address">>     => Bank#domain_InternationalBankDetails.address
+    }).
+
 -spec decode_optional(_, _) ->
     _.
 
@@ -915,7 +993,7 @@ decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
     }.
 
 compute_terms(ServiceName, Args, Context) ->
-    capi_handler_utils:service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
+    utils:service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
 
 -spec make_invoice_and_token(_, _) ->
     _.
@@ -923,14 +1001,14 @@ compute_terms(ServiceName, Args, Context) ->
 make_invoice_and_token(Invoice, PartyID) ->
     #{
         <<"invoice"           >> => decode_invoice(Invoice),
-        <<"invoiceAccessToken">> => capi_handler_utils:issue_access_token(PartyID, {invoice, Invoice#domain_Invoice.id})
+        <<"invoiceAccessToken">> => utils:issue_access_token(PartyID, {invoice, Invoice#domain_Invoice.id})
     }.
 
 decode_invoice(Invoice) ->
     #domain_Cash{amount = Amount, currency = Currency} = Invoice#domain_Invoice.cost,
     #domain_InvoiceDetails{product = Product, description = Description, cart = Cart} =
         Invoice#domain_Invoice.details,
-    capi_handler_utils:merge_and_compact(#{
+    utils:merge_and_compact(#{
         <<"id"               >> => Invoice#domain_Invoice.id,
         <<"shopID"           >> => Invoice#domain_Invoice.shop_id,
         <<"createdAt"        >> => Invoice#domain_Invoice.created_at,

@@ -24,6 +24,7 @@
 -export([wrap_payment_session/2]).
 -export([get_invoice_by_id/2]).
 -export([get_payment_by_id/3]).
+-export([get_contract_by_id/2]).
 
 -type processing_context() :: capi_handler:processing_context().
 
@@ -259,3 +260,10 @@ get_invoice_by_id(InvoiceID, Context) ->
 
 get_payment_by_id(InvoiceID, PaymentID, Context) ->
     service_call_with([user_info], {invoicing, 'GetPayment', [InvoiceID, PaymentID]}, Context).
+
+-spec get_contract_by_id(_, _) ->
+    _.
+
+get_contract_by_id(ContractID, Context) ->
+    Call = {party_management, 'GetContract', [ContractID]},
+    capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context).

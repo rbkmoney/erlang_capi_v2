@@ -63,7 +63,7 @@ create_dsl(QueryType, QueryBody, QueryParams) ->
     ).
 
 process_merchant_stat(StatType, Req, Context) ->
-    Call = {merchant_stat, 'GetStatistics', [encode_stat_request(create_stat_dsl(StatType, Req, Context))]},
+    Call = {merchant_stat, 'GetStatistics', [capi_handler:encode_stat_request(create_stat_dsl(StatType, Req, Context))]},
     process_merchant_stat_result(StatType, capi_handler_utils:service_call(Call, Context)).
 
 process_merchant_stat_result(customers_rate_stat = StatType, {ok, #merchstat_StatResponse{data = {records, Stats}}}) ->
@@ -85,18 +85,6 @@ process_merchant_stat_result(StatType, Result) ->
         {exception, #merchstat_BadToken{}} ->
             {ok, {400, [], capi_handler_utils:logic_error(invalidRequest, <<"Invalid token">>)}}
     end.
-
-encode_stat_request(Dsl) ->
-    encode_stat_request(Dsl, undefined).
-
-encode_stat_request(Dsl, ContinuationToken) when is_map(Dsl) ->
-    encode_stat_request(jsx:encode(Dsl), ContinuationToken);
-
-encode_stat_request(Dsl, ContinuationToken) when is_binary(Dsl) ->
-    #merchstat_StatRequest{
-        dsl = Dsl,
-        continuation_token = ContinuationToken
-    }.
 
 decode_stat_info(payments_conversion_stat, Response) ->
     #{

@@ -29,7 +29,7 @@ process_request('GetContractByID', Req, Context, _) ->
     end;
 
 process_request('GetContractAdjustments', Req, Context, _) ->
-    case get_contract_by_id(maps:get('contractID', Req), Context) of
+    case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
         {ok, #domain_Contract{adjustments = Adjustments}} ->
             Resp = [decode_contract_adjustment(A) || A <- Adjustments],
             {ok, {200, [], Resp}};
@@ -38,7 +38,7 @@ process_request('GetContractAdjustments', Req, Context, _) ->
     end;
 
 process_request('GetContractAdjustmentByID', Req, Context, _) ->
-    case get_contract_by_id(maps:get('contractID', Req), Context) of
+    case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
         {ok, #domain_Contract{adjustments = Adjustments}} ->
             AdjustmentID = maps:get('adjustmentID', Req),
             case lists:keyfind(AdjustmentID, #domain_ContractAdjustment.id, Adjustments) of
@@ -56,15 +56,8 @@ process_request('GetContractAdjustmentByID', Req, Context, _) ->
 process_request(OperationID, Req, Context, Handlers) ->
     capi_handler:process_request(OperationID, Req, Context, Handlers).
 
-get_contract_by_id(ContractID, Context) ->
-    Call = {party_management, 'GetContract', [ContractID]},
-    capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context).
-
 decode_contracts_map(Contracts, Contractors) ->
-    decode_map(Contracts, fun(C) -> decode_contract(C, Contractors) end).
-
-decode_map(Items, Fun) ->
-    lists:map(Fun, maps:values(Items)).
+    capi_handler:decode_map(Contracts, fun(C) -> decode_contract(C, Contractors) end).
 
 decode_contract(Contract, Contractors) ->
     capi_handler_utils:merge_and_compact(#{
