@@ -45,7 +45,7 @@ process_request('GetContractAdjustmentByID', Req, Context, _) ->
                 #domain_ContractAdjustment{} = A ->
                     {ok, {200, [], decode_contract_adjustment(A)}};
                 false ->
-                    {ok, {404, [], capi_handler_utils:eneral_error(<<"Adjustment not found">>)}}
+                    {ok, {404, [], capi_handler_utils:general_error(<<"Adjustment not found">>)}}
             end;
         {exception, #payproc_ContractNotFound{}} ->
             {ok, {404, [], capi_handler_utils:general_error(<<"Contract not found">>)}}
@@ -69,11 +69,11 @@ decode_contract(Contract, Contractors) ->
         <<"validUntil"          >> => Contract#domain_Contract.valid_until,
         <<"legalAgreement"      >> => capi_handler:decode_optional(
             Contract#domain_Contract.legal_agreement,
-            fun capi_handler_utils:decode_legal_agreement/1
+            fun capi_handler:decode_legal_agreement/1
         ),
         <<"reportingPreferences">> => capi_handler:decode_optional(
             Contract#domain_Contract.report_preferences,
-            fun capi_handler_utils:decode_reporting_preferences/1
+            fun capi_handler:decode_reporting_preferences/1
         )
     }, decode_contract_status(Contract#domain_Contract.status)).
 

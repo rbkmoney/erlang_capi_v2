@@ -15,7 +15,7 @@
     {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
 
 process_request('CreateInvoice', Req, Context, _) ->
-    PartyID = capi_handler:get_party_id(Context),
+    PartyID = capi_handler_utils:get_party_id(Context),
     try
         Call = {invoicing, 'Create', [encode_invoice_params(PartyID, maps:get('InvoiceParams', Req))]},
         capi_handler_utils:service_call_with([user_info, party_creation], Call, Context)
@@ -45,7 +45,7 @@ process_request('CreateInvoiceAccessToken', Req, Context, _) ->
     InvoiceID = maps:get(invoiceID, Req),
     case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
         {ok, #'payproc_Invoice'{}} ->
-            {ok, {201, [], capi_handler_utils:issue_access_token(capi_handler:get_party_id(Context), {invoice, InvoiceID})}};
+            {ok, {201, [], capi_handler_utils:issue_access_token(capi_handler_utils:get_party_id(Context), {invoice, InvoiceID})}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->

@@ -12,6 +12,8 @@
 -export([service_call/2]).
 
 -export([get_my_party/1]).
+-export([get_auth_context/1]).
+-export([get_party_id/1]).
 
 -export([issue_access_token/2]).
 -export([merge_and_compact/2]).
@@ -34,7 +36,7 @@
 general_error(Message) ->
     #{<<"message">> => genlib:to_binary(Message)}.
 
--spec logic_error(integer(), binary()) ->
+-spec logic_error(atom(), binary()) ->
     map().
 
 logic_error(Code, Message) ->
@@ -97,6 +99,9 @@ get_party_params(Context) ->
         }
     }.
 
+-spec get_auth_context(processing_context()) ->
+    _.
+
 get_auth_context(#{swagger_context := #{auth_context := AuthContext}}) ->
     AuthContext.
 
@@ -105,6 +110,9 @@ get_user_info(Context) ->
         id = get_party_id(Context),
         type = {external_user, #payproc_ExternalUser{}}
     }.
+
+-spec get_party_id(processing_context()) ->
+    _.
 
 get_party_id(Context) ->
     capi_auth:get_subject_id(get_auth_context(Context)).

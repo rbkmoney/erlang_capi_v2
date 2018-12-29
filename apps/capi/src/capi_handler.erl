@@ -10,10 +10,13 @@
 -export([encode_client_info/1]).
 -export([encode_payment_tool_token/1]).
 -export([encode_cash/1]).
+-export([encode_cash/2]).
 -export([encode_currency/1]).
 -export([encode_invoice_cart/1]).
 -export([encode_stat_request/1]).
 -export([encode_invoice_context/1]).
+-export([encode_invoice_line_meta/1]).
+-export([encode_residence/1]).
 
 -export([decode_map/2]).
 -export([decode_currency/1]).
@@ -39,6 +42,21 @@
 -export([decode_category_ref/1]).
 -export([decode_payout_tool_params/2]).
 -export([decode_payout_tool_details/1]).
+-export([decode_disposable_payment_resource/1]).
+-export([decode_invoice_cart/1]).
+-export([decode_invoice_line_tax_mode/1]).
+-export([decode_invoice/1]).
+-export([decode_payment_status/2]).
+-export([decode_refund_status/2]).
+-export([decode_context/1]).
+-export([decode_invoice_status/1]).
+-export([decode_recurrent_parent/1]).
+-export([decode_flow/1]).
+-export([decode_make_recurrent/1]).
+-export([encode_content/2]).
+-export([encode_stat_request/2]).
+-export([is_blocked/1]).
+-export([is_suspended/1]).
 -export([decode_optional/2]).
 
 -export([construct_payment_methods/3]).
@@ -49,6 +67,7 @@
 -export([handle_request/3]).
 
 %% Handler behaviour
+-export([process_request/4]).
 -export_type([operation_id/0]).
 -export_type([request_data/0]).
 -export_type([request_context/0]).
@@ -242,6 +261,9 @@ encode_token_provider(TokenProvider) when TokenProvider /= undefined ->
 encode_token_provider(undefined) ->
     undefined.
 
+-spec encode_residence(_) ->
+    _.
+
 encode_residence(undefined) ->
     undefined;
 encode_residence(Residence) when is_binary(Residence) ->
@@ -270,6 +292,9 @@ encode_cash(Params) ->
     Amount   = genlib_map:get(<<"amount"  >>, Params),
     Currency = genlib_map:get(<<"currency">>, Params),
     encode_cash(Amount, Currency).
+
+-spec encode_cash(_, _) ->
+    _.
 
 encode_cash(Amount, Currency) ->
     #domain_Cash{
@@ -302,13 +327,16 @@ encode_invoice_cart(undefined, _) ->
 
 encode_invoice_line(Line, Currency) ->
     Metadata = encode_invoice_line_meta(Line),
-    Price = capi_handler:encode_cash(genlib_map:get(<<"price">>, Line), Currency),
+    Price = encode_cash(genlib_map:get(<<"price">>, Line), Currency),
     #domain_InvoiceLine{
         product  = genlib_map:get(<<"product" >>, Line),
         quantity = genlib_map:get(<<"quantity">>, Line),
         price    = Price,
         metadata = Metadata
     }.
+
+-spec encode_invoice_line_meta(_) ->
+    _.
 
 -define(DEFAULT_INVOICE_LINE_META, #{}).
 
@@ -338,6 +366,9 @@ encode_invoice_context(Params, DefaultMeta) ->
     Context = genlib_map:get(<<"metadata">>, Params, DefaultMeta),
     encode_content(json, Context).
 
+-spec encode_content(_, _) ->
+    _.
+
 encode_content(json, Data) ->
     #'Content'{
         type = <<"application/json">>,
@@ -349,6 +380,9 @@ encode_content(json, Data) ->
 
 encode_stat_request(Dsl) ->
     encode_stat_request(Dsl, undefined).
+
+-spec encode_stat_request(_, _) ->
+    _.
 
 encode_stat_request(Dsl, ContinuationToken) when is_map(Dsl) ->
     encode_stat_request(jsx:encode(Dsl), ContinuationToken);
@@ -418,8 +452,14 @@ decode_party(#domain_Party{id = PartyID, blocking = Blocking, suspension = Suspe
         <<"isSuspended">> => is_suspended(Suspension)
     }.
 
+-spec is_blocked(_) ->
+    true | false.
+
 is_blocked({blocked  , _}) -> true;
 is_blocked({unblocked, _}) -> false.
+
+-spec is_suspended(_) ->
+    true | false.
 
 is_suspended({suspended, _}) -> true;
 is_suspended({active   , _}) ->false.
@@ -452,7 +492,7 @@ decode_private_entity({russian_private_entity, PrivateEntity}) ->
         <<"firstName">>     => PrivateEntity#domain_RussianPrivateEntity.first_name,
         <<"secondName">>    => PrivateEntity#domain_RussianPrivateEntity.second_name,
         <<"middleName">>    => PrivateEntity#domain_RussianPrivateEntity.middle_name,
-        <<"contactInfo">>   => capi_handler_utils:decode_contact_info(PrivateEntity#domain_RussianPrivateEntity.contact_info)
+        <<"contactInfo">>   => decode_contact_info(PrivateEntity#domain_RussianPrivateEntity.contact_info)
     }.
 
 decode_registered_user(#domain_RegisteredUser{email = Email}) ->
@@ -574,6 +614,9 @@ decode_digital_wallet(#domain_DigitalWallet{
         <<"id"      >> => ID
     }).
 
+-spec decode_payment_tool_details(_) ->
+    _.
+
 decode_payment_tool_details({bank_card, V}) ->
     decode_bank_card_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsBankCard">>});
 decode_payment_tool_details({payment_terminal, V}) ->
@@ -678,6 +721,9 @@ decode_payer({payment_resource, #domain_PaymentResourcePayer{resource = Resource
         decode_disposable_payment_resource(Resource)
     ).
 
+-spec decode_payment_status(_, _) ->
+    _.
+
 decode_payment_status({Status, StatusInfo}, Context) ->
     Error =
         case StatusInfo of
@@ -712,6 +758,9 @@ decode_payment_operation_failure_([H|T]) ->
         _  -> R#{<<"subError">> => decode_payment_operation_failure_(T)}
     end.
 
+-spec decode_flow(_) ->
+    _.
+
 decode_flow({instant, _}) ->
     #{<<"type">> => <<"PaymentFlowInstant">>};
 
@@ -722,10 +771,16 @@ decode_flow({hold, #domain_InvoicePaymentFlowHold{on_hold_expiration = OnHoldExp
         <<"heldUntil"       >> => HeldUntil
     }.
 
+-spec decode_make_recurrent(_) ->
+    _.
+
 decode_make_recurrent(undefined) ->
     false;
 decode_make_recurrent(Value) when is_boolean(Value) ->
     Value.
+
+-spec decode_recurrent_parent(_) ->
+    _.
 
 decode_recurrent_parent(#domain_RecurrentParentPayment{invoice_id = InvoiceID, payment_id = PaymentID}) ->
     #{
@@ -841,6 +896,9 @@ decode_refund(Refund, Context) ->
         },
         decode_refund_status(Refund#domain_InvoicePaymentRefund.status, Context)
     ).
+
+-spec decode_refund_status(_, _) ->
+    _.
 
 decode_refund_status({Status, StatusInfo}, Context) ->
     Error =
@@ -993,7 +1051,7 @@ decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
     }.
 
 compute_terms(ServiceName, Args, Context) ->
-    utils:service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
+    capi_handler_utils:service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
 
 -spec make_invoice_and_token(_, _) ->
     _.
@@ -1001,14 +1059,17 @@ compute_terms(ServiceName, Args, Context) ->
 make_invoice_and_token(Invoice, PartyID) ->
     #{
         <<"invoice"           >> => decode_invoice(Invoice),
-        <<"invoiceAccessToken">> => utils:issue_access_token(PartyID, {invoice, Invoice#domain_Invoice.id})
+        <<"invoiceAccessToken">> => capi_handler_utils:issue_access_token(PartyID, {invoice, Invoice#domain_Invoice.id})
     }.
+
+-spec decode_invoice(_) ->
+    _.
 
 decode_invoice(Invoice) ->
     #domain_Cash{amount = Amount, currency = Currency} = Invoice#domain_Invoice.cost,
     #domain_InvoiceDetails{product = Product, description = Description, cart = Cart} =
         Invoice#domain_Invoice.details,
-    utils:merge_and_compact(#{
+    capi_handler_utils:merge_and_compact(#{
         <<"id"               >> => Invoice#domain_Invoice.id,
         <<"shopID"           >> => Invoice#domain_Invoice.shop_id,
         <<"createdAt"        >> => Invoice#domain_Invoice.created_at,
@@ -1022,6 +1083,9 @@ decode_invoice(Invoice) ->
         <<"invoiceTemplateID">> => Invoice#domain_Invoice.template_id
     }, decode_invoice_status(Invoice#domain_Invoice.status)).
 
+-spec decode_invoice_status(_) ->
+    _.
+
 decode_invoice_status({Status, StatusInfo}) ->
     Reason =
         case StatusInfo of
@@ -1033,6 +1097,9 @@ decode_invoice_status({Status, StatusInfo}) ->
         <<"status">> => genlib:to_binary(Status),
         <<"reason">> => Reason
     }.
+
+-spec decode_invoice_cart(_) ->
+    _.
 
 decode_invoice_cart(#domain_InvoiceCart{lines = Lines}) ->
     [decode_invoice_line(L) || L <- Lines];
@@ -1048,6 +1115,9 @@ decode_invoice_line(InvoiceLine = #domain_InvoiceLine{quantity = Quantity, price
         <<"taxMode" >> => decode_invoice_line_tax_mode(InvoiceLine#domain_InvoiceLine.metadata)
     }).
 
+-spec decode_invoice_line_tax_mode(_) ->
+    _.
+
 decode_invoice_line_tax_mode(#{<<"TaxMode">> := {str, TM}}) ->
     %% for more info about taxMode look here:
     %% https://github.com/rbkmoney/starrys/blob/master/docs/settings.md
@@ -1057,6 +1127,9 @@ decode_invoice_line_tax_mode(#{<<"TaxMode">> := {str, TM}}) ->
     };
 decode_invoice_line_tax_mode(_) ->
     undefined.
+
+-spec decode_context(_) ->
+    _.
 
 decode_context(#'Content'{type = <<"application/json">>, data = InvoiceContext}) ->
     % @TODO deal with non json contexts
