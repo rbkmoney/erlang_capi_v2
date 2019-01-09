@@ -93,6 +93,8 @@ authorize_api_key(OperationID, ApiKey) ->
     capi_auth:authorize_api_key(OperationID, ApiKey).
 
 -type request_data()        :: #{atom() | binary() => term()}.
+-type decode_data()         :: #{binary() => term()}.
+-type encode_data()         :: tuple().
 -type operation_id()        :: swag_server:operation_id().
 -type request_context()     :: swag_server:request_context().
 -type response()            :: swag_server_logic_handler:response().
@@ -204,8 +206,8 @@ process_woody_error(_Source, result_unknown      , _Details) ->
 
 %%
 
--spec encode_contact_info(map()) ->
-    tuple().
+-spec encode_contact_info(request_data()) ->
+    encode_data().
 
 encode_contact_info(ContactInfo) ->
     #domain_ContactInfo{
@@ -213,8 +215,8 @@ encode_contact_info(ContactInfo) ->
         email        = genlib_map:get(<<"email">>, ContactInfo)
     }.
 
--spec encode_client_info(map()) ->
-    tuple().
+-spec encode_client_info(request_data()) ->
+    encode_data().
 encode_client_info(ClientInfo) ->
     #domain_ClientInfo{
         fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
@@ -222,7 +224,7 @@ encode_client_info(ClientInfo) ->
     }.
 
 -spec encode_payment_tool_token(_) ->
-    tuple().
+    encode_data().
 
 encode_payment_tool_token(Token) ->
     try capi_utils:base64url_to_map(Token) of
@@ -262,8 +264,8 @@ encode_token_provider(TokenProvider) when TokenProvider /= undefined ->
 encode_token_provider(undefined) ->
     undefined.
 
--spec encode_residence(_) ->
-    _.
+-spec encode_residence(binary() | undefined) ->
+    atom().
 
 encode_residence(undefined) ->
     undefined;
@@ -286,16 +288,16 @@ encode_digital_wallet(#{<<"provider">> := Provider, <<"id">> := ID}) ->
         id       = ID
     }}.
 
--spec encode_cash(_) ->
-    _.
+-spec encode_cash(request_data()) ->
+    encode_data().
 
 encode_cash(Params) ->
     Amount   = genlib_map:get(<<"amount"  >>, Params),
     Currency = genlib_map:get(<<"currency">>, Params),
     encode_cash(Amount, Currency).
 
--spec encode_cash(_, _) ->
-    _.
+-spec encode_cash(integer(), binary()) ->
+    encode_data().
 
 encode_cash(Amount, Currency) ->
     #domain_Cash{
@@ -304,13 +306,13 @@ encode_cash(Amount, Currency) ->
     }.
 
 -spec encode_currency(binary()) ->
-    tuple().
+    encode_data().
 
 encode_currency(SymbolicCode) ->
     #domain_CurrencyRef{symbolic_code = SymbolicCode}.
 
--spec encode_invoice_cart(_) ->
-    _.
+-spec encode_invoice_cart(request_data()) ->
+    encode_data().
 
 encode_invoice_cart(Params) ->
     Cart     = genlib_map:get(<<"cart"    >>, Params),
@@ -336,8 +338,8 @@ encode_invoice_line(Line, Currency) ->
         metadata = Metadata
     }.
 
--spec encode_invoice_line_meta(_) ->
-    _.
+-spec encode_invoice_line_meta(request_data()) ->
+    #{binary() => {str, _}}.
 
 -define(DEFAULT_INVOICE_LINE_META, #{}).
 
@@ -355,8 +357,8 @@ encode_invoice_line_tax_mode(#{<<"type">> := <<"InvoiceLineTaxVAT">>} = TaxMode)
     %% https://github.com/rbkmoney/starrys/blob/master/docs/settings.md
     genlib_map:get(<<"rate">>, TaxMode).
 
--spec encode_invoice_context(_) ->
-    _.
+-spec encode_invoice_context(request_data()) ->
+    encode_data().
 
 -define(DEFAULT_INVOICE_META, #{}).
 
@@ -367,8 +369,8 @@ encode_invoice_context(Params, DefaultMeta) ->
     Context = genlib_map:get(<<"metadata">>, Params, DefaultMeta),
     encode_content(json, Context).
 
--spec encode_content(_, _) ->
-    _.
+-spec encode_content(json, term()) ->
+    encode_data().
 
 encode_content(json, Data) ->
     #'Content'{
@@ -376,14 +378,14 @@ encode_content(json, Data) ->
         data = jsx:encode(Data)
     }.
 
--spec encode_stat_request(_) ->
-    _.
+-spec encode_stat_request(map() | binary()) ->
+    encode_data().
 
 encode_stat_request(Dsl) ->
     encode_stat_request(Dsl, undefined).
 
--spec encode_stat_request(_, _) ->
-    _.
+-spec encode_stat_request(map() | binary(), binary() | undefined) ->
+    encode_data().
 
 encode_stat_request(Dsl, ContinuationToken) when is_map(Dsl) ->
     encode_stat_request(jsx:encode(Dsl), ContinuationToken);
@@ -396,20 +398,20 @@ encode_stat_request(Dsl, ContinuationToken) when is_binary(Dsl) ->
 
 %%
 
--spec decode_map(_, _) ->
-    _.
+-spec decode_map(map(), fun((_) -> any())) ->
+    [any()].
 
 decode_map(Items, Fun) ->
     lists:map(Fun, maps:values(Items)).
 
--spec decode_currency(tuple()) ->
+-spec decode_currency(encode_data()) ->
     binary().
 
 decode_currency(#domain_Currency   {symbolic_code = SymbolicCode}) -> SymbolicCode;
 decode_currency(#domain_CurrencyRef{symbolic_code = SymbolicCode}) -> SymbolicCode.
 
--spec decode_shop_location(tuple()) ->
-    map().
+-spec decode_shop_location(encode_data()) ->
+    decode_data().
 
 decode_shop_location({url, Location}) ->
     #{
@@ -417,8 +419,8 @@ decode_shop_location({url, Location}) ->
         <<"url">> => Location
     }.
 
--spec decode_shop_details(tuple()) ->
-    map().
+-spec decode_shop_details(encode_data()) ->
+    decode_data().
 
 decode_shop_details(#domain_ShopDetails{name = Name, description = Description}) ->
     genlib_map:compact(#{
@@ -426,7 +428,7 @@ decode_shop_details(#domain_ShopDetails{name = Name, description = Description})
         <<"description">> => Description
     }).
 
--spec decode_business_schedule_ref(tuple()) ->
+-spec decode_business_schedule_ref(encode_data()) ->
     binary() | undefined.
 
 decode_business_schedule_ref(#domain_BusinessScheduleRef{id = ID}) when ID /= undefined ->
@@ -434,8 +436,8 @@ decode_business_schedule_ref(#domain_BusinessScheduleRef{id = ID}) when ID /= un
 decode_business_schedule_ref(undefined) ->
     undefined.
 
--spec decode_contact_info(tuple()) ->
-    map().
+-spec decode_contact_info(encode_data()) ->
+    decode_data().
 
 decode_contact_info(#domain_ContactInfo{phone_number = PhoneNumber, email = Email}) ->
     genlib_map:compact(#{
@@ -443,8 +445,8 @@ decode_contact_info(#domain_ContactInfo{phone_number = PhoneNumber, email = Emai
         <<"email"      >> => Email
     }).
 
--spec decode_party(tuple()) ->
-    map().
+-spec decode_party(encode_data()) ->
+    decode_data().
 
 decode_party(#domain_Party{id = PartyID, blocking = Blocking, suspension = Suspension}) ->
     #{
@@ -453,20 +455,20 @@ decode_party(#domain_Party{id = PartyID, blocking = Blocking, suspension = Suspe
         <<"isSuspended">> => is_suspended(Suspension)
     }.
 
--spec is_blocked(_) ->
+-spec is_blocked({blocked | unblocked, _}) ->
     true | false.
 
 is_blocked({blocked  , _}) -> true;
 is_blocked({unblocked, _}) -> false.
 
--spec is_suspended(_) ->
+-spec is_suspended({suspended | active, _}) ->
     true | false.
 
 is_suspended({suspended, _}) -> true;
-is_suspended({active   , _}) ->false.
+is_suspended({active   , _}) -> false.
 
--spec decode_contractor(tuple()) ->
-    map().
+-spec decode_contractor(encode_data()) ->
+    decode_data().
 
 decode_contractor({legal_entity, LegalEntity}) ->
     maps:merge(#{<<"contractorType">> => <<"LegalEntity">>}, decode_legal_entity(LegalEntity));
@@ -499,8 +501,8 @@ decode_private_entity({russian_private_entity, PrivateEntity}) ->
 decode_registered_user(#domain_RegisteredUser{email = Email}) ->
     #{<<"email">> => Email}.
 
--spec decode_legal_agreement(tuple()) ->
-    map().
+-spec decode_legal_agreement(encode_data()) ->
+    decode_data().
 
 decode_legal_agreement(
     #domain_LegalAgreement{
@@ -515,8 +517,8 @@ decode_legal_agreement(
         <<"validUntil">> => ValidUntil
     }).
 
--spec decode_reporting_preferences(tuple()) ->
-    map().
+-spec decode_reporting_preferences(encode_data()) ->
+    decode_data().
 
 decode_reporting_preferences(#domain_ReportPreferences{
     service_acceptance_act_preferences = #domain_ServiceAcceptanceActPreferences{
@@ -554,14 +556,14 @@ decode_representative_document({power_of_attorney, LegalAgreement}) ->
         decode_legal_agreement(LegalAgreement)
     ).
 
--spec decode_payment_institution_ref(tuple()) ->
+-spec decode_payment_institution_ref(encode_data()) ->
     integer().
 
 decode_payment_institution_ref(#domain_PaymentInstitutionRef{id = Ref}) ->
     Ref.
 
--spec decode_payment_tool_token(tuple()) ->
-    _.
+-spec decode_payment_tool_token({bank_card | payment_terminal | digital_wallet, encode_data()}) ->
+    binary().
 
 decode_payment_tool_token({bank_card, BankCard}) ->
     decode_bank_card(BankCard);
@@ -615,8 +617,8 @@ decode_digital_wallet(#domain_DigitalWallet{
         <<"id"      >> => ID
     }).
 
--spec decode_payment_tool_details(_) ->
-    _.
+-spec decode_payment_tool_details({bank_card | payment_terminal | digital_wallet, encode_data()}) ->
+    decode_data().
 
 decode_payment_tool_details({bank_card, V}) ->
     decode_bank_card_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsBankCard">>});
@@ -654,8 +656,8 @@ decode_digital_wallet_details(#domain_DigitalWallet{provider = qiwi, id = ID}, V
 
 -define(PAN_LENGTH, 16).
 
--spec decode_masked_pan(_, _) ->
-    _.
+-spec decode_masked_pan(binary(), binary()) ->
+    binary().
 
 decode_masked_pan(Bin, LastDigits) ->
     Mask = binary:copy(<<"*">>, ?PAN_LENGTH - byte_size(Bin) - byte_size(LastDigits)),
@@ -663,8 +665,8 @@ decode_masked_pan(Bin, LastDigits) ->
 
 -define(MASKED_PAN_MAX_LENGTH, 4).
 
--spec decode_last_digits(_) ->
-    _.
+-spec decode_last_digits(binary()) ->
+    binary().
 
 decode_last_digits(MaskedPan) when byte_size(MaskedPan) > ?MASKED_PAN_MAX_LENGTH ->
     binary:part(MaskedPan, {byte_size(MaskedPan), -?MASKED_PAN_MAX_LENGTH});
@@ -675,15 +677,15 @@ mask_phone_number(PhoneNumber) ->
     capi_utils:redact(PhoneNumber, <<"^\\+\\d(\\d{1,10}?)\\d{2,4}$">>).
 
 -spec decode_operation_failure(_, _) ->
-    _.
+    decode_data().
 
 decode_operation_failure({operation_timeout, _}, _) ->
     capi_handler_utils:logic_error(timeout, <<"timeout">>);
 decode_operation_failure({failure, #domain_Failure{code = Code, reason = Reason}}, _) ->
     capi_handler_utils:logic_error(Code, Reason).
 
--spec decode_payment(_, _, _) ->
-    _.
+-spec decode_payment(binary(), encode_data(), processing_context()) ->
+    decode_data().
 
 decode_payment(InvoiceID, Payment, Context) ->
     #domain_Cash{
@@ -722,8 +724,8 @@ decode_payer({payment_resource, #domain_PaymentResourcePayer{resource = Resource
         decode_disposable_payment_resource(Resource)
     ).
 
--spec decode_payment_status(_, _) ->
-    _.
+-spec decode_payment_status({atom(), _}, processing_context()) ->
+    decode_data().
 
 decode_payment_status({Status, StatusInfo}, Context) ->
     Error =
@@ -759,8 +761,8 @@ decode_payment_operation_failure_([H|T]) ->
         _  -> R#{<<"subError">> => decode_payment_operation_failure_(T)}
     end.
 
--spec decode_flow(_) ->
-    _.
+-spec decode_flow({atom(), _}) ->
+    decode_data().
 
 decode_flow({instant, _}) ->
     #{<<"type">> => <<"PaymentFlowInstant">>};
@@ -772,16 +774,16 @@ decode_flow({hold, #domain_InvoicePaymentFlowHold{on_hold_expiration = OnHoldExp
         <<"heldUntil"       >> => HeldUntil
     }.
 
--spec decode_make_recurrent(_) ->
-    _.
+-spec decode_make_recurrent(undefined | boolean()) ->
+    boolean().
 
 decode_make_recurrent(undefined) ->
     false;
 decode_make_recurrent(Value) when is_boolean(Value) ->
     Value.
 
--spec decode_recurrent_parent(_) ->
-    _.
+-spec decode_recurrent_parent(encode_data()) ->
+    decode_data().
 
 decode_recurrent_parent(#domain_RecurrentParentPayment{invoice_id = InvoiceID, payment_id = PaymentID}) ->
     #{
@@ -799,7 +801,7 @@ payment_error(Code) ->
 
 %% client error mapping
 %% @see https://github.com/petrkozorezov/swag/blob/master/spec/definitions/PaymentError.yaml
--spec payment_error_client_maping(dmsl_payment_processing_errors_thrift:'PaymentFailure'()) ->
+-spec payment_error_client_maping(encode_data()) ->
     binary().
 payment_error_client_maping({preauthorization_failed, _})->
     <<"PreauthorizationFailed">>;
@@ -818,8 +820,8 @@ payment_error_client_maping({authorization_failed, {insufficient_funds, _}}) ->
 payment_error_client_maping(_) ->
     <<"PaymentRejected">>.
 
--spec decode_disposable_payment_resource(_) ->
-    _.
+-spec decode_disposable_payment_resource(encode_data()) ->
+    decode_data().
 
 decode_disposable_payment_resource(Resource) ->
     #domain_DisposablePaymentResource{payment_tool = PaymentTool, payment_session_id = SessionID} = Resource,
@@ -839,8 +841,8 @@ decode_client_info(ClientInfo) ->
         <<"ip"         >> => ClientInfo#domain_ClientInfo.ip_address
     }.
 
--spec decode_user_interaction(_) ->
-    _.
+-spec decode_user_interaction({atom(), _}) ->
+    decode_data().
 
 decode_user_interaction({payment_terminal_reciept, TerminalReceipt}) ->
     #{
@@ -866,8 +868,8 @@ decode_browser_request({post_request, #'BrowserPostRequest'{uri = UriTemplate, f
         <<"form">> => decode_user_interaction_form(UserInteractionForm)
     }.
 
--spec decode_user_interaction_form(_) ->
-    _.
+-spec decode_user_interaction_form(map()) ->
+    decode_data().
 
 decode_user_interaction_form(Form) ->
     maps:fold(
@@ -882,8 +884,8 @@ decode_user_interaction_form(Form) ->
         Form
     ).
 
--spec decode_refund(_, _) ->
-    _.
+-spec decode_refund(encode_data(), processing_context()) ->
+    decode_data().
 
 decode_refund(Refund, Context) ->
     #domain_Cash{amount = Amount, currency = Currency} = Refund#domain_InvoicePaymentRefund.cash,
@@ -898,8 +900,8 @@ decode_refund(Refund, Context) ->
         decode_refund_status(Refund#domain_InvoicePaymentRefund.status, Context)
     ).
 
--spec decode_refund_status(_, _) ->
-    _.
+-spec decode_refund_status({atom(), _}, processing_context()) ->
+    decode_data().
 
 decode_refund_status({Status, StatusInfo}, Context) ->
     Error =
@@ -914,22 +916,22 @@ decode_refund_status({Status, StatusInfo}, Context) ->
         <<"error" >> => Error
     }.
 
--spec decode_residence(_) ->
-    _.
+-spec decode_residence(atom() | undefined) ->
+    binary().
 
 decode_residence(undefined) ->
     undefined;
 decode_residence(Residence) when is_atom(Residence) ->
     list_to_binary(string:to_upper(atom_to_list(Residence))).
 
--spec decode_category_ref(_) ->
-    _.
+-spec decode_category_ref(encode_data()) ->
+    integer().
 
 decode_category_ref(#domain_CategoryRef{id = CategoryRef}) ->
     CategoryRef.
 
--spec decode_payout_tool_params(_, _) ->
-    _.
+-spec decode_payout_tool_params(encode_data(), {atom(), _}) ->
+    decode_data().
 
 decode_payout_tool_params(Currency, Info) ->
     #{
@@ -937,8 +939,8 @@ decode_payout_tool_params(Currency, Info) ->
         <<"details">> => decode_payout_tool_details(Info)
     }.
 
--spec decode_payout_tool_details(_) ->
-    _.
+-spec decode_payout_tool_details({atom(), _}) ->
+    decode_data().
 
 decode_payout_tool_details({bank_card, V}) ->
     decode_bank_card_details(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankCard">>});
@@ -984,8 +986,8 @@ decode_international_bank_details(Bank) ->
          <<"address">>     => Bank#domain_InternationalBankDetails.address
     }).
 
--spec decode_optional(_, _) ->
-    _.
+-spec decode_optional(any() | undefined, fun((any()) -> decode_data())) ->
+    decode_data().
 
 decode_optional(Arg, DecodeFun) when Arg /= undefined ->
     DecodeFun(Arg);
@@ -994,8 +996,8 @@ decode_optional(undefined, _) ->
 
 %%
 
--spec construct_payment_methods(_, _, _) ->
-    _.
+-spec construct_payment_methods(atom(), list(), processing_context()) ->
+    {ok, list()} | woody:result().
 
 construct_payment_methods(ServiceName, Args, Context) ->
     case compute_terms(ServiceName, Args, Context) of
@@ -1010,6 +1012,7 @@ construct_payment_methods(ServiceName, Args, Context) ->
         Error ->
             Error
     end.
+
 decode_payment_methods(undefined) ->
     [];
 decode_payment_methods({value, PaymentMethodRefs}) ->
@@ -1054,8 +1057,8 @@ decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
 compute_terms(ServiceName, Args, Context) ->
     capi_handler_utils:service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
 
--spec make_invoice_and_token(_, _) ->
-    _.
+-spec make_invoice_and_token(encode_data(), binary()) ->
+    decode_data().
 
 make_invoice_and_token(Invoice, PartyID) ->
     #{
@@ -1063,8 +1066,8 @@ make_invoice_and_token(Invoice, PartyID) ->
         <<"invoiceAccessToken">> => capi_handler_utils:issue_access_token(PartyID, {invoice, Invoice#domain_Invoice.id})
     }.
 
--spec decode_invoice(_) ->
-    _.
+-spec decode_invoice(encode_data()) ->
+    decode_data().
 
 decode_invoice(Invoice) ->
     #domain_Cash{amount = Amount, currency = Currency} = Invoice#domain_Invoice.cost,
@@ -1084,8 +1087,8 @@ decode_invoice(Invoice) ->
         <<"invoiceTemplateID">> => Invoice#domain_Invoice.template_id
     }, decode_invoice_status(Invoice#domain_Invoice.status)).
 
--spec decode_invoice_status(_) ->
-    _.
+-spec decode_invoice_status({atom(), _}) ->
+    decode_data().
 
 decode_invoice_status({Status, StatusInfo}) ->
     Reason =
@@ -1099,8 +1102,8 @@ decode_invoice_status({Status, StatusInfo}) ->
         <<"reason">> => Reason
     }.
 
--spec decode_invoice_cart(_) ->
-    _.
+-spec decode_invoice_cart(encode_data() | undefined) ->
+    decode_data() | undefined.
 
 decode_invoice_cart(#domain_InvoiceCart{lines = Lines}) ->
     [decode_invoice_line(L) || L <- Lines];
@@ -1116,8 +1119,8 @@ decode_invoice_line(InvoiceLine = #domain_InvoiceLine{quantity = Quantity, price
         <<"taxMode" >> => decode_invoice_line_tax_mode(InvoiceLine#domain_InvoiceLine.metadata)
     }).
 
--spec decode_invoice_line_tax_mode(_) ->
-    _.
+-spec decode_invoice_line_tax_mode(map()) ->
+    decode_data() | undefined.
 
 decode_invoice_line_tax_mode(#{<<"TaxMode">> := {str, TM}}) ->
     %% for more info about taxMode look here:
@@ -1129,8 +1132,8 @@ decode_invoice_line_tax_mode(#{<<"TaxMode">> := {str, TM}}) ->
 decode_invoice_line_tax_mode(_) ->
     undefined.
 
--spec decode_context(_) ->
-    _.
+-spec decode_context(encode_data()) ->
+    decode_data() | undefined.
 
 decode_context(#'Content'{type = <<"application/json">>, data = InvoiceContext}) ->
     % @TODO deal with non json contexts

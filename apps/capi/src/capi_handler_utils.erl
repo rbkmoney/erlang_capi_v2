@@ -59,7 +59,7 @@ format_request_errors(Errors) -> genlib_string:join(<<"\n">>, Errors).
 % Нужно быть аккуратным с флагами их порядок влияет на порядок аргументов при вызове функций!
 % обычно параметры идут в порядке [user_info, party_id, party_creation],
 % но это зависит от damsel протокола
--spec service_call_with(list(atom()), tuple(), processing_context()) ->
+-spec service_call_with(list(atom()), {atom(), atom(), list()}, processing_context()) ->
     woody:result().
 
 service_call_with(Flags, Call, Context) ->
@@ -86,7 +86,7 @@ service_call_with_([party_creation|T], Call, Context) ->
 service_call_with_([], Call, Context) ->
     service_call(Call, Context).
 
--spec service_call(tuple(), processing_context()) ->
+-spec service_call({atom(), atom(), list()}, processing_context()) ->
     woody:result().
 
 service_call({ServiceName, Function, Args}, #{woody_context := WoodyContext}) ->
@@ -100,7 +100,7 @@ get_party_params(Context) ->
     }.
 
 -spec get_auth_context(processing_context()) ->
-    _.
+    any().
 
 get_auth_context(#{swagger_context := #{auth_context := AuthContext}}) ->
     AuthContext.
@@ -112,7 +112,7 @@ get_user_info(Context) ->
     }.
 
 -spec get_party_id(processing_context()) ->
-    _.
+    binary().
 
 get_party_id(Context) ->
     capi_auth:get_subject_id(get_auth_context(Context)).
@@ -175,8 +175,14 @@ parse_rfc3339_datetime(DateTime) ->
     {ok, {DateFrom, TimeFrom, _, _}} = rfc3339:parse(DateTime),
     {DateFrom, TimeFrom}.
 
--spec collect_events(_, _, _, _, _) ->
-    _.
+-spec collect_events(
+    integer(),
+    integer(),
+    fun((_) -> {exception, _} | {ok, _}),
+    fun((_, _) -> false | {true, #{binary() => binary() | [any()] | integer()}}),
+    undefined
+) ->
+    {ok, _} | {exception, _}.
 
 collect_events(Limit, After, GetterFun, DecodeFun, Context) ->
     collect_events([], Limit, After, GetterFun, DecodeFun, Context).
@@ -233,8 +239,8 @@ get_events(Limit, After, GetterFun) ->
     },
     GetterFun(EventRange).
 
--spec unwrap_payment_session(_) ->
-    {_, _}.
+-spec unwrap_payment_session(binary()) ->
+    {map(), binary()}.
 
 unwrap_payment_session(Encoded) ->
     #{
@@ -248,8 +254,8 @@ unwrap_payment_session(Encoded) ->
         end,
     {ClientInfo, PaymentSession}.
 
--spec wrap_payment_session(_, _) ->
-    _.
+-spec wrap_payment_session(map(), binary()) ->
+    binary().
 
 wrap_payment_session(ClientInfo, PaymentSession) ->
     capi_utils:map_to_base64url(#{
@@ -257,21 +263,21 @@ wrap_payment_session(ClientInfo, PaymentSession) ->
         <<"paymentSession">> => PaymentSession
     }).
 
--spec get_invoice_by_id(_, _) ->
-    _.
+-spec get_invoice_by_id(binary(), processing_context()) ->
+    woody:result().
 
 get_invoice_by_id(InvoiceID, Context) ->
     service_call_with([user_info], {invoicing, 'Get', [InvoiceID]}, Context).
 
--spec get_payment_by_id(_, _, _) ->
-    _.
+-spec get_payment_by_id(binary(), binary(), processing_context()) ->
+    woody:result().
 
 get_payment_by_id(InvoiceID, PaymentID, Context) ->
     service_call_with([user_info], {invoicing, 'GetPayment', [InvoiceID, PaymentID]}, Context).
 
--spec get_contract_by_id(_, _) ->
-    _.
+-spec get_contract_by_id(binary(), processing_context()) ->
+    woody:result().
 
 get_contract_by_id(ContractID, Context) ->
     Call = {party_management, 'GetContract', [ContractID]},
-    capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context).
+    service_call_with([user_info, party_id, party_creation], Call, Context).
