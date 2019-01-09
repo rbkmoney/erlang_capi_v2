@@ -254,7 +254,7 @@ encode_international_bank_details(undefined) ->
 encode_international_bank_details(Acc) ->
     #domain_InternationalBankDetails{
         bic     = genlib_map:get(<<"bic">>, Acc),
-        country = encode_residence(genlib_map:get(<<"countryCode">>, Acc)),
+        country = capi_handler:encode_residence(genlib_map:get(<<"countryCode">>, Acc)),
         name    = genlib_map:get(<<"name">>, Acc),
         address = genlib_map:get(<<"address">>, Acc),
         aba_rtn = genlib_map:get(<<"abartn">>, Acc)
@@ -303,16 +303,6 @@ encode_registered_user(#{<<"email">> := Email}) ->
 
 encode_payment_institution_ref(Ref) ->
     #domain_PaymentInstitutionRef{id = Ref}.
-
-encode_residence(undefined) ->
-    undefined;
-encode_residence(Residence) when is_binary(Residence) ->
-    try
-        list_to_existing_atom(string:to_lower(binary_to_list(Residence)))
-    catch
-        error:badarg ->
-            throw({encode_residence, invalid_residence})
-    end.
 
 encode_report_preferences(#{<<"serviceAcceptanceActPreferences">> := #{
     <<"scheduleID">> := ScheduleID,

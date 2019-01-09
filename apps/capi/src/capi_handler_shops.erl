@@ -71,25 +71,13 @@ decode_shop(Shop) ->
         <<"isBlocked"   >> => capi_handler:is_blocked(Shop#domain_Shop.blocking),
         <<"isSuspended" >> => capi_handler:is_suspended(Shop#domain_Shop.suspension),
         <<"categoryID"  >> => capi_handler:decode_category_ref(Shop#domain_Shop.category),
-        <<"details"     >> => decode_shop_details(Shop#domain_Shop.details),
-        <<"location"    >> => decode_shop_location(Shop#domain_Shop.location),
+        <<"details"     >> => capi_handler:decode_shop_details(Shop#domain_Shop.details),
+        <<"location"    >> => capi_handler:decode_shop_location(Shop#domain_Shop.location),
         <<"contractID"  >> => Shop#domain_Shop.contract_id,
         <<"payoutToolID">> => Shop#domain_Shop.payout_tool_id,
         <<"scheduleID"  >> => capi_handler:decode_business_schedule_ref(Shop#domain_Shop.payout_schedule),
         <<"account"     >> => decode_shop_account(Shop#domain_Shop.account)
     }).
-
-decode_shop_details(#domain_ShopDetails{name = Name, description = Description}) ->
-    genlib_map:compact(#{
-        <<"name">> => Name,
-        <<"description">> => Description
-    }).
-
-decode_shop_location({url, Location}) ->
-    #{
-        <<"locationType">> => <<"ShopLocationUrl">>,
-        <<"url">> => Location
-    }.
 
 decode_shop_account(undefined) ->
     undefined;
