@@ -45,7 +45,11 @@ process_request('CreateInvoiceAccessToken', Req, Context, _) ->
     InvoiceID = maps:get(invoiceID, Req),
     case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
         {ok, #'payproc_Invoice'{}} ->
-            {ok, {201, [], capi_handler_utils:issue_access_token(capi_handler_utils:get_party_id(Context), {invoice, InvoiceID})}};
+            Response =  capi_handler_utils:issue_access_token(
+                capi_handler_utils:get_party_id(Context),
+                {invoice, InvoiceID}
+            ),
+            {ok, {201, [], Response}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -98,7 +102,8 @@ process_request('RescindInvoice', Req, Context, _) ->
                 #payproc_InvalidInvoiceStatus{} ->
                     {ok, {400, [], capi_handler_utils:logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)}};
                 #payproc_InvoicePaymentPending{} ->
-                    {ok, {400, [], capi_handler_utils:logic_error(invoicePaymentPending, <<"Invoice payment pending">>)}};
+                    ErrorMsg = capi_handler_utils:logic_error(invoicePaymentPending, <<"Invoice payment pending">>),
+                    {ok, {400, [], ErrorMsg}};
                 #payproc_InvalidPartyStatus{} ->
                     {ok, {400, [], capi_handler_utils:logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
@@ -116,7 +121,11 @@ process_request('GetInvoiceEvents', Req, Context, _) ->
             maps:get(limit, Req),
             genlib_map:get(eventID, Req),
             fun(Range) ->
-                capi_handler_utils:service_call_with([user_info], {invoicing, 'GetEvents', [maps:get(invoiceID, Req), Range]}, Context)
+                capi_handler_utils:service_call_with(
+                    [user_info],
+                    {invoicing, 'GetEvents', [maps:get(invoiceID, Req), Range]},
+                    Context
+                )
             end,
             fun decode_invoice_event/2,
             Context

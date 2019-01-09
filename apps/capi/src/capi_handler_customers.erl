@@ -31,7 +31,11 @@ process_request('CreateCustomer', Req, Context, _) ->
                 #payproc_InvalidShopStatus{} ->
                     {ok, {400, [], capi_handler_utils:logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
                 #payproc_OperationNotPermitted{} ->
-                    {ok, {400, [], capi_handler_utils:logic_error(operationNotPermitted, <<"Operation not permitted">>)}}
+                    ErrorMsg = capi_handler_utils:logic_error(
+                        operationNotPermitted,
+                        <<"Operation not permitted">>
+                    ),
+                    {ok, {400, [], ErrorMsg}}
             end
     end;
 
@@ -69,7 +73,11 @@ process_request('CreateCustomerAccessToken', Req, Context, _) ->
     CustomerID = maps:get(customerID, Req),
     case get_customer_by_id(CustomerID, Context) of
         {ok, #payproc_Customer{}} ->
-            {ok, {201, [], capi_handler_utils:issue_access_token(capi_handler_utils:get_party_id(Context), {customer, CustomerID})}};
+            Response = capi_handler_utils:issue_access_token(
+                capi_handler_utils:get_party_id(Context),
+                {customer, CustomerID}
+            ),
+            {ok, {201, [], Response}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -102,18 +110,28 @@ process_request('CreateBinding', Req, Context, _) ->
                 #payproc_InvalidShopStatus{} ->
                     {ok, {400, [], capi_handler_utils:logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
                 #payproc_InvalidPaymentTool{} ->
-                    {ok, {400, [], capi_handler_utils:logic_error(invalidPaymentResource, <<"Invalid payment resource">>)}};
+                    ErrorMsg = capi_handler_utils:logic_error(invalidPaymentResource, <<"Invalid payment resource">>),
+                    {ok, {400, [], ErrorMsg}};
                 #payproc_OperationNotPermitted{} ->
-                    {ok, {400, [], capi_handler_utils:logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
+                    ErrorMsg = capi_handler_utils:logic_error(operationNotPermitted, <<"Operation not permitted">>),
+                    {ok, {400, [], ErrorMsg}};
                 #payproc_InvalidUser{} ->
                     {ok, {404, [], capi_handler_utils:general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
                     {ok, {404, [], capi_handler_utils:general_error(<<"Customer not found">>)}}
             end;
         {error, invalid_token} ->
-            {ok, {400, [], capi_handler_utils:logic_error(invalidPaymentToolToken, <<"Specified payment tool token is invalid">>)}};
+            ErrorMsg = capi_handler_utils:logic_error(
+                invalidPaymentToolToken,
+                <<"Specified payment tool token is invalid">>
+            ),
+            {ok, {400, [], ErrorMsg}};
         {error, invalid_payment_session} ->
-            {ok, {400, [], capi_handler_utils:logic_error(invalidPaymentSession, <<"Specified payment session is invalid">>)}}
+            ErrorMsg = capi_handler_utils:logic_error(
+                invalidPaymentSession,
+                <<"Specified payment session is invalid">>
+            ),
+            {ok, {400, [], ErrorMsg}}
     end;
 
 process_request('GetBindings', Req, Context, _) ->
@@ -150,7 +168,10 @@ process_request('GetBinding', Req, Context, _) ->
 process_request('GetCustomerEvents', Req, Context, _) ->
     GetterFun =
         fun(Range) ->
-            capi_handler_utils:service_call({customer_management, 'GetEvents', [maps:get(customerID, Req), Range]}, Context)
+            capi_handler_utils:service_call(
+                {customer_management, 'GetEvents', [maps:get(customerID, Req), Range]},
+                Context
+            )
         end,
     Result =
         capi_handler_utils:collect_events(
@@ -205,7 +226,8 @@ encode_customer_metadata(Meta) ->
 
 encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
     PaymentTool = capi_handler:encode_payment_tool_token(maps:get(<<"paymentToolToken">>, PaymentResource)),
-    {ClientInfo, PaymentSession} = capi_handler_utils:unwrap_payment_session(maps:get(<<"paymentSession">>, PaymentResource)),
+    {ClientInfo, PaymentSession} =
+        capi_handler_utils:unwrap_payment_session(maps:get(<<"paymentSession">>, PaymentResource)),
     #payproc_CustomerBindingParams{
         payment_resource =
             #domain_DisposablePaymentResource{
@@ -218,7 +240,8 @@ encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
 make_customer_and_token(Customer, PartyID) ->
     #{
         <<"customer"           >> => decode_customer(Customer),
-        <<"customerAccessToken">> => capi_handler_utils:issue_access_token(PartyID, {customer, Customer#payproc_Customer.id})
+        <<"customerAccessToken">> =>
+            capi_handler_utils:issue_access_token(PartyID, {customer, Customer#payproc_Customer.id})
     }.
 
 decode_customer(Customer) ->
@@ -226,7 +249,8 @@ decode_customer(Customer) ->
         <<"id"         >> => Customer#payproc_Customer.id,
         <<"shopID"     >> => Customer#payproc_Customer.shop_id,
         <<"status"     >> => decode_customer_status(Customer#payproc_Customer.status),
-        <<"contactInfo">> => capi_handler:decode_contact_info(Customer#payproc_Customer.contact_info),
+        <<"contactInfo">> =>
+            capi_handler:decode_contact_info(Customer#payproc_Customer.contact_info),
         <<"metadata"   >> => decode_customer_metadata(Customer#payproc_Customer.metadata)
     }.
 
@@ -241,7 +265,9 @@ decode_customer_binding(CustomerBinding, Context) ->
         #{
             <<"id"             >> => CustomerBinding#payproc_CustomerBinding.id,
             <<"paymentResource">> =>
-                capi_handler:decode_disposable_payment_resource(CustomerBinding#payproc_CustomerBinding.payment_resource)
+                capi_handler:decode_disposable_payment_resource(
+                    CustomerBinding#payproc_CustomerBinding.payment_resource
+                )
         },
         decode_customer_binding_status(CustomerBinding#payproc_CustomerBinding.status, Context)
     ).

@@ -20,14 +20,18 @@ process_request('CreateWebhook', Req, Context, _) ->
     Call = {party_management, 'GetShop', [ShopID]},
     case capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context) of
         {ok, _} ->
-            Webhook = capi_utils:unwrap(capi_handler_utils:service_call({webhook_manager, 'Create', [WebhookParams]}, Context)),
+            Webhook = capi_utils:unwrap(
+                capi_handler_utils:service_call({webhook_manager, 'Create', [WebhookParams]}, Context)
+            ),
             {ok, {201, [], decode_webhook(Webhook)}};
         {exception, #payproc_ShopNotFound{}} ->
             {ok, {400, [], capi_handler_utils:logic_error(invalidShopID, <<"Shop not found">>)}}
     end;
 
 process_request('GetWebhooks', _Req, Context, _) ->
-    Webhooks = capi_utils:unwrap(capi_handler_utils:service_call_with([party_id], {webhook_manager, 'GetList', []}, Context)),
+    Webhooks = capi_utils:unwrap(
+        capi_handler_utils:service_call_with([party_id], {webhook_manager, 'GetList', []}, Context)
+    ),
     {ok, {200, [], [decode_webhook(V) || V <- Webhooks]}};
 
 process_request('GetWebhookByID', Req, Context, _) ->
@@ -192,12 +196,60 @@ decode_webhook(Hook) ->
         <<"publicKey">> => Hook#webhooker_Webhook.pub_key
     }.
 
+decode_event_filter({invoice, #webhooker_InvoiceEventFilter{shop_id = ShopID, types = EventTypes}}) ->
+    genlib_map:compact(#{
+        <<"topic"     >> => <<"InvoicesTopic">>,
+        <<"shopID"    >> => ShopID,
+        <<"eventTypes">> => lists:flatmap(fun decode_invoice_event_type/1, ordsets:to_list(EventTypes))
+    });
 decode_event_filter({customer, #webhooker_CustomerEventFilter{shop_id = ShopID, types = EventTypes}}) ->
     genlib_map:compact(#{
         <<"topic"     >> => <<"CustomersTopic">>,
         <<"shopID"    >> => ShopID,
         <<"eventTypes">> => lists:map(fun decode_customer_event_type/1, ordsets:to_list(EventTypes))
     }).
+
+decode_invoice_event_type({created, #webhooker_InvoiceCreated{}}) ->
+    [<<"InvoiceCreated">>];
+decode_invoice_event_type({status_changed, #webhooker_InvoiceStatusChanged{value = undefined}}) ->
+    % TODO seems unmaintainable
+    [decode_invoice_status_event_type(V) || V <- [
+        ?invpaid(),
+        ?invcancelled(),
+        ?invfulfilled()
+    ]];
+decode_invoice_event_type({status_changed, #webhooker_InvoiceStatusChanged{value = Value}}) ->
+    [decode_invoice_status_event_type(Value)];
+decode_invoice_event_type({payment, {created, #webhooker_InvoicePaymentCreated{}}}) ->
+    [<<"PaymentStarted">>];
+decode_invoice_event_type({payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = undefined}}}) ->
+    % TODO seems unmaintainable
+    [decode_payment_status_event_type(V) || V <- [
+        ?pmtprocessed(),
+        ?pmtcaptured(),
+        ?pmtcancelled(),
+        ?pmtrefunded(),
+        ?pmtfailed()
+    ]];
+decode_invoice_event_type({payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = Value}}}) ->
+    [decode_payment_status_event_type(Value)];
+decode_invoice_event_type({payment, {invoice_payment_refund_change, ?pmtrfndcreated()}}) ->
+    [<<"PaymentRefundCreated">>];
+decode_invoice_event_type({payment, {invoice_payment_refund_change, ?pmtrfndstatus(Value)}}) ->
+    [decode_payment_refund_status_event_type(Value)].
+
+decode_invoice_status_event_type(?invpaid())      -> <<"InvoicePaid">>;
+decode_invoice_status_event_type(?invcancelled()) -> <<"InvoiceCancelled">>;
+decode_invoice_status_event_type(?invfulfilled()) -> <<"InvoiceFulfilled">>.
+
+decode_payment_status_event_type(?pmtprocessed()) -> <<"PaymentProcessed">>;
+decode_payment_status_event_type(?pmtcaptured())  -> <<"PaymentCaptured">>;
+decode_payment_status_event_type(?pmtcancelled()) -> <<"PaymentCancelled">>;
+decode_payment_status_event_type(?pmtrefunded())  -> <<"PaymentRefunded">>;
+decode_payment_status_event_type(?pmtfailed())    -> <<"PaymentFailed">>.
+
+decode_payment_refund_status_event_type(?pmtrfndfailed()) -> <<"PaymentRefundFailed">>;
+decode_payment_refund_status_event_type(?pmtrfndsucceeded()) -> <<"PaymentRefundSucceeded">>.
 
 decode_customer_event_type({created, #webhooker_CustomerCreated{}}) ->
     <<"CustomerCreated">>;

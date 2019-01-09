@@ -36,7 +36,7 @@
 general_error(Message) ->
     #{<<"message">> => genlib:to_binary(Message)}.
 
--spec logic_error(atom(), binary()) ->
+-spec logic_error(term(), io_lib:chars() | binary()) ->
     map().
 
 logic_error(Code, Message) ->
@@ -140,7 +140,7 @@ issue_access_token(PartyID, TokenSpec) ->
 merge_and_compact(M1, M2) ->
     genlib_map:compact(maps:merge(M1, M2)).
 
--spec get_time(atom(), map()) ->
+-spec get_time(term(), map()) ->
     TimestampUTC :: binary() | undefined.
 
 get_time(Key, Req) ->

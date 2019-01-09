@@ -69,7 +69,10 @@ process_request('CreateReport', Req, Context, _) ->
     ReportType = encode_report_type(maps:get(<<"reportType">>, ReportParams)),
     case capi_handler_utils:service_call({reporting, 'GenerateReport', [ReportRequest, ReportType]}, Context) of
         {ok, ReportId} ->
-            {ok, Report} = capi_handler_utils:service_call({reporting, 'GetReport', [PartyId, ShopId, ReportId]}, Context),
+            {ok, Report} = capi_handler_utils:service_call(
+                {reporting, 'GetReport', [PartyId, ShopId, ReportId]},
+                Context
+            ),
             {ok, {201, [], decode_report(Report)}};
         {exception, Exception} ->
             case Exception of
@@ -82,7 +85,11 @@ process_request('CreateReport', Req, Context, _) ->
     end;
 
 process_request('DownloadFile', Req, Context, _) ->
-    Call = {reporting, 'GetReport', [capi_handler_utils:get_party_id(Context), maps:get(shopID, Req), maps:get(reportID, Req)]},
+    Call = {
+        reporting,
+        'GetReport',
+        [capi_handler_utils:get_party_id(Context), maps:get(shopID, Req), maps:get(reportID, Req)]
+    },
     case capi_handler_utils:service_call(Call, Context) of
         {ok, #reports_Report{status = created, files = Files}} ->
             FileID = maps:get(fileID, Req),

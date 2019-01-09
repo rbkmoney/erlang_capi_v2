@@ -147,7 +147,8 @@ handle_request(OperationID, Req, SwagContext = #{auth_context := AuthContext}) -
             process_woody_error(Source, Class, Details);
         throw:{bad_deadline, Deadline} ->
             _ = lager:warning("Operation ~p failed due to invalid deadline ~p", [OperationID, Deadline]),
-            {ok, {400, [], capi_handler_utils:logic_error(invalidDeadline, <<"Invalid data in X-Request-Deadline header">>)}}
+            ErrorMsg = capi_handler_utils:logic_error(invalidDeadline, <<"Invalid data in X-Request-Deadline header">>),
+            {ok, {400, [], ErrorMsg}}
     end.
 
 -spec process_request(
@@ -554,7 +555,7 @@ decode_representative_document({power_of_attorney, LegalAgreement}) ->
     ).
 
 -spec decode_payment_institution_ref(tuple()) ->
-    binary().
+    integer().
 
 decode_payment_institution_ref(#domain_PaymentInstitutionRef{id = Ref}) ->
     Ref.

@@ -43,7 +43,11 @@ process_request('CreatePayment', Req, Context, _) ->
                 #payproc_InvalidInvoiceStatus{} ->
                     {ok, {400, [], capi_handler_utils:logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)}};
                 #payproc_InvoicePaymentPending{} ->
-                    {ok, {400, [], capi_handler_utils:logic_error(invoicePaymentPending, <<"Invoice payment pending">>)}};
+                    ErrorMsg = capi_handler_utils:logic_error(
+                        invoicePaymentPending,
+                        <<"Invoice payment pending">>
+                    ),
+                    {ok, {400, [], ErrorMsg}};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, {400, [], capi_handler_utils:logic_error(invalidRequest, FormattedErrors)}};
@@ -52,9 +56,17 @@ process_request('CreatePayment', Req, Context, _) ->
                 #payproc_InvalidShopStatus{} ->
                     {ok, {400, [], capi_handler_utils:logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
                 #payproc_InvalidContractStatus{} ->
-                    {ok, {400, [], capi_handler_utils:logic_error(invalidContractStatus, <<"Invalid contract status">>)}};
+                    ErrorMsg = capi_handler_utils:logic_error(
+                        invalidContractStatus,
+                        <<"Invalid contract status">>
+                    ),
+                    {ok, {400, [], ErrorMsg}};
                 #payproc_InvalidRecurrentParentPayment{} ->
-                    {ok, {400, [], capi_handler_utils:logic_error(invalidRecurrentParent, <<"Specified recurrent parent is invalid">>)}};
+                    ErrorMsg = capi_handler_utils:logic_error(
+                        invalidRecurrentParent,
+                        <<"Specified recurrent parent is invalid">>
+                    ),
+                    {ok, {400, [], ErrorMsg}};
                 #payproc_InvalidUser{} ->
                     {ok, {404, [], capi_handler_utils:general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
@@ -122,7 +134,11 @@ process_request('CancelPayment', Req, Context, _) ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, {400, [], capi_handler_utils:logic_error(invalidRequest, FormattedErrors)}};
                 #payproc_OperationNotPermitted{} ->
-                    {ok, {400, [], capi_handler_utils:logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
+                    ErrorMsg = capi_handler_utils:logic_error(
+                        operationNotPermitted,
+                        <<"Operation not permitted">>
+                    ),
+                    {ok, {400, [], ErrorMsg}};
                 #payproc_InvalidPartyStatus{} ->
                     {ok, {400, [], capi_handler_utils:logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
@@ -150,7 +166,11 @@ process_request('CapturePayment', Req, Context, _) ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, {400, [], capi_handler_utils:logic_error(invalidRequest, FormattedErrors)}};
                 #payproc_OperationNotPermitted{} ->
-                    {ok, {400, [], capi_handler_utils:logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
+                    ErrorMsg = capi_handler_utils:logic_error(
+                        operationNotPermitted,
+                        <<"Operation not permitted">>
+                    ),
+                    {ok, {400, [], ErrorMsg}};
                 #payproc_InvalidPartyStatus{} ->
                     {ok, {400, [], capi_handler_utils:logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
@@ -183,20 +203,40 @@ process_request('CreateRefund', Req, Context, _) ->
                 #payproc_InvalidShopStatus{} ->
                     {ok, {400, [], capi_handler_utils:logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
                 #payproc_InvalidContractStatus{} ->
-                    {ok, {400, [], capi_handler_utils:logic_error(invalidContractStatus, <<"Invalid contract status">>)}};
+                    ErrorMsg = capi_handler_utils:logic_error(
+                        invalidContractStatus,
+                         <<"Invalid contract status">>
+                    ),
+                    {ok, {400, [], ErrorMsg}};
                 #payproc_OperationNotPermitted{} ->
-                    {ok, {400, [], capi_handler_utils:logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
+                    ErrorMsg = capi_handler_utils:logic_error(
+                        operationNotPermitted,
+                        <<"Operation not permitted">>
+                    ),
+                    {ok, {400, [], ErrorMsg}};
                 #payproc_InvalidPaymentStatus{} ->
-                    {ok, {400, [], capi_handler_utils:logic_error(invalidPaymentStatus, <<"Invalid invoice payment status">>)}};
+                    ErrorMsg = capi_handler_utils:logic_error(
+                        invalidPaymentStatus,
+                        <<"Invalid invoice payment status">>
+                    ),
+                    {ok, {400, [], ErrorMsg}};
                 #payproc_InsufficientAccountBalance{} ->
                     {ok, {400, [], capi_handler_utils:logic_error(
                         insufficentAccountBalance,
                         <<"Operation can not be conducted because of insufficient funds on the merchant account">>
                     )}};
                 #payproc_InvoicePaymentAmountExceeded{} ->
-                    {ok, {400, [], capi_handler_utils:logic_error(invoicePaymentAmountExceeded, <<"Payment amount exceeded">>)}};
+                    ErrorMsg = capi_handler_utils:logic_error(
+                        invoicePaymentAmountExceeded,
+                        <<"Payment amount exceeded">>
+                    ),
+                    {ok, {400, [], ErrorMsg}};
                 #payproc_InconsistentRefundCurrency{} ->
-                    {ok, {400, [], capi_handler_utils:logic_error(inconsistentRefundCurrency, <<"Inconsistent refund currency">>)}};
+                    ErrorMsg = capi_handler_utils:logic_error(
+                        inconsistentRefundCurrency,
+                        <<"Inconsistent refund currency">>
+                    ),
+                    {ok, {400, [], ErrorMsg}};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, {400, [], capi_handler_utils:logic_error(invalidRequest, FormattedErrors)}}

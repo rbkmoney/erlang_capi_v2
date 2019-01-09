@@ -52,7 +52,10 @@ process_request('GetPayout', Req, Context, _) ->
     end;
 
 process_request('CreatePayout', Req, Context, _) ->
-    CreateRequest = encode_payout_proc_payout_params(capi_handler_utils:get_party_id(Context), maps:get('PayoutParams', Req)),
+    CreateRequest = encode_payout_proc_payout_params(
+        capi_handler_utils:get_party_id(Context),
+        maps:get('PayoutParams', Req)
+    ),
     case capi_handler_utils:service_call({payouts, 'CreatePayout', [CreateRequest]}, Context) of
         {ok, Payout} ->
             {ok, {201, [], decode_payout_proc_payout(Payout)}};

@@ -64,7 +64,8 @@ decode_contract(Contract, Contractors) ->
         <<"id"                  >> => Contract#domain_Contract.id,
         <<"createdAt"           >> => Contract#domain_Contract.created_at,
         <<"contractor"          >> => capi_handler:decode_contractor(get_contractor(Contract, Contractors)),
-        <<"paymentInstitutionID">> => capi_handler:decode_payment_institution_ref(Contract#domain_Contract.payment_institution),
+        <<"paymentInstitutionID">> =>
+            capi_handler:decode_payment_institution_ref(Contract#domain_Contract.payment_institution),
         <<"validSince"          >> => Contract#domain_Contract.valid_since,
         <<"validUntil"          >> => Contract#domain_Contract.valid_until,
         <<"legalAgreement"      >> => capi_handler:decode_optional(

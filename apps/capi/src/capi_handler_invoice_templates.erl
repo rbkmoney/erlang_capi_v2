@@ -18,7 +18,11 @@ process_request('CreateInvoiceTemplate', Req, Context, _) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     try
         CallArgs = [encode_invoice_tpl_create_params(PartyID, maps:get('InvoiceTemplateCreateParams', Req))],
-        capi_handler_utils:service_call_with([user_info, party_creation], {invoice_templating, 'Create', CallArgs}, Context)
+        capi_handler_utils:service_call_with(
+            [user_info, party_creation],
+            {invoice_templating, 'Create', CallArgs},
+            Context
+        )
     of
         {ok, InvoiceTpl} ->
             {ok, {201, [], make_invoice_tpl_and_token(InvoiceTpl, PartyID)}};

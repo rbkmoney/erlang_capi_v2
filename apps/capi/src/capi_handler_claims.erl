@@ -15,11 +15,17 @@
 
 process_request('GetClaims', Req, Context, _) ->
     Call = {party_management, 'GetClaims', []},
-    Claims = capi_utils:unwrap(capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context)),
+    Claims = capi_utils:unwrap(
+        capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context)
+    ),
     {ok, {200, [], decode_claims(filter_claims(maps:get('claimStatus', Req), Claims))}};
 
 process_request('GetClaimByID', Req, Context, _) ->
-    Call = {party_management, 'GetClaim', [capi_handler_utils:get_party_id(Context), genlib:to_int(maps:get('claimID', Req))]},
+    Call = {
+        party_management,
+        'GetClaim',
+        [capi_handler_utils:get_party_id(Context), genlib:to_int(maps:get('claimID', Req))]
+    },
     case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
         {ok, Claim} ->
             case is_wallet_claim(Claim) of
@@ -55,7 +61,11 @@ process_request('CreateClaim', Req, Context, _) ->
         end
     catch
         throw:{encode_contract_modification, adjustment_creation_not_supported} ->
-            {ok, {400, [], capi_handler_utils:logic_error(invalidChangeset, <<"Contract adjustment creation not supported">>)}};
+            ErrorMsg = capi_handler_utils:logic_error(
+                invalidChangeset,
+                <<"Contract adjustment creation not supported">>
+            ),
+            {ok, {400, [], ErrorMsg}};
         throw:{encode_residence, invalid_residence} ->
             {ok, {400, [], capi_handler_utils:logic_error(invalidRequest, <<"Invalid residence">>)}}
     end;
@@ -68,7 +78,9 @@ process_request('CreateClaim', Req, Context, _) ->
 %             genlib:to_int(maps:get('claimRevision', Req)),
 %             encode_claim_changeset(maps:get('claimChangeset', Req))
 %         ]},
-%     Party = capi_utils:unwrap(capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context)),
+%     Party = capi_utils:unwrap(
+%         capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context)
+%     ),
 %     {ok, {200, [], capi_handler_utils:decode_party(Party)}};
 
 process_request('RevokeClaimByID', Req, Context, _) ->
@@ -430,7 +442,8 @@ decode_party_modification({shop_modification, ShopModification}) ->
 decode_contract_modification({creation, ContractParams}) ->
     #{
         <<"contractModificationType">> => <<"ContractCreation">>,
-        <<"contractor"              >> => capi_handler:decode_contractor(ContractParams#payproc_ContractParams.contractor),
+        <<"contractor"              >> =>
+            capi_handler:decode_contractor(ContractParams#payproc_ContractParams.contractor),
         <<"paymentInstitutionID"    >> =>
             capi_handler:decode_payment_institution_ref(ContractParams#payproc_ContractParams.payment_institution)
     };

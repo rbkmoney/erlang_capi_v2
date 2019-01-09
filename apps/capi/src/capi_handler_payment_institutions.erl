@@ -135,7 +135,8 @@ decode_payment_institution_obj(#domain_PaymentInstitutionObject{ref = Ref, data 
         <<"name">> => Data#domain_PaymentInstitution.name,
         <<"description">> => Data#domain_PaymentInstitution.description,
         <<"realm">> => genlib:to_binary(Data#domain_PaymentInstitution.realm),
-        <<"residences">> => [capi_handler:decode_residence(R) || R <- ordsets:to_list(Data#domain_PaymentInstitution.residences)]
+        <<"residences">> =>
+            [capi_handler:decode_residence(R) || R <- ordsets:to_list(Data#domain_PaymentInstitution.residences)]
     }).
 
 decode_payment_terms(#domain_PaymentsServiceTerms{currencies = Currencies, categories = Categories}) ->
