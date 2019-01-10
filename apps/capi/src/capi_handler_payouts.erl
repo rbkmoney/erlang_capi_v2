@@ -41,9 +41,9 @@ process_request('GetPayout', Req, Context, _) ->
     PayoutID = maps:get(payoutID, Req),
     case capi_handler_utils:service_call({payouts, 'Get', [PayoutID]}, Context) of
         {ok, Payout} ->
-            case check_party_in_payout_proc_payout(capi_handler_utils:get_party_id(Context), Payout) of
+            case check_party_in_payout(capi_handler_utils:get_party_id(Context), Payout) of
                 true ->
-                    {ok, {200, [], decode_payout_proc_payout(Payout)}};
+                    {ok, {200, [], decode_payout(Payout)}};
                 false ->
                     {ok, {404, [], capi_handler_utils:general_error(<<"Payout not found">>)}}
             end;
@@ -52,13 +52,13 @@ process_request('GetPayout', Req, Context, _) ->
     end;
 
 process_request('CreatePayout', Req, Context, _) ->
-    CreateRequest = encode_payout_proc_payout_params(
+    CreateRequest = encode_payout_params(
         capi_handler_utils:get_party_id(Context),
         maps:get('PayoutParams', Req)
     ),
     case capi_handler_utils:service_call({payouts, 'CreatePayout', [CreateRequest]}, Context) of
         {ok, Payout} ->
-            {ok, {201, [], decode_payout_proc_payout(Payout)}};
+            {ok, {201, [], decode_payout(Payout)}};
         {exception, Exception} ->
             case Exception of
                 #'payout_processing_InvalidPayoutTool'{} ->
@@ -84,9 +84,9 @@ process_request('GetScheduleByRef', Req, Context, _) ->
 process_request(OperationID, Req, Context, Handlers) ->
     capi_handler:process_request(OperationID, Req, Context, Handlers).
 
-check_party_in_payout_proc_payout(PartyID, #payout_processing_Payout{party_id = PartyID}) ->
+check_party_in_payout(PartyID, #payout_processing_Payout{party_id = PartyID}) ->
     true;
-check_party_in_payout_proc_payout(_PartyID, _) ->
+check_party_in_payout(_PartyID, _) ->
     false.
 
 get_schedule_by_id(ScheduleID, #{woody_context := WoodyContext}) ->
@@ -98,12 +98,12 @@ get_schedule_by_id(ScheduleID, #{woody_context := WoodyContext}) ->
 encode_msgpack_value(_Key, Value) ->
     capi_msgpack:wrap(Value).
 
-encode_payout_proc_metadata(undefined) ->
+encode_metadata(undefined) ->
     undefined;
-encode_payout_proc_metadata(Data) ->
+encode_metadata(Data) ->
     maps:map(fun encode_msgpack_value/2, Data).
 
-encode_payout_proc_payout_params(PartyID, PayoutParams) ->
+encode_payout_params(PartyID, PayoutParams) ->
     #'payout_processing_PayoutParams'{
         payout_id = maps:get(<<"id">>, PayoutParams),
         shop = #'payout_processing_ShopParams'{
@@ -112,7 +112,7 @@ encode_payout_proc_payout_params(PartyID, PayoutParams) ->
         },
         payout_tool_id = maps:get(<<"payoutToolID">>, PayoutParams),
         amount = capi_handler:encode_cash(maps:get(<<"amount">>, PayoutParams), maps:get(<<"currency">>, PayoutParams)),
-        metadata = encode_payout_proc_metadata(maps:get(<<"metadata">>, PayoutParams, undefined))
+        metadata = encode_metadata(maps:get(<<"metadata">>, PayoutParams, undefined))
     }.
 
 %%
@@ -123,7 +123,7 @@ decode_payout_tool(#domain_PayoutTool{id = ID, currency = Currency, payout_tool_
         capi_handler:decode_payout_tool_params(Currency, Info)
     ).
 
-decode_payout_proc_payout(Payout) ->
+decode_payout(Payout) ->
     capi_handler_utils:merge_and_compact(#{
         <<"id"               >> => Payout#payout_processing_Payout.id,
         <<"shopID"           >> => Payout#payout_processing_Payout.shop_id,
@@ -131,22 +131,22 @@ decode_payout_proc_payout(Payout) ->
         <<"amount"           >> => Payout#payout_processing_Payout.amount,
         <<"fee"              >> => Payout#payout_processing_Payout.fee,
         <<"currency"         >> => capi_handler:decode_currency(Payout#payout_processing_Payout.currency),
-        <<"payoutToolDetails">> => decode_payout_proc_payout_tool_details(Payout#payout_processing_Payout.type),
-        <<"payoutSummary"    >> => decode_payout_proc_payout_summary(Payout#payout_processing_Payout.summary),
-        <<"metadata"         >> => decode_payout_proc_metadata(Payout#payout_processing_Payout.metadata)
-    }, decode_payout_proc_payout_status(Payout#payout_processing_Payout.status)).
+        <<"payoutToolDetails">> => decode_payout_tool_details(Payout#payout_processing_Payout.type),
+        <<"payoutSummary"    >> => decode_payout_summary(Payout#payout_processing_Payout.summary),
+        <<"metadata"         >> => decode_metadata(Payout#payout_processing_Payout.metadata)
+    }, decode_payout_status(Payout#payout_processing_Payout.status)).
 
-decode_payout_proc_payout_status({cancelled, #payout_processing_PayoutCancelled{details = Details}}) ->
+decode_payout_status({cancelled, #payout_processing_PayoutCancelled{details = Details}}) ->
     #{
         <<"status"             >> => <<"cancelled">>,
         <<"cancellationDetails">> => genlib:to_binary(Details)
     };
-decode_payout_proc_payout_status({Status, _}) ->
+decode_payout_status({Status, _}) ->
     #{
         <<"status">> => genlib:to_binary(Status)
     }.
 
-decode_payout_proc_payout_tool_details(PayoutType) ->
+decode_payout_tool_details(PayoutType) ->
     capi_handler:decode_payout_tool_details(payout_proc_to_domain(PayoutType)).
 
 payout_proc_to_domain({bank_account, {russian_payout_account, PayoutAccount}}) ->
@@ -158,12 +158,12 @@ payout_proc_to_domain({bank_account, {international_payout_account, PayoutAccoun
 payout_proc_to_domain({wallet, #payout_processing_Wallet{wallet_id = WalletID}}) ->
     {wallet_info, #domain_WalletInfo{wallet_id = WalletID}}.
 
-decode_payout_proc_payout_summary(PayoutSummary) when is_list(PayoutSummary) ->
-    [decode_payout_proc_payout_summary_item(PayoutSummaryItem) || PayoutSummaryItem <- PayoutSummary];
-decode_payout_proc_payout_summary(undefined) ->
+decode_payout_summary(PayoutSummary) when is_list(PayoutSummary) ->
+    [decode_payout_summary_item(PayoutSummaryItem) || PayoutSummaryItem <- PayoutSummary];
+decode_payout_summary(undefined) ->
     undefined.
 
-decode_payout_proc_payout_summary_item(PayoutSummary) ->
+decode_payout_summary_item(PayoutSummary) ->
     genlib_map:compact(#{
         <<"amount"  >> => PayoutSummary#payout_processing_PayoutSummaryItem.amount,
         <<"fee"     >> => PayoutSummary#payout_processing_PayoutSummaryItem.fee,
@@ -174,9 +174,9 @@ decode_payout_proc_payout_summary_item(PayoutSummary) ->
         <<"type"    >> => genlib:to_binary(PayoutSummary#payout_processing_PayoutSummaryItem.operation_type)
     }).
 
-decode_payout_proc_metadata(undefined) ->
+decode_metadata(undefined) ->
     undefined;
-decode_payout_proc_metadata(Data) ->
+decode_metadata(Data) ->
     maps:map(fun decode_msgpack_value/2, Data).
 
 decode_msgpack_value(_Key, Value) ->
