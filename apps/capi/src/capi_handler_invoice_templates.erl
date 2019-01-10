@@ -291,7 +291,7 @@ decode_invoice_tpl(InvoiceTpl) ->
                 <<"years" >> => undef_to_zero(YY)
             },
         <<"details"    >> => decode_invoice_tpl_details(InvoiceTpl#domain_InvoiceTemplate.details),
-        <<"metadata"   >> => decode_context(InvoiceTpl#domain_InvoiceTemplate.context)
+        <<"metadata"   >> => capi_handler:decode_context(InvoiceTpl#domain_InvoiceTemplate.context)
     }).
 
 undef_to_zero(undefined) -> 0;
@@ -314,13 +314,6 @@ decode_invoice_tpl_details({product, Product}) ->
 get_currency_from_cart(#domain_InvoiceCart{lines = [FirstLine | _]}) ->
     #domain_InvoiceLine{price = #domain_Cash{currency = Currency}} = FirstLine,
     capi_handler:decode_currency(Currency).
-
-decode_context(#'Content'{type = <<"application/json">>, data = InvoiceContext}) ->
-    % @TODO deal with non json contexts
-    jsx:decode(InvoiceContext,  [return_maps]);
-
-decode_context(undefined) ->
-    undefined.
 
 decode_invoice_tpl_line_cost({unlim, _}) ->
     #{

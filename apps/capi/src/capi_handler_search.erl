@@ -120,15 +120,14 @@ process_search_request(QueryType, Query, Req, Context, Opts = #{thrift_fun := Th
     Call = {
         merchant_stat,
         ThriftFun,
-        [capi_handler:encode_stat_request(create_dsl(QueryType, Query, QueryParams), ContinuationToken)]
+        [
+            capi_handler:encode_stat_request(
+                capi_handler_utils:create_dsl(QueryType, Query, QueryParams),
+                ContinuationToken
+            )
+        ]
     },
     process_search_request_result(QueryType, capi_handler_utils:service_call(Call, Context), Context, Opts).
-
-create_dsl(QueryType, QueryBody, QueryParams) ->
-    capi_handler_utils:merge_and_compact(
-        #{<<"query">> => maps:put(genlib:to_binary(QueryType), genlib_map:compact(QueryBody), #{})},
-        QueryParams
-    ).
 
 process_search_request_result(QueryType, Result, Context, #{decode_fun := DecodeFun}) ->
     case Result of

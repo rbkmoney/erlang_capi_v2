@@ -54,13 +54,7 @@ create_stat_dsl(StatType, Req, Context) ->
         <<"to_time"       >> => ToTime,
         <<"split_interval">> => SplitInterval
     },
-    create_dsl(StatType, Query, #{}).
-
-create_dsl(QueryType, QueryBody, QueryParams) ->
-    capi_handler_utils:merge_and_compact(
-        #{<<"query">> => maps:put(genlib:to_binary(QueryType), genlib_map:compact(QueryBody), #{})},
-        QueryParams
-    ).
+    capi_handler_utils:create_dsl(StatType, Query, #{}).
 
 process_merchant_stat(StatType, Req, Context) ->
     Call = {

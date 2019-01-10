@@ -210,14 +210,8 @@ encode_customer_params(PartyID, Params) ->
     #payproc_CustomerParams{
         party_id     = PartyID,
         shop_id      = genlib_map:get(<<"shopID">>, Params),
-        contact_info = encode_contact_info(genlib_map:get(<<"contactInfo">>, Params)),
+        contact_info = capi_handler:encode_contact_info(genlib_map:get(<<"contactInfo">>, Params)),
         metadata     = encode_customer_metadata(genlib_map:get(<<"metadata">>, Params))
-    }.
-
-encode_contact_info(ContactInfo) ->
-    #domain_ContactInfo{
-        phone_number = genlib_map:get(<<"phoneNumber">>, ContactInfo),
-        email        = genlib_map:get(<<"email">>, ContactInfo)
     }.
 
 encode_customer_metadata(Meta) ->

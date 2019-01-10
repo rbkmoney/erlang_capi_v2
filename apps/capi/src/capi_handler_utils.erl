@@ -28,6 +28,8 @@
 -export([get_payment_by_id/3]).
 -export([get_contract_by_id/2]).
 
+-export([create_dsl/3]).
+
 -type processing_context() :: capi_handler:processing_context().
 
 -spec general_error(binary()) ->
@@ -281,3 +283,12 @@ get_payment_by_id(InvoiceID, PaymentID, Context) ->
 get_contract_by_id(ContractID, Context) ->
     Call = {party_management, 'GetContract', [ContractID]},
     service_call_with([user_info, party_id, party_creation], Call, Context).
+
+-spec create_dsl(atom(), map(), map()) ->
+    map().
+
+create_dsl(QueryType, QueryBody, QueryParams) ->
+    merge_and_compact(
+        #{<<"query">> => maps:put(genlib:to_binary(QueryType), genlib_map:compact(QueryBody), #{})},
+        QueryParams
+    ).
