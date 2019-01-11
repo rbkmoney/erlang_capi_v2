@@ -123,7 +123,9 @@ process_request('CreateInvoiceWithTemplate', Req, Context, _) ->
 capi_handler_utils:        service_call_with([user_info, party_creation], Call, Context)
     of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {201, [], capi_handler:make_invoice_and_token(Invoice, capi_handler_utils:get_party_id(Context))}};
+            {ok, {201, [], capi_handler_decoder_invoicing:make_invoice_and_token(
+                Invoice, capi_handler_utils:get_party_id(Context))
+            }};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -149,7 +151,7 @@ capi_handler_utils:        service_call_with([user_info, party_creation], Call, 
 
 process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context, _) ->
     Result =
-        capi_handler:construct_payment_methods(
+        capi_handler_decoder_invoicing:construct_payment_methods(
             invoice_templating,
             [maps:get('invoiceTemplateID', Req), capi_utils:unwrap(rfc3339:format(erlang:system_time()))],
             Context
@@ -180,7 +182,7 @@ encode_invoice_tpl_create_params(PartyID, Params) ->
         product          = Product,
         description      = genlib_map:get(<<"description">>, Params),
         details          = Details,
-        context          = capi_handler:encode_invoice_context(Params)
+        context          = capi_handler_encoder:encode_invoice_context(Params)
     }.
 
 encode_invoice_tpl_update_params(Params) ->
@@ -204,7 +206,7 @@ make_invoice_tpl_and_token(InvoiceTpl, PartyID) ->
 encode_invoice_tpl_details(#{<<"templateType">> := <<"InvoiceTemplateSingleLine">>} = Details) ->
     {product, encode_invoice_tpl_product(Details)};
 encode_invoice_tpl_details(#{<<"templateType">> := <<"InvoiceTemplateMultiLine">>} = Details) ->
-    {cart, capi_handler:encode_invoice_cart(Details)};
+    {cart, capi_handler_encoder:encode_invoice_cart(Details)};
 encode_invoice_tpl_details(undefined) ->
     undefined.
 
@@ -217,7 +219,7 @@ get_product_from_tpl_details(undefined) ->
     undefined.
 
 encode_optional_context(Params = #{<<"metadata">> := _}) ->
-    capi_handler:encode_invoice_context(Params);
+    capi_handler_encoder:encode_invoice_context(Params);
 encode_optional_context(#{}) ->
     undefined.
 
@@ -250,11 +252,11 @@ encode_invoice_tpl_product(Details) ->
     #domain_InvoiceTemplateProduct{
         product = genlib_map:get(<<"product">>, Details),
         price = encode_invoice_tpl_line_cost(genlib_map:get(<<"price">>, Details)),
-        metadata = capi_handler:encode_invoice_line_meta(Details)
+        metadata = capi_handler_encoder:encode_invoice_line_meta(Details)
     }.
 
 encode_optional_invoice_cost(Params = #{<<"amount">> := _, <<"currency">> := _}) ->
-    capi_handler:encode_cash(Params);
+    capi_handler_encoder:encode_cash(Params);
 encode_optional_invoice_cost(#{<<"amount">> := _}) ->
     throw({bad_invoice_params, amount_no_currency});
 encode_optional_invoice_cost(#{<<"currency">> := _}) ->
@@ -270,12 +272,16 @@ encode_invoice_tpl_line_cost(_) ->
 encode_invoice_tpl_line_cost(<<"InvoiceTemplateLineCostUnlim">>, _Cost) ->
     {unlim, #domain_InvoiceTemplateCostUnlimited{}};
 encode_invoice_tpl_line_cost(<<"InvoiceTemplateLineCostFixed">>, Cost) ->
-    {fixed, capi_handler:encode_cash(Cost)};
+    {fixed, capi_handler_encoder:encode_cash(Cost)};
 encode_invoice_tpl_line_cost(<<"InvoiceTemplateLineCostRange">>, Cost) ->
     Range = genlib_map:get(<<"range">>, Cost),
     {range, #domain_CashRange{
-        lower = {inclusive, capi_handler:encode_cash(Cost#{<<"amount">> => genlib_map:get(<<"lowerBound">>, Range)})},
-        upper = {inclusive, capi_handler:encode_cash(Cost#{<<"amount">> => genlib_map:get(<<"upperBound">>, Range)})}
+        lower = {inclusive, capi_handler_encoder:encode_cash(
+            Cost#{<<"amount">> => genlib_map:get(<<"lowerBound">>, Range)}
+        )},
+        upper = {inclusive, capi_handler_encoder:encode_cash(
+            Cost#{<<"amount">> => genlib_map:get(<<"upperBound">>, Range)}
+        )}
     }}.
 
 decode_invoice_tpl(InvoiceTpl) ->
@@ -291,7 +297,7 @@ decode_invoice_tpl(InvoiceTpl) ->
                 <<"years" >> => undef_to_zero(YY)
             },
         <<"details"    >> => decode_invoice_tpl_details(InvoiceTpl#domain_InvoiceTemplate.details),
-        <<"metadata"   >> => capi_handler:decode_context(InvoiceTpl#domain_InvoiceTemplate.context)
+        <<"metadata"   >> => capi_handler_decoder_utils:decode_context(InvoiceTpl#domain_InvoiceTemplate.context)
     }).
 
 undef_to_zero(undefined) -> 0;
@@ -301,19 +307,21 @@ decode_invoice_tpl_details({cart, Cart}) ->
     #{
         <<"templateType">> => <<"InvoiceTemplateMultiLine">>,
         <<"currency"    >> => get_currency_from_cart(Cart),
-        <<"cart"        >> => capi_handler:decode_invoice_cart(Cart)
+        <<"cart"        >> => capi_handler_decoder_invoicing:decode_invoice_cart(Cart)
     };
 decode_invoice_tpl_details({product, Product}) ->
     genlib_map:compact(#{
         <<"templateType">> => <<"InvoiceTemplateSingleLine">>,
         <<"product"     >> => Product#domain_InvoiceTemplateProduct.product,
         <<"price"       >> => decode_invoice_tpl_line_cost(Product#domain_InvoiceTemplateProduct.price),
-        <<"taxMode"     >> => capi_handler:decode_invoice_line_tax_mode(Product#domain_InvoiceTemplateProduct.metadata)
+        <<"taxMode"     >> => capi_handler_decoder_invoicing:decode_invoice_line_tax_mode(
+            Product#domain_InvoiceTemplateProduct.metadata
+        )
     }).
 
 get_currency_from_cart(#domain_InvoiceCart{lines = [FirstLine | _]}) ->
     #domain_InvoiceLine{price = #domain_Cash{currency = Currency}} = FirstLine,
-    capi_handler:decode_currency(Currency).
+    capi_handler_decoder_utils:decode_currency(Currency).
 
 decode_invoice_tpl_line_cost({unlim, _}) ->
     #{
@@ -323,7 +331,7 @@ decode_invoice_tpl_line_cost({unlim, _}) ->
 decode_invoice_tpl_line_cost({fixed, #domain_Cash{amount = Amount, currency = Currency}}) ->
     #{
         <<"costType">> => <<"InvoiceTemplateLineCostFixed">>,
-        <<"currency">> => capi_handler:decode_currency(Currency),
+        <<"currency">> => capi_handler_decoder_utils:decode_currency(Currency),
         <<"amount">> => Amount
     };
 
@@ -332,7 +340,7 @@ decode_invoice_tpl_line_cost({range, #domain_CashRange{upper = {_, UpperCashBoun
     #domain_Cash{amount = LowerBound, currency = Currency} = LowerCashBound,
     #{
         <<"costType">> => <<"InvoiceTemplateLineCostRange">>,
-        <<"currency">> => capi_handler:decode_currency(Currency),
+        <<"currency">> => capi_handler_decoder_utils:decode_currency(Currency),
         <<"range">> => #{
             <<"upperBound">> => UpperBound,
             <<"lowerBound">> => LowerBound

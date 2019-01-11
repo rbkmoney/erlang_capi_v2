@@ -21,7 +21,7 @@ process_request('CreateInvoice', Req, Context, _) ->
         capi_handler_utils:service_call_with([user_info, party_creation], Call, Context)
     of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {201, [], capi_handler:make_invoice_and_token(Invoice, PartyID)}};
+            {ok, {201, [], capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, PartyID)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
@@ -62,7 +62,7 @@ process_request('CreateInvoiceAccessToken', Req, Context, _) ->
 process_request('GetInvoiceByID', Req, Context, _) ->
     case capi_handler_utils:get_invoice_by_id(maps:get(invoiceID, Req), Context) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {200, [], capi_handler:decode_invoice(Invoice)}};
+            {ok, {200, [], capi_handler_decoder_invoicing:decode_invoice(Invoice)}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -148,7 +148,7 @@ process_request('GetInvoiceEvents', Req, Context, _) ->
     end;
 
 process_request('GetInvoicePaymentMethods', Req, Context, _) ->
-    case capi_handler:construct_payment_methods(invoicing, [maps:get(invoiceID, Req)], Context) of
+    case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, [maps:get(invoiceID, Req)], Context) of
         {ok, PaymentMethods} when is_list(PaymentMethods) ->
             {ok, {200, [], PaymentMethods}};
         {exception, Exception} ->
@@ -174,21 +174,21 @@ encode_invoice_params(PartyID, InvoiceParams) ->
         details  = encode_invoice_details(InvoiceParams),
         cost     = encode_invoice_cost(Amount, Currency, Cart),
         due      = capi_handler_utils:get_time(<<"dueDate">>, InvoiceParams),
-        context  = capi_handler:encode_invoice_context(InvoiceParams),
+        context  = capi_handler_encoder:encode_invoice_context(InvoiceParams),
         shop_id  = genlib_map:get(<<"shopID">>, InvoiceParams)
     }.
 
 encode_invoice_cost(Amount, Currency, Cart) when Amount =/= undefined, Cart =/= undefined ->
     case get_invoice_cart_amount(Cart) of
         Amount ->
-            capi_handler:encode_cash(Amount, Currency);
+            capi_handler_encoder:encode_cash(Amount, Currency);
         _ ->
             throw(invalid_invoice_cost)
     end;
 encode_invoice_cost(undefined, Currency, Cart) when Cart =/= undefined ->
-    capi_handler:encode_cash(get_invoice_cart_amount(Cart), Currency);
+    capi_handler_encoder:encode_cash(get_invoice_cart_amount(Cart), Currency);
 encode_invoice_cost(Amount, Currency, undefined) when Amount =/= undefined ->
-    capi_handler:encode_cash(Amount, Currency);
+    capi_handler_encoder:encode_cash(Amount, Currency);
 encode_invoice_cost(_, _, _) ->
     throw(invalid_invoice_cost).
 
@@ -207,7 +207,7 @@ encode_invoice_details(Params) ->
     #domain_InvoiceDetails{
         product     = genlib_map:get(<<"product"    >>, Params),
         description = genlib_map:get(<<"description">>, Params),
-        cart        = capi_handler:encode_invoice_cart(Params)
+        cart        = capi_handler_encoder:encode_invoice_cart(Params)
     }.
 
 %%
@@ -240,7 +240,7 @@ decode_invoice_changes(InvoiceID, InvoiceChanges, Context) ->
 decode_invoice_change(_, {invoice_created, #payproc_InvoiceCreated{invoice = Invoice}}, _Context) ->
     #{
         <<"changeType">> => <<"InvoiceCreated">>,
-        <<"invoice"   >> => capi_handler:decode_invoice(Invoice)
+        <<"invoice"   >> => capi_handler_decoder_invoicing:decode_invoice(Invoice)
     };
 
 decode_invoice_change(_, {invoice_status_changed, #payproc_InvoiceStatusChanged{status = {Status, _}}}, _Context) ->
@@ -260,7 +260,7 @@ decode_payment_change(InvoiceID, _PaymentID, {invoice_payment_started, PaymentSt
     #payproc_InvoicePaymentStarted{payment = Payment} = PaymentStarted,
     #{
         <<"changeType">> => <<"PaymentStarted">>,
-        <<"payment"   >> => capi_handler:decode_payment(InvoiceID, Payment, Context)
+        <<"payment"   >> => capi_handler_decoder_invoicing:decode_payment(InvoiceID, Payment, Context)
     };
 
 decode_payment_change(_InvoiceID, PaymentID, {invoice_payment_session_change,
@@ -269,7 +269,7 @@ decode_payment_change(_InvoiceID, PaymentID, {invoice_payment_session_change,
     #{
         <<"changeType">> => <<"PaymentInteractionRequested">>,
         <<"paymentID">> => PaymentID,
-        <<"userInteraction">> => capi_handler:decode_user_interaction(Interaction)
+        <<"userInteraction">> => capi_handler_decoder_invoicing:decode_user_interaction(Interaction)
     };
 
 decode_payment_change(_InvoiceID, PaymentID, {invoice_payment_status_changed, PaymentStatusChanged}, Context) ->
@@ -279,7 +279,7 @@ decode_payment_change(_InvoiceID, PaymentID, {invoice_payment_status_changed, Pa
             <<"changeType">> => <<"PaymentStatusChanged">>,
             <<"paymentID" >> => PaymentID
         },
-        capi_handler:decode_payment_status(Status, Context)
+        capi_handler_decoder_invoicing:decode_payment_status(Status, Context)
     );
 
 decode_payment_change(InvoiceID, PaymentID, {invoice_payment_refund_change, PaymentRefundChange}, Context) ->
@@ -308,16 +308,16 @@ decode_refund_change(_, PaymentID, RefundID, {invoice_payment_refund_status_chan
             <<"paymentID" >> => PaymentID,
             <<"refundID"  >> => RefundID
         },
-        capi_handler:decode_refund_status(Status, Context)
+        capi_handler_decoder_invoicing:decode_refund_status(Status, Context)
     );
 
 decode_refund_change(_, _, _, _, _) ->
     undefined.
 
 decode_refund_for_event(#domain_InvoicePaymentRefund{cash = #domain_Cash{}} = Refund, _, _, Context) ->
-    capi_handler:decode_refund(Refund, Context);
+    capi_handler_decoder_invoicing:decode_refund(Refund, Context);
 decode_refund_for_event(#domain_InvoicePaymentRefund{cash = undefined} = Refund, InvoiceID, PaymentID, Context) ->
     % Need to fix it!
     {ok, #payproc_InvoicePayment{payment = #domain_InvoicePayment{cost = Cash}}} =
         capi_handler_utils:get_payment_by_id(InvoiceID, PaymentID, Context),
-    capi_handler:decode_refund(Refund#domain_InvoicePaymentRefund{cash = Cash}, Context).
+    capi_handler_decoder_invoicing:decode_refund(Refund#domain_InvoicePaymentRefund{cash = Cash}, Context).

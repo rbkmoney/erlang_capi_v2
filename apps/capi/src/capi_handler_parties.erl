@@ -15,7 +15,7 @@
 
 process_request('GetMyParty', _Req, Context, _) ->
     Party = capi_utils:unwrap(capi_handler_utils:get_my_party(Context)),
-    {ok, {200, [], capi_handler:decode_party(Party)}};
+    {ok, {200, [], capi_handler_decoder_party:decode_party(Party)}};
 process_request('ActivateMyParty', _Req, Context, _) ->
     Call = {party_management, 'Activate', []},
     case capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context) of

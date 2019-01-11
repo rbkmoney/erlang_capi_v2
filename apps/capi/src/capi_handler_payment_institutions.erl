@@ -19,7 +19,7 @@
 
 process_request('GetPaymentInstitutions', Req, #{woody_context := WoodyContext}, _) ->
     try
-        Residence = capi_handler:encode_residence(genlib_map:get(residence, Req)),
+        Residence = capi_handler_encoder:encode_residence(genlib_map:get(residence, Req)),
         Realm = genlib_map:get(realm, Req),
         {ok, PaymentInstObjects} = capi_domain:get_payment_institutions(WoodyContext),
         Resp =
@@ -125,7 +125,7 @@ encode_optional_payout_method(undefined) ->
     undefined.
 
 encode_optional_currency(undefined   ) -> undefined;
-encode_optional_currency(SymbolicCode) -> capi_handler:encode_currency(SymbolicCode).
+encode_optional_currency(SymbolicCode) -> capi_handler_encoder:encode_currency(SymbolicCode).
 
 %
 
@@ -136,13 +136,16 @@ decode_payment_institution_obj(#domain_PaymentInstitutionObject{ref = Ref, data 
         <<"description">> => Data#domain_PaymentInstitution.description,
         <<"realm">> => genlib:to_binary(Data#domain_PaymentInstitution.realm),
         <<"residences">> =>
-            [capi_handler:decode_residence(R) || R <- ordsets:to_list(Data#domain_PaymentInstitution.residences)]
+            [
+                capi_handler_decoder_party:decode_residence(R) ||
+                R <- ordsets:to_list(Data#domain_PaymentInstitution.residences)
+            ]
     }).
 
 decode_payment_terms(#domain_PaymentsServiceTerms{currencies = Currencies, categories = Categories}) ->
     genlib_map:compact(#{
-        <<"currencies">> => decode_payment_terms(fun capi_handler:decode_currency    /1, Currencies),
-        <<"categories">> => decode_payment_terms(fun capi_handler:decode_category_ref/1, Categories)
+        <<"currencies">> => decode_payment_terms(fun capi_handler_decoder_utils:decode_currency    /1, Currencies),
+        <<"categories">> => decode_payment_terms(fun capi_handler_decoder_utils:decode_category_ref/1, Categories)
     });
 decode_payment_terms(undefined) ->
     #{}.
@@ -165,6 +168,6 @@ decode_payout_methods_selector(_) ->
     [].
 
 decode_business_schedules_selector({value, Val}) when is_list(Val) ->
-    lists:map(fun capi_handler:decode_business_schedule_ref/1, Val);
+    lists:map(fun capi_handler_decoder_utils:decode_business_schedule_ref/1, Val);
 decode_business_schedules_selector(_) ->
     [].

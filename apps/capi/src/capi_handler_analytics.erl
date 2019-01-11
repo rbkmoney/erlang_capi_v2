@@ -60,7 +60,7 @@ process_merchant_stat(StatType, Req, Context) ->
     Call = {
         merchant_stat,
         'GetStatistics',
-        [capi_handler:encode_stat_request(create_stat_dsl(StatType, Req, Context))]
+        [capi_handler_encoder:encode_stat_request(create_stat_dsl(StatType, Req, Context))]
     },
     process_merchant_stat_result(StatType, capi_handler_utils:service_call(Call, Context)).
 

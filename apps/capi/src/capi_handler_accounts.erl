@@ -32,5 +32,5 @@ decode_account_state(AccountState) ->
         <<"id"             >> => AccountState#payproc_AccountState.account_id,
         <<"ownAmount"      >> => AccountState#payproc_AccountState.own_amount,
         <<"availableAmount">> => AccountState#payproc_AccountState.available_amount,
-        <<"currency"       >> => capi_handler:decode_currency(AccountState#payproc_AccountState.currency)
+        <<"currency"       >> => capi_handler_decoder_utils:decode_currency(AccountState#payproc_AccountState.currency)
     }.

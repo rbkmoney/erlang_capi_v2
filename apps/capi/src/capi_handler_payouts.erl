@@ -111,7 +111,10 @@ encode_payout_params(PartyID, PayoutParams) ->
             shop_id = maps:get(<<"shopID">>, PayoutParams)
         },
         payout_tool_id = maps:get(<<"payoutToolID">>, PayoutParams),
-        amount = capi_handler:encode_cash(maps:get(<<"amount">>, PayoutParams), maps:get(<<"currency">>, PayoutParams)),
+        amount = capi_handler_encoder:encode_cash(
+            maps:get(<<"amount">>, PayoutParams),
+            maps:get(<<"currency">>, PayoutParams)
+        ),
         metadata = encode_metadata(maps:get(<<"metadata">>, PayoutParams, undefined))
     }.
 
@@ -120,7 +123,7 @@ encode_payout_params(PartyID, PayoutParams) ->
 decode_payout_tool(#domain_PayoutTool{id = ID, currency = Currency, payout_tool_info = Info}) ->
     maps:merge(
         #{<<"id">> => ID},
-        capi_handler:decode_payout_tool_params(Currency, Info)
+        capi_handler_decoder_party:decode_payout_tool_params(Currency, Info)
     ).
 
 decode_payout(Payout) ->
@@ -130,7 +133,7 @@ decode_payout(Payout) ->
         <<"createdAt"        >> => Payout#payout_processing_Payout.created_at,
         <<"amount"           >> => Payout#payout_processing_Payout.amount,
         <<"fee"              >> => Payout#payout_processing_Payout.fee,
-        <<"currency"         >> => capi_handler:decode_currency(Payout#payout_processing_Payout.currency),
+        <<"currency"         >> => capi_handler_decoder_utils:decode_currency(Payout#payout_processing_Payout.currency),
         <<"payoutToolDetails">> => decode_payout_tool_details(Payout#payout_processing_Payout.type),
         <<"payoutSummary"    >> => decode_payout_summary(Payout#payout_processing_Payout.summary),
         <<"metadata"         >> => decode_metadata(Payout#payout_processing_Payout.metadata)
@@ -147,7 +150,7 @@ decode_payout_status({Status, _}) ->
     }.
 
 decode_payout_tool_details(PayoutType) ->
-    capi_handler:decode_payout_tool_details(payout_proc_to_domain(PayoutType)).
+    capi_handler_decoder_party:decode_payout_tool_details(payout_proc_to_domain(PayoutType)).
 
 payout_proc_to_domain({bank_account, {russian_payout_account, PayoutAccount}}) ->
     #payout_processing_RussianPayoutAccount{bank_account = BankAccount} = PayoutAccount,

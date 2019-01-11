@@ -210,7 +210,7 @@ encode_customer_params(PartyID, Params) ->
     #payproc_CustomerParams{
         party_id     = PartyID,
         shop_id      = genlib_map:get(<<"shopID">>, Params),
-        contact_info = capi_handler:encode_contact_info(genlib_map:get(<<"contactInfo">>, Params)),
+        contact_info = capi_handler_encoder:encode_contact_info(genlib_map:get(<<"contactInfo">>, Params)),
         metadata     = encode_customer_metadata(genlib_map:get(<<"metadata">>, Params))
     }.
 
@@ -219,7 +219,7 @@ encode_customer_metadata(Meta) ->
 
 
 encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
-    PaymentTool = capi_handler:encode_payment_tool_token(maps:get(<<"paymentToolToken">>, PaymentResource)),
+    PaymentTool = capi_handler_encoder:encode_payment_tool_token(maps:get(<<"paymentToolToken">>, PaymentResource)),
     {ClientInfo, PaymentSession} =
         capi_handler_utils:unwrap_payment_session(maps:get(<<"paymentSession">>, PaymentResource)),
     #payproc_CustomerBindingParams{
@@ -227,7 +227,7 @@ encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
             #domain_DisposablePaymentResource{
                 payment_tool       = PaymentTool,
                 payment_session_id = PaymentSession,
-                client_info        = capi_handler:encode_client_info(ClientInfo)
+                client_info        = capi_handler_encoder:encode_client_info(ClientInfo)
             }
     }.
 
@@ -244,7 +244,7 @@ decode_customer(Customer) ->
         <<"shopID"     >> => Customer#payproc_Customer.shop_id,
         <<"status"     >> => decode_customer_status(Customer#payproc_Customer.status),
         <<"contactInfo">> =>
-            capi_handler:decode_contact_info(Customer#payproc_Customer.contact_info),
+            capi_handler_decoder_party:decode_contact_info(Customer#payproc_Customer.contact_info),
         <<"metadata"   >> => decode_customer_metadata(Customer#payproc_Customer.metadata)
     }.
 
@@ -259,7 +259,7 @@ decode_customer_binding(CustomerBinding, Context) ->
         #{
             <<"id"             >> => CustomerBinding#payproc_CustomerBinding.id,
             <<"paymentResource">> =>
-                capi_handler:decode_disposable_payment_resource(
+                capi_handler_decoder_party:decode_disposable_payment_resource(
                     CustomerBinding#payproc_CustomerBinding.payment_resource
                 )
         },
@@ -270,7 +270,7 @@ decode_customer_binding_status({Status, StatusInfo}, Context) ->
     Error =
         case StatusInfo of
             #payproc_CustomerBindingFailed{failure = OperationFailure} ->
-                capi_handler:decode_operation_failure(OperationFailure, Context);
+                capi_handler_decoder_utils:decode_operation_failure(OperationFailure, Context);
             _ ->
                 undefined
         end,
@@ -323,5 +323,5 @@ decode_customer_binding_change(BindingID, {interaction_requested, InteractionReq
     {true, #{
         <<"changeType">> => <<"CustomerBindingInteractionRequested">>,
         <<"customerBindingID">> => BindingID,
-        <<"userInteraction">> => capi_handler:decode_user_interaction(UserInteraction)
+        <<"userInteraction">> => capi_handler_decoder_invoicing:decode_user_interaction(UserInteraction)
     }}.

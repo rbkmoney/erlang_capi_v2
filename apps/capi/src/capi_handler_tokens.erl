@@ -34,9 +34,9 @@ process_request('CreatePaymentResource', Req, Context, _) ->
             #domain_DisposablePaymentResource{
                 payment_tool = PaymentTool,
                 payment_session_id = PaymentSessionID,
-                client_info = capi_handler:encode_client_info(ClientInfo)
+                client_info = capi_handler_encoder:encode_client_info(ClientInfo)
             },
-        {ok, {201, [], capi_handler:decode_disposable_payment_resource(PaymentResource)}}
+        {ok, {201, [], capi_handler_decoder_party:decode_disposable_payment_resource(PaymentResource)}}
     catch
         Result -> Result
     end;
@@ -125,7 +125,7 @@ expand_card_info(BankCard, {BinData, Version}) ->
     try
         BankCard#'domain_BankCard'{
             payment_system = encode_binbase_payment_system(BinData#'binbase_BinData'.payment_system),
-            issuer_country = capi_handler:encode_residence(BinData#'binbase_BinData'.iso_country_code),
+            issuer_country = capi_handler_encoder:encode_residence(BinData#'binbase_BinData'.iso_country_code),
             bank_name = BinData#'binbase_BinData'.bank_name,
             metadata = #{
                 ?CAPI_NS =>
@@ -244,12 +244,12 @@ encode_wrapped_payment_tool(Data) ->
 encode_payment_request(#{<<"provider" >> := <<"ApplePay">>} = Data) ->
     {apple, #paytoolprv_ApplePayRequest{
         merchant_id = maps:get(<<"merchantID">>, Data),
-        payment_token = capi_handler:encode_content(json, maps:get(<<"paymentToken">>, Data))
+        payment_token = capi_handler_encoder:encode_content(json, maps:get(<<"paymentToken">>, Data))
     }};
 encode_payment_request(#{<<"provider" >> := <<"GooglePay">>} = Data) ->
     {google, #paytoolprv_GooglePayRequest{
         gateway_merchant_id = maps:get(<<"gatewayMerchantID">>, Data),
-        payment_token = capi_handler:encode_content(json, maps:get(<<"paymentToken">>, Data))
+        payment_token = capi_handler_encoder:encode_content(json, maps:get(<<"paymentToken">>, Data))
     }};
 encode_payment_request(#{<<"provider" >> := <<"SamsungPay">>} = Data) ->
     {samsung, #paytoolprv_SamsungPayRequest{

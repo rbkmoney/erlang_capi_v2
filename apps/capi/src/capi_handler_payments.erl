@@ -189,7 +189,7 @@ process_request('CreateRefund', Req, Context, _) ->
     Call = {invoicing, 'RefundPayment', [InvoiceID, PaymentID, Params]},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, Refund} ->
-            {ok, {201, [], capi_handler:decode_refund(Refund, Context)}};
+            {ok, {201, [], capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -246,7 +246,7 @@ process_request('CreateRefund', Req, Context, _) ->
 process_request('GetRefunds', Req, Context, _) ->
     case capi_handler_utils:get_payment_by_id(maps:get(invoiceID, Req), maps:get(paymentID, Req), Context) of
         {ok, #payproc_InvoicePayment{refunds = Refunds}} ->
-            {ok, {200, [], [capi_handler:decode_refund(R, Context) || R <- Refunds]}};
+            {ok, {200, [], [capi_handler_decoder_invoicing:decode_refund(R, Context) || R <- Refunds]}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -263,7 +263,7 @@ process_request('GetRefundByID', Req, Context, _) ->
         {invoicing, 'GetPaymentRefund', [maps:get(invoiceID, Req), maps:get(paymentID, Req), maps:get(refundID, Req)]},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, Refund} ->
-            {ok, {200, [], capi_handler:decode_refund(Refund, Context)}};
+            {ok, {200, [], capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvoicePaymentRefundNotFound{} ->
@@ -296,15 +296,15 @@ encode_payer_params(#{
     <<"paymentSession"  >> := EncodedSession,
     <<"contactInfo"     >> := ContactInfo
 }) ->
-    PaymentTool = capi_handler:encode_payment_tool_token(Token),
+    PaymentTool = capi_handler_encoder:encode_payment_tool_token(Token),
     {ClientInfo, PaymentSession} = capi_handler_utils:unwrap_payment_session(EncodedSession),
     {payment_resource, #payproc_PaymentResourcePayerParams{
         resource = #domain_DisposablePaymentResource{
             payment_tool = PaymentTool,
             payment_session_id = PaymentSession,
-            client_info = capi_handler:encode_client_info(ClientInfo)
+            client_info = capi_handler_encoder:encode_client_info(ClientInfo)
         },
-        contact_info = capi_handler:encode_contact_info(ContactInfo)
+        contact_info = capi_handler_encoder:encode_contact_info(ContactInfo)
     }};
 
 encode_payer_params(#{
@@ -321,7 +321,7 @@ encode_payer_params(#{
             invoice_id = InvoiceID,
             payment_id = PaymentID
         },
-        contact_info = capi_handler:encode_contact_info(ContactInfo)
+        contact_info = capi_handler_encoder:encode_contact_info(ContactInfo)
     }}.
 
 encode_flow(#{<<"type">> := <<"PaymentFlowInstant">>}) ->
@@ -334,19 +334,19 @@ encode_flow(#{<<"type">> := <<"PaymentFlowHold">>} = Entity) ->
     }}.
 
 encode_optional_refund_cash(Params = #{<<"amount">> := _, <<"currency">> := _}, _, _, _) ->
-    capi_handler:encode_cash(Params);
+    capi_handler_encoder:encode_cash(Params);
 encode_optional_refund_cash(Params = #{<<"amount">> := _}, InvoiceID, PaymentID, Context) ->
     {ok, #payproc_InvoicePayment{
         payment = #domain_InvoicePayment{
             cost = #domain_Cash{currency = Currency}
         }
     }} = capi_handler_utils:get_payment_by_id(InvoiceID, PaymentID, Context),
-    capi_handler:encode_cash(Params#{<<"currency">> => capi_handler:decode_currency(Currency)});
+    capi_handler_encoder:encode_cash(Params#{<<"currency">> => capi_handler_decoder_utils:decode_currency(Currency)});
 encode_optional_refund_cash(_, _, _, _) ->
     undefined.
 
 %%
 
 decode_invoice_payment(InvoiceID, #payproc_InvoicePayment{payment = Payment}, Context) ->
-    capi_handler:decode_payment(InvoiceID, Payment, Context).
+    capi_handler_decoder_invoicing:decode_payment(InvoiceID, Payment, Context).
 

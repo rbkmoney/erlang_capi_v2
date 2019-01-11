@@ -62,20 +62,20 @@ process_request(OperationID, Req, Context, Handlers) ->
 %%
 
 decode_shops_map(Shops) ->
-    capi_handler:decode_map(Shops, fun decode_shop/1).
+    capi_handler_decoder_utils:decode_map(Shops, fun decode_shop/1).
 
 decode_shop(Shop) ->
     genlib_map:compact(#{
         <<"id"          >> => Shop#domain_Shop.id,
         <<"createdAt"   >> => Shop#domain_Shop.created_at,
-        <<"isBlocked"   >> => capi_handler:is_blocked(Shop#domain_Shop.blocking),
-        <<"isSuspended" >> => capi_handler:is_suspended(Shop#domain_Shop.suspension),
-        <<"categoryID"  >> => capi_handler:decode_category_ref(Shop#domain_Shop.category),
-        <<"details"     >> => capi_handler:decode_shop_details(Shop#domain_Shop.details),
-        <<"location"    >> => capi_handler:decode_shop_location(Shop#domain_Shop.location),
+        <<"isBlocked"   >> => capi_handler_decoder_party:is_blocked(Shop#domain_Shop.blocking),
+        <<"isSuspended" >> => capi_handler_decoder_party:is_suspended(Shop#domain_Shop.suspension),
+        <<"categoryID"  >> => capi_handler_decoder_utils:decode_category_ref(Shop#domain_Shop.category),
+        <<"details"     >> => capi_handler_decoder_party:decode_shop_details(Shop#domain_Shop.details),
+        <<"location"    >> => capi_handler_decoder_party:decode_shop_location(Shop#domain_Shop.location),
         <<"contractID"  >> => Shop#domain_Shop.contract_id,
         <<"payoutToolID">> => Shop#domain_Shop.payout_tool_id,
-        <<"scheduleID"  >> => capi_handler:decode_business_schedule_ref(Shop#domain_Shop.payout_schedule),
+        <<"scheduleID"  >> => capi_handler_decoder_utils:decode_business_schedule_ref(Shop#domain_Shop.payout_schedule),
         <<"account"     >> => decode_shop_account(Shop#domain_Shop.account)
     }).
 
@@ -85,6 +85,6 @@ decode_shop_account(#domain_ShopAccount{currency = Currency, settlement = Settle
     #{
         <<"guaranteeID" >> => GuaranteeID,
         <<"settlementID">> => SettlementID,
-        <<"currency"    >> => capi_handler:decode_currency(Currency)
+        <<"currency"    >> => capi_handler_decoder_utils:decode_currency(Currency)
     }.
 

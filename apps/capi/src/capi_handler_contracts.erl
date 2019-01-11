@@ -57,24 +57,26 @@ process_request(OperationID, Req, Context, Handlers) ->
     capi_handler:process_request(OperationID, Req, Context, Handlers).
 
 decode_contracts_map(Contracts, Contractors) ->
-    capi_handler:decode_map(Contracts, fun(C) -> decode_contract(C, Contractors) end).
+    capi_handler_decoder_utils:decode_map(Contracts, fun(C) -> decode_contract(C, Contractors) end).
 
 decode_contract(Contract, Contractors) ->
     capi_handler_utils:merge_and_compact(#{
         <<"id"                  >> => Contract#domain_Contract.id,
         <<"createdAt"           >> => Contract#domain_Contract.created_at,
-        <<"contractor"          >> => capi_handler:decode_contractor(get_contractor(Contract, Contractors)),
+        <<"contractor"          >> => capi_handler_decoder_party:decode_contractor(
+            get_contractor(Contract, Contractors)
+        ),
         <<"paymentInstitutionID">> =>
-            capi_handler:decode_payment_institution_ref(Contract#domain_Contract.payment_institution),
+            capi_handler_decoder_party:decode_payment_institution_ref(Contract#domain_Contract.payment_institution),
         <<"validSince"          >> => Contract#domain_Contract.valid_since,
         <<"validUntil"          >> => Contract#domain_Contract.valid_until,
-        <<"legalAgreement"      >> => capi_handler:decode_optional(
+        <<"legalAgreement"      >> => capi_handler_decoder_utils:decode_optional(
             Contract#domain_Contract.legal_agreement,
-            fun capi_handler:decode_legal_agreement/1
+            fun capi_handler_decoder_party:decode_legal_agreement/1
         ),
-        <<"reportingPreferences">> => capi_handler:decode_optional(
+        <<"reportingPreferences">> => capi_handler_decoder_utils:decode_optional(
             Contract#domain_Contract.report_preferences,
-            fun capi_handler:decode_reporting_preferences/1
+            fun capi_handler_decoder_party:decode_reporting_preferences/1
         )
     }, decode_contract_status(Contract#domain_Contract.status)).
 

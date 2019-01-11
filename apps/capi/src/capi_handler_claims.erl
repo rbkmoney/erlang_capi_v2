@@ -81,7 +81,7 @@ process_request('CreateClaim', Req, Context, _) ->
 %     Party = capi_utils:unwrap(
 %         capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context)
 %     ),
-%     {ok, {200, [], capi_handler_utils:decode_party(Party)}};
+%     {ok, {200, [], capi_handler_utils:capi_handler_decoder_party:decode_party(Party)}};
 
 process_request('RevokeClaimByID', Req, Context, _) ->
     Call =
@@ -183,7 +183,7 @@ encode_shop_modification(#{<<"shopID">> := ShopID} = Modification) ->
             {creation, encode_shop_params(Modification)};
         <<"ShopAccountCreation">> ->
             {shop_account_creation, #payproc_ShopAccountParams{
-                currency = capi_handler:encode_currency(maps:get(<<"currency">>, Modification))
+                currency = capi_handler_encoder:encode_currency(maps:get(<<"currency">>, Modification))
             }};
         <<"ShopCategoryChange">> ->
             {category_modification, encode_category_ref(maps:get(<<"categoryID">>, Modification))};
@@ -220,7 +220,7 @@ encode_legal_agreement(LegalAgreement) ->
 
 encode_payout_tool_params(#{<<"currency">> := Currency, <<"details">> := Details}) ->
     #payproc_PayoutToolParams{
-        currency = capi_handler:encode_currency(Currency),
+        currency = capi_handler_encoder:encode_currency(Currency),
         tool_info = encode_payout_tool_info(Details)
     }.
 
@@ -254,7 +254,7 @@ encode_international_bank_details(undefined) ->
 encode_international_bank_details(Acc) ->
     #domain_InternationalBankDetails{
         bic     = genlib_map:get(<<"bic">>, Acc),
-        country = capi_handler:encode_residence(genlib_map:get(<<"countryCode">>, Acc)),
+        country = capi_handler_encoder:encode_residence(genlib_map:get(<<"countryCode">>, Acc)),
         name    = genlib_map:get(<<"name">>, Acc),
         address = genlib_map:get(<<"address">>, Acc),
         aba_rtn = genlib_map:get(<<"abartn">>, Acc)
@@ -274,7 +274,7 @@ encode_private_entity(#{<<"entityType">> := <<"RussianPrivateEntity">>} = Entity
         first_name = maps:get(<<"firstName">>, Entity),
         second_name = maps:get(<<"secondName">>, Entity),
         middle_name = maps:get(<<"middleName">>, Entity),
-        contact_info = capi_handler:encode_contact_info(maps:get(<<"contactInfo">>, Entity))
+        contact_info = capi_handler_encoder:encode_contact_info(maps:get(<<"contactInfo">>, Entity))
     }}.
 
 encode_legal_entity(#{<<"entityType">> := <<"RussianLegalEntity">>} = Entity) ->
@@ -433,14 +433,16 @@ decode_contract_modification({creation, ContractParams}) ->
     #{
         <<"contractModificationType">> => <<"ContractCreation">>,
         <<"contractor"              >> =>
-            capi_handler:decode_contractor(ContractParams#payproc_ContractParams.contractor),
+            capi_handler_decoder_party:decode_contractor(ContractParams#payproc_ContractParams.contractor),
         <<"paymentInstitutionID"    >> =>
-            capi_handler:decode_payment_institution_ref(ContractParams#payproc_ContractParams.payment_institution)
+            capi_handler_decoder_party:decode_payment_institution_ref(
+                ContractParams#payproc_ContractParams.payment_institution
+            )
     };
 decode_contract_modification({legal_agreement_binding, LegalAgreement}) ->
     #{
         <<"contractModificationType">> => <<"ContractLegalAgreementBinding">>,
-        <<"legalAgreement"          >> => capi_handler:decode_legal_agreement(LegalAgreement)
+        <<"legalAgreement"          >> => capi_handler_decoder_party:decode_legal_agreement(LegalAgreement)
     };
 decode_contract_modification({adjustment_modification, AdjustmentModification}) ->
     #payproc_ContractAdjustmentModificationUnit{
@@ -474,12 +476,12 @@ decode_contract_modification({payout_tool_modification, #payproc_PayoutToolModif
     #{
         <<"contractModificationType">> => <<"ContractPayoutToolInfoModification">>,
         <<"payoutToolID"            >> => PayoutToolID,
-        <<"details"                 >> => capi_handler:decode_payout_tool_details(ToolInfo)
+        <<"details"                 >> => capi_handler_decoder_party:decode_payout_tool_details(ToolInfo)
     };
 decode_contract_modification({report_preferences_modification, ReportPreferences}) ->
     maps:merge(
         #{<<"contractModificationType">> => <<"ContractReportingPreferencesChange">>},
-        capi_handler:decode_reporting_preferences(ReportPreferences)
+        capi_handler_decoder_party:decode_reporting_preferences(ReportPreferences)
     ).
 
 decode_shop_modification({creation, ShopParams}) ->
@@ -490,22 +492,22 @@ decode_shop_modification({creation, ShopParams}) ->
 decode_shop_modification({shop_account_creation, #payproc_ShopAccountParams{currency = Currency}}) ->
     #{
         <<"shopModificationType">> => <<"ShopAccountCreation">>,
-        <<"currency"            >> => capi_handler:decode_currency(Currency)
+        <<"currency"            >> => capi_handler_decoder_utils:decode_currency(Currency)
     };
 decode_shop_modification({category_modification, CategoryRef}) ->
     #{
         <<"shopModificationType">> => <<"ShopCategoryChange">>,
-        <<"categoryID"          >> => capi_handler:decode_category_ref(CategoryRef)
+        <<"categoryID"          >> => capi_handler_decoder_utils:decode_category_ref(CategoryRef)
     };
 decode_shop_modification({location_modification, Location}) ->
     #{
         <<"shopModificationType">> => <<"ShopLocationChange">>,
-        <<"location"            >> => capi_handler:decode_shop_location(Location)
+        <<"location"            >> => capi_handler_decoder_party:decode_shop_location(Location)
     };
 decode_shop_modification({details_modification, Details}) ->
     #{
         <<"shopModificationType">> => <<"ShopDetailsChange">>,
-        <<"details"             >> => capi_handler:decode_shop_details(Details)
+        <<"details"             >> => capi_handler_decoder_party:decode_shop_details(Details)
     };
 decode_shop_modification({contract_modification, ContractMod}) ->
     #{
@@ -521,16 +523,16 @@ decode_shop_modification({payout_tool_modification, PayoutToolID}) ->
 decode_shop_modification({payout_schedule_modification, #payproc_ScheduleModification{schedule = ScheduleRef}}) ->
     genlib_map:compact(#{
         <<"shopModificationType">> => <<"ShopPayoutScheduleChange">>,
-        <<"scheduleID"          >> => capi_handler:decode_business_schedule_ref(ScheduleRef)
+        <<"scheduleID"          >> => capi_handler_decoder_utils:decode_business_schedule_ref(ScheduleRef)
     }).
 
 decode_payout_tool_params(#payproc_PayoutToolParams{currency = Currency, tool_info = ToolInfo}) ->
-    capi_handler:decode_payout_tool_params(Currency, ToolInfo).
+    capi_handler_decoder_party:decode_payout_tool_params(Currency, ToolInfo).
 
 decode_shop_params(ShopParams) ->
     #{
-        <<"location"    >> => capi_handler:decode_shop_location(ShopParams#payproc_ShopParams.location),
-        <<"details"     >> => capi_handler:decode_shop_details(ShopParams#payproc_ShopParams.details),
+        <<"location"    >> => capi_handler_decoder_party:decode_shop_location(ShopParams#payproc_ShopParams.location),
+        <<"details"     >> => capi_handler_decoder_party:decode_shop_details(ShopParams#payproc_ShopParams.details),
         <<"contractID"  >> => ShopParams#payproc_ShopParams.contract_id,
         <<"payoutToolID">> => ShopParams#payproc_ShopParams.payout_tool_id
     }.

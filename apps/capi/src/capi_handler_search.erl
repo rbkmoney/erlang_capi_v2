@@ -121,7 +121,7 @@ process_search_request(QueryType, Query, Req, Context, Opts = #{thrift_fun := Th
         merchant_stat,
         ThriftFun,
         [
-            capi_handler:encode_stat_request(
+            capi_handler_encoder:encode_stat_request(
                 capi_handler_utils:create_dsl(QueryType, Query, QueryParams),
                 ContinuationToken
             )
@@ -274,14 +274,14 @@ decode_stat_invoice(Invoice, _Context) ->
         <<"dueDate"    >> => Invoice#merchstat_StatInvoice.due,
         <<"amount"     >> => Invoice#merchstat_StatInvoice.amount,
         <<"currency"   >> => Invoice#merchstat_StatInvoice.currency_symbolic_code,
-        <<"metadata"   >> => capi_handler:decode_context(Invoice#merchstat_StatInvoice.context),
+        <<"metadata"   >> => capi_handler_decoder_utils:decode_context(Invoice#merchstat_StatInvoice.context),
         <<"product"    >> => Invoice#merchstat_StatInvoice.product,
         <<"description">> => Invoice#merchstat_StatInvoice.description,
-        <<"cart"       >> => capi_handler:decode_invoice_cart(Invoice#merchstat_StatInvoice.cart)
+        <<"cart"       >> => capi_handler_decoder_invoicing:decode_invoice_cart(Invoice#merchstat_StatInvoice.cart)
     }, decode_stat_invoice_status(Invoice#merchstat_StatInvoice.status)).
 
 decode_stat_invoice_status(Status) ->
-    capi_handler:decode_invoice_status(merchstat_to_domain(Status)).
+    capi_handler_decoder_invoicing:decode_invoice_status(merchstat_to_domain(Status)).
 
 decode_stat_payment(Stat, Context) ->
     capi_handler_utils:merge_and_compact(#{
@@ -296,8 +296,10 @@ decode_stat_payment(Stat, Context) ->
         <<"currency"       >> => Stat#merchstat_StatPayment.currency_symbolic_code,
         <<"payer"          >> => decode_stat_payer(Stat#merchstat_StatPayment.payer),
         <<"geoLocationInfo">> => decode_geo_location_info(Stat#merchstat_StatPayment.location_info),
-        <<"metadata"       >> => capi_handler:decode_context(Stat#merchstat_StatPayment.context),
-        <<"makeRecurrent"  >> => capi_handler:decode_make_recurrent(Stat#merchstat_StatPayment.make_recurrent),
+        <<"metadata"       >> => capi_handler_decoder_utils:decode_context(Stat#merchstat_StatPayment.context),
+        <<"makeRecurrent"  >> => capi_handler_decoder_invoicing:decode_make_recurrent(
+            Stat#merchstat_StatPayment.make_recurrent
+        ),
         <<"statusChangedAt">> => decode_status_changed_at(Stat#merchstat_StatPayment.status)
     }, decode_stat_payment_status(Stat#merchstat_StatPayment.status, Context)).
 
@@ -318,7 +320,7 @@ decode_stat_payer({recurrent, RecurrentPayer}) ->
             <<"phoneNumber">> => PhoneNumber,
             <<"email"      >> => Email
         }),
-        <<"recurrentParentPayment">> => capi_handler:decode_recurrent_parent(RecurrentParent)
+        <<"recurrentParentPayment">> => capi_handler_decoder_invoicing:decode_recurrent_parent(RecurrentParent)
     };
 decode_stat_payer({payment_resource, PaymentResource}) ->
     #merchstat_PaymentResourcePayer{
@@ -345,16 +347,16 @@ decode_stat_payer({payment_resource, PaymentResource}) ->
     }).
 
 decode_stat_payment_flow(Flow) ->
-    capi_handler:decode_flow(merchstat_to_domain(Flow)).
+    capi_handler_decoder_invoicing:decode_flow(merchstat_to_domain(Flow)).
 
 decode_stat_payment_status(PaymentStatus, Context) ->
-    capi_handler:decode_payment_status(merchstat_to_domain(PaymentStatus), Context).
+    capi_handler_decoder_invoicing:decode_payment_status(merchstat_to_domain(PaymentStatus), Context).
 
 decode_stat_payment_tool_token(PaymentTool) ->
-    capi_handler:decode_payment_tool_token(merchstat_to_domain(PaymentTool)).
+    capi_handler_decoder_party:decode_payment_tool_token(merchstat_to_domain(PaymentTool)).
 
 decode_stat_payment_tool_details(PaymentTool) ->
-    capi_handler:decode_payment_tool_details(merchstat_to_domain(PaymentTool)).
+    capi_handler_decoder_party:decode_payment_tool_details(merchstat_to_domain(PaymentTool)).
 
 decode_geo_location_info(#geo_ip_LocationInfo{city_geo_id = CityID, country_geo_id = CountryID}) ->
     #{
@@ -400,7 +402,7 @@ decode_stat_payout_status({Status, _}) ->
     }.
 
 decode_stat_payout_tool_details(PayoutType) ->
-    capi_handler:decode_payout_tool_details(merchstat_to_domain(PayoutType)).
+    capi_handler_decoder_party:decode_payout_tool_details(merchstat_to_domain(PayoutType)).
 
 decode_stat_payout_summary(PayoutSummary) when is_list(PayoutSummary) ->
     [decode_stat_payout_summary_item(PayoutSummaryItem) || PayoutSummaryItem <- PayoutSummary];
@@ -433,5 +435,5 @@ decode_stat_refund(Refund, Context) ->
     ).
 
 decode_stat_refund_status(RefundStatus, Context) ->
-    capi_handler:decode_refund_status(merchstat_to_domain(RefundStatus), Context).
+    capi_handler_decoder_invoicing:decode_refund_status(merchstat_to_domain(RefundStatus), Context).
 
