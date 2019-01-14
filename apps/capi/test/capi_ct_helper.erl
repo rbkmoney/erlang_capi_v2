@@ -9,12 +9,14 @@
 -export([start_app/2]).
 -export([start_capi/1]).
 -export([issue_token/2]).
+-export([issue_token/3]).
 -export([get_context/1]).
 -export([get_keysource/2]).
 -export([start_mocked_service_sup/1]).
 -export([stop_mocked_service_sup/1]).
 -export([mock_services/2]).
 -export([mock_services_/2]).
+-export([get_lifetime/0]).
 
 -define(CAPI_IP                     , "::").
 -define(CAPI_PORT                   , 8080).
@@ -106,6 +108,12 @@ get_keysource(Key, Config) ->
 issue_token(ACL, LifeTime) ->
     issue_token(?STRING, ACL, LifeTime).
 
+-spec issue_token(_, _, _) ->
+    {ok, binary()} |
+    {error,
+        nonexistent_signee
+    }.
+
 issue_token(PartyID, ACL, LifeTime) ->
     Claims = #{?STRING => ?STRING},
     capi_authorizer_jwt:issue({{PartyID, capi_acl:from_list(ACL)}, Claims}, LifeTime).
@@ -193,3 +201,16 @@ make_url(ServiceName, Port) ->
 
 make_path(ServiceName) ->
     "/" ++ atom_to_list(ServiceName).
+
+-spec get_lifetime() ->
+    map().
+
+get_lifetime() ->
+    get_lifetime(0, 0, 7).
+
+get_lifetime(YY, MM, DD) ->
+    #{
+       <<"years">>  => YY,
+       <<"months">> => MM,
+       <<"days">>   => DD
+    }.
