@@ -86,6 +86,7 @@ start_capi(Config) ->
             jwt => #{
                 signee => capi,
                 keyset => #{
+                    % TODO use crypto:generate_key here when move on 21 Erlang
                     capi => {pem_file, get_keysource("keys/local/private.pem", Config)}
                 }
             }
