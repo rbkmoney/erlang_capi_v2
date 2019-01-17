@@ -4,17 +4,16 @@
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
 
 -behaviour(capi_handler).
--export([process_request/4]).
+-export([process_request/3]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context(),
-    Handlers    :: list(module())
+    Context     :: capi_handler:processing_context()
 ) ->
-    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
+    {ok | error, capi_handler:response() | noimpl}.
 
-process_request('CreateInvoiceTemplate', Req, Context, _) ->
+process_request('CreateInvoiceTemplate', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     try
         CallArgs = [encode_invoice_tpl_create_params(PartyID, maps:get('InvoiceTemplateCreateParams', Req))],
@@ -45,7 +44,7 @@ process_request('CreateInvoiceTemplate', Req, Context, _) ->
             {ok, {400, [], capi_handler_utils:logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}}
     end;
 
-process_request('GetInvoiceTemplateByID', Req, Context, _) ->
+process_request('GetInvoiceTemplateByID', Req, Context) ->
     Call = {invoice_templating, 'Get', [maps:get('invoiceTemplateID', Req)]},
     case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
         {ok, InvoiceTpl} ->
@@ -58,7 +57,7 @@ process_request('GetInvoiceTemplateByID', Req, Context, _) ->
             {ok, {404, [], capi_handler_utils:general_error(<<"Invoice template not found">>)}}
     end;
 
-process_request('UpdateInvoiceTemplate', Req, Context, _) ->
+process_request('UpdateInvoiceTemplate', Req, Context) ->
     try
         Params = encode_invoice_tpl_update_params(maps:get('InvoiceTemplateUpdateParams', Req)),
         Call = {invoice_templating, 'Update', [maps:get('invoiceTemplateID', Req), Params]},
@@ -95,7 +94,7 @@ process_request('UpdateInvoiceTemplate', Req, Context, _) ->
             {ok, {400, [], capi_handler_utils:logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}}
     end;
 
-process_request('DeleteInvoiceTemplate', Req, Context, _) ->
+process_request('DeleteInvoiceTemplate', Req, Context) ->
     Call = {invoice_templating, 'Delete', [maps:get('invoiceTemplateID', Req)]},
     case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
         {ok, _R} ->
@@ -115,7 +114,7 @@ process_request('DeleteInvoiceTemplate', Req, Context, _) ->
             end
     end;
 
-process_request('CreateInvoiceWithTemplate', Req, Context, _) ->
+process_request('CreateInvoiceWithTemplate', Req, Context) ->
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
     InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
     try
@@ -149,7 +148,7 @@ capi_handler_utils:        service_call_with([user_info, party_creation], Call, 
             {ok, {400, [], capi_handler_utils:logic_error(invalidRequest, <<"Currency is required for the amount">>)}}
     end;
 
-process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context, _) ->
+process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
     Result =
         capi_handler_decoder_invoicing:construct_payment_methods(
             invoice_templating,
@@ -169,8 +168,8 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context, _) ->
 
 %%
 
-process_request(OperationID, Req, Context, Handlers) ->
-    capi_handler:process_request(OperationID, Req, Context, Handlers).
+process_request(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
 
 encode_invoice_tpl_create_params(PartyID, Params) ->
     Details = encode_invoice_tpl_details(genlib_map:get(<<"details">>, Params)),

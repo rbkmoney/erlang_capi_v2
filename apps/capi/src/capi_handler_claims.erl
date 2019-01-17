@@ -3,24 +3,23 @@
 -include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
 
 -behaviour(capi_handler).
--export([process_request/4]).
+-export([process_request/3]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context(),
-    Handlers    :: list(module())
+    Context     :: capi_handler:processing_context()
 ) ->
-    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
+    {ok | error, capi_handler:response() | noimpl}.
 
-process_request('GetClaims', Req, Context, _) ->
+process_request('GetClaims', Req, Context) ->
     Call = {party_management, 'GetClaims', []},
     Claims = capi_utils:unwrap(
         capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context)
     ),
     {ok, {200, [], decode_claims(filter_claims(maps:get('claimStatus', Req), Claims))}};
 
-process_request('GetClaimByID', Req, Context, _) ->
+process_request('GetClaimByID', Req, Context) ->
     Call = {
         party_management,
         'GetClaim',
@@ -39,7 +38,7 @@ process_request('GetClaimByID', Req, Context, _) ->
             {ok, {404, [], capi_handler_utils:general_error(<<"Claim not found">>)}}
     end;
 
-process_request('CreateClaim', Req, Context, _) ->
+process_request('CreateClaim', Req, Context) ->
     try
         Changeset = encode_claim_changeset(maps:get('ClaimChangeset', Req)),
         Call = {party_management, 'CreateClaim', [capi_handler_utils:get_party_id(Context), Changeset]},
@@ -71,7 +70,7 @@ process_request('CreateClaim', Req, Context, _) ->
     end;
 
 % TODO disabled temporary, exception handling must be fixed befor enabling
-% process_request('UpdateClaimByID', Req, Context, _) ->
+% process_request('UpdateClaimByID', Req, Context) ->
 %     Call =
 %         {party_management, 'UpdateClaim', [
 %             genlib:to_int(maps:get('claimID', Req)),
@@ -83,7 +82,7 @@ process_request('CreateClaim', Req, Context, _) ->
 %     ),
 %     {ok, {200, [], capi_handler_utils:capi_handler_decoder_party:decode_party(Party)}};
 
-process_request('RevokeClaimByID', Req, Context, _) ->
+process_request('RevokeClaimByID', Req, Context) ->
     Call =
         {party_management, 'RevokeClaim', [
             genlib:to_int(maps:get('claimID', Req)),
@@ -108,8 +107,8 @@ process_request('RevokeClaimByID', Req, Context, _) ->
 
 %%
 
-process_request(OperationID, Req, Context, Handlers) ->
-    capi_handler:process_request(OperationID, Req, Context, Handlers).
+process_request(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
 
 filter_claims(ClaimStatus, Claims) ->
     lists:filter(

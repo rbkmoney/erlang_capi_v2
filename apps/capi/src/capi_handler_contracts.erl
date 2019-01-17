@@ -4,21 +4,20 @@
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
 
 -behaviour(capi_handler).
--export([process_request/4]).
+-export([process_request/3]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context(),
-    Handlers    :: list(module())
+    Context     :: capi_handler:processing_context()
 ) ->
-    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
+    {ok | error, capi_handler:response() | noimpl}.
 
-process_request('GetContracts', _Req, Context, _) ->
+process_request('GetContracts', _Req, Context) ->
     Party = capi_utils:unwrap(capi_handler_utils:get_my_party(Context)),
     {ok, {200, [], decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
 
-process_request('GetContractByID', Req, Context, _) ->
+process_request('GetContractByID', Req, Context) ->
     ContractID = maps:get('contractID', Req),
     Party = capi_utils:unwrap(capi_handler_utils:get_my_party(Context)),
     case genlib_map:get(ContractID, Party#domain_Party.contracts) of
@@ -28,7 +27,7 @@ process_request('GetContractByID', Req, Context, _) ->
             {ok, {200, [], decode_contract(Contract, Party#domain_Party.contractors)}}
     end;
 
-process_request('GetContractAdjustments', Req, Context, _) ->
+process_request('GetContractAdjustments', Req, Context) ->
     case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
         {ok, #domain_Contract{adjustments = Adjustments}} ->
             Resp = [decode_contract_adjustment(A) || A <- Adjustments],
@@ -37,7 +36,7 @@ process_request('GetContractAdjustments', Req, Context, _) ->
             {ok, {404, [], capi_handler_utils:general_error(<<"Contract not found">>)}}
     end;
 
-process_request('GetContractAdjustmentByID', Req, Context, _) ->
+process_request('GetContractAdjustmentByID', Req, Context) ->
     case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
         {ok, #domain_Contract{adjustments = Adjustments}} ->
             AdjustmentID = maps:get('adjustmentID', Req),
@@ -53,8 +52,8 @@ process_request('GetContractAdjustmentByID', Req, Context, _) ->
 
 %%
 
-process_request(OperationID, Req, Context, Handlers) ->
-    capi_handler:process_request(OperationID, Req, Context, Handlers).
+process_request(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
 
 decode_contracts_map(Contracts, Contractors) ->
     capi_handler_decoder_utils:decode_map(Contracts, fun(C) -> decode_contract(C, Contractors) end).

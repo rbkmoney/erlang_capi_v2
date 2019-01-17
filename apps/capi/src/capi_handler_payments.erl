@@ -4,17 +4,16 @@
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
 
 -behaviour(capi_handler).
--export([process_request/4]).
+-export([process_request/3]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context(),
-    Handlers    :: list(module())
+    Context     :: capi_handler:processing_context()
 ) ->
-    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
+    {ok | error, capi_handler:response() | noimpl}.
 
-process_request('CreatePayment', Req, Context, _) ->
+process_request('CreatePayment', Req, Context) ->
     InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('PaymentParams', Req),
     Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
@@ -84,7 +83,7 @@ process_request('CreatePayment', Req, Context, _) ->
             )}}
     end;
 
-process_request('GetPayments', Req, Context, _) ->
+process_request('GetPayments', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
         {ok, #'payproc_Invoice'{payments = Payments}} ->
@@ -98,7 +97,7 @@ process_request('GetPayments', Req, Context, _) ->
             end
     end;
 
-process_request('GetPaymentByID', Req, Context, _) ->
+process_request('GetPaymentByID', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     case capi_handler_utils:get_payment_by_id(InvoiceID, maps:get(paymentID, Req), Context) of
         {ok, Payment} ->
@@ -114,7 +113,7 @@ process_request('GetPaymentByID', Req, Context, _) ->
             end
     end;
 
-process_request('CancelPayment', Req, Context, _) ->
+process_request('CancelPayment', Req, Context) ->
     CallArgs = [maps:get(invoiceID, Req), maps:get(paymentID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))],
     Call = {invoicing, 'CancelPayment', CallArgs},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
@@ -146,7 +145,7 @@ process_request('CancelPayment', Req, Context, _) ->
             end
     end;
 
-process_request('CapturePayment', Req, Context, _) ->
+process_request('CapturePayment', Req, Context) ->
     CallArgs = [maps:get(invoiceID, Req), maps:get(paymentID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))],
     Call = {invoicing, 'CapturePayment', CallArgs},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
@@ -178,7 +177,7 @@ process_request('CapturePayment', Req, Context, _) ->
             end
     end;
 
-process_request('CreateRefund', Req, Context, _) ->
+process_request('CreateRefund', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
     RefundParams = maps:get('RefundParams', Req),
@@ -243,7 +242,7 @@ process_request('CreateRefund', Req, Context, _) ->
             end
     end;
 
-process_request('GetRefunds', Req, Context, _) ->
+process_request('GetRefunds', Req, Context) ->
     case capi_handler_utils:get_payment_by_id(maps:get(invoiceID, Req), maps:get(paymentID, Req), Context) of
         {ok, #payproc_InvoicePayment{refunds = Refunds}} ->
             {ok, {200, [], [capi_handler_decoder_invoicing:decode_refund(R, Context) || R <- Refunds]}};
@@ -258,7 +257,7 @@ process_request('GetRefunds', Req, Context, _) ->
             end
     end;
 
-process_request('GetRefundByID', Req, Context, _) ->
+process_request('GetRefundByID', Req, Context) ->
     Call =
         {invoicing, 'GetPaymentRefund', [maps:get(invoiceID, Req), maps:get(paymentID, Req), maps:get(refundID, Req)]},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
@@ -279,8 +278,8 @@ process_request('GetRefundByID', Req, Context, _) ->
 
 %%
 
-process_request(OperationID, Req, Context, Handlers) ->
-    capi_handler:process_request(OperationID, Req, Context, Handlers).
+process_request(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
 
 %%
 

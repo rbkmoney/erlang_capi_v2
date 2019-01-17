@@ -11,7 +11,7 @@
 -export([handle_request/3]).
 
 %% Handler behaviour
--export([process_request/4]).
+
 -export_type([operation_id/0]).
 -export_type([request_data/0]).
 -export_type([request_context/0]).
@@ -21,10 +21,9 @@
 -callback process_request(
     OperationID :: operation_id(),
     Req         :: request_data(),
-    Context     :: processing_context(),
-    Handlers    :: list(module())
+    Context     :: processing_context()
 ) ->
-    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
+    {ok | error, response() | noimpl}.
 
 %% @WARNING Must be refactored in case of different classes of users using this API
 -define(REALM, <<"external">>).
@@ -102,12 +101,17 @@ handle_request(OperationID, Req, SwagContext = #{auth_context := AuthContext}) -
     Context     :: processing_context(),
     Handlers    :: list(module())
 ) ->
-    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
+    {ok | error,   response()}.
 
 process_request(OperationID, _Req, _Context, []) ->
     erlang:throw({handler_function_clause, OperationID});
 process_request(OperationID, Req, Context, [Handler | Rest]) ->
-    Handler:process_request(OperationID, Req, Context, Rest).
+    case Handler:process_request(OperationID, Req, Context) of
+        {error, noimpl} ->
+            process_request(OperationID, Req, Context, Rest);
+        Response ->
+            Response
+    end.
 
 %%
 

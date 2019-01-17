@@ -4,19 +4,18 @@
 -include_lib("dmsl/include/dmsl_reporting_thrift.hrl").
 
 -behaviour(capi_handler).
--export([process_request/4]).
+-export([process_request/3]).
 
 -define(DEFAULT_URL_LIFETIME, 60). % seconds
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context(),
-    Handlers    :: list(module())
+    Context     :: capi_handler:processing_context()
 ) ->
-    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
+    {ok | error, capi_handler:response() | noimpl}.
 
-process_request('GetReports', Req, Context, _) ->
+process_request('GetReports', Req, Context) ->
     ReportRequest = #reports_ReportRequest{
         party_id   = capi_handler_utils:get_party_id(Context),
         shop_id    = maps:get(shopID, Req),
@@ -41,7 +40,7 @@ process_request('GetReports', Req, Context, _) ->
             end
     end;
 
-process_request('GetReport', Req, Context, _) ->
+process_request('GetReport', Req, Context) ->
     PartyId  = capi_handler_utils:get_party_id(Context),
     ShopId   = maps:get(shopID, Req),
     ReportId = maps:get(reportID, Req),
@@ -53,7 +52,7 @@ process_request('GetReport', Req, Context, _) ->
             {ok, {404, [], capi_handler_utils:general_error(<<"Report not found">>)}}
     end;
 
-process_request('CreateReport', Req, Context, _) ->
+process_request('CreateReport', Req, Context) ->
     PartyId = capi_handler_utils:get_party_id(Context),
     ShopId = maps:get(shopID, Req),
     ReportParams = maps:get('ReportParams', Req),
@@ -84,7 +83,7 @@ process_request('CreateReport', Req, Context, _) ->
             end
     end;
 
-process_request('DownloadFile', Req, Context, _) ->
+process_request('DownloadFile', Req, Context) ->
     Call = {
         reporting,
         'GetReport',
@@ -105,8 +104,8 @@ process_request('DownloadFile', Req, Context, _) ->
 
 %%
 
-process_request(OperationID, Req, Context, Handlers) ->
-    capi_handler:process_request(OperationID, Req, Context, Handlers).
+process_request(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
 
 limit_exceeded_error(Limit) ->
     capi_handler_utils:logic_error(<<"limitExceeded">>, io_lib:format("Max limit: ~p", [Limit])).

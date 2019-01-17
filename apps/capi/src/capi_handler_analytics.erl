@@ -3,37 +3,36 @@
 -include_lib("dmsl/include/dmsl_merch_stat_thrift.hrl").
 
 -behaviour(capi_handler).
--export([process_request/4]).
+-export([process_request/3]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context(),
-    Handlers    :: list(module())
+    Context     :: capi_handler:processing_context()
 ) ->
-    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
+    {ok | error, capi_handler:response() | noimpl}.
 
-process_request('GetPaymentConversionStats', Req, Context, _) ->
+process_request('GetPaymentConversionStats', Req, Context) ->
     process_merchant_stat(payments_conversion_stat, Req, Context);
 
-process_request('GetPaymentRevenueStats', Req, Context, _) ->
+process_request('GetPaymentRevenueStats', Req, Context) ->
     process_merchant_stat(payments_turnover, Req, Context);
 
-process_request('GetPaymentGeoStats', Req, Context, _) ->
+process_request('GetPaymentGeoStats', Req, Context) ->
     process_merchant_stat(payments_geo_stat, Req, Context);
 
-process_request('GetPaymentRateStats', Req, Context, _) ->
+process_request('GetPaymentRateStats', Req, Context) ->
     process_merchant_stat(customers_rate_stat, Req, Context);
 
-process_request('GetPaymentMethodStats', Req, Context, _) ->
+process_request('GetPaymentMethodStats', Req, Context) ->
     bankCard =  maps:get(paymentMethod, Req),
     StatType = payments_pmt_cards_stat,
     process_merchant_stat(StatType, Req, Context);
 
 %%
 
-process_request(OperationID, Req, Context, Handlers) ->
-    capi_handler:process_request(OperationID, Req, Context, Handlers).
+process_request(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
 
 create_stat_dsl(StatType, Req, Context) ->
     FromTime = capi_handler_utils:get_time('fromTime', Req),

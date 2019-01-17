@@ -4,17 +4,16 @@
 -include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
 
 -behaviour(capi_handler).
--export([process_request/4]).
+-export([process_request/3]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context(),
-    Handlers    :: list(module())
+    Context     :: capi_handler:processing_context()
 ) ->
-    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
+    {ok | error, capi_handler:response() | noimpl}.
 
-process_request('CreateWebhook', Req, Context, _) ->
+process_request('CreateWebhook', Req, Context) ->
     WebhookParams = encode_webhook_params(capi_handler_utils:get_party_id(Context), maps:get('Webhook', Req)),
     ShopID = validate_webhook_params(WebhookParams),
     Call = {party_management, 'GetShop', [ShopID]},
@@ -28,13 +27,13 @@ process_request('CreateWebhook', Req, Context, _) ->
             {ok, {400, [], capi_handler_utils:logic_error(invalidShopID, <<"Shop not found">>)}}
     end;
 
-process_request('GetWebhooks', _Req, Context, _) ->
+process_request('GetWebhooks', _Req, Context) ->
     Webhooks = capi_utils:unwrap(
         capi_handler_utils:service_call_with([party_id], {webhook_manager, 'GetList', []}, Context)
     ),
     {ok, {200, [], [decode_webhook(V) || V <- Webhooks]}};
 
-process_request('GetWebhookByID', Req, Context, _) ->
+process_request('GetWebhookByID', Req, Context) ->
     case encode_webhook_id(maps:get(webhookID, Req)) of
         {ok, WebhookID} ->
             case get_webhook(WebhookID, Context) of
@@ -47,7 +46,7 @@ process_request('GetWebhookByID', Req, Context, _) ->
             {ok, {404, [], capi_handler_utils:general_error(<<"Webhook not found">>)}}
     end;
 
-process_request('DeleteWebhookByID', Req, Context, _) ->
+process_request('DeleteWebhookByID', Req, Context) ->
     case encode_webhook_id(maps:get(webhookID, Req)) of
         {ok, WebhookID} ->
             case delete_webhook(WebhookID, Context) of
@@ -62,8 +61,8 @@ process_request('DeleteWebhookByID', Req, Context, _) ->
 
 %%
 
-process_request(OperationID, Req, Context, Handlers) ->
-    capi_handler:process_request(OperationID, Req, Context, Handlers).
+process_request(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
 
 validate_webhook_params(#webhooker_WebhookParams{event_filter = EventFilter}) ->
     validate_event_filter(EventFilter).

@@ -3,17 +3,16 @@
 -include_lib("dmsl/include/dmsl_merch_stat_thrift.hrl").
 
 -behaviour(capi_handler).
--export([process_request/4]).
+-export([process_request/3]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context(),
-    Handlers    :: list(module())
+    Context     :: capi_handler:processing_context()
 ) ->
-    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
+    {ok | error, capi_handler:response() | noimpl}.
 
-process_request('SearchInvoices', Req, Context, _) ->
+process_request('SearchInvoices', Req, Context) ->
     Query = #{
         <<"merchant_id"              >> => capi_handler_utils:get_party_id(Context),
         <<"shop_id"                  >> => genlib_map:get('shopID', Req),
@@ -43,7 +42,7 @@ process_request('SearchInvoices', Req, Context, _) ->
     },
     process_search_request(invoices, Query, Req, Context, Opts);
 
-process_request('SearchPayments', Req, Context, _) ->
+process_request('SearchPayments', Req, Context) ->
     Query = #{
         <<"merchant_id"              >> => capi_handler_utils:get_party_id(Context),
         <<"shop_id"                  >> => genlib_map:get('shopID', Req),
@@ -71,7 +70,7 @@ process_request('SearchPayments', Req, Context, _) ->
     },
     process_search_request(payments, Query, Req, Context, Opts);
 
-process_request('SearchPayouts', Req, Context, _) ->
+process_request('SearchPayouts', Req, Context) ->
     Query = #{
         <<"merchant_id"    >> => capi_handler_utils:get_party_id(Context),
         <<"shop_id"        >> => genlib_map:get('shopID', Req),
@@ -87,7 +86,7 @@ process_request('SearchPayouts', Req, Context, _) ->
     },
     process_search_request(payouts, Query, Req, Context, Opts);
 
-process_request('SearchRefunds', Req, Context, _) ->
+process_request('SearchRefunds', Req, Context) ->
     Query = #{
         <<"merchant_id"              >> => capi_handler_utils:get_party_id(Context),
         <<"shop_id"                  >> => genlib_map:get('shopID', Req),
@@ -108,8 +107,8 @@ process_request('SearchRefunds', Req, Context, _) ->
 
 %%
 
-process_request(OperationID, Req, Context, Handlers) ->
-    capi_handler:process_request(OperationID, Req, Context, Handlers).
+process_request(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
 
 process_search_request(QueryType, Query, Req, Context, Opts = #{thrift_fun := ThriftFun}) ->
     QueryParams = #{

@@ -5,17 +5,16 @@
 -include_lib("dmsl/include/dmsl_payout_processing_thrift.hrl").
 
 -behaviour(capi_handler).
--export([process_request/4]).
+-export([process_request/3]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context(),
-    Handlers    :: list(module())
+    Context     :: capi_handler:processing_context()
 ) ->
-    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
+    {ok | error, capi_handler:response() | noimpl}.
 
-process_request('GetPayoutTools', Req, Context, _) ->
+process_request('GetPayoutTools', Req, Context) ->
     case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
         {ok, #domain_Contract{payout_tools = PayoutTools}} ->
             {ok, {200, [], [decode_payout_tool(P) || P <- PayoutTools]}};
@@ -23,7 +22,7 @@ process_request('GetPayoutTools', Req, Context, _) ->
             {ok, {404, [], capi_handler_utils:general_error(<<"Contract not found">>)}}
     end;
 
-process_request('GetPayoutToolByID', Req, Context, _) ->
+process_request('GetPayoutToolByID', Req, Context) ->
     case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
         {ok, #domain_Contract{payout_tools = PayoutTools}} ->
             PayoutToolID = maps:get('payoutToolID', Req),
@@ -37,7 +36,7 @@ process_request('GetPayoutToolByID', Req, Context, _) ->
             {ok, {404, [], capi_handler_utils:general_error(<<"Contract not found">>)}}
     end;
 
-process_request('GetPayout', Req, Context, _) ->
+process_request('GetPayout', Req, Context) ->
     PayoutID = maps:get(payoutID, Req),
     case capi_handler_utils:service_call({payouts, 'Get', [PayoutID]}, Context) of
         {ok, Payout} ->
@@ -51,7 +50,7 @@ process_request('GetPayout', Req, Context, _) ->
             {ok, {404, [], capi_handler_utils:general_error(<<"Payout not found">>)}}
     end;
 
-process_request('CreatePayout', Req, Context, _) ->
+process_request('CreatePayout', Req, Context) ->
     CreateRequest = encode_payout_params(
         capi_handler_utils:get_party_id(Context),
         maps:get('PayoutParams', Req)
@@ -71,7 +70,7 @@ process_request('CreatePayout', Req, Context, _) ->
             end
     end;
 
-process_request('GetScheduleByRef', Req, Context, _) ->
+process_request('GetScheduleByRef', Req, Context) ->
     case get_schedule_by_id(genlib:to_int(maps:get(scheduleID, Req)), Context) of
         {ok, Schedule} ->
             {ok, {200, [], decode_business_schedule(Schedule)}};
@@ -81,8 +80,8 @@ process_request('GetScheduleByRef', Req, Context, _) ->
 
 %%
 
-process_request(OperationID, Req, Context, Handlers) ->
-    capi_handler:process_request(OperationID, Req, Context, Handlers).
+process_request(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
 
 check_party_in_payout(PartyID, #payout_processing_Payout{party_id = PartyID}) ->
     true;

@@ -3,17 +3,16 @@
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
 
 -behaviour(capi_handler).
--export([process_request/4]).
+-export([process_request/3]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context(),
-    Handlers    :: list(module())
+    Context     :: capi_handler:processing_context()
 ) ->
-    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
+    {ok | error, capi_handler:response() | noimpl}.
 
-process_request('GetLocationsNames', Req, Context, _) ->
+process_request('GetLocationsNames', Req, Context) ->
     CallArgs = [ordsets:from_list(maps:get('geoIDs', Req)), maps:get('language', Req)],
     Call = {geo_ip_service, 'GetLocationName', CallArgs},
     case capi_handler_utils:service_call(Call, Context) of
@@ -31,8 +30,8 @@ process_request('GetLocationsNames', Req, Context, _) ->
     end;
 %%
 
-process_request(OperationID, Req, Context, Handlers) ->
-    capi_handler:process_request(OperationID, Req, Context, Handlers).
+process_request(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
 
 decode_location_name(GeoID, Name) ->
     #{

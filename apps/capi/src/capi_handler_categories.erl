@@ -3,21 +3,20 @@
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
 
 -behaviour(capi_handler).
--export([process_request/4]).
+-export([process_request/3]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context(),
-    Handlers    :: list(module())
+    Context     :: capi_handler:processing_context()
 ) ->
-    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
+    {ok | error, capi_handler:response() | noimpl}.
 
-process_request('GetCategories', _Req, #{woody_context := WoodyContext}, _) ->
+process_request('GetCategories', _Req, #{woody_context := WoodyContext}) ->
     Categories = capi_utils:unwrap(capi_domain:get_categories(WoodyContext)),
     {ok, {200, [], [decode_category(C) || C <- Categories]}};
 
-process_request('GetCategoryByRef', Req, Context, _) ->
+process_request('GetCategoryByRef', Req, Context) ->
     case get_category_by_id(genlib:to_int(maps:get(categoryID, Req)), Context) of
         {ok, Category} ->
             {ok, {200, [], decode_category(Category)}};
@@ -27,8 +26,8 @@ process_request('GetCategoryByRef', Req, Context, _) ->
 
 %%
 
-process_request(OperationID, Req, Context, Handlers) ->
-    capi_handler:process_request(OperationID, Req, Context, Handlers).
+process_request(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
 
 get_category_by_id(CategoryID, #{woody_context := WoodyContext}) ->
     CategoryRef = {category, #domain_CategoryRef{id = CategoryID}},

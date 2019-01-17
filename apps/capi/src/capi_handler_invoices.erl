@@ -4,17 +4,16 @@
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
 
 -behaviour(capi_handler).
--export([process_request/4]).
+-export([process_request/3]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context(),
-    Handlers    :: list(module())
+    Context     :: capi_handler:processing_context()
 ) ->
-    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
+    {ok | error, capi_handler:response() | noimpl}.
 
-process_request('CreateInvoice', Req, Context, _) ->
+process_request('CreateInvoice', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     try
         Call = {invoicing, 'Create', [encode_invoice_params(PartyID, maps:get('InvoiceParams', Req))]},
@@ -41,7 +40,7 @@ process_request('CreateInvoice', Req, Context, _) ->
             {ok, {400, [], capi_handler_utils:logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)}}
     end;
 
-process_request('CreateInvoiceAccessToken', Req, Context, _) ->
+process_request('CreateInvoiceAccessToken', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
         {ok, #'payproc_Invoice'{}} ->
@@ -59,7 +58,7 @@ process_request('CreateInvoiceAccessToken', Req, Context, _) ->
             end
     end;
 
-process_request('GetInvoiceByID', Req, Context, _) ->
+process_request('GetInvoiceByID', Req, Context) ->
     case capi_handler_utils:get_invoice_by_id(maps:get(invoiceID, Req), Context) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             {ok, {200, [], capi_handler_decoder_invoicing:decode_invoice(Invoice)}};
@@ -72,7 +71,7 @@ process_request('GetInvoiceByID', Req, Context, _) ->
             end
     end;
 
-process_request('FulfillInvoice', Req, Context, _) ->
+process_request('FulfillInvoice', Req, Context) ->
     Call = {invoicing, 'Fulfill', [maps:get(invoiceID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))]},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _} ->
@@ -92,7 +91,7 @@ process_request('FulfillInvoice', Req, Context, _) ->
             end
     end;
 
-process_request('RescindInvoice', Req, Context, _) ->
+process_request('RescindInvoice', Req, Context) ->
     Call = {invoicing, 'Rescind', [maps:get(invoiceID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))]},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _} ->
@@ -115,7 +114,7 @@ process_request('RescindInvoice', Req, Context, _) ->
             end
     end;
 
-process_request('GetInvoiceEvents', Req, Context, _) ->
+process_request('GetInvoiceEvents', Req, Context) ->
     Result =
         capi_handler_utils:collect_events(
             maps:get(limit, Req),
@@ -147,7 +146,7 @@ process_request('GetInvoiceEvents', Req, Context, _) ->
             end
     end;
 
-process_request('GetInvoicePaymentMethods', Req, Context, _) ->
+process_request('GetInvoicePaymentMethods', Req, Context) ->
     case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, [maps:get(invoiceID, Req)], Context) of
         {ok, PaymentMethods} when is_list(PaymentMethods) ->
             {ok, {200, [], PaymentMethods}};
@@ -162,8 +161,8 @@ process_request('GetInvoicePaymentMethods', Req, Context, _) ->
 
 %%
 
-process_request(OperationID, Req, Context, Handlers) ->
-    capi_handler:process_request(OperationID, Req, Context, Handlers).
+process_request(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
 
 encode_invoice_params(PartyID, InvoiceParams) ->
     Amount = genlib_map:get(<<"amount">>, InvoiceParams),
