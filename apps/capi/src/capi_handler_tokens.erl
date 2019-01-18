@@ -106,7 +106,7 @@ put_card_data_to_cds(CardData, SessionData, Context) ->
                     % It's better for the cds to signal woody-level unavailability when the
                     % keyring is locked, isn't it? It could always mention keyring lock as a
                     % reason in a woody error definition.
-                    throw({error, capi_handler_utils:reply_5xx(503)})
+                    throw({error, capi_handler_utils:server_error(503)})
             end
     end.
 

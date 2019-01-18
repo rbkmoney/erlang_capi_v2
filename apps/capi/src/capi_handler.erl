@@ -145,8 +145,8 @@ attach_deadline(#{'X-Request-Deadline' := Header}, Context) ->
     end.
 
 process_woody_error(_Source, result_unexpected   , _Details) ->
-    {error, capi_handler_utils:reply_5xx(500)};
+    {error, capi_handler_utils:server_error(500)};
 process_woody_error(_Source, resource_unavailable, _Details) ->
-    {error, capi_handler_utils:reply_5xx(503)};
+    {error, capi_handler_utils:server_error(503)};
 process_woody_error(_Source, result_unknown      , _Details) ->
-    {error, capi_handler_utils:reply_5xx(504)}.
+    {error, capi_handler_utils:server_error(504)}.

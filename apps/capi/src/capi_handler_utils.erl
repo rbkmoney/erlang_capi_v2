@@ -5,7 +5,7 @@
 
 -export([general_error/1]).
 -export([logic_error/2]).
--export([reply_5xx/1]).
+-export([server_error/1]).
 -export([format_request_errors/1]).
 
 -export([service_call_with/3]).
@@ -44,10 +44,10 @@ general_error(Message) ->
 logic_error(Code, Message) ->
     #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)}.
 
--spec reply_5xx(integer()) ->
+-spec server_error(integer()) ->
     {integer(), [], <<>>}.
 
-reply_5xx(Code) when Code >= 500 andalso Code < 600 ->
+server_error(Code) when Code >= 500 andalso Code < 600 ->
     {Code, [], <<>>}.
 
 -spec format_request_errors(list()) ->
