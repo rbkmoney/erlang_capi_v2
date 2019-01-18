@@ -9,14 +9,12 @@
 -export([decode_payment/3]).
 -export([decode_refund/2]).
 -export([decode_invoice/1]).
--export([decode_invoice_status/1]).
 -export([decode_invoice_cart/1]).
 -export([decode_invoice_line_tax_mode/1]).
 -export([decode_payment_status/2]).
 -export([decode_payment_operation_failure/2]).
 -export([decode_refund_status/2]).
 -export([decode_recurrent_parent/1]).
--export([decode_flow/1]).
 -export([decode_make_recurrent/1]).
 
 -export([construct_payment_methods/3]).
@@ -149,9 +147,6 @@ decode_payment_operation_failure_([H|T]) ->
         _  -> R#{<<"subError">> => decode_payment_operation_failure_(T)}
     end.
 
--spec decode_flow({atom(), _}) ->
-    capi_handler_decoder_utils:decode_data().
-
 decode_flow({instant, _}) ->
     #{<<"type">> => <<"PaymentFlowInstant">>};
 
@@ -260,9 +255,6 @@ decode_invoice(Invoice) ->
         <<"cart"             >> => decode_invoice_cart(Cart),
         <<"invoiceTemplateID">> => Invoice#domain_Invoice.template_id
     }, decode_invoice_status(Invoice#domain_Invoice.status)).
-
--spec decode_invoice_status({atom(), _}) ->
-    capi_handler_decoder_utils:decode_data().
 
 decode_invoice_status({Status, StatusInfo}) ->
     Reason =
