@@ -13,6 +13,7 @@
 -export([decode_invoice_cart/1]).
 -export([decode_invoice_line_tax_mode/1]).
 -export([decode_payment_status/2]).
+-export([decode_payment_operation_failure/2]).
 -export([decode_refund_status/2]).
 -export([decode_recurrent_parent/1]).
 -export([decode_flow/1]).
@@ -123,6 +124,9 @@ decode_payment_status({Status, StatusInfo}, Context) ->
         <<"status">> => genlib:to_binary(Status),
         <<"error" >> => Error
     }.
+
+-spec decode_payment_operation_failure({atom(), _}, processing_context()) ->
+    capi_handler_decoder_utils:decode_data().
 
 decode_payment_operation_failure({operation_timeout, _}, _) ->
     payment_error(<<"timeout">>);

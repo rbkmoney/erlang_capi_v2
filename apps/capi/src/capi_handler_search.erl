@@ -150,110 +150,6 @@ process_search_request_result(QueryType, Result, Context, #{decode_fun := Decode
             {ok, {400, [], logic_error(invalidRequest, <<"Invalid token">>)}}
     end.
 
-merchstat_to_domain({bank_card, BankCard = #merchstat_BankCard{}}) ->
-    {bank_card, #domain_BankCard{
-        token          = BankCard#merchstat_BankCard.token,
-        payment_system = BankCard#merchstat_BankCard.payment_system,
-        bin            = BankCard#merchstat_BankCard.bin,
-        masked_pan     = BankCard#merchstat_BankCard.masked_pan,
-        token_provider = BankCard#merchstat_BankCard.token_provider
-    }};
-merchstat_to_domain({payment_terminal, #merchstat_PaymentTerminal{terminal_type = Type}}) ->
-    {payment_terminal, #domain_PaymentTerminal{terminal_type = Type}};
-merchstat_to_domain({digital_wallet, #merchstat_DigitalWallet{provider = Provider, id = ID}}) ->
-    {digital_wallet, #domain_DigitalWallet{provider = Provider, id = ID}};
-merchstat_to_domain({bank_card, #merchstat_PayoutCard{card = BankCard}}) ->
-    merchstat_to_domain({bank_card, BankCard});
-merchstat_to_domain({bank_account, {russian_payout_account, PayoutAccount}}) ->
-    #merchstat_RussianPayoutAccount{bank_account = BankAccount} = PayoutAccount,
-    {russian_bank_account, #domain_RussianBankAccount{
-        account           = BankAccount#merchstat_RussianBankAccount.account,
-        bank_name         = BankAccount#merchstat_RussianBankAccount.bank_name,
-        bank_post_account = BankAccount#merchstat_RussianBankAccount.bank_post_account,
-        bank_bik          = BankAccount#merchstat_RussianBankAccount.bank_bik
-    }};
-merchstat_to_domain({bank_account, {international_payout_account, PayoutAccount}}) ->
-    #merchstat_InternationalPayoutAccount{bank_account = BankAccount} = PayoutAccount,
-    {international_bank_account, merchstat_to_domain({international_bank_account, BankAccount})};
-merchstat_to_domain({wallet, #merchstat_Wallet{wallet_id = WalletID}}) ->
-    {wallet_info, #domain_WalletInfo{wallet_id = WalletID}};
-
-merchstat_to_domain({international_bank_account, undefined}) ->
-    undefined;
-merchstat_to_domain({international_bank_account, BankAccount = #merchstat_InternationalBankAccount{}}) ->
-    #domain_InternationalBankAccount{
-        number         = BankAccount#merchstat_InternationalBankAccount.number,
-        iban           = BankAccount#merchstat_InternationalBankAccount.iban,
-        account_holder = BankAccount#merchstat_InternationalBankAccount.account_holder,
-        bank           = merchstat_to_domain(
-            {international_bank_details, BankAccount#merchstat_InternationalBankAccount.bank}
-        ),
-        correspondent_account = merchstat_to_domain(
-            {international_bank_account, BankAccount#merchstat_InternationalBankAccount.correspondent_account}
-        )
-    };
-merchstat_to_domain({international_bank_details, undefined}) ->
-    undefined;
-merchstat_to_domain({international_bank_details, Bank = #merchstat_InternationalBankDetails{}}) ->
-    #domain_InternationalBankDetails{
-            bic     = Bank#merchstat_InternationalBankDetails.bic,
-            name    = Bank#merchstat_InternationalBankDetails.name,
-            address = Bank#merchstat_InternationalBankDetails.address,
-            country = Bank#merchstat_InternationalBankDetails.country,
-            aba_rtn = Bank#merchstat_InternationalBankDetails.aba_rtn
-    };
-
-merchstat_to_domain({Status, #merchstat_InvoicePaymentPending{}}) ->
-    {Status, #domain_InvoicePaymentPending{}};
-merchstat_to_domain({Status, #merchstat_InvoicePaymentProcessed{}}) ->
-    {Status, #domain_InvoicePaymentProcessed{}};
-merchstat_to_domain({Status, #merchstat_InvoicePaymentCaptured{}}) ->
-    {Status, #domain_InvoicePaymentCaptured{}};
-merchstat_to_domain({Status, #merchstat_InvoicePaymentCancelled{}}) ->
-    {Status, #domain_InvoicePaymentCancelled{}};
-merchstat_to_domain({Status, #merchstat_InvoicePaymentRefunded{}}) ->
-    {Status, #domain_InvoicePaymentRefunded{}};
-merchstat_to_domain({Status, #merchstat_InvoicePaymentFailed{failure = Failure}}) ->
-    NewFailure =
-        case Failure of
-            {failure, _} ->
-                Failure;
-            {operation_timeout, #merchstat_OperationTimeout{}} ->
-                {operation_timeout, #domain_OperationTimeout{}}
-        end,
-    {Status, #domain_InvoicePaymentFailed{failure = NewFailure}};
-
-merchstat_to_domain({Status, #merchstat_InvoiceUnpaid{}}) ->
-    {Status, #domain_InvoiceUnpaid{}};
-merchstat_to_domain({Status, #merchstat_InvoicePaid{}}) ->
-    {Status, #domain_InvoicePaid{}};
-merchstat_to_domain({Status, #merchstat_InvoiceCancelled{details = Details}}) ->
-    {Status, #domain_InvoiceCancelled{details = Details}};
-merchstat_to_domain({Status, #merchstat_InvoiceFulfilled{details = Details}}) ->
-    {Status, #domain_InvoiceFulfilled{details = Details}};
-
-merchstat_to_domain({Status, #merchstat_InvoicePaymentRefundPending{}}) ->
-    {Status, #domain_InvoicePaymentRefundPending{}};
-merchstat_to_domain({Status, #merchstat_InvoicePaymentRefundSucceeded{}}) ->
-    {Status, #domain_InvoicePaymentRefundSucceeded{}};
-merchstat_to_domain({Status, #merchstat_InvoicePaymentRefundFailed{failure = Failure}}) ->
-    NewFailure =
-        case Failure of
-            {failure, _} ->
-                Failure;
-            {operation_timeout, #merchstat_OperationTimeout{}} ->
-                {operation_timeout, #domain_OperationTimeout{}}
-        end,
-    {Status, #domain_InvoicePaymentRefundFailed{failure = NewFailure}};
-
-merchstat_to_domain({instant, #merchstat_InvoicePaymentFlowInstant{}}) ->
-    {instant, #domain_InvoicePaymentFlowInstant{}};
-merchstat_to_domain({hold, Hold}) ->
-    {hold, #domain_InvoicePaymentFlowHold{
-        on_hold_expiration = Hold#merchstat_InvoicePaymentFlowHold.on_hold_expiration,
-        held_until         = Hold#merchstat_InvoicePaymentFlowHold.held_until
-    }}.
-
 %%
 
 encode_payment_method('bankCard'       ) -> <<"bank_card">>;
@@ -280,8 +176,17 @@ decode_stat_invoice(Invoice, _Context) ->
         <<"cart"       >> => capi_handler_decoder_invoicing:decode_invoice_cart(Invoice#merchstat_StatInvoice.cart)
     }, decode_stat_invoice_status(Invoice#merchstat_StatInvoice.status)).
 
-decode_stat_invoice_status(Status) ->
-    capi_handler_decoder_invoicing:decode_invoice_status(merchstat_to_domain(Status)).
+decode_stat_invoice_status({Status, StatusInfo}) ->
+    Reason =
+        case StatusInfo of
+            #merchstat_InvoiceCancelled{details = Details} -> Details;
+            #merchstat_InvoiceFulfilled{details = Details} -> Details;
+            _ -> undefined
+        end,
+    #{
+        <<"status">> => genlib:to_binary(Status),
+        <<"reason">> => Reason
+    }.
 
 decode_stat_payment(Stat, Context) ->
     capi_handler_utils:merge_and_compact(#{
@@ -346,17 +251,112 @@ decode_stat_payer({payment_resource, PaymentResource}) ->
         })
     }).
 
-decode_stat_payment_flow(Flow) ->
-    capi_handler_decoder_invoicing:decode_flow(merchstat_to_domain(Flow)).
+decode_stat_payment_flow({instant, _}) ->
+    #{<<"type">> => <<"PaymentFlowInstant">>};
 
-decode_stat_payment_status(PaymentStatus, Context) ->
-    capi_handler_decoder_invoicing:decode_payment_status(merchstat_to_domain(PaymentStatus), Context).
+decode_stat_payment_flow({hold, #merchstat_InvoicePaymentFlowHold{
+    on_hold_expiration = OnHoldExpiration,
+    held_until = HeldUntil
+}}) ->
+    #{
+        <<"type"            >> => <<"PaymentFlowHold">>,
+        <<"onHoldExpiration">> => atom_to_binary(OnHoldExpiration, utf8),
+        <<"heldUntil"       >> => HeldUntil
+    }.
 
-decode_stat_payment_tool_token(PaymentTool) ->
-    capi_handler_decoder_party:decode_payment_tool_token(merchstat_to_domain(PaymentTool)).
+decode_stat_payment_status({Status, StatusInfo}, Context) ->
+    Error =
+        case StatusInfo of
+            #merchstat_InvoicePaymentFailed{failure = OperationFailure} ->
+                capi_handler_decoder_invoicing:decode_payment_operation_failure(OperationFailure, Context);
+            _ ->
+                undefined
+        end,
+    #{
+        <<"status">> => genlib:to_binary(Status),
+        <<"error" >> => Error
+    }.
 
-decode_stat_payment_tool_details(PaymentTool) ->
-    capi_handler_decoder_party:decode_payment_tool_details(merchstat_to_domain(PaymentTool)).
+decode_stat_payment_tool_token({bank_card, BankCard}) ->
+    decode_bank_card(BankCard);
+decode_stat_payment_tool_token({payment_terminal, PaymentTerminal}) ->
+    decode_payment_terminal(PaymentTerminal);
+decode_stat_payment_tool_token({digital_wallet, DigitalWallet}) ->
+    decode_digital_wallet(DigitalWallet).
+
+decode_bank_card(#merchstat_BankCard{
+    'token'          = Token,
+    'payment_system' = PaymentSystem,
+    'bin'            = Bin,
+    'masked_pan'     = MaskedPan,
+    'token_provider' = TokenProvider
+}) ->
+    capi_utils:map_to_base64url(genlib_map:compact(#{
+        <<"type"          >> => <<"bank_card">>,
+        <<"token"         >> => Token,
+        <<"payment_system">> => PaymentSystem,
+        <<"bin"           >> => Bin,
+        <<"masked_pan"    >> => MaskedPan,
+        <<"token_provider">> => TokenProvider,
+        <<"issuer_country">> => undefined,
+        <<"bank_name"     >> => undefined,
+        <<"metadata"      >> => undefined
+    })).
+
+decode_payment_terminal(#merchstat_PaymentTerminal{
+    terminal_type = Type
+}) ->
+    capi_utils:map_to_base64url(#{
+        <<"type"         >> => <<"payment_terminal">>,
+        <<"terminal_type">> => Type
+    }).
+
+decode_digital_wallet(#merchstat_DigitalWallet{
+    provider = Provider,
+    id = ID
+}) ->
+    capi_utils:map_to_base64url(#{
+        <<"type"    >> => <<"digital_wallet">>,
+        <<"provider">> => atom_to_binary(Provider, utf8),
+        <<"id"      >> => ID
+    }).
+
+decode_stat_payment_tool_details({bank_card, V}) ->
+    decode_bank_card_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsBankCard">>});
+decode_stat_payment_tool_details({payment_terminal, V}) ->
+    decode_payment_terminal_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsPaymentTerminal">>});
+decode_stat_payment_tool_details({digital_wallet, V}) ->
+    decode_digital_wallet_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsDigitalWallet">>}).
+
+decode_bank_card_details(BankCard, V) ->
+    LastDigits = capi_handler_decoder_utils:decode_last_digits(BankCard#merchstat_BankCard.masked_pan),
+    Bin = BankCard#merchstat_BankCard.bin,
+    capi_handler_utils:merge_and_compact(V, #{
+        <<"lastDigits">>     => LastDigits,
+        <<"bin">>            => Bin,
+        <<"cardNumberMask">> => capi_handler_decoder_utils:decode_masked_pan(Bin, LastDigits),
+        <<"paymentSystem" >> => genlib:to_binary(BankCard#merchstat_BankCard.payment_system),
+        <<"tokenProvider" >> => decode_token_provider(BankCard#merchstat_BankCard.token_provider)
+    }).
+
+decode_token_provider(Provider) when Provider /= undefined ->
+    genlib:to_binary(Provider);
+decode_token_provider(undefined) ->
+    undefined.
+
+decode_payment_terminal_details(#merchstat_PaymentTerminal{terminal_type = Type}, V) ->
+    V#{
+        <<"provider">> => genlib:to_binary(Type)
+    }.
+
+decode_digital_wallet_details(#merchstat_DigitalWallet{provider = qiwi, id = ID}, V) ->
+    V#{
+        <<"digitalWalletDetailsType">> => <<"DigitalWalletDetailsQIWI">>,
+        <<"phoneNumberMask"         >> => mask_phone_number(ID)
+    }.
+
+mask_phone_number(PhoneNumber) ->
+    capi_utils:redact(PhoneNumber, <<"^\\+\\d(\\d{1,10}?)\\d{2,4}$">>).
 
 decode_geo_location_info(#geo_ip_LocationInfo{city_geo_id = CityID, country_geo_id = CountryID}) ->
     #{
@@ -401,8 +401,60 @@ decode_stat_payout_status({Status, _}) ->
         <<"status">> => genlib:to_binary(Status)
     }.
 
-decode_stat_payout_tool_details(PayoutType) ->
-    capi_handler_decoder_party:decode_payout_tool_details(merchstat_to_domain(PayoutType)).
+decode_stat_payout_tool_details({bank_card, #merchstat_PayoutCard{card = BankCard}}) ->
+    decode_stat_payout_tool_details({bank_card, BankCard});
+decode_stat_payout_tool_details({bank_account, {russian_payout_account, PayoutAccount}}) ->
+    #merchstat_RussianPayoutAccount{bank_account = BankAccount} = PayoutAccount,
+    decode_stat_payout_tool_details({russian_bank_account, BankAccount});
+decode_stat_payout_tool_details({bank_account, {international_payout_account, PayoutAccount}}) ->
+    #merchstat_InternationalPayoutAccount{bank_account = BankAccount} = PayoutAccount,
+    decode_stat_payout_tool_details({international_bank_account, BankAccount});
+
+decode_stat_payout_tool_details({bank_card, V}) ->
+    decode_bank_card_details(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankCard">>});
+decode_stat_payout_tool_details({russian_bank_account, V}) ->
+    decode_russian_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankAccount">>});
+decode_stat_payout_tool_details({international_bank_account, V}) ->
+    decode_international_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsInternationalBankAccount">>});
+decode_stat_payout_tool_details({wallet, V}) ->
+    #{
+        <<"detailsType">> => <<"PayoutToolDetailsWalletInfo">>,
+        <<"walletID">> => V#merchstat_Wallet.wallet_id
+    }.
+
+decode_russian_bank_account(BankAccount, V) ->
+    V#{
+        <<"account"        >> => BankAccount#merchstat_RussianBankAccount.account,
+        <<"bankName"       >> => BankAccount#merchstat_RussianBankAccount.bank_name,
+        <<"bankPostAccount">> => BankAccount#merchstat_RussianBankAccount.bank_post_account,
+        <<"bankBik"        >> => BankAccount#merchstat_RussianBankAccount.bank_bik
+    }.
+
+decode_international_bank_account(undefined, _) ->
+    undefined;
+decode_international_bank_account(BankAccount, V) ->
+    genlib_map:compact(V#{
+        <<"number">>                   => BankAccount#merchstat_InternationalBankAccount.number,
+        <<"iban">>                     => BankAccount#merchstat_InternationalBankAccount.iban,
+        <<"bankDetails">>              => decode_international_bank_details(
+            BankAccount#merchstat_InternationalBankAccount.bank
+        ),
+        <<"correspondentBankAccount">> => decode_international_bank_account(
+            BankAccount#merchstat_InternationalBankAccount.correspondent_account, #{}
+        )
+    }).
+
+decode_international_bank_details(undefined) ->
+    undefined;
+decode_international_bank_details(Bank) ->
+    genlib_map:compact(#{
+         <<"bic">>         => Bank#merchstat_InternationalBankDetails.bic,
+         <<"abartn">>      => Bank#merchstat_InternationalBankDetails.aba_rtn,
+         <<"name">>        => Bank#merchstat_InternationalBankDetails.name,
+         <<"countryCode">> =>
+            capi_handler_decoder_party:decode_residence(Bank#merchstat_InternationalBankDetails.country),
+         <<"address">>     => Bank#merchstat_InternationalBankDetails.address
+    }).
 
 decode_stat_payout_summary(PayoutSummary) when is_list(PayoutSummary) ->
     [decode_stat_payout_summary_item(PayoutSummaryItem) || PayoutSummaryItem <- PayoutSummary];
@@ -434,6 +486,15 @@ decode_stat_refund(Refund, Context) ->
         decode_stat_refund_status(Refund#merchstat_StatRefund.status, Context)
     ).
 
-decode_stat_refund_status(RefundStatus, Context) ->
-    capi_handler_decoder_invoicing:decode_refund_status(merchstat_to_domain(RefundStatus), Context).
-
+decode_stat_refund_status({Status, StatusInfo}, Context) ->
+    Error =
+        case StatusInfo of
+            #merchstat_InvoicePaymentRefundFailed{failure = OperationFailure} ->
+                capi_handler_decoder_utils:decode_operation_failure(OperationFailure, Context);
+            _ ->
+                undefined
+        end,
+    #{
+        <<"status">> => genlib:to_binary(Status),
+        <<"error" >> => Error
+    }.
