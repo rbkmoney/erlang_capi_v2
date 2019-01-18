@@ -25,6 +25,8 @@
 ) ->
     {ok | error, response() | noimpl}.
 
+-import(capi_handler_utils, [logic_error/2, server_error/1]).
+
 %% @WARNING Must be refactored in case of different classes of users using this API
 -define(REALM, <<"external">>).
 
@@ -91,7 +93,7 @@ handle_request(OperationID, Req, SwagContext = #{auth_context := AuthContext}) -
             process_woody_error(Source, Class, Details);
         throw:{bad_deadline, Deadline} ->
             _ = lager:warning("Operation ~p failed due to invalid deadline ~p", [OperationID, Deadline]),
-            ErrorMsg = capi_handler_utils:logic_error(invalidDeadline, <<"Invalid data in X-Request-Deadline header">>),
+            ErrorMsg = logic_error(invalidDeadline, <<"Invalid data in X-Request-Deadline header">>),
             {ok, {400, [], ErrorMsg}}
     end.
 
@@ -145,8 +147,8 @@ attach_deadline(#{'X-Request-Deadline' := Header}, Context) ->
     end.
 
 process_woody_error(_Source, result_unexpected   , _Details) ->
-    {error, capi_handler_utils:server_error(500)};
+    {error, server_error(500)};
 process_woody_error(_Source, resource_unavailable, _Details) ->
-    {error, capi_handler_utils:server_error(503)};
+    {error, server_error(503)};
 process_woody_error(_Source, result_unknown      , _Details) ->
-    {error, capi_handler_utils:server_error(504)}.
+    {error, server_error(504)}.

@@ -4,6 +4,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
+-import(capi_handler_utils, [general_error/1, logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -30,12 +31,12 @@ process_request('GetClaimByID', Req, Context) ->
             case is_wallet_claim(Claim) of
                 true ->
                     %% filter this out
-                    {ok, {404, [], capi_handler_utils:general_error(<<"Claim not found">>)}};
+                    {ok, {404, [], general_error(<<"Claim not found">>)}};
                 false ->
                     {ok, {200, [], decode_claim(Claim)}}
             end;
         {exception, #payproc_ClaimNotFound{}} ->
-            {ok, {404, [], capi_handler_utils:general_error(<<"Claim not found">>)}}
+            {ok, {404, [], general_error(<<"Claim not found">>)}}
     end;
 
 process_request('CreateClaim', Req, Context) ->
@@ -48,25 +49,25 @@ process_request('CreateClaim', Req, Context) ->
             {exception, Exception} ->
                 case Exception of
                     #payproc_InvalidPartyStatus{} ->
-                        {ok, {400, [], capi_handler_utils:logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                        {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                     #payproc_ChangesetConflict{} ->
-                        {ok, {400, [], capi_handler_utils:logic_error(changesetConflict, <<"Changeset conflict">>)}};
+                        {ok, {400, [], logic_error(changesetConflict, <<"Changeset conflict">>)}};
                     #payproc_InvalidChangeset{} ->
-                        {ok, {400, [], capi_handler_utils:logic_error(invalidChangeset, <<"Invalid changeset">>)}};
+                        {ok, {400, [], logic_error(invalidChangeset, <<"Invalid changeset">>)}};
                     #'InvalidRequest'{errors = Errors} ->
                         FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                        {ok, {400, [], capi_handler_utils:logic_error(invalidRequest, FormattedErrors)}}
+                        {ok, {400, [], logic_error(invalidRequest, FormattedErrors)}}
                 end
         end
     catch
         throw:{encode_contract_modification, adjustment_creation_not_supported} ->
-            ErrorMsg = capi_handler_utils:logic_error(
+            ErrorMsg = logic_error(
                 invalidChangeset,
                 <<"Contract adjustment creation not supported">>
             ),
             {ok, {400, [], ErrorMsg}};
         throw:{encode_residence, invalid_residence} ->
-            {ok, {400, [], capi_handler_utils:logic_error(invalidRequest, <<"Invalid residence">>)}}
+            {ok, {400, [], logic_error(invalidRequest, <<"Invalid residence">>)}}
     end;
 
 % TODO disabled temporary, exception handling must be fixed befor enabling
@@ -95,13 +96,13 @@ process_request('RevokeClaimByID', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], capi_handler_utils:logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_ClaimNotFound{} ->
-                    {ok, {404, [], capi_handler_utils:general_error(<<"Claim not found">>)}};
+                    {ok, {404, [], general_error(<<"Claim not found">>)}};
                 #payproc_InvalidClaimStatus{} ->
-                    {ok, {400, [], capi_handler_utils:logic_error(invalidClaimStatus, <<"Invalid claim status">>)}};
+                    {ok, {400, [], logic_error(invalidClaimStatus, <<"Invalid claim status">>)}};
                 #payproc_InvalidClaimRevision{} ->
-                    {ok, {400, [], capi_handler_utils:logic_error(invalidClaimRevision, <<"Invalid claim revision">>)}}
+                    {ok, {400, [], logic_error(invalidClaimRevision, <<"Invalid claim revision">>)}}
             end
     end;
 

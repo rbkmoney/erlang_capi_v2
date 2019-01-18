@@ -7,6 +7,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
+-import(capi_handler_utils, [logic_error/2, server_error/1]).
 
 -define(CAPI_NS, <<"com.rbkmoney.capi">>).
 
@@ -100,13 +101,13 @@ put_card_data_to_cds(CardData, SessionData, Context) ->
         {exception, Exception} ->
             case Exception of
                 #'InvalidCardData'{} ->
-                    throw({ok, {400, [], capi_handler_utils:logic_error(invalidRequest, <<"Card data is invalid">>)}});
+                    throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}});
                 #'KeyringLocked'{} ->
                     % TODO
                     % It's better for the cds to signal woody-level unavailability when the
                     % keyring is locked, isn't it? It could always mention keyring lock as a
                     % reason in a woody error definition.
-                    throw({error, capi_handler_utils:server_error(503)})
+                    throw({error, server_error(503)})
             end
     end.
 
@@ -117,7 +118,7 @@ lookup_bank_info(Pan, Context) ->
         {ok, #'binbase_ResponseData'{bin_data = BinData, version = Version}} ->
             {BinData, Version};
         {exception, #'binbase_BinNotFound'{}} ->
-            throw({ok, {400, [], capi_handler_utils:logic_error(invalidRequest, <<"Card data is invalid">>)}})
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}})
     end.
 
 expand_card_info(BankCard, {BinData, Version}) ->
@@ -136,9 +137,9 @@ expand_card_info(BankCard, {BinData, Version}) ->
         }
     catch
         throw:{encode_binbase_payment_system, invalid_payment_system} ->
-            throw({ok, {400, [], capi_handler_utils:logic_error(invalidRequest, <<"Unsupported card">>)}});
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Unsupported card">>)}});
         throw:{encode_residence, invalid_residence} ->
-            throw({ok, {400, [], capi_handler_utils:logic_error(invalidRequest, <<"Unsupported card">>)}})
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Unsupported card">>)}})
     end.
 
 encode_binbase_payment_system(<<"VISA">>)                      -> visa;
@@ -180,7 +181,7 @@ process_tokenized_card_data(Data, Context) ->
         {ok, Tool} ->
             Tool;
         {exception, #'InvalidRequest'{}} ->
-            throw({ok, {400, [], capi_handler_utils:logic_error(invalidRequest, <<"Tokenized card data is invalid">>)}})
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Tokenized card data is invalid">>)}})
     end,
     process_put_card_data_result(
         put_card_data_to_cds(

@@ -5,6 +5,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
+-import(capi_handler_utils, [general_error/1]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -22,7 +23,7 @@ process_request('GetContractByID', Req, Context) ->
     Party = capi_utils:unwrap(capi_handler_utils:get_my_party(Context)),
     case genlib_map:get(ContractID, Party#domain_Party.contracts) of
         undefined ->
-            {ok, {404, [], capi_handler_utils:general_error(<<"Contract not found">>)}};
+            {ok, {404, [], general_error(<<"Contract not found">>)}};
         Contract ->
             {ok, {200, [], decode_contract(Contract, Party#domain_Party.contractors)}}
     end;
@@ -33,7 +34,7 @@ process_request('GetContractAdjustments', Req, Context) ->
             Resp = [decode_contract_adjustment(A) || A <- Adjustments],
             {ok, {200, [], Resp}};
         {exception, #payproc_ContractNotFound{}} ->
-            {ok, {404, [], capi_handler_utils:general_error(<<"Contract not found">>)}}
+            {ok, {404, [], general_error(<<"Contract not found">>)}}
     end;
 
 process_request('GetContractAdjustmentByID', Req, Context) ->
@@ -44,10 +45,10 @@ process_request('GetContractAdjustmentByID', Req, Context) ->
                 #domain_ContractAdjustment{} = A ->
                     {ok, {200, [], decode_contract_adjustment(A)}};
                 false ->
-                    {ok, {404, [], capi_handler_utils:general_error(<<"Adjustment not found">>)}}
+                    {ok, {404, [], general_error(<<"Adjustment not found">>)}}
             end;
         {exception, #payproc_ContractNotFound{}} ->
-            {ok, {404, [], capi_handler_utils:general_error(<<"Contract not found">>)}}
+            {ok, {404, [], general_error(<<"Contract not found">>)}}
     end;
 
 %%

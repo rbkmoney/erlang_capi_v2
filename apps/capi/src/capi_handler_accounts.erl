@@ -4,6 +4,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
+-import(capi_handler_utils, [general_error/1]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -18,7 +19,7 @@ process_request('GetAccountByID', Req, Context) ->
         {ok, S} ->
             {ok, {200, [], decode_account_state(S)}};
         {exception, #payproc_AccountNotFound{}} ->
-            {ok, {404, [], capi_handler_utils:general_error(<<"Account not found">>)}}
+            {ok, {404, [], general_error(<<"Account not found">>)}}
     end;
 
 %%

@@ -4,6 +4,8 @@
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
 -include_lib("dmsl/include/dmsl_merch_stat_thrift.hrl").
 
+-import(capi_handler_utils, [logic_error/2]).
+
 -export([decode_map/2]).
 -export([decode_currency/1]).
 -export([decode_business_schedule_ref/1]).
@@ -61,9 +63,9 @@ decode_last_digits(MaskedPan) ->
     decode_data().
 
 decode_operation_failure({operation_timeout, _}, _) ->
-    capi_handler_utils:logic_error(timeout, <<"timeout">>);
+    logic_error(timeout, <<"timeout">>);
 decode_operation_failure({failure, #domain_Failure{code = Code, reason = Reason}}, _) ->
-    capi_handler_utils:logic_error(Code, Reason).
+    logic_error(Code, Reason).
 
 -spec decode_category_ref(capi_handler_encoder:encode_data()) ->
     integer().
