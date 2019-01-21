@@ -5,7 +5,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/1, logic_error/2]).
+-import(capi_handler_utils, [general_error/2, logic_error/3]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -25,7 +25,7 @@ process_request('CreateWebhook', Req, Context) ->
             ),
             {ok, {201, [], decode_webhook(Webhook)}};
         {exception, #payproc_ShopNotFound{}} ->
-            {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}}
+            {ok, logic_error(400, invalidShopID, <<"Shop not found">>)}
     end;
 
 process_request('GetWebhooks', _Req, Context) ->
@@ -41,10 +41,10 @@ process_request('GetWebhookByID', Req, Context) ->
                 {ok, Webhook} ->
                     {ok, {200, [], decode_webhook(Webhook)}};
                 {exception, #webhooker_WebhookNotFound{}} ->
-                    {ok, {404, [], general_error(<<"Webhook not found">>)}}
+                    {ok, general_error(404, <<"Webhook not found">>)}
             end;
         error ->
-            {ok, {404, [], general_error(<<"Webhook not found">>)}}
+            {ok, general_error(404, <<"Webhook not found">>)}
     end;
 
 process_request('DeleteWebhookByID', Req, Context) ->
@@ -57,7 +57,7 @@ process_request('DeleteWebhookByID', Req, Context) ->
                     {ok, {204, [], undefined}}
             end;
         error ->
-            {ok, {404, [], general_error(<<"Webhook not found">>)}}
+            {ok, general_error(404, <<"Webhook not found">>)}
     end;
 
 %%

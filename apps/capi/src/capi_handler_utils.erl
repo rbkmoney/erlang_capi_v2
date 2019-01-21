@@ -3,8 +3,9 @@
 -include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
 
--export([general_error/1]).
+-export([general_error/2]).
 -export([logic_error/2]).
+-export([logic_error/3]).
 -export([server_error/1]).
 -export([format_request_errors/1]).
 
@@ -31,18 +32,31 @@
 -export([create_dsl/3]).
 
 -type processing_context() :: capi_handler:processing_context().
+-type response()           :: capi_handler:response().
 
--spec general_error(binary()) ->
-    map().
+-spec general_error(integer(), binary()) ->
+    response().
 
-general_error(Message) ->
-    #{<<"message">> => genlib:to_binary(Message)}.
+general_error(Code, Message) ->
+    create_erorr_resp(Code, #{<<"message">> => genlib:to_binary(Message)}).
 
--spec logic_error(term(), io_lib:chars() | binary()) ->
+-spec logic_error(term(), binary()) ->
     map().
 
 logic_error(Code, Message) ->
     #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)}.
+
+-spec logic_error(integer(), term(), io_lib:chars() | binary()) ->
+    response().
+
+logic_error(Code, ErrorCode, Message) ->
+    Data = #{<<"code">> => genlib:to_binary(ErrorCode), <<"message">> => genlib:to_binary(Message)},
+    create_erorr_resp(Code, Data).
+
+create_erorr_resp(Code, Data) ->
+    create_erorr_resp(Code, [], Data).
+create_erorr_resp(Code, Headers, Data) ->
+    {Code, Headers, Data}.
 
 -spec server_error(integer()) ->
     {integer(), [], <<>>}.

@@ -5,7 +5,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/1, logic_error/2]).
+-import(capi_handler_utils, [general_error/2, logic_error/3]).
 
 -define(payment_institution_ref(PaymentInstitutionID),
     #domain_PaymentInstitutionRef{id = PaymentInstitutionID}).
@@ -37,7 +37,7 @@ process_request('GetPaymentInstitutions', Req, #{woody_context := WoodyContext})
         {ok, {200, [], Resp}}
     catch
         throw:{encode_residence, invalid_residence} ->
-            {ok, {400, [], logic_error(invalidRequest, <<"Invalid residence">>)}}
+            {ok, logic_error(400, invalidRequest, <<"Invalid residence">>)}
     end;
 
 process_request('GetPaymentInstitutionByRef', Req, #{woody_context := WoodyContext}) ->
@@ -46,7 +46,7 @@ process_request('GetPaymentInstitutionByRef', Req, #{woody_context := WoodyConte
         {ok, PaymentInstitution} ->
             {ok, {200, [], decode_payment_institution_obj(PaymentInstitution)}};
         {error, not_found} ->
-            {404, [], general_error(<<"Payment institution not found">>)}
+            {ok, general_error(404, <<"Payment institution not found">>)}
     end;
 
 process_request('GetPaymentInstitutionPaymentTerms', Req, Context) ->
@@ -55,7 +55,7 @@ process_request('GetPaymentInstitutionPaymentTerms', Req, Context) ->
         {ok, #domain_TermSet{payments = PaymentTerms}} ->
             {ok, {200, [], decode_payment_terms(PaymentTerms)}};
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
-            {404, [], general_error(<<"Payment institution not found">>)}
+            {ok, general_error(404, <<"Payment institution not found">>)}
     end;
 
 process_request('GetPaymentInstitutionPayoutMethods', Req, Context) ->
@@ -64,9 +64,9 @@ process_request('GetPaymentInstitutionPayoutMethods', Req, Context) ->
         {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{payout_methods = PayoutMethods}}} ->
             {ok, {200, [], decode_payout_methods_selector(PayoutMethods)}};
         {ok, #domain_TermSet{payouts = undefined}} ->
-            {404, [], general_error(<<"Automatic payouts not allowed">>)};
+            {ok, general_error(404, <<"Automatic payouts not allowed">>)};
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
-            {404, [], general_error(<<"Payment institution not found">>)}
+            {ok, general_error(404, <<"Payment institution not found">>)}
     end;
 
 process_request('GetPaymentInstitutionPayoutSchedules', Req, Context) ->
@@ -75,9 +75,9 @@ process_request('GetPaymentInstitutionPayoutSchedules', Req, Context) ->
         {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{payout_schedules = Schedules}}} ->
             {ok, {200, [], decode_business_schedules_selector(Schedules)}};
         {ok, #domain_TermSet{payouts = undefined}} ->
-            {404, [], general_error(<<"Automatic payouts not allowed">>)};
+            {ok, general_error(404, <<"Automatic payouts not allowed">>)};
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
-            {404, [], general_error(<<"Payment institution not found">>)}
+            {ok, general_error(404, <<"Payment institution not found">>)}
     end;
 
 %%

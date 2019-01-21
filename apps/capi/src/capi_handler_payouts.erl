@@ -6,7 +6,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/1, logic_error/2]).
+-import(capi_handler_utils, [general_error/2, logic_error/3]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -20,7 +20,7 @@ process_request('GetPayoutTools', Req, Context) ->
         {ok, #domain_Contract{payout_tools = PayoutTools}} ->
             {ok, {200, [], [decode_payout_tool(P) || P <- PayoutTools]}};
         {exception, #payproc_ContractNotFound{}} ->
-            {ok, {404, [], general_error(<<"Contract not found">>)}}
+            {ok, general_error(404, <<"Contract not found">>)}
     end;
 
 process_request('GetPayoutToolByID', Req, Context) ->
@@ -31,10 +31,10 @@ process_request('GetPayoutToolByID', Req, Context) ->
                 #domain_PayoutTool{} = P ->
                     {ok, {200, [], decode_payout_tool(P)}};
                 false ->
-                    {ok, {404, [], general_error(<<"PayoutTool not found">>)}}
+                    {ok, general_error(404, <<"PayoutTool not found">>)}
             end;
         {exception, #payproc_ContractNotFound{}} ->
-            {ok, {404, [], general_error(<<"Contract not found">>)}}
+            {ok, general_error(404, <<"Contract not found">>)}
     end;
 
 process_request('GetPayout', Req, Context) ->
@@ -45,10 +45,10 @@ process_request('GetPayout', Req, Context) ->
                 true ->
                     {ok, {200, [], decode_payout(Payout)}};
                 false ->
-                    {ok, {404, [], general_error(<<"Payout not found">>)}}
+                    {ok, general_error(404, <<"Payout not found">>)}
             end;
         {exception, #'payout_processing_PayoutNotFound'{}} ->
-            {ok, {404, [], general_error(<<"Payout not found">>)}}
+            {ok, general_error(404, <<"Payout not found">>)}
     end;
 
 process_request('CreatePayout', Req, Context) ->
@@ -62,12 +62,12 @@ process_request('CreatePayout', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #'payout_processing_InvalidPayoutTool'{} ->
-                    {ok, {400, [], logic_error(invalidPayoutTool, <<"Invalid payout tool">>)}};
+                    {ok, logic_error(400, invalidPayoutTool, <<"Invalid payout tool">>)};
                 #'payout_processing_InsufficientFunds'{} ->
-                    {ok, {400, [], logic_error(invalidCash, <<"Invalid amount or currency">>)}};
+                    {ok, logic_error(400, invalidCash, <<"Invalid amount or currency">>)};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, {400, [], logic_error(invalidRequest, FormattedErrors)}}
+                    {ok, logic_error(400, invalidRequest, FormattedErrors)}
             end
     end;
 
@@ -76,7 +76,7 @@ process_request('GetScheduleByRef', Req, Context) ->
         {ok, Schedule} ->
             {ok, {200, [], decode_business_schedule(Schedule)}};
         {error, not_found} ->
-            {404, [], general_error(<<"Schedule not found">>)}
+            {ok, general_error(404, <<"Schedule not found">>)}
     end;
 
 %%

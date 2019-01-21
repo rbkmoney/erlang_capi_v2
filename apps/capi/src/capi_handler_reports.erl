@@ -5,7 +5,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/1, logic_error/2]).
+-import(capi_handler_utils, [general_error/2, logic_error/3]).
 
 -define(DEFAULT_URL_LIFETIME, 60). % seconds
 
@@ -35,9 +35,9 @@ process_request('GetReports', Req, Context) ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, {400, [], logic_error(invalidRequest, FormattedErrors)}};
+                    {ok, logic_error(400, invalidRequest, FormattedErrors)};
                 #reports_DatasetTooBig{limit = Limit} ->
-                    {ok, {400, [], limit_exceeded_error(Limit)}}
+                    {ok, limit_exceeded_error(400, Limit)}
             end
     end;
 
@@ -50,7 +50,7 @@ process_request('GetReport', Req, Context) ->
         {ok, Report} ->
             {ok, {200, [], decode_report(Report)}};
         {exception, #reports_ReportNotFound{}} ->
-            {ok, {404, [], general_error(<<"Report not found">>)}}
+            {ok, general_error(404, <<"Report not found">>)}
     end;
 
 process_request('CreateReport', Req, Context) ->
@@ -78,9 +78,9 @@ process_request('CreateReport', Req, Context) ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, {400, [], logic_error(invalidRequest, FormattedErrors)}};
+                    {ok, logic_error(400, invalidRequest, FormattedErrors)};
                 #reports_ShopNotFound{} ->
-                    {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}}
+                    {ok, logic_error(400, invalidShopID, <<"Shop not found">>)}
             end
     end;
 
@@ -97,10 +97,10 @@ process_request('DownloadFile', Req, Context) ->
                 true ->
                     generate_report_presigned_url(FileID, Context);
                 false ->
-                    {ok, {404, [], general_error(<<"File not found">>)}}
+                    {ok, general_error(404, <<"File not found">>)}
             end;
         {exception, #reports_ReportNotFound{}} ->
-            {ok, {404, [], general_error(<<"Report not found">>)}}
+            {ok, general_error(404, <<"Report not found">>)}
     end;
 
 %%
@@ -108,8 +108,8 @@ process_request('DownloadFile', Req, Context) ->
 process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
-limit_exceeded_error(Limit) ->
-    logic_error(<<"limitExceeded">>, io_lib:format("Max limit: ~p", [Limit])).
+limit_exceeded_error(Code, Limit) ->
+    logic_error(Code, <<"limitExceeded">>, io_lib:format("Max limit: ~p", [Limit])).
 
 generate_report_presigned_url(FileID, Context) ->
     ExpiresAt = get_default_url_lifetime(),
@@ -121,9 +121,9 @@ generate_report_presigned_url(FileID, Context) ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, {400, [], logic_error(invalidRequest, FormattedErrors)}};
+                    {ok, logic_error(400, invalidRequest, FormattedErrors)};
                 #reports_FileNotFound{}->
-                    {ok, {404, [], general_error(<<"File not found">>)}}
+                    {ok, general_error(404, <<"File not found">>)}
             end
     end.
 

@@ -4,7 +4,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [logic_error/2]).
+-import(capi_handler_utils, [logic_error/3]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -79,9 +79,9 @@ process_merchant_stat_result(StatType, Result) ->
             {ok, {200, [], Resp}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
             FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-            {ok, {400, [], logic_error(invalidRequest, FormattedErrors)}};
+            {ok, logic_error(400, invalidRequest, FormattedErrors)};
         {exception, #merchstat_BadToken{}} ->
-            {ok, {400, [], logic_error(invalidRequest, <<"Invalid token">>)}}
+            {ok, logic_error(400, invalidRequest, <<"Invalid token">>)}
     end.
 
 decode_stat_info(payments_conversion_stat, Response) ->

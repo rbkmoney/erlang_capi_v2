@@ -5,7 +5,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/1, logic_error/2]).
+-import(capi_handler_utils, [general_error/2, logic_error/3]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -41,47 +41,50 @@ process_request('CreatePayment', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidInvoiceStatus{} ->
-                    {ok, {400, [], logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)}};
+                    {ok, logic_error(400, invalidInvoiceStatus, <<"Invalid invoice status">>)};
                 #payproc_InvoicePaymentPending{} ->
-                    ErrorMsg = logic_error(
+                    ErrorResp = logic_error(
+                        400,
                         invoicePaymentPending,
                         <<"Invoice payment pending">>
                     ),
-                    {ok, {400, [], ErrorMsg}};
+                    {ok, ErrorResp};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, {400, [], logic_error(invalidRequest, FormattedErrors)}};
+                    {ok, logic_error(400, invalidRequest, FormattedErrors)};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, logic_error(400, invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                    {ok, logic_error(400, invalidShopStatus, <<"Invalid shop status">>)};
                 #payproc_InvalidContractStatus{} ->
-                    ErrorMsg = logic_error(
+                    ErrorResp = logic_error(
+                        400,
                         invalidContractStatus,
                         <<"Invalid contract status">>
                     ),
-                    {ok, {400, [], ErrorMsg}};
+                    {ok, ErrorResp};
                 #payproc_InvalidRecurrentParentPayment{} ->
-                    ErrorMsg = logic_error(
+                    ErrorResp = logic_error(
+                        400,
                         invalidRecurrentParent,
                         <<"Specified recurrent parent is invalid">>
                     ),
-                    {ok, {400, [], ErrorMsg}};
+                    {ok, ErrorResp};
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, general_error(404, <<"Invoice not found">>)};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+                    {ok, general_error(404, <<"Invoice not found">>)}
             end;
         {error, invalid_token} ->
-            {ok, {400, [], logic_error(
+            {ok, logic_error(400,
                 invalidPaymentToolToken,
                 <<"Specified payment tool token is invalid">>
-            )}};
+            )};
         {error, invalid_payment_session} ->
-            {ok, {400, [], logic_error(
+            {ok, logic_error(400,
                 invalidPaymentSession,
                 <<"Specified payment session is invalid">>
-            )}}
+            )}
     end;
 
 process_request('GetPayments', Req, Context) ->
@@ -92,9 +95,9 @@ process_request('GetPayments', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, general_error(404, <<"Invoice not found">>)};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+                    {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
 
@@ -106,11 +109,11 @@ process_request('GetPaymentByID', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvoicePaymentNotFound{} ->
-                    {ok, {404, [], general_error(<<"Payment not found">>)}};
+                    {ok, general_error(404, <<"Payment not found">>)};
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, general_error(404, <<"Invoice not found">>)};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+                    {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
 
@@ -123,26 +126,27 @@ process_request('CancelPayment', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvoicePaymentNotFound{} ->
-                    {ok, {404, [], general_error(<<"Payment not found">>)}};
+                    {ok, general_error(404, <<"Payment not found">>)};
                 #payproc_InvalidPaymentStatus{} ->
-                    {ok, {400, [], logic_error(invalidPaymentStatus, <<"Invalid payment status">>)}};
+                    {ok, logic_error(400, invalidPaymentStatus, <<"Invalid payment status">>)};
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, general_error(404, <<"Invoice not found">>)};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, general_error(404, <<"Invoice not found">>)};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, {400, [], logic_error(invalidRequest, FormattedErrors)}};
+                    {ok, logic_error(400, invalidRequest, FormattedErrors)};
                 #payproc_OperationNotPermitted{} ->
-                    ErrorMsg = logic_error(
+                    ErrorResp = logic_error(
+                        400,
                         operationNotPermitted,
                         <<"Operation not permitted">>
                     ),
-                    {ok, {400, [], ErrorMsg}};
+                    {ok, ErrorResp};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, logic_error(400, invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
+                    {ok, logic_error(400, invalidShopStatus, <<"Invalid shop status">>)}
             end
     end;
 
@@ -155,26 +159,27 @@ process_request('CapturePayment', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvoicePaymentNotFound{} ->
-                    {ok, {404, [], general_error(<<"Payment not found">>)}};
+                    {ok, general_error(404, <<"Payment not found">>)};
                 #payproc_InvalidPaymentStatus{} ->
-                    {ok, {400, [], logic_error(invalidPaymentStatus, <<"Invalid payment status">>)}};
+                    {ok, logic_error(400, invalidPaymentStatus, <<"Invalid payment status">>)};
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, general_error(404, <<"Invoice not found">>)};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, general_error(404, <<"Invoice not found">>)};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, {400, [], logic_error(invalidRequest, FormattedErrors)}};
+                    {ok, logic_error(400, invalidRequest, FormattedErrors)};
                 #payproc_OperationNotPermitted{} ->
-                    ErrorMsg = logic_error(
+                    ErrorResp = logic_error(
+                        400,
                         operationNotPermitted,
                         <<"Operation not permitted">>
                     ),
-                    {ok, {400, [], ErrorMsg}};
+                    {ok, ErrorResp};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, logic_error(400, invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
+                    {ok, logic_error(400, invalidShopStatus, <<"Invalid shop status">>)}
             end
     end;
 
@@ -193,53 +198,59 @@ process_request('CreateRefund', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, general_error(404, <<"Invoice not found">>)};
                 #payproc_InvoicePaymentNotFound{} ->
-                    {ok, {404, [], general_error(<<"Payment not found">>)}};
+                    {ok, general_error(404, <<"Payment not found">>)};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, general_error(404, <<"Invoice not found">>)};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, logic_error(400, invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                    {ok, logic_error(400, invalidShopStatus, <<"Invalid shop status">>)};
                 #payproc_InvalidContractStatus{} ->
-                    ErrorMsg = logic_error(
+                    ErrorResp = logic_error(
+                        400,
                         invalidContractStatus,
                          <<"Invalid contract status">>
                     ),
-                    {ok, {400, [], ErrorMsg}};
+                    {ok, ErrorResp};
                 #payproc_OperationNotPermitted{} ->
-                    ErrorMsg = logic_error(
+                    ErrorResp = logic_error(
+                        400,
                         operationNotPermitted,
                         <<"Operation not permitted">>
                     ),
-                    {ok, {400, [], ErrorMsg}};
+                    {ok, ErrorResp};
                 #payproc_InvalidPaymentStatus{} ->
-                    ErrorMsg = logic_error(
+                    ErrorResp = logic_error(
+                        400,
                         invalidPaymentStatus,
                         <<"Invalid invoice payment status">>
                     ),
-                    {ok, {400, [], ErrorMsg}};
+                    {ok, ErrorResp};
                 #payproc_InsufficientAccountBalance{} ->
-                    {ok, {400, [], logic_error(
+                    {ok, logic_error(
+                        400,
                         insufficentAccountBalance,
                         <<"Operation can not be conducted because of insufficient funds on the merchant account">>
-                    )}};
+                    )};
                 #payproc_InvoicePaymentAmountExceeded{} ->
-                    ErrorMsg = logic_error(
+                    ErrorResp = logic_error(
+                        400,
                         invoicePaymentAmountExceeded,
                         <<"Payment amount exceeded">>
                     ),
-                    {ok, {400, [], ErrorMsg}};
+                    {ok, ErrorResp};
                 #payproc_InconsistentRefundCurrency{} ->
-                    ErrorMsg = logic_error(
+                    ErrorResp = logic_error(
+                        400,
                         inconsistentRefundCurrency,
                         <<"Inconsistent refund currency">>
                     ),
-                    {ok, {400, [], ErrorMsg}};
+                    {ok, ErrorResp};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, {400, [], logic_error(invalidRequest, FormattedErrors)}}
+                    {ok, logic_error(400, invalidRequest, FormattedErrors)}
             end
     end;
 
@@ -250,11 +261,11 @@ process_request('GetRefunds', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, general_error(404, <<"Invoice not found">>)};
                 #payproc_InvoicePaymentNotFound{} ->
-                    {ok, {404, [], general_error(<<"Payment not found">>)}};
+                    {ok, general_error(404, <<"Payment not found">>)};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+                    {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
 
@@ -267,13 +278,13 @@ process_request('GetRefundByID', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvoicePaymentRefundNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice payment refund not found">>)}};
+                    {ok, general_error(404, <<"Invoice payment refund not found">>)};
                 #payproc_InvoicePaymentNotFound{} ->
-                    {ok, {404, [], general_error(<<"Payment not found">>)}};
+                    {ok, general_error(404, <<"Payment not found">>)};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, general_error(404, <<"Invoice not found">>)};
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+                    {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
 
