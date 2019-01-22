@@ -5,7 +5,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/1, logic_error/2]).
+-import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -41,10 +41,10 @@ process_request('GetWebhookByID', Req, Context) ->
                 {ok, Webhook} ->
                     {ok, {200, [], decode_webhook(Webhook)}};
                 {exception, #webhooker_WebhookNotFound{}} ->
-                    {ok, general_error(<<"Webhook not found">>)}
+                    {ok, general_error(404, <<"Webhook not found">>)}
             end;
         error ->
-            {ok, general_error(<<"Webhook not found">>)}
+            {ok, general_error(404, <<"Webhook not found">>)}
     end;
 
 process_request('DeleteWebhookByID', Req, Context) ->
@@ -57,7 +57,7 @@ process_request('DeleteWebhookByID', Req, Context) ->
                     {ok, {204, [], undefined}}
             end;
         error ->
-            {ok, general_error(<<"Webhook not found">>)}
+            {ok, general_error(404, <<"Webhook not found">>)}
     end;
 
 %%

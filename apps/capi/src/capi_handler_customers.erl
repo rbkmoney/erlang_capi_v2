@@ -4,7 +4,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/1, logic_error/2]).
+-import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -46,9 +46,9 @@ process_request('GetCustomerById', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, general_error(<<"Customer not found">>)};
+                    {ok, general_error(404, <<"Customer not found">>)};
                 #payproc_CustomerNotFound{} ->
-                    {ok, general_error(<<"Customer not found">>)}
+                    {ok, general_error(404, <<"Customer not found">>)}
             end
     end;
 
@@ -59,9 +59,9 @@ process_request('DeleteCustomer', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, general_error(<<"Customer not found">>)};
+                    {ok, general_error(404, <<"Customer not found">>)};
                 #payproc_CustomerNotFound{} ->
-                    {ok, general_error(<<"Customer not found">>)};
+                    {ok, general_error(404, <<"Customer not found">>)};
                 #payproc_InvalidPartyStatus{} ->
                     {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_InvalidShopStatus{} ->
@@ -81,9 +81,9 @@ process_request('CreateCustomerAccessToken', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, general_error(<<"Customer not found">>)};
+                    {ok, general_error(404, <<"Customer not found">>)};
                 #payproc_CustomerNotFound{} ->
-                    {ok, general_error(<<"Customer not found">>)}
+                    {ok, general_error(404, <<"Customer not found">>)}
             end
     end;
 
@@ -116,9 +116,9 @@ process_request('CreateBinding', Req, Context) ->
                     ErrorResp = logic_error(operationNotPermitted, <<"Operation not permitted">>),
                     {ok, ErrorResp};
                 #payproc_InvalidUser{} ->
-                    {ok, general_error(<<"Customer not found">>)};
+                    {ok, general_error(404, <<"Customer not found">>)};
                 #payproc_CustomerNotFound{} ->
-                    {ok, general_error(<<"Customer not found">>)}
+                    {ok, general_error(404, <<"Customer not found">>)}
             end;
         {error, invalid_token} ->
             ErrorResp = logic_error(
@@ -141,9 +141,9 @@ process_request('GetBindings', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, general_error(<<"Customer not found">>)};
+                    {ok, general_error(404, <<"Customer not found">>)};
                 #payproc_CustomerNotFound{} ->
-                    {ok, general_error(<<"Customer not found">>)}
+                    {ok, general_error(404, <<"Customer not found">>)}
             end
     end;
 
@@ -154,14 +154,14 @@ process_request('GetBinding', Req, Context) ->
                 #payproc_CustomerBinding{} = B ->
                     {ok, {200, [], decode_customer_binding(B, Context)}};
                 false ->
-                    {ok, general_error(<<"Customer binding not found">>)}
+                    {ok, general_error(404, <<"Customer binding not found">>)}
             end;
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, general_error(<<"Customer not found">>)};
+                    {ok, general_error(404, <<"Customer not found">>)};
                 #payproc_CustomerNotFound{} ->
-                    {ok, general_error(<<"Customer not found">>)}
+                    {ok, general_error(404, <<"Customer not found">>)}
             end
     end;
 
@@ -187,11 +187,11 @@ process_request('GetCustomerEvents', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, general_error(<<"Customer not found">>)};
+                    {ok, general_error(404, <<"Customer not found">>)};
                 #payproc_CustomerNotFound{} ->
-                    {ok, general_error(<<"Customer not found">>)};
+                    {ok, general_error(404, <<"Customer not found">>)};
                 #payproc_EventNotFound{} ->
-                    {ok, general_error(<<"Event not found">>)};
+                    {ok, general_error(404, <<"Event not found">>)};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)}

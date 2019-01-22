@@ -4,7 +4,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/1]).
+-import(capi_handler_utils, [general_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -21,7 +21,7 @@ process_request('ActivateShop', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_ShopNotFound{} ->
-                    {ok, general_error(<<"Shop not found">>)};
+                    {ok, general_error(404, <<"Shop not found">>)};
                 #payproc_InvalidShopStatus{status = {suspension, {active, _}}} ->
                     {ok, {204, [], undefined}}
             end
@@ -35,7 +35,7 @@ process_request('SuspendShop', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_ShopNotFound{} ->
-                    {ok, general_error(<<"Shop not found">>)};
+                    {ok, general_error(404, <<"Shop not found">>)};
                 #payproc_InvalidShopStatus{status = {suspension, {suspended, _}}} ->
                     {ok, {204, [], undefined}}
             end
@@ -51,7 +51,7 @@ process_request('GetShopByID', Req, Context) ->
         {ok, Shop} ->
             {ok, {200, [], decode_shop(Shop)}};
         {exception, #payproc_ShopNotFound{}} ->
-            {ok, general_error(<<"Shop not found">>)}
+            {ok, general_error(404, <<"Shop not found">>)}
     end;
 
 %%
