@@ -4,7 +4,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/2, logic_error/3]).
+-import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -49,26 +49,25 @@ process_request('CreateClaim', Req, Context) ->
             {exception, Exception} ->
                 case Exception of
                     #payproc_InvalidPartyStatus{} ->
-                        {ok, logic_error(400, invalidPartyStatus, <<"Invalid party status">>)};
+                        {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
                     #payproc_ChangesetConflict{} ->
-                        {ok, logic_error(400, changesetConflict, <<"Changeset conflict">>)};
+                        {ok, logic_error(changesetConflict, <<"Changeset conflict">>)};
                     #payproc_InvalidChangeset{} ->
-                        {ok, logic_error(400, invalidChangeset, <<"Invalid changeset">>)};
+                        {ok, logic_error(invalidChangeset, <<"Invalid changeset">>)};
                     #'InvalidRequest'{errors = Errors} ->
                         FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                        {ok, logic_error(400, invalidRequest, FormattedErrors)}
+                        {ok, logic_error(invalidRequest, FormattedErrors)}
                 end
         end
     catch
         throw:{encode_contract_modification, adjustment_creation_not_supported} ->
             ErrorResp = logic_error(
-                400,
                 invalidChangeset,
                 <<"Contract adjustment creation not supported">>
             ),
             {ok, ErrorResp};
         throw:{encode_residence, invalid_residence} ->
-            {ok, logic_error(400, invalidRequest, <<"Invalid residence">>)}
+            {ok, logic_error(invalidRequest, <<"Invalid residence">>)}
     end;
 
 % TODO disabled temporary, exception handling must be fixed befor enabling
@@ -97,13 +96,13 @@ process_request('RevokeClaimByID', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, logic_error(400, invalidPartyStatus, <<"Invalid party status">>)};
+                    {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_ClaimNotFound{} ->
                     {ok, general_error(404, <<"Claim not found">>)};
                 #payproc_InvalidClaimStatus{} ->
-                    {ok, logic_error(400, invalidClaimStatus, <<"Invalid claim status">>)};
+                    {ok, logic_error(invalidClaimStatus, <<"Invalid claim status">>)};
                 #payproc_InvalidClaimRevision{} ->
-                    {ok, logic_error(400, invalidClaimRevision, <<"Invalid claim revision">>)}
+                    {ok, logic_error(invalidClaimRevision, <<"Invalid claim revision">>)}
             end
     end;
 

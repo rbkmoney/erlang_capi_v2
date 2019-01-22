@@ -6,7 +6,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/2, logic_error/3]).
+-import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -62,12 +62,12 @@ process_request('CreatePayout', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #'payout_processing_InvalidPayoutTool'{} ->
-                    {ok, logic_error(400, invalidPayoutTool, <<"Invalid payout tool">>)};
+                    {ok, logic_error(invalidPayoutTool, <<"Invalid payout tool">>)};
                 #'payout_processing_InsufficientFunds'{} ->
-                    {ok, logic_error(400, invalidCash, <<"Invalid amount or currency">>)};
+                    {ok, logic_error(invalidCash, <<"Invalid amount or currency">>)};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, logic_error(400, invalidRequest, FormattedErrors)}
+                    {ok, logic_error(invalidRequest, FormattedErrors)}
             end
     end;
 

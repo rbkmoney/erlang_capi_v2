@@ -5,7 +5,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/2, logic_error/3]).
+-import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -41,31 +41,28 @@ process_request('CreatePayment', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidInvoiceStatus{} ->
-                    {ok, logic_error(400, invalidInvoiceStatus, <<"Invalid invoice status">>)};
+                    {ok, logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)};
                 #payproc_InvoicePaymentPending{} ->
                     ErrorResp = logic_error(
-                        400,
                         invoicePaymentPending,
                         <<"Invoice payment pending">>
                     ),
                     {ok, ErrorResp};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, logic_error(400, invalidRequest, FormattedErrors)};
+                    {ok, logic_error(invalidRequest, FormattedErrors)};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, logic_error(400, invalidPartyStatus, <<"Invalid party status">>)};
+                    {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, logic_error(400, invalidShopStatus, <<"Invalid shop status">>)};
+                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
                 #payproc_InvalidContractStatus{} ->
                     ErrorResp = logic_error(
-                        400,
                         invalidContractStatus,
                         <<"Invalid contract status">>
                     ),
                     {ok, ErrorResp};
                 #payproc_InvalidRecurrentParentPayment{} ->
                     ErrorResp = logic_error(
-                        400,
                         invalidRecurrentParent,
                         <<"Specified recurrent parent is invalid">>
                     ),
@@ -76,12 +73,12 @@ process_request('CreatePayment', Req, Context) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end;
         {error, invalid_token} ->
-            {ok, logic_error(400,
+            {ok, logic_error(
                 invalidPaymentToolToken,
                 <<"Specified payment tool token is invalid">>
             )};
         {error, invalid_payment_session} ->
-            {ok, logic_error(400,
+            {ok, logic_error(
                 invalidPaymentSession,
                 <<"Specified payment session is invalid">>
             )}
@@ -128,25 +125,24 @@ process_request('CancelPayment', Req, Context) ->
                 #payproc_InvoicePaymentNotFound{} ->
                     {ok, general_error(404, <<"Payment not found">>)};
                 #payproc_InvalidPaymentStatus{} ->
-                    {ok, logic_error(400, invalidPaymentStatus, <<"Invalid payment status">>)};
+                    {ok, logic_error(invalidPaymentStatus, <<"Invalid payment status">>)};
                 #payproc_InvalidUser{} ->
                     {ok, general_error(404, <<"Invoice not found">>)};
                 #payproc_InvoiceNotFound{} ->
                     {ok, general_error(404, <<"Invoice not found">>)};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, logic_error(400, invalidRequest, FormattedErrors)};
+                    {ok, logic_error(invalidRequest, FormattedErrors)};
                 #payproc_OperationNotPermitted{} ->
                     ErrorResp = logic_error(
-                        400,
                         operationNotPermitted,
                         <<"Operation not permitted">>
                     ),
                     {ok, ErrorResp};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, logic_error(400, invalidPartyStatus, <<"Invalid party status">>)};
+                    {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, logic_error(400, invalidShopStatus, <<"Invalid shop status">>)}
+                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)}
             end
     end;
 
@@ -161,25 +157,24 @@ process_request('CapturePayment', Req, Context) ->
                 #payproc_InvoicePaymentNotFound{} ->
                     {ok, general_error(404, <<"Payment not found">>)};
                 #payproc_InvalidPaymentStatus{} ->
-                    {ok, logic_error(400, invalidPaymentStatus, <<"Invalid payment status">>)};
+                    {ok, logic_error(invalidPaymentStatus, <<"Invalid payment status">>)};
                 #payproc_InvalidUser{} ->
                     {ok, general_error(404, <<"Invoice not found">>)};
                 #payproc_InvoiceNotFound{} ->
                     {ok, general_error(404, <<"Invoice not found">>)};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, logic_error(400, invalidRequest, FormattedErrors)};
+                    {ok, logic_error(invalidRequest, FormattedErrors)};
                 #payproc_OperationNotPermitted{} ->
                     ErrorResp = logic_error(
-                        400,
                         operationNotPermitted,
                         <<"Operation not permitted">>
                     ),
                     {ok, ErrorResp};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, logic_error(400, invalidPartyStatus, <<"Invalid party status">>)};
+                    {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, logic_error(400, invalidShopStatus, <<"Invalid shop status">>)}
+                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)}
             end
     end;
 
@@ -204,53 +199,47 @@ process_request('CreateRefund', Req, Context) ->
                 #payproc_InvoiceNotFound{} ->
                     {ok, general_error(404, <<"Invoice not found">>)};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, logic_error(400, invalidPartyStatus, <<"Invalid party status">>)};
+                    {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, logic_error(400, invalidShopStatus, <<"Invalid shop status">>)};
+                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
                 #payproc_InvalidContractStatus{} ->
                     ErrorResp = logic_error(
-                        400,
                         invalidContractStatus,
                          <<"Invalid contract status">>
                     ),
                     {ok, ErrorResp};
                 #payproc_OperationNotPermitted{} ->
                     ErrorResp = logic_error(
-                        400,
                         operationNotPermitted,
                         <<"Operation not permitted">>
                     ),
                     {ok, ErrorResp};
                 #payproc_InvalidPaymentStatus{} ->
                     ErrorResp = logic_error(
-                        400,
                         invalidPaymentStatus,
                         <<"Invalid invoice payment status">>
                     ),
                     {ok, ErrorResp};
                 #payproc_InsufficientAccountBalance{} ->
                     {ok, logic_error(
-                        400,
                         insufficentAccountBalance,
                         <<"Operation can not be conducted because of insufficient funds on the merchant account">>
                     )};
                 #payproc_InvoicePaymentAmountExceeded{} ->
                     ErrorResp = logic_error(
-                        400,
                         invoicePaymentAmountExceeded,
                         <<"Payment amount exceeded">>
                     ),
                     {ok, ErrorResp};
                 #payproc_InconsistentRefundCurrency{} ->
                     ErrorResp = logic_error(
-                        400,
                         inconsistentRefundCurrency,
                         <<"Inconsistent refund currency">>
                     ),
                     {ok, ErrorResp};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, logic_error(400, invalidRequest, FormattedErrors)}
+                    {ok, logic_error(invalidRequest, FormattedErrors)}
             end
     end;
 

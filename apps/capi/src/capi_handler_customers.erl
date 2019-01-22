@@ -4,7 +4,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/2, logic_error/3]).
+-import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -23,16 +23,15 @@ process_request('CreateCustomer', Req, Context) ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, logic_error(400, invalidRequest, FormattedErrors)};
+                    {ok, logic_error(invalidRequest, FormattedErrors)};
                 #payproc_ShopNotFound{} ->
-                    {ok, logic_error(400, invalidShopID, <<"Shop not found">>)};
+                    {ok, logic_error(invalidShopID, <<"Shop not found">>)};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, logic_error(400, invalidPartyStatus, <<"Invalid party status">>)};
+                    {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, logic_error(400, invalidShopStatus, <<"Invalid shop status">>)};
+                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
                 #payproc_OperationNotPermitted{} ->
                     ErrorResp = logic_error(
-                        400,
                         operationNotPermitted,
                         <<"Operation not permitted">>
                     ),
@@ -64,9 +63,9 @@ process_request('DeleteCustomer', Req, Context) ->
                 #payproc_CustomerNotFound{} ->
                     {ok, general_error(404, <<"Customer not found">>)};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, logic_error(400, invalidPartyStatus, <<"Invalid party status">>)};
+                    {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, logic_error(400, invalidShopStatus, <<"Invalid shop status">>)}
+                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)}
             end
     end;
 
@@ -105,16 +104,16 @@ process_request('CreateBinding', Req, Context) ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, logic_error(400, invalidRequest, FormattedErrors)};
+                    {ok, logic_error(invalidRequest, FormattedErrors)};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, logic_error(400, invalidPartyStatus, <<"Invalid party status">>)};
+                    {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, logic_error(400, invalidShopStatus, <<"Invalid shop status">>)};
+                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
                 #payproc_InvalidPaymentTool{} ->
-                    ErrorResp = logic_error(400, invalidPaymentResource, <<"Invalid payment resource">>),
+                    ErrorResp = logic_error(invalidPaymentResource, <<"Invalid payment resource">>),
                     {ok, ErrorResp};
                 #payproc_OperationNotPermitted{} ->
-                    ErrorResp = logic_error(400, operationNotPermitted, <<"Operation not permitted">>),
+                    ErrorResp = logic_error(operationNotPermitted, <<"Operation not permitted">>),
                     {ok, ErrorResp};
                 #payproc_InvalidUser{} ->
                     {ok, general_error(404, <<"Customer not found">>)};
@@ -123,14 +122,12 @@ process_request('CreateBinding', Req, Context) ->
             end;
         {error, invalid_token} ->
             ErrorResp = logic_error(
-                400,
                 invalidPaymentToolToken,
                 <<"Specified payment tool token is invalid">>
             ),
             {ok, ErrorResp};
         {error, invalid_payment_session} ->
             ErrorResp = logic_error(
-                400,
                 invalidPaymentSession,
                 <<"Specified payment session is invalid">>
             ),
@@ -197,7 +194,7 @@ process_request('GetCustomerEvents', Req, Context) ->
                     {ok, general_error(404, <<"Event not found">>)};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, logic_error(400, invalidRequest, FormattedErrors)}
+                    {ok, logic_error(invalidRequest, FormattedErrors)}
             end
     end;
 

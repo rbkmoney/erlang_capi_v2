@@ -7,7 +7,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [logic_error/3]).
+-import(capi_handler_utils, [logic_error/2]).
 
 -define(CAPI_NS, <<"com.rbkmoney.capi">>).
 
@@ -99,7 +99,7 @@ put_card_data_to_cds(CardData, SessionData, Context) ->
         {ok, #'PutCardDataResult'{session_id = SessionID, bank_card = BankCard}} ->
             {{bank_card, expand_card_info(BankCard, BinData)}, SessionID};
         {exception, #'InvalidCardData'{}} ->
-            throw({ok, logic_error(400, invalidRequest, <<"Card data is invalid">>)})
+            throw({ok, logic_error(invalidRequest, <<"Card data is invalid">>)})
     end.
 
 lookup_bank_info(Pan, Context) ->
@@ -109,7 +109,7 @@ lookup_bank_info(Pan, Context) ->
         {ok, #'binbase_ResponseData'{bin_data = BinData, version = Version}} ->
             {BinData, Version};
         {exception, #'binbase_BinNotFound'{}} ->
-            throw({ok, logic_error(400, invalidRequest, <<"Card data is invalid">>)})
+            throw({ok, logic_error(invalidRequest, <<"Card data is invalid">>)})
     end.
 
 expand_card_info(BankCard, {BinData, Version}) ->
@@ -128,9 +128,9 @@ expand_card_info(BankCard, {BinData, Version}) ->
         }
     catch
         throw:{encode_binbase_payment_system, invalid_payment_system} ->
-            throw({ok, logic_error(400, invalidRequest, <<"Unsupported card">>)});
+            throw({ok, logic_error(invalidRequest, <<"Unsupported card">>)});
         throw:{encode_residence, invalid_residence} ->
-            throw({ok, logic_error(400, invalidRequest, <<"Unsupported card">>)})
+            throw({ok, logic_error(invalidRequest, <<"Unsupported card">>)})
     end.
 
 encode_binbase_payment_system(<<"VISA">>)                      -> visa;
@@ -172,7 +172,7 @@ process_tokenized_card_data(Data, Context) ->
         {ok, Tool} ->
             Tool;
         {exception, #'InvalidRequest'{}} ->
-            throw({ok, logic_error(400, invalidRequest, <<"Tokenized card data is invalid">>)})
+            throw({ok, logic_error(invalidRequest, <<"Tokenized card data is invalid">>)})
     end,
     process_put_card_data_result(
         put_card_data_to_cds(

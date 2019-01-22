@@ -5,7 +5,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/2, logic_error/3]).
+-import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -define(payment_institution_ref(PaymentInstitutionID),
     #domain_PaymentInstitutionRef{id = PaymentInstitutionID}).
@@ -37,7 +37,7 @@ process_request('GetPaymentInstitutions', Req, #{woody_context := WoodyContext})
         {ok, {200, [], Resp}}
     catch
         throw:{encode_residence, invalid_residence} ->
-            {ok, logic_error(400, invalidRequest, <<"Invalid residence">>)}
+            {ok, logic_error(invalidRequest, <<"Invalid residence">>)}
     end;
 
 process_request('GetPaymentInstitutionByRef', Req, #{woody_context := WoodyContext}) ->

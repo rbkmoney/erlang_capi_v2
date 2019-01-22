@@ -5,7 +5,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/2, logic_error/3]).
+-import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -25,7 +25,7 @@ process_request('CreateWebhook', Req, Context) ->
             ),
             {ok, {201, [], decode_webhook(Webhook)}};
         {exception, #payproc_ShopNotFound{}} ->
-            {ok, logic_error(400, invalidShopID, <<"Shop not found">>)}
+            {ok, logic_error(invalidShopID, <<"Shop not found">>)}
     end;
 
 process_request('GetWebhooks', _Req, Context) ->

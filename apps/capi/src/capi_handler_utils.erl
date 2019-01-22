@@ -5,7 +5,6 @@
 
 -export([general_error/2]).
 -export([logic_error/2]).
--export([logic_error/3]).
 -export([server_error/1]).
 -export([format_request_errors/1]).
 
@@ -40,18 +39,12 @@
 general_error(Code, Message) ->
     create_erorr_resp(Code, #{<<"message">> => genlib:to_binary(Message)}).
 
--spec logic_error(term(), binary()) ->
-    map().
-
-logic_error(Code, Message) ->
-    #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)}.
-
--spec logic_error(integer(), term(), io_lib:chars() | binary()) ->
+-spec logic_error(term(), io_lib:chars() | binary()) ->
     response().
 
-logic_error(Code, ErrorCode, Message) ->
-    Data = #{<<"code">> => genlib:to_binary(ErrorCode), <<"message">> => genlib:to_binary(Message)},
-    create_erorr_resp(Code, Data).
+logic_error(Code, Message) ->
+    Data = #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)},
+    create_erorr_resp(400, Data).
 
 create_erorr_resp(Code, Data) ->
     create_erorr_resp(Code, [], Data).
