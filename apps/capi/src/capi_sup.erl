@@ -48,15 +48,8 @@ get_authorizer_child_spec(jwt, Options) ->
 
 get_logic_handler_info() ->
     case genlib_app:env(capi, service_type) of
-        mock ->
-            Spec = genlib_app:permanent(
-                {capi_mock_handler, capi_mock_handler, start_link},
-                none,
-                []
-            ),
-            {capi_mock_handler, [Spec]};
         real ->
-            {capi_real_handler, []};
+            {capi_handler, []};
         undefined ->
             exit(undefined_service_type)
     end.

@@ -3940,9 +3940,9 @@ parse_rfc3339_datetime(DateTime) ->
 format_request_errors([]    ) -> <<>>;
 format_request_errors(Errors) -> genlib_string:join(<<"\n">>, Errors).
 
-process_woody_error(_Source, result_unexpected   , _Details) -> {error, reply_5xx(500)};
-process_woody_error(_Source, resource_unavailable, _Details) -> {error, reply_5xx(503)};
-process_woody_error(_Source, result_unknown      , _Details) -> {error, reply_5xx(504)}.
+process_woody_error(_Source, result_unexpected   , _Details) -> {error, server_error(500)};
+process_woody_error(_Source, resource_unavailable, _Details) -> {error, server_error(503)};
+process_woody_error(_Source, result_unknown      , _Details) -> {error, server_error(504)}.
 
 get_invoice_by_id(InvoiceID, Context) ->
     service_call_with([user_info], {invoicing, 'Get', [InvoiceID]}, Context).
@@ -4091,7 +4091,7 @@ decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
 compute_terms(ServiceName, Args, Context) ->
     service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
 
-reply_5xx(Code) when Code >= 500 andalso Code < 600 ->
+server_error(Code) when Code >= 500 andalso Code < 600 ->
     {Code, [], <<>>}.
 
 process_card_data(Data, Context) ->
@@ -4299,7 +4299,7 @@ put_card_data_to_cds(CardData, SessionData, Context) ->
                     % It's better for the cds to signal woody-level unavailability when the
                     % keyring is locked, isn't it? It could always mention keyring lock as a
                     % reason in a woody error definition.
-                    throw({error, reply_5xx(503)})
+                    throw({error, server_error(503)})
             end
     end.
 

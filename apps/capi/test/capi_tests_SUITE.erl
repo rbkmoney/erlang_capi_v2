@@ -2067,7 +2067,6 @@ get_context(Token, Deadline) ->
     DefEvtHandler = capi_client_lib:default_event_handler(),
     capi_client_lib:get_context(?CAPI_URL, Token, 10000, ipv4, DefEvtHandler, Deadline).
 
-
 get_keysource(Key, Config) ->
     filename:join(?config(data_dir, Config), Key).
 
