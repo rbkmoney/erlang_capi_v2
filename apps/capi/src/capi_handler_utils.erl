@@ -3,7 +3,7 @@
 -include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
 
--export([general_error/2]).
+-export([general_error/1]).
 -export([logic_error/2]).
 -export([server_error/1]).
 -export([format_request_errors/1]).
@@ -33,11 +33,11 @@
 -type processing_context() :: capi_handler:processing_context().
 -type response()           :: capi_handler:response().
 
--spec general_error(integer(), binary()) ->
+-spec general_error(binary()) ->
     response().
 
-general_error(Code, Message) ->
-    create_erorr_resp(Code, #{<<"message">> => genlib:to_binary(Message)}).
+general_error(Message) ->
+    create_erorr_resp(404, #{<<"message">> => genlib:to_binary(Message)}).
 
 -spec logic_error(term(), io_lib:chars() | binary()) ->
     response().

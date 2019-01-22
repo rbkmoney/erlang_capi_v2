@@ -6,7 +6,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/2, logic_error/2]).
+-import(capi_handler_utils, [general_error/1, logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -20,7 +20,7 @@ process_request('GetPayoutTools', Req, Context) ->
         {ok, #domain_Contract{payout_tools = PayoutTools}} ->
             {ok, {200, [], [decode_payout_tool(P) || P <- PayoutTools]}};
         {exception, #payproc_ContractNotFound{}} ->
-            {ok, general_error(404, <<"Contract not found">>)}
+            {ok, general_error(<<"Contract not found">>)}
     end;
 
 process_request('GetPayoutToolByID', Req, Context) ->
@@ -31,10 +31,10 @@ process_request('GetPayoutToolByID', Req, Context) ->
                 #domain_PayoutTool{} = P ->
                     {ok, {200, [], decode_payout_tool(P)}};
                 false ->
-                    {ok, general_error(404, <<"PayoutTool not found">>)}
+                    {ok, general_error(<<"PayoutTool not found">>)}
             end;
         {exception, #payproc_ContractNotFound{}} ->
-            {ok, general_error(404, <<"Contract not found">>)}
+            {ok, general_error(<<"Contract not found">>)}
     end;
 
 process_request('GetPayout', Req, Context) ->
@@ -45,10 +45,10 @@ process_request('GetPayout', Req, Context) ->
                 true ->
                     {ok, {200, [], decode_payout(Payout)}};
                 false ->
-                    {ok, general_error(404, <<"Payout not found">>)}
+                    {ok, general_error(<<"Payout not found">>)}
             end;
         {exception, #'payout_processing_PayoutNotFound'{}} ->
-            {ok, general_error(404, <<"Payout not found">>)}
+            {ok, general_error(<<"Payout not found">>)}
     end;
 
 process_request('CreatePayout', Req, Context) ->
@@ -76,7 +76,7 @@ process_request('GetScheduleByRef', Req, Context) ->
         {ok, Schedule} ->
             {ok, {200, [], decode_business_schedule(Schedule)}};
         {error, not_found} ->
-            {ok, general_error(404, <<"Schedule not found">>)}
+            {ok, general_error(<<"Schedule not found">>)}
     end;
 
 %%

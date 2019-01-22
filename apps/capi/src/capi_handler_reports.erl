@@ -5,7 +5,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/2, logic_error/2]).
+-import(capi_handler_utils, [general_error/1, logic_error/2]).
 
 -define(DEFAULT_URL_LIFETIME, 60). % seconds
 
@@ -50,7 +50,7 @@ process_request('GetReport', Req, Context) ->
         {ok, Report} ->
             {ok, {200, [], decode_report(Report)}};
         {exception, #reports_ReportNotFound{}} ->
-            {ok, general_error(404, <<"Report not found">>)}
+            {ok, general_error(<<"Report not found">>)}
     end;
 
 process_request('CreateReport', Req, Context) ->
@@ -97,10 +97,10 @@ process_request('DownloadFile', Req, Context) ->
                 true ->
                     generate_report_presigned_url(FileID, Context);
                 false ->
-                    {ok, general_error(404, <<"File not found">>)}
+                    {ok, general_error(<<"File not found">>)}
             end;
         {exception, #reports_ReportNotFound{}} ->
-            {ok, general_error(404, <<"Report not found">>)}
+            {ok, general_error(<<"Report not found">>)}
     end;
 
 %%
@@ -120,7 +120,7 @@ generate_report_presigned_url(FileID, Context) ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)};
                 #reports_FileNotFound{}->
-                    {ok, general_error(404, <<"File not found">>)}
+                    {ok, general_error(<<"File not found">>)}
             end
     end.
 

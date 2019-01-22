@@ -5,7 +5,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/2, logic_error/2]).
+-import(capi_handler_utils, [general_error/1, logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -55,7 +55,7 @@ process_request('GetInvoiceTemplateByID', Req, Context) ->
             E == #payproc_InvoiceTemplateNotFound{};
             E == #payproc_InvoiceTemplateRemoved{}
         ->
-            {ok, general_error(404, <<"Invoice template not found">>)}
+            {ok, general_error(<<"Invoice template not found">>)}
     end;
 
 process_request('UpdateInvoiceTemplate', Req, Context) ->
@@ -69,7 +69,7 @@ process_request('UpdateInvoiceTemplate', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Invoice Template not found">>)};
+                    {ok, general_error(<<"Invoice Template not found">>)};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)};
@@ -78,17 +78,17 @@ process_request('UpdateInvoiceTemplate', Req, Context) ->
                 #payproc_InvalidShopStatus{} ->
                     {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
                 #payproc_InvoiceTemplateNotFound{} ->
-                    {ok, general_error(404, <<"Invoice Template not found">>)};
+                    {ok, general_error(<<"Invoice Template not found">>)};
                 #payproc_InvoiceTemplateRemoved{} ->
-                    {ok, general_error(404, <<"Invoice Template not found">>)}
+                    {ok, general_error(<<"Invoice Template not found">>)}
             end
     catch
         throw:#payproc_InvalidUser{} ->
-            {ok, general_error(404, <<"Invoice Template not found">>)};
+            {ok, general_error(<<"Invoice Template not found">>)};
         throw:#payproc_InvoiceTemplateNotFound{} ->
-            {ok, general_error(404, <<"Invoice Template not found">>)};
+            {ok, general_error(<<"Invoice Template not found">>)};
         throw:#payproc_InvoiceTemplateRemoved{} ->
-            {ok, general_error(404, <<"Invoice Template not found">>)};
+            {ok, general_error(<<"Invoice Template not found">>)};
         throw:invoice_cart_empty ->
             {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
         throw:zero_invoice_lifetime ->
@@ -103,15 +103,15 @@ process_request('DeleteInvoiceTemplate', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Invoice Template not found">>)};
+                    {ok, general_error(<<"Invoice Template not found">>)};
                 #payproc_InvalidPartyStatus{} ->
                     {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_InvalidShopStatus{} ->
                     {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
                 #payproc_InvoiceTemplateNotFound{} ->
-                    {ok, general_error(404, <<"Invoice Template not found">>)};
+                    {ok, general_error(<<"Invoice Template not found">>)};
                 #payproc_InvoiceTemplateRemoved{} ->
-                    {ok, general_error(404, <<"Invoice Template not found">>)}
+                    {ok, general_error(<<"Invoice Template not found">>)}
             end
     end;
 
@@ -129,7 +129,7 @@ capi_handler_utils:        service_call_with([user_info, party_creation], Call, 
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Invoice Template not found">>)};
+                    {ok, general_error(<<"Invoice Template not found">>)};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)};
@@ -138,9 +138,9 @@ capi_handler_utils:        service_call_with([user_info, party_creation], Call, 
                 #payproc_InvalidShopStatus{} ->
                     {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
                 #payproc_InvoiceTemplateNotFound{} ->
-                    {ok, general_error(404, <<"Invoice Template not found">>)};
+                    {ok, general_error(<<"Invoice Template not found">>)};
                 #payproc_InvoiceTemplateRemoved{} ->
-                    {ok, general_error(404, <<"Invoice Template not found">>)}
+                    {ok, general_error(<<"Invoice Template not found">>)}
             end
     catch
         throw:{bad_invoice_params, currency_no_amount} ->
@@ -164,7 +164,7 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
             E == #payproc_InvoiceTemplateNotFound{};
             E == #payproc_InvoiceTemplateRemoved{}
         ->
-            {ok, general_error(404, <<"Invoice template not found">>)}
+            {ok, general_error(<<"Invoice template not found">>)}
     end;
 
 %%

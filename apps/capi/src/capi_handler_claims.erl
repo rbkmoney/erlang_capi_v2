@@ -4,7 +4,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/2, logic_error/2]).
+-import(capi_handler_utils, [general_error/1, logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -31,12 +31,12 @@ process_request('GetClaimByID', Req, Context) ->
             case is_wallet_claim(Claim) of
                 true ->
                     %% filter this out
-                    {ok, general_error(404, <<"Claim not found">>)};
+                    {ok, general_error(<<"Claim not found">>)};
                 false ->
                     {ok, {200, [], decode_claim(Claim)}}
             end;
         {exception, #payproc_ClaimNotFound{}} ->
-            {ok, general_error(404, <<"Claim not found">>)}
+            {ok, general_error(<<"Claim not found">>)}
     end;
 
 process_request('CreateClaim', Req, Context) ->
@@ -98,7 +98,7 @@ process_request('RevokeClaimByID', Req, Context) ->
                 #payproc_InvalidPartyStatus{} ->
                     {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_ClaimNotFound{} ->
-                    {ok, general_error(404, <<"Claim not found">>)};
+                    {ok, general_error(<<"Claim not found">>)};
                 #payproc_InvalidClaimStatus{} ->
                     {ok, logic_error(invalidClaimStatus, <<"Invalid claim status">>)};
                 #payproc_InvalidClaimRevision{} ->

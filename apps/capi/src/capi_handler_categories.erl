@@ -4,7 +4,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/2]).
+-import(capi_handler_utils, [general_error/1]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -22,7 +22,7 @@ process_request('GetCategoryByRef', Req, Context) ->
         {ok, Category} ->
             {ok, {200, [], decode_category(Category)}};
         {error, not_found} ->
-            {ok, general_error(404, <<"Category not found">>)}
+            {ok, general_error(<<"Category not found">>)}
     end;
 
 %%

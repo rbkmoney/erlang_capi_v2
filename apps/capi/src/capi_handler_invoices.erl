@@ -5,7 +5,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/2, logic_error/2]).
+-import(capi_handler_utils, [general_error/1, logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -53,9 +53,9 @@ process_request('CreateInvoiceAccessToken', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Invoice not found">>)};
+                    {ok, general_error(<<"Invoice not found">>)};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, general_error(404, <<"Invoice not found">>)}
+                    {ok, general_error(<<"Invoice not found">>)}
             end
     end;
 
@@ -66,9 +66,9 @@ process_request('GetInvoiceByID', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Invoice not found">>)};
+                    {ok, general_error(<<"Invoice not found">>)};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, general_error(404, <<"Invoice not found">>)}
+                    {ok, general_error(<<"Invoice not found">>)}
             end
     end;
 
@@ -86,9 +86,9 @@ process_request('FulfillInvoice', Req, Context) ->
                 #payproc_InvalidShopStatus{} ->
                     {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
                 #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Invoice not found">>)};
+                    {ok, general_error(<<"Invoice not found">>)};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, general_error(404, <<"Invoice not found">>)}
+                    {ok, general_error(<<"Invoice not found">>)}
             end
     end;
 
@@ -109,9 +109,9 @@ process_request('RescindInvoice', Req, Context) ->
                 #payproc_InvalidShopStatus{} ->
                     {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
                 #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Invoice not found">>)};
+                    {ok, general_error(<<"Invoice not found">>)};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, general_error(404, <<"Invoice not found">>)}
+                    {ok, general_error(<<"Invoice not found">>)}
             end
     end;
 
@@ -136,11 +136,11 @@ process_request('GetInvoiceEvents', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Invoice not found">>)};
+                    {ok, general_error(<<"Invoice not found">>)};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, general_error(404, <<"Invoice not found">>)};
+                    {ok, general_error(<<"Invoice not found">>)};
                 #payproc_EventNotFound{} ->
-                    {ok, general_error(404, <<"Event not found">>)};
+                    {ok, general_error(<<"Event not found">>)};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)}
@@ -154,9 +154,9 @@ process_request('GetInvoicePaymentMethods', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Invoice not found">>)};
+                    {ok, general_error(<<"Invoice not found">>)};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, general_error(404, <<"Invoice not found">>)}
+                    {ok, general_error(<<"Invoice not found">>)}
             end
     end;
 
