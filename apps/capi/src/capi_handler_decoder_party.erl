@@ -82,6 +82,20 @@ decode_contractor({private_entity, PrivateEntity}) ->
 decode_contractor({registered_user, RegisteredUser}) ->
     maps:merge(#{<<"contractorType">> => <<"RegisteredUser">>}, decode_registered_user(RegisteredUser)).
 
+decode_legal_entity({russian_legal_entity, LegalEntity}) ->
+    #{
+        <<"entityType"            >> => <<"RussianLegalEntity">>,
+        <<"registeredName"        >> => LegalEntity#domain_RussianLegalEntity.registered_name,
+        <<"registeredNumber"      >> => LegalEntity#domain_RussianLegalEntity.registered_number,
+        <<"inn"                   >> => LegalEntity#domain_RussianLegalEntity.inn,
+        <<"actualAddress"         >> => LegalEntity#domain_RussianLegalEntity.actual_address,
+        <<"postAddress"           >> => LegalEntity#domain_RussianLegalEntity.post_address,
+        <<"representativePosition">> => LegalEntity#domain_RussianLegalEntity.representative_position,
+        <<"representativeFullName">> => LegalEntity#domain_RussianLegalEntity.representative_full_name,
+        <<"representativeDocument">> => LegalEntity#domain_RussianLegalEntity.representative_document,
+        <<"bankAccount"           >> =>
+            decode_russian_bank_account(LegalEntity#domain_RussianLegalEntity.russian_bank_account, #{})
+    };
 decode_legal_entity({international_legal_entity, LegalEntity}) ->
     genlib_map:compact(#{
         <<"entityType">> => <<"InternationalLegalEntity">>,
