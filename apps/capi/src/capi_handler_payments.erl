@@ -148,9 +148,11 @@ process_request('CancelPayment', Req, Context) ->
 
 process_request('CapturePayment', Req, Context) ->
     CaptureParams = maps:get('CaptureParams', Req),
+    InvoiceID = maps:get(invoiceID, Req),
+    PaymentID = maps:get(paymentID, Req),
     CallArgs = [
-        maps:get(invoiceID, Req),
-        maps:get(paymentID, Req),
+        InvoiceID,
+        PaymentID,
         #payproc_InvoicePaymentCaptureParams{
             reason = maps:get(<<"reason">>, CaptureParams),
             cash = encode_optional_cash(CaptureParams, InvoiceID, PaymentID, Context)
@@ -183,12 +185,12 @@ process_request('CapturePayment', Req, Context) ->
                     {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_InvalidShopStatus{} ->
                     {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
-                #payproc_InconsistentCaptureCurrency{paymentCurrency = PaymentCurrency} ->
+                #payproc_InconsistentCaptureCurrency{payment_currency = PaymentCurrency} ->
                     {ok, logic_error(
                         inconsistentCaptureCurrency,
                         io_lib:format("Correct currency: ~p", [PaymentCurrency])
                     )};
-                #payproc_AmountExceededCaptureBalance{paymentAmount = PaymentAmount} ->
+                #payproc_AmountExceededCaptureBalance{payment_amount = PaymentAmount} ->
                     {ok, logic_error(
                         amountExceededCaptureBalance,
                         io_lib:format("Max amount: ~p", [PaymentAmount])

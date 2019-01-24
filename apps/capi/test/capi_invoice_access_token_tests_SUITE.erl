@@ -478,7 +478,7 @@ cancel_payment_ok_test(Config) ->
 -spec capture_payment_ok_test(config()) ->
     _.
 capture_payment_ok_test(Config) ->
-    capi_ct_helper:mock_services([{invoicing, fun('CapturePayment', _) -> {ok, ok} end}], Config),
+    capi_ct_helper:mock_services([{invoicing, fun('CapturePaymentNew', _) -> {ok, ok} end}], Config),
     ok = capi_client_payments:capture_payment(?config(context, Config), ?STRING, ?STRING, ?STRING).
 
 -spec capture_partial_payment_ok_test(config()) ->
