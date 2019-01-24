@@ -39,6 +39,7 @@
     get_client_payment_status_test/1,
     cancel_payment_ok_test/1,
     capture_payment_ok_test/1,
+    capture_partial_payment_ok_test/1,
     create_first_recurrent_payment_ok_test/1,
     create_second_recurrent_payment_ok_test/1,
     get_recurrent_payments_ok_test/1
@@ -80,6 +81,7 @@ invoice_access_token_tests() ->
         get_payment_by_id_ok_test,
         cancel_payment_ok_test,
         capture_payment_ok_test,
+        capture_partial_payment_ok_test,
         create_first_recurrent_payment_ok_test,
         create_second_recurrent_payment_ok_test,
         get_recurrent_payments_ok_test,
@@ -478,6 +480,17 @@ cancel_payment_ok_test(Config) ->
 capture_payment_ok_test(Config) ->
     capi_ct_helper:mock_services([{invoicing, fun('CapturePayment', _) -> {ok, ok} end}], Config),
     ok = capi_client_payments:capture_payment(?config(context, Config), ?STRING, ?STRING, ?STRING).
+
+-spec capture_partial_payment_ok_test(config()) ->
+    _.
+capture_partial_payment_ok_test(Config) ->
+    capi_ct_helper:mock_services([{invoicing, fun('CapturePaymentNew', _) -> {ok, ok} end}], Config),
+    Req = #{
+        <<"reason">> => ?STRING,
+        <<"amount">> => 123,
+        <<"currency">> => ?RUB
+    },
+    ok = capi_client_payments:capture_partial_payment(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec create_first_recurrent_payment_ok_test(config()) ->
     _.
