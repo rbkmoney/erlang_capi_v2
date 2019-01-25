@@ -479,7 +479,10 @@ cancel_payment_ok_test(Config) ->
     _.
 capture_payment_ok_test(Config) ->
     capi_ct_helper:mock_services([{invoicing, fun('CapturePaymentNew', _) -> {ok, ok} end}], Config),
-    ok = capi_client_payments:capture_payment(?config(context, Config), ?STRING, ?STRING, ?STRING).
+    Req = #{
+        <<"reason">> => ?STRING
+    },
+    ok = capi_client_payments:capture_payment(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec capture_partial_payment_ok_test(config()) ->
     _.
@@ -490,7 +493,7 @@ capture_partial_payment_ok_test(Config) ->
         <<"amount">> => 123,
         <<"currency">> => ?RUB
     },
-    ok = capi_client_payments:capture_partial_payment(?config(context, Config), Req, ?STRING, ?STRING).
+    ok = capi_client_payments:capture_payment(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec create_first_recurrent_payment_ok_test(config()) ->
     _.

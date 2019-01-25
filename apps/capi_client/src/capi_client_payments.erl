@@ -5,7 +5,6 @@
 -export([create_payment/3]).
 -export([cancel_payment/4]).
 -export([capture_payment/4]).
--export([capture_partial_payment/4]).
 -export([get_refunds/3]).
 -export([get_refund_by_id/4]).
 -export([create_refund/4]).
@@ -63,25 +62,9 @@ cancel_payment(Context, InvoiceID, PaymentID, Reason) ->
         {error, Error} -> {error, Error}
     end.
 
--spec capture_payment(context(), integer(), integer(), binary()) -> ok | {error, term()}.
-capture_payment(Context, InvoiceID, PaymentID, Reason) ->
-    Params = #{
-        binding => #{
-            <<"invoiceID">> => InvoiceID,
-            <<"paymentID">> => PaymentID
-        },
-        body => #{<<"reason">> => genlib:to_binary(Reason)}
-    },
-    {Host, Port, PreparedParams} = capi_client_lib:make_request(Context, Params),
-    Response = swag_client_payments_api:capture_payment(Host, Port, PreparedParams),
-    case capi_client_lib:handle_response(Response) of
-        {ok, _Body} -> ok;
-        {error, Error} -> {error, Error}
-    end.
-
--spec capture_partial_payment(context(), map(), integer(), integer()) ->
+-spec capture_payment(context(), map(), integer(), integer()) ->
     ok | {error, term()}.
-capture_partial_payment(Context, Request, InvoiceID, PaymentID) ->
+capture_payment(Context, Request, InvoiceID, PaymentID) ->
     Params = #{
         binding => #{
             <<"invoiceID">> => InvoiceID,
