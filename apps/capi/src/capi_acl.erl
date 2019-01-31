@@ -6,7 +6,7 @@
 
 -type priority()      :: integer().
 -type scope()         :: [resource() | {resource(), resource_id()}, ...].
--type resource()      :: atom().
+-type resource()      :: atom() | {unknown, binary()}.
 -type resource_id()   :: binary().
 -type permission()    :: read | write.
 
@@ -182,7 +182,7 @@ decode_scope_frag_resource(V, ID, H) ->
 decode_resource(V) ->
     try binary_to_existing_atom(V, utf8) catch
         error:badarg ->
-            error({badarg, {resource, V}})
+            {unknown, V}
     end.
 
 decode_permission(<<"read">>) ->
@@ -219,7 +219,9 @@ encode_scope_frags([Resource | Rest], H) ->
 encode_scope_frags([], _) ->
     [].
 
-encode_resource(V) ->
+encode_resource({unknown, V}) when is_binary(V) ->
+    V;
+encode_resource(V) when is_atom(V) ->
     atom_to_binary(V, utf8).
 
 encode_permission(read) ->
