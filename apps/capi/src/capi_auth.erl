@@ -342,5 +342,6 @@ get_resource_hierarchy() ->
         party               => #{invoice_templates => #{invoice_template_invoices => #{}}},
         customers           => #{bindings => #{}},
         invoices            => #{payments => #{}},
-        payment_resources => #{}
+        payment_resources   => #{},
+        payouts             => #{}
     }.
