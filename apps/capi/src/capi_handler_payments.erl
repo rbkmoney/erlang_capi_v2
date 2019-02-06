@@ -147,8 +147,18 @@ process_request('CancelPayment', Req, Context) ->
     end;
 
 process_request('CapturePayment', Req, Context) ->
-    CallArgs = [maps:get(invoiceID, Req), maps:get(paymentID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))],
-    Call = {invoicing, 'CapturePayment', CallArgs},
+    CaptureParams = maps:get('CaptureParams', Req),
+    InvoiceID = maps:get(invoiceID, Req),
+    PaymentID = maps:get(paymentID, Req),
+    CallArgs = [
+        InvoiceID,
+        PaymentID,
+        #payproc_InvoicePaymentCaptureParams{
+            reason = maps:get(<<"reason">>, CaptureParams),
+            cash = encode_optional_cash(CaptureParams, InvoiceID, PaymentID, Context)
+        }
+    ],
+    Call = {invoicing, 'CapturePaymentNew', CallArgs},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _} ->
             {ok, {202, [], undefined}};
@@ -174,7 +184,17 @@ process_request('CapturePayment', Req, Context) ->
                 #payproc_InvalidPartyStatus{} ->
                     {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)}
+                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
+                #payproc_InconsistentCaptureCurrency{payment_currency = PaymentCurrency} ->
+                    {ok, logic_error(
+                        inconsistentCaptureCurrency,
+                        io_lib:format("Correct currency: ~p", [PaymentCurrency])
+                    )};
+                #payproc_AmountExceededCaptureBalance{payment_amount = PaymentAmount} ->
+                    {ok, logic_error(
+                        amountExceededCaptureBalance,
+                        io_lib:format("Max amount: ~p", [PaymentAmount])
+                    )}
             end
     end;
 
@@ -184,7 +204,7 @@ process_request('CreateRefund', Req, Context) ->
     RefundParams = maps:get('RefundParams', Req),
     Params = #payproc_InvoicePaymentRefundParams{
         reason = genlib_map:get(<<"reason">>, RefundParams),
-        cash = encode_optional_refund_cash(RefundParams, InvoiceID, PaymentID, Context)
+        cash = encode_optional_cash(RefundParams, InvoiceID, PaymentID, Context)
     },
     Call = {invoicing, 'RefundPayment', [InvoiceID, PaymentID, Params]},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
@@ -333,16 +353,16 @@ encode_flow(#{<<"type">> := <<"PaymentFlowHold">>} = Entity) ->
         on_hold_expiration = binary_to_existing_atom(OnHoldExpiration, utf8)
     }}.
 
-encode_optional_refund_cash(Params = #{<<"amount">> := _, <<"currency">> := _}, _, _, _) ->
+encode_optional_cash(Params = #{<<"amount">> := _, <<"currency">> := _}, _, _, _) ->
     capi_handler_encoder:encode_cash(Params);
-encode_optional_refund_cash(Params = #{<<"amount">> := _}, InvoiceID, PaymentID, Context) ->
+encode_optional_cash(Params = #{<<"amount">> := _}, InvoiceID, PaymentID, Context) ->
     {ok, #payproc_InvoicePayment{
         payment = #domain_InvoicePayment{
             cost = #domain_Cash{currency = Currency}
         }
     }} = capi_handler_utils:get_payment_by_id(InvoiceID, PaymentID, Context),
     capi_handler_encoder:encode_cash(Params#{<<"currency">> => capi_handler_decoder_utils:decode_currency(Currency)});
-encode_optional_refund_cash(_, _, _, _) ->
+encode_optional_cash(_, _, _, _) ->
     undefined.
 
 %%

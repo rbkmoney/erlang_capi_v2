@@ -62,14 +62,15 @@ cancel_payment(Context, InvoiceID, PaymentID, Reason) ->
         {error, Error} -> {error, Error}
     end.
 
--spec capture_payment(context(), integer(), integer(), binary()) -> ok | {error, term()}.
-capture_payment(Context, InvoiceID, PaymentID, Reason) ->
+-spec capture_payment(context(), map(), integer(), integer()) ->
+    ok | {error, term()}.
+capture_payment(Context, Request, InvoiceID, PaymentID) ->
     Params = #{
         binding => #{
             <<"invoiceID">> => InvoiceID,
             <<"paymentID">> => PaymentID
         },
-        body => #{<<"reason">> => genlib:to_binary(Reason)}
+        body => Request
     },
     {Host, Port, PreparedParams} = capi_client_lib:make_request(Context, Params),
     Response = swag_client_payments_api:capture_payment(Host, Port, PreparedParams),
