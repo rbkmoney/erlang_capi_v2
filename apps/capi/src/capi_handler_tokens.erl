@@ -97,7 +97,11 @@ put_card_data_to_cds(CardData, SessionData, Context) ->
     Call = {cds_storage, 'PutCardData', [CardData, SessionData]},
     case capi_handler_utils:service_call(Call, Context) of
         {ok, #'PutCardDataResult'{session_id = SessionID, bank_card = BankCard}} ->
-            {{bank_card, expand_card_info(BankCard, BinData)}, SessionID};
+            {{bank_card, expand_card_info(
+                BankCard,
+                BinData,
+                undefCVV(SessionData)
+            )}, SessionID};
         {exception, #'InvalidCardData'{}} ->
             throw({ok, logic_error(invalidRequest, <<"Card data is invalid">>)})
     end.
@@ -112,7 +116,20 @@ lookup_bank_info(Pan, Context) ->
             throw({ok, logic_error(invalidRequest, <<"Card data is invalid">>)})
     end.
 
-expand_card_info(BankCard, {BinData, Version}) ->
+undefCVV(#'SessionData'{
+        auth_data = {card_security_code, #'CardSecurityCode'{
+            value = undefined
+        }}
+    }) ->
+    true;
+undefCVV(#'SessionData'{
+        auth_data = {card_security_code, #'CardSecurityCode'{
+            value = _Value
+        }}
+    }) ->
+    false.
+
+expand_card_info(BankCard, {BinData, Version}, HaveCVV) ->
     try
         BankCard#'domain_BankCard'{
             payment_system = encode_binbase_payment_system(BinData#'binbase_BinData'.payment_system),
@@ -124,7 +141,8 @@ expand_card_info(BankCard, {BinData, Version}) ->
                         {str, <<"version">>} => {i, Version}
                     }
                 }
-            }
+            },
+            is_cvv_empty = HaveCVV
         }
     catch
         throw:{encode_binbase_payment_system, invalid_payment_system} ->

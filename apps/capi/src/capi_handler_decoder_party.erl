@@ -203,7 +203,8 @@ decode_bank_card(#domain_BankCard{
     'token_provider' = TokenProvider,
     'issuer_country' = IssuerCountry,
     'bank_name'      = BankName,
-    'metadata'       = Metadata
+    'metadata'       = Metadata,
+    'is_cvv_empty'   = IsCVVEmpty
 }) ->
     capi_utils:map_to_base64url(genlib_map:compact(#{
         <<"type"          >> => <<"bank_card">>,
@@ -214,8 +215,14 @@ decode_bank_card(#domain_BankCard{
         <<"token_provider">> => TokenProvider,
         <<"issuer_country">> => IssuerCountry,
         <<"bank_name"     >> => BankName,
-        <<"metadata"      >> => decode_bank_card_metadata(Metadata)
+        <<"metadata"      >> => decode_bank_card_metadata(Metadata),
+        <<"is_cvv_empty"  >> => decode_bank_card_cvv_flag(IsCVVEmpty)
     })).
+
+decode_bank_card_cvv_flag(undefined)->
+    undefined;
+decode_bank_card_cvv_flag(CVVFlag)->
+    erlang:term_to_binary(CVVFlag).
 
 decode_bank_card_metadata(undefined) ->
     undefined;

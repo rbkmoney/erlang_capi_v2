@@ -65,11 +65,19 @@ encode_bank_card(BankCard) ->
         token_provider = encode_token_provider(genlib_map:get(<<"token_provider">>, BankCard)),
         issuer_country = encode_residence(genlib_map:get(<<"issuer_country">>, BankCard)),
         bank_name      = genlib_map:get(<<"bank_name">>, BankCard),
-        metadata       = encode_bank_card_metadata(genlib_map:get(<<"metadata">>, BankCard))
+        metadata       = encode_bank_card_metadata(genlib_map:get(<<"metadata">>, BankCard)),
+        is_cvv_empty   = encode_bank_card_cvv_flag(genlib_map:get(<<"is_cvv_empty">>, BankCard))
     }}.
 
 encode_payment_system(PaymentSystem) ->
     binary_to_existing_atom(PaymentSystem, utf8).
+
+encode_bank_card_cvv_flag(undefined) ->
+    undefined;
+encode_bank_card_cvv_flag(<<"true">>) ->
+    true;
+encode_bank_card_cvv_flag(<<"false">>) ->
+    false.
 
 encode_bank_card_metadata(undefined) ->
     undefined;
