@@ -74,10 +74,8 @@ encode_payment_system(PaymentSystem) ->
 
 encode_bank_card_cvv_flag(undefined) ->
     undefined;
-encode_bank_card_cvv_flag(<<"true">>) ->
-    true;
-encode_bank_card_cvv_flag(<<"false">>) ->
-    false.
+encode_bank_card_cvv_flag(Flag) when is_binary(Flag) ->
+    erlang:binary_to_existing_atom(Flag, utf8).
 
 encode_bank_card_metadata(undefined) ->
     undefined;

@@ -88,7 +88,8 @@ parse_exp_date(ExpDate) when is_binary(ExpDate) ->
 encode_session_data(CardData) ->
     #'SessionData'{
         auth_data = {card_security_code, #'CardSecurityCode'{
-            value = genlib_map:get(<<"cvv">>, CardData)
+            % dirty hack for cds support empty cvv bank cards
+            value = maps:get(<<"cvv">>, CardData, <<"">>)
         }}
     }.
 
@@ -100,7 +101,7 @@ put_card_data_to_cds(CardData, SessionData, Context) ->
             {{bank_card, expand_card_info(
                 BankCard,
                 BinData,
-                undefCVV(SessionData)
+                undef_cvv(SessionData)
             )}, SessionID};
         {exception, #'InvalidCardData'{}} ->
             throw({ok, logic_error(invalidRequest, <<"Card data is invalid">>)})
@@ -116,18 +117,20 @@ lookup_bank_info(Pan, Context) ->
             throw({ok, logic_error(invalidRequest, <<"Card data is invalid">>)})
     end.
 
-undefCVV(#'SessionData'{
+undef_cvv(#'SessionData'{
         auth_data = {card_security_code, #'CardSecurityCode'{
-            value = undefined
+            value = <<"">>
         }}
     }) ->
     true;
-undefCVV(#'SessionData'{
+undef_cvv(#'SessionData'{
         auth_data = {card_security_code, #'CardSecurityCode'{
             value = _Value
         }}
     }) ->
-    false.
+    false;
+undef_cvv(#'SessionData'{}) ->
+    undefined.
 
 expand_card_info(BankCard, {BinData, Version}, HaveCVV) ->
     try

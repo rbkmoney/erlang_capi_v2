@@ -219,10 +219,10 @@ decode_bank_card(#domain_BankCard{
         <<"is_cvv_empty"  >> => decode_bank_card_cvv_flag(IsCVVEmpty)
     })).
 
-decode_bank_card_cvv_flag(undefined)->
+decode_bank_card_cvv_flag(undefined) ->
     undefined;
-decode_bank_card_cvv_flag(CVVFlag)->
-    erlang:term_to_binary(CVVFlag).
+decode_bank_card_cvv_flag(CVVFlag) when is_atom(CVVFlag) ->
+    erlang:atom_to_binary(CVVFlag, utf8).
 
 decode_bank_card_metadata(undefined) ->
     undefined;

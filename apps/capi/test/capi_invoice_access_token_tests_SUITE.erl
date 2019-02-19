@@ -24,6 +24,7 @@
 
 -export([
     create_visa_payment_resource_ok_test/1,
+    create_visa_with_empty_cvv_ok_test/1,
     create_nspkmir_payment_resource_ok_test/1,
     create_euroset_payment_resource_ok_test/1,
     create_qw_payment_resource_ok_test/1,
@@ -34,6 +35,7 @@
     get_invoice_events_ok_test/1,
     get_invoice_payment_methods_ok_test/1,
     create_payment_ok_test/1,
+    create_payment_with_empty_cvv_ok_test/1,
     get_payments_ok_test/1,
     get_payment_by_id_ok_test/1,
     get_client_payment_status_test/1,
@@ -76,6 +78,7 @@ invoice_access_token_tests() ->
         get_invoice_events_ok_test,
         get_invoice_payment_methods_ok_test,
         create_payment_ok_test,
+        create_payment_with_empty_cvv_ok_test,
         get_payments_ok_test,
         get_client_payment_status_test,
         get_payment_by_id_ok_test,
@@ -95,6 +98,7 @@ groups() ->
         {payment_resources, [],
             [
                 create_visa_payment_resource_ok_test,
+                create_visa_with_empty_cvv_ok_test,
                 create_nspkmir_payment_resource_ok_test,
                 create_euroset_payment_resource_ok_test,
                 create_qw_payment_resource_ok_test,
@@ -218,6 +222,48 @@ create_visa_payment_resource_ok_test(Config) ->
             <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
             <<"expDate">> => <<"08/27">>,
             <<"cvv">> => <<"232">>
+        },
+        <<"clientInfo">> => ClientInfo
+    }).
+
+-spec create_visa_with_empty_cvv_ok_test(_) ->
+    _.
+create_visa_with_empty_cvv_ok_test(Config) ->
+    capi_ct_helper:mock_services([
+        {cds_storage, fun
+            ('PutCardData', [
+                #'CardData'{pan = <<"411111", _:6/binary, Mask:4/binary>>},
+                #'SessionData'{
+                    auth_data = {card_security_code, #'CardSecurityCode'{
+                        value = <<>>
+                    }}
+                }
+            ]) ->
+                {ok, #'PutCardDataResult'{
+                    bank_card = #domain_BankCard{
+                        token = ?STRING,
+                        payment_system = visa,
+                        bin = <<"411111">>,
+                        masked_pan = Mask
+                    },
+                    session_id = ?STRING
+                }}
+        end},
+        {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT(<<"VISA">>)} end}
+    ], Config),
+    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
+    {ok, #{<<"paymentToolDetails">> := #{
+        <<"detailsType">> := <<"PaymentToolDetailsBankCard">>,
+        <<"paymentSystem">> := <<"visa">>,
+        <<"lastDigits">> := <<"1111">>,
+        <<"bin">> := <<"411111">>,
+        <<"cardNumberMask">> := <<"411111******1111">>
+    }}} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"CardData">>,
+            <<"cardNumber">> => <<"4111111111111111">>,
+            <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
+            <<"expDate">> => <<"08/27">>
         },
         <<"clientInfo">> => ClientInfo
     }).
@@ -448,6 +494,59 @@ create_payment_ok_test(Config) ->
         }
     },
     {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
+
+-spec create_payment_with_empty_cvv_ok_test(config()) ->
+    _.
+create_payment_with_empty_cvv_ok_test(Config) ->
+    capi_ct_helper:mock_services(
+        [
+            {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
+            {invoicing,fun
+                ('StartPayment', [_UserInfo, _InvoiceID,
+                    #payproc_InvoicePaymentParams{
+                        payer = {payment_resource, #payproc_PaymentResourcePayerParams{
+                            resource = #domain_DisposablePaymentResource{
+                                payment_tool = {
+                                    bank_card,
+                                    #domain_BankCard{is_cvv_empty = true}
+                                }
+                            }
+                        }}
+                    }
+                ]) -> {ok, ?PAYPROC_PAYMENT}
+             end},
+            {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end}
+        ],
+        Config
+    ),
+    Req1 = #{
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"CardData">>,
+            <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
+            <<"cardNumber">> => <<"4111111111111111">>,
+            <<"expDate">> => <<"08/27">>
+        },
+        <<"clientInfo">> => #{
+            <<"fingerprint">> => <<"test fingerprint">>
+        }
+    },
+    {ok, #{
+        <<"paymentToolToken">> := Token,
+        <<"paymentSession">> := Session
+    }} = capi_client_tokens:create_payment_resource(?config(context, Config), Req1),
+    Req2 = #{
+        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
+        <<"payer">> => #{
+            <<"payerType">> => <<"PaymentResourcePayer">>,
+            <<"paymentSession">> => Session,
+            <<"paymentToolToken">> => Token,
+            <<"contactInfo">> => #{
+                <<"email">> => <<"bla@bla.ru">>
+            }
+        }
+    },
+    {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
+
 
 -spec get_payments_ok_test(config()) ->
     _.
