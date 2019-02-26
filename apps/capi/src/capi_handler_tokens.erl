@@ -88,7 +88,8 @@ parse_exp_date(ExpDate) when is_binary(ExpDate) ->
 encode_session_data(CardData) ->
     #'SessionData'{
         auth_data = {card_security_code, #'CardSecurityCode'{
-            value = genlib_map:get(<<"cvv">>, CardData)
+            % dirty hack for cds support empty cvv bank cards
+            value = maps:get(<<"cvv">>, CardData, <<"">>)
         }}
     }.
 
@@ -97,7 +98,11 @@ put_card_data_to_cds(CardData, SessionData, Context) ->
     Call = {cds_storage, 'PutCardData', [CardData, SessionData]},
     case capi_handler_utils:service_call(Call, Context) of
         {ok, #'PutCardDataResult'{session_id = SessionID, bank_card = BankCard}} ->
-            {{bank_card, expand_card_info(BankCard, BinData)}, SessionID};
+            {{bank_card, expand_card_info(
+                BankCard,
+                BinData,
+                undef_cvv(SessionData)
+            )}, SessionID};
         {exception, #'InvalidCardData'{}} ->
             throw({ok, logic_error(invalidRequest, <<"Card data is invalid">>)})
     end.
@@ -112,7 +117,22 @@ lookup_bank_info(Pan, Context) ->
             throw({ok, logic_error(invalidRequest, <<"Card data is invalid">>)})
     end.
 
-expand_card_info(BankCard, {BinData, Version}) ->
+undef_cvv(#'SessionData'{
+        auth_data = {card_security_code, #'CardSecurityCode'{
+            value = <<"">>
+        }}
+    }) ->
+    true;
+undef_cvv(#'SessionData'{
+        auth_data = {card_security_code, #'CardSecurityCode'{
+            value = _Value
+        }}
+    }) ->
+    false;
+undef_cvv(#'SessionData'{}) ->
+    undefined.
+
+expand_card_info(BankCard, {BinData, Version}, HaveCVV) ->
     try
         BankCard#'domain_BankCard'{
             payment_system = encode_binbase_payment_system(BinData#'binbase_BinData'.payment_system),
@@ -124,7 +144,8 @@ expand_card_info(BankCard, {BinData, Version}) ->
                         {str, <<"version">>} => {i, Version}
                     }
                 }
-            }
+            },
+            is_cvv_empty = HaveCVV
         }
     catch
         throw:{encode_binbase_payment_system, invalid_payment_system} ->
