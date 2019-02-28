@@ -54,7 +54,6 @@ enrich_client_info(ClientInfo, Context) ->
         _ ->
             prepare_client_ip(Context)
     end,
-    ct:log("Resulting ip: ~p", [IP]),
     ClientInfo#{<<"ip">> => IP}.
 
 is_ip_replacement_allowed(Context) ->

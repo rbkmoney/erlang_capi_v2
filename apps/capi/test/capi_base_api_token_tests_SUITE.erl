@@ -224,7 +224,7 @@ init_per_group(operations_by_base_api_token, Config) ->
         {[payouts], read}
     ],
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
-    {ok, Token2} = capi_ct_helper:issue_token(<<"TEST2">>, BasePermissions, unlimited),
+    {ok, Token2} = capi_ct_helper:issue_token(<<"TEST2">>, BasePermissions, unlimited, #{}),
     Config2 = [{context_with_diff_party, capi_ct_helper:get_context(Token2)} | Config],
     [{context, capi_ct_helper:get_context(Token)} | Config2];
 

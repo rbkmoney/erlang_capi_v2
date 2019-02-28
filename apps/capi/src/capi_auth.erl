@@ -3,6 +3,7 @@
 -export([authorize_api_key/2]).
 -export([authorize_operation/3]).
 -export([issue_access_token/2]).
+-export([issue_access_token/3]).
 
 -export([get_subject_id/1]).
 -export([get_claims/1]).
@@ -110,7 +111,13 @@ authorize_operation(OperationID, Req, {{_SubjectID, ACL}, _}) ->
 -spec issue_access_token(PartyID :: binary(), token_spec()) ->
     capi_authorizer_jwt:token().
 issue_access_token(PartyID, TokenSpec) ->
-    {Claims, ACL, Expiration} = resolve_token_spec(TokenSpec),
+    issue_access_token(PartyID, TokenSpec, #{}).
+
+-spec issue_access_token(PartyID :: binary(), token_spec(), map()) ->
+    capi_authorizer_jwt:token().
+issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
+    {Claims0, ACL, Expiration} = resolve_token_spec(TokenSpec),
+    Claims = maps:merge(ExtraProperties, Claims0),
     capi_utils:unwrap(capi_authorizer_jwt:issue({{PartyID, capi_acl:from_list(ACL)}, Claims}, Expiration)).
 
 -type acl() :: [{capi_acl:scope(), capi_acl:permission()}].
