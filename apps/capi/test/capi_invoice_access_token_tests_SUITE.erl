@@ -306,7 +306,8 @@ create_qw_payment_resource_ok_test(Config) ->
 
 ip_replacement_not_allowed_test(Config) ->
     % In this case we have no ip_replacement_allowed field, perhaps we could also test token with this field set to false
-    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>, <<"ip">> => <<"::ffff:42.42.42.42">>},
+    ClientIP = <<"::ffff:42.42.42.42">>,
+    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>, <<"ip">> => ClientIP},
     {ok, Res} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
         <<"paymentTool">> => #{
             <<"paymentToolType">> => <<"DigitalWalletData">>,
@@ -315,13 +316,19 @@ ip_replacement_not_allowed_test(Config) ->
         },
         <<"clientInfo">> => ClientInfo
     }),
-    <<"::ffff:127.0.0.1">> = maps:get(<<"ip">>, maps:get(<<"clientInfo">>, Res)).
+    case maps:get(<<"ip">>, maps:get(<<"clientInfo">>, Res)) of
+        ClientIP ->
+            error("unathorized ip replacement");
+        _ ->
+            ok
+    end.
 
 -spec ip_replacement_allowed_test(_) ->
     _.
 
 ip_replacement_allowed_test(Config) ->
-    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>, <<"ip">> => <<"::ffff:42.42.42.42">>},
+    ClientIP = <<"::ffff:42.42.42.42">>,
+    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>, <<"ip">> => ClientIP},
     {ok, Res} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
         <<"paymentTool">> => #{
             <<"paymentToolType">> => <<"DigitalWalletData">>,
@@ -330,7 +337,7 @@ ip_replacement_allowed_test(Config) ->
         },
         <<"clientInfo">> => ClientInfo
     }),
-   <<"::ffff:42.42.42.42">> = maps:get(<<"ip">>, maps:get(<<"clientInfo">>, Res)).
+   ClientIP = maps:get(<<"ip">>, maps:get(<<"clientInfo">>, Res)).
 
 -spec create_applepay_tokenized_payment_resource_ok_test(_) ->
     _.
