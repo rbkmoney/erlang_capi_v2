@@ -57,9 +57,8 @@ enrich_client_info(ClientInfo, Context) ->
     ClientInfo#{<<"ip">> => IP}.
 
 is_ip_replacement_allowed(Context) ->
-    SwagContext = maps:get(swagger_context, Context),
-    {_, JWTinfo} = maps:get(auth_context, SwagContext),
-    case maps:get(<<"ip_replacement_allowed">>, JWTinfo, undefined) of
+    Claims = capi_handler_utils:get_auth_context(Context),
+    case capi_auth:get_claim(<<"ip_replacement_allowed">>, Claims, undefined) of
         <<"true">> ->
             true;
         _ ->

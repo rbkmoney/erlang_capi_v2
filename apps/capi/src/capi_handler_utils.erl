@@ -132,8 +132,7 @@ get_party_id(Context) ->
     map().
 
 get_extra_properties(Context) ->
-    {_, Extra} = get_auth_context(Context),
-    Extra.
+    capi_auth:get_claims(get_auth_context(Context)).
 %% Common functions
 
 -spec get_my_party(processing_context()) ->
