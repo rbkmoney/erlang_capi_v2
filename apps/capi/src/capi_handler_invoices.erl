@@ -16,12 +16,13 @@
 
 process_request('CreateInvoice', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
+    ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     try
         Call = {invoicing, 'Create', [encode_invoice_params(PartyID, maps:get('InvoiceParams', Req))]},
         capi_handler_utils:service_call_with([user_info, party_creation], Call, Context)
     of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {201, [], capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, PartyID)}};
+            {ok, {201, [], capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, PartyID, ExtraProperties)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->

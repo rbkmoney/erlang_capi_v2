@@ -16,6 +16,7 @@
 
 process_request('CreateInvoiceTemplate', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
+    ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     try
         CallArgs = [encode_invoice_tpl_create_params(PartyID, maps:get('InvoiceTemplateCreateParams', Req))],
         capi_handler_utils:service_call_with(
@@ -25,7 +26,7 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
         )
     of
         {ok, InvoiceTpl} ->
-            {ok, {201, [], make_invoice_tpl_and_token(InvoiceTpl, PartyID)}};
+            {ok, {201, [], make_invoice_tpl_and_token(InvoiceTpl, PartyID, ExtraProperties)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
@@ -118,13 +119,14 @@ process_request('DeleteInvoiceTemplate', Req, Context) ->
 process_request('CreateInvoiceWithTemplate', Req, Context) ->
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
     InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
+    ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     try
         Call = {invoicing, 'CreateWithTemplate', [encode_invoice_params_with_tpl(InvoiceTplID, InvoiceParams)]},
 capi_handler_utils:        service_call_with([user_info, party_creation], Call, Context)
     of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             {ok, {201, [], capi_handler_decoder_invoicing:make_invoice_and_token(
-                Invoice, capi_handler_utils:get_party_id(Context))
+                Invoice, capi_handler_utils:get_party_id(Context), ExtraProperties)
             }};
         {exception, Exception} ->
             case Exception of
@@ -196,11 +198,15 @@ encode_invoice_tpl_update_params(Params) ->
         context          = encode_optional_context(Params)
     }.
 
-make_invoice_tpl_and_token(InvoiceTpl, PartyID) ->
+make_invoice_tpl_and_token(InvoiceTpl, PartyID, ExtraProperties) ->
     #{
         <<"invoiceTemplate"           >> => decode_invoice_tpl(InvoiceTpl),
         <<"invoiceTemplateAccessToken">> =>
-            capi_handler_utils:issue_access_token(PartyID, {invoice_tpl, InvoiceTpl#domain_InvoiceTemplate.id})
+            capi_handler_utils:issue_access_token(
+                PartyID,
+                {invoice_tpl, InvoiceTpl#domain_InvoiceTemplate.id},
+                ExtraProperties
+            )
     }.
 
 encode_invoice_tpl_details(#{<<"templateType">> := <<"InvoiceTemplateSingleLine">>} = Details) ->

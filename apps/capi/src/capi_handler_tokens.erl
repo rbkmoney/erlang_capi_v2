@@ -47,7 +47,28 @@ process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 enrich_client_info(ClientInfo, Context) ->
-    ClientInfo#{<<"ip">> => prepare_client_ip(Context)}.
+    IP = case is_ip_replacement_allowed(Context) of
+        true ->
+            UncheckedIP = maps:get(<<"ip">>, ClientInfo, prepare_client_ip(Context)),
+            validate_ip(UncheckedIP);
+        _ ->
+            prepare_client_ip(Context)
+    end,
+    ClientInfo#{<<"ip">> => IP}.
+
+is_ip_replacement_allowed(Context) ->
+    Claims = capi_handler_utils:get_auth_context(Context),
+    case capi_auth:get_claim(<<"ip_replacement_allowed">>, Claims, undefined) of
+        <<"true">> ->
+            true;
+        _ ->
+            false
+    end.
+
+validate_ip(IP) ->
+    % placeholder so far.
+    % we could want to check whether client's ip is valid and corresponds IPv4 inside IPv6 standart
+    IP.
 
 prepare_client_ip(Context) ->
     #{ip_address := IP} = get_peer_info(Context),

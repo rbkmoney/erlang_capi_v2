@@ -144,4 +144,4 @@ deadline_relative_ok_test(Config) ->
 
 get_context(Token, Deadline) ->
     DefEvtHandler = capi_client_lib:default_event_handler(),
-    capi_client_lib:get_context(?CAPI_URL, Token, 10000, ipv4, DefEvtHandler, Deadline).
+    capi_client_lib:get_context(?CAPI_URL, Token, 10000, ipv4, #{}, DefEvtHandler, Deadline).

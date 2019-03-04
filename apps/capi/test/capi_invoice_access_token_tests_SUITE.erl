@@ -44,7 +44,9 @@
     capture_partial_payment_ok_test/1,
     create_first_recurrent_payment_ok_test/1,
     create_second_recurrent_payment_ok_test/1,
-    get_recurrent_payments_ok_test/1
+    get_recurrent_payments_ok_test/1,
+    ip_replacement_not_allowed_test/1,
+    ip_replacement_allowed_test/1
 ]).
 
 -define(CAPI_PORT                   , 8080).
@@ -108,10 +110,10 @@ groups() ->
             ]
         },
         {operations_by_invoice_access_token_after_invoice_creation, [],
-            invoice_access_token_tests()
+            [ip_replacement_allowed_test | invoice_access_token_tests()]
         },
         {operations_by_invoice_access_token_after_token_creation, [],
-            invoice_access_token_tests()
+            [ip_replacement_not_allowed_test |  invoice_access_token_tests()]
         }
     ].
 
@@ -134,7 +136,8 @@ end_per_suite(C) ->
     config().
 init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    {ok, Token} = capi_ct_helper:issue_token([{[invoices], write}], unlimited),
+    ExtraProperties = #{<<"ip_replacement_allowed">> => <<"true">>},
+    {ok, Token} = capi_ct_helper:issue_token([{[invoices], write}], unlimited, ExtraProperties),
     capi_ct_helper:mock_services([{invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end}], MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
@@ -149,7 +152,7 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
         #{
             <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
         }
-    } = capi_client_invoices:create_invoice(capi_ct_helper:get_context(Token), Req),
+    } = capi_client_invoices:create_invoice(capi_ct_helper:get_context(Token, ExtraProperties), Req),
     capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
     [{context, capi_ct_helper:get_context(InvAccToken)} | Config];
 
@@ -172,6 +175,7 @@ end_per_group(_Group, _C) ->
 
 -spec init_per_testcase(test_case_name(), config()) ->
     config().
+
 init_per_testcase(_Name, C) ->
     [{test_sup, capi_ct_helper:start_mocked_service_sup(?MODULE)} | C].
 
@@ -342,6 +346,44 @@ create_qw_payment_resource_ok_test(Config) ->
         },
         <<"clientInfo">> => ClientInfo
     }).
+
+-spec ip_replacement_not_allowed_test(_) ->
+    _.
+
+ip_replacement_not_allowed_test(Config) ->
+    % In this case we have no ip_replacement_allowed field, perhaps we could also test token with this field set to false
+    ClientIP = <<"::ffff:42.42.42.42">>,
+    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>, <<"ip">> => ClientIP},
+    {ok, Res} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"DigitalWalletData">>,
+            <<"digitalWalletType">> => <<"DigitalWalletQIWI">>,
+            <<"phoneNumber">> => <<"+79876543210">>
+        },
+        <<"clientInfo">> => ClientInfo
+    }),
+    case maps:get(<<"ip">>, maps:get(<<"clientInfo">>, Res)) of
+        ClientIP ->
+            error("unathorized ip replacement");
+        _ ->
+            ok
+    end.
+
+-spec ip_replacement_allowed_test(_) ->
+    _.
+
+ip_replacement_allowed_test(Config) ->
+    ClientIP = <<"::ffff:42.42.42.42">>,
+    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>, <<"ip">> => ClientIP},
+    {ok, Res} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"DigitalWalletData">>,
+            <<"digitalWalletType">> => <<"DigitalWalletQIWI">>,
+            <<"phoneNumber">> => <<"+79876543210">>
+        },
+        <<"clientInfo">> => ClientInfo
+    }),
+   ClientIP = maps:get(<<"ip">>, maps:get(<<"clientInfo">>, Res)).
 
 -spec create_applepay_tokenized_payment_resource_ok_test(_) ->
     _.
