@@ -329,6 +329,8 @@ decode_payment_methods({value, PaymentMethodRefs}) ->
         proplists:get_keys(PaymentMethods)
     ).
 
+decode_payment_method(empty_cvv_bank_card, PaymentSystems) ->
+    [#{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems)}];
 decode_payment_method(bank_card, PaymentSystems) ->
     [#{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems)}];
 decode_payment_method(payment_terminal, Providers) ->
