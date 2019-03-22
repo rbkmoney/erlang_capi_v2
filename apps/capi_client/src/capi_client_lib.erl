@@ -58,6 +58,7 @@ make_search_query_string(ParamList) ->
     map().
 prepare_param(Param) ->
     case Param of
+        {shopID, P}         -> #{<<"shopID">> => genlib:to_binary(P)};
         {limit, P}          -> #{<<"limit">> => genlib:to_binary(P)};
         {offset, P}         -> #{<<"offset">> => genlib:to_binary(P)};
         {from_time, P}      -> #{<<"fromTime">> => genlib_format:format_datetime_iso8601(P)};

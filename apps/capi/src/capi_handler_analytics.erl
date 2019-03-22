@@ -26,7 +26,7 @@ process_request('GetPaymentRateStats', Req, Context) ->
     process_merchant_stat(customers_rate_stat, Req, Context);
 
 process_request('GetPaymentMethodStats', Req, Context) ->
-    bankCard =  maps:get(paymentMethod, Req),
+    bankCard = maps:get(paymentMethod, Req),
     StatType = payments_pmt_cards_stat,
     process_merchant_stat(StatType, Req, Context);
 
