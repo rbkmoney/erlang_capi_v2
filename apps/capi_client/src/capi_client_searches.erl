@@ -11,10 +11,7 @@
 -spec search_invoices(context(), search_query()) -> {ok, term(), term()} | {error, term()}.
 search_invoices(Context, Query) ->
     Qs = capi_client_lib:make_search_query_string(Query),
-    Params = #{
-        % binding => #{<<"shopID">> => ShopID},
-        qs_val => Qs
-    },
+    Params = #{ qs_val => Qs },
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
     Response = swag_client_search_api:search_invoices(Url, PreparedParams, Opts),
     case capi_client_lib:handle_response(Response) of
@@ -26,10 +23,7 @@ search_invoices(Context, Query) ->
 -spec search_payments(context(), search_query()) -> {ok, term(), term()} | {error, term()}.
 search_payments(Context, Query) ->
     Qs = capi_client_lib:make_search_query_string(Query),
-    Params = #{
-        % binding => #{<<"shopID">> => ShopID},
-        qs_val => Qs
-    },
+    Params = #{ qs_val => Qs },
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
     Response = swag_client_search_api:search_payments(Url, PreparedParams, Opts),
     case capi_client_lib:handle_response(Response) of
@@ -41,10 +35,7 @@ search_payments(Context, Query) ->
 -spec search_refunds(context(), search_query()) -> {ok, term(), term()} | {error, term()}.
 search_refunds(Context, Query) ->
     Qs = capi_client_lib:make_search_query_string(Query),
-    Params = #{
-        % binding => #{<<"shopID">> => ShopID},
-        qs_val => Qs
-    },
+    Params = #{ qs_val => Qs },
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
     Response = swag_client_search_api:search_refunds(Url, PreparedParams, Opts),
     case capi_client_lib:handle_response(Response) of
@@ -56,10 +47,7 @@ search_refunds(Context, Query) ->
 -spec search_payouts(context(), search_query()) -> {ok, term(), term()} | {error, term()}.
 search_payouts(Context, Query) ->
     Qs = capi_client_lib:make_search_query_string(Query),
-    Params = #{
-        % binding => #{<<"shopID">> => ShopID},
-        qs_val => Qs
-    },
+    Params = #{ qs_val => Qs },
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
     Response = swag_client_search_api:search_payouts(Url, PreparedParams, Opts),
     case capi_client_lib:handle_response(Response) of
