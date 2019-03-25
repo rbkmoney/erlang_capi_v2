@@ -866,6 +866,7 @@ search_invoices_ok_test(Config) ->
         {invoiceStatus, <<"fulfilled">>},
         {payerEmail, <<"test@test.ru">>},
         {payerIP, <<"192.168.0.1">>},
+        {shopID, ?STRING},
         {paymentStatus, <<"processed">>},
         {paymentFlow, <<"instant">>},
         {paymentMethod, <<"bankCard">>},
@@ -880,7 +881,7 @@ search_invoices_ok_test(Config) ->
         {continuationToken, <<"come_back_next_time">>}
     ],
 
-    {ok, _, _} = capi_client_searches:search_invoices(?config(context, Config), ?STRING, Query).
+    {ok, _, _} = capi_client_searches:search_invoices(?config(context, Config), Query).
 
 -spec search_payments_ok_test(config()) ->
     _.
@@ -892,6 +893,7 @@ search_payments_ok_test(Config) ->
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
         {payerEmail, <<"test@test.ru">>},
         {payerIP, <<"192.168.0.0.1">>},
+        {shopID, ?STRING},
         {paymentStatus, <<"processed">>},
         {paymentFlow, <<"instant">>},
         {paymentMethod, <<"bankCard">>},
@@ -906,7 +908,7 @@ search_payments_ok_test(Config) ->
         {continuationToken, <<"come_back_next_time">>}
     ],
 
-    {ok, _, _} = capi_client_searches:search_payments(?config(context, Config), ?STRING, Query).
+    {ok, _, _} = capi_client_searches:search_payments(?config(context, Config), Query).
 
 -spec search_refunds_ok_test(config()) ->
     _.
@@ -917,14 +919,14 @@ search_refunds_ok_test(Config) ->
         {offset, 2},
         {from_time, {{2015, 08, 11},{19, 42, 35}}},
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
-        {shopID, <<"testShopID">>},
+        {shopID, ?STRING},
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
         {refundID, <<"testRefundID">>},
         {refundStatus, <<"succeeded">>}
     ],
 
-    {ok, _, _} = capi_client_searches:search_refunds(?config(context, Config), ?STRING, Query).
+    {ok, _, _} = capi_client_searches:search_refunds(?config(context, Config), Query).
 
 -spec search_payouts_ok_test(config()) ->
     _.
@@ -935,12 +937,12 @@ search_payouts_ok_test(Config) ->
         {offset, 2},
         {from_time, {{2015, 08, 11},{19, 42, 35}}},
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
-        {shopID, <<"testShopID">>},
+        {shopID, ?STRING},
         {payoutID, <<"testPayoutID">>},
         {payoutToolType, <<"Wallet">>}
     ],
 
-    {ok, _, _} = capi_client_searches:search_payouts(?config(context, Config), ?STRING, Query).
+    {ok, _, _} = capi_client_searches:search_payouts(?config(context, Config), Query).
 
 -spec get_payment_conversion_stats_ok_test(_) ->
     _.
@@ -951,10 +953,11 @@ get_payment_conversion_stats_ok_test(Config) ->
         {offset, 2},
         {from_time, {{2015, 08, 11},{19, 42, 35}}},
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {shopID, ?STRING},
         {split_unit, minute},
         {split_size, 1}
     ],
-    {ok, _} = capi_client_analytics:get_payment_conversion_stats(?config(context, Config), ?STRING, Query).
+    {ok, _} = capi_client_analytics:get_payment_conversion_stats(?config(context, Config), Query).
 
 -spec get_payment_revenue_stats_ok_test(config()) ->
     _.
@@ -965,10 +968,11 @@ get_payment_revenue_stats_ok_test(Config) ->
         {offset, 2},
         {from_time, {{2015, 08, 11},{19, 42, 35}}},
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {shopID, ?STRING},
         {split_unit, minute},
         {split_size, 1}
     ],
-    {ok, _} = capi_client_analytics:get_payment_revenue_stats(?config(context, Config), ?STRING, Query).
+    {ok, _} = capi_client_analytics:get_payment_revenue_stats(?config(context, Config), Query).
 
 -spec get_payment_geo_stats_ok_test(config()) ->
     _.
@@ -979,10 +983,11 @@ get_payment_geo_stats_ok_test(Config) ->
         {offset, 0},
         {from_time, {{2015, 08, 11},{19, 42, 35}}},
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {shopID, ?STRING},
         {split_unit, minute},
         {split_size, 1}
     ],
-    {ok, _} = capi_client_analytics:get_payment_geo_stats(?config(context, Config), ?STRING, Query).
+    {ok, _} = capi_client_analytics:get_payment_geo_stats(?config(context, Config), Query).
 
 -spec get_payment_rate_stats_ok_test(config()) ->
     _.
@@ -993,10 +998,11 @@ get_payment_rate_stats_ok_test(Config) ->
         {offset, 0},
         {from_time, {{2015, 08, 11},{19, 42, 35}}},
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {shopID, ?STRING},
         {split_unit, minute},
         {split_size, 1}
     ],
-    {ok, _} = capi_client_analytics:get_payment_rate_stats(?config(context, Config), ?STRING, Query).
+    {ok, _} = capi_client_analytics:get_payment_rate_stats(?config(context, Config), Query).
 
 -spec get_payment_method_stats_ok_test(config()) ->
     _.
@@ -1007,11 +1013,12 @@ get_payment_method_stats_ok_test(Config) ->
         {offset, 0},
         {from_time, {{2015, 08, 11},{19, 42, 35}}},
         {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {shopID, ?STRING},
         {split_unit, minute},
         {split_size, 1},
         {paymentMethod, <<"bankCard">>}
     ],
-    {ok, _} = capi_client_analytics:get_payment_method_stats(?config(context, Config), ?STRING, Query).
+    {ok, _} = capi_client_analytics:get_payment_method_stats(?config(context, Config), Query).
 
 -spec get_reports_ok_test(config()) ->
     _.
