@@ -9,7 +9,7 @@ UTILS_PATH := build_utils
 TEMPLATES_PATH := .
 
 # Name of the service
-SERVICE_NAME := capi-v2
+SERVICE_NAME := capi-v3
 # Service image default tag
 SERVICE_IMAGE_TAG ?= $(shell git rev-parse HEAD)
 # The tag for service image to be pushed with
