@@ -15,18 +15,22 @@
     {ok | error, capi_handler:response() | noimpl}.
 
 process_request('CreatePayment', Req, Context) ->
-    InvoiceID = maps:get('invoiceID', Req),
+    InvoiceID     = maps:get('invoiceID', Req),
     PaymentParams = maps:get('PaymentParams', Req),
-    Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
     Result =
         try
-            Params =  #payproc_InvoicePaymentParams{
-                'payer' = encode_payer_params(genlib_map:get(<<"payer">>, PaymentParams)),
-                'flow' = encode_flow(Flow),
-                'make_recurrent' = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false)
-            },
-            Call = {invoicing, 'StartPayment', [InvoiceID, Params]},
-            capi_handler_utils:service_call_with([user_info], Call, Context)
+            capi_handler_utils:service_call_idemp({PaymentParams, Context}, fun(ParamsIn) ->
+                Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
+                Params =  #payproc_InvoicePaymentParams{
+                    'id'             = genlib_map:get(<<"id">>, ParamsIn),
+                    'external_id'    = genlib_map:get(<<"externalID">>, ParamsIn, undefined),
+                    'payer'          = encode_payer_params(genlib_map:get(<<"payer">>, ParamsIn)),
+                    'flow'           = encode_flow(Flow),
+                    'make_recurrent' = genlib_map:get(<<"makeRecurrent">>, ParamsIn, false)
+                },
+                Call = {invoicing, 'StartPayment', [InvoiceID, Params]},
+                capi_handler_utils:service_call_with([user_info], Call, Context)
+            end)
         catch
             throw:Error when
                 Error =:= invalid_token orelse
@@ -40,6 +44,8 @@ process_request('CreatePayment', Req, Context) ->
             {ok, {201, [], decode_invoice_payment(InvoiceID, Payment, Context)}};
         {exception, Exception} ->
             case Exception of
+                {error, external_id_conflict} ->
+                    {ok, logic_error(invalidRequest, <<"ExternalID alredy used in another request">>)};
                 #payproc_InvalidInvoiceStatus{} ->
                     {ok, logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)};
                 #payproc_InvoicePaymentPending{} ->

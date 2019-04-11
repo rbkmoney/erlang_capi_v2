@@ -7,6 +7,7 @@
 -export([process_request/3]).
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
+
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
@@ -18,13 +19,18 @@ process_request('CreateInvoice', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     try
-        Call = {invoicing, 'Create', [encode_invoice_params(PartyID, maps:get('InvoiceParams', Req))]},
-        capi_handler_utils:service_call_with([user_info, party_creation], Call, Context)
+        InvoiceParams = maps:get('InvoiceParams', Req),
+        capi_handler_utils:service_call_idemp({InvoiceParams, Context}, fun(Params) ->
+            Call = {invoicing, 'Create', [encode_invoice_params(PartyID, Params)]},
+            capi_handler_utils:service_call_with([user_info, party_creation], Call, Context)
+        end)
     of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             {ok, {201, [], capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, PartyID, ExtraProperties)}};
         {exception, Exception} ->
             case Exception of
+                {error, external_id_conflict} ->
+                    {ok, logic_error(invalidRequest, <<"ExternalID alredy used in another request">>)};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)};
@@ -41,7 +47,6 @@ process_request('CreateInvoice', Req, Context) ->
         invalid_invoice_cost ->
             {ok, logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)}
     end;
-
 process_request('CreateInvoiceAccessToken', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
@@ -171,12 +176,14 @@ encode_invoice_params(PartyID, InvoiceParams) ->
     Currency = genlib_map:get(<<"currency">>, InvoiceParams),
     Cart = genlib_map:get(<<"cart">>, InvoiceParams),
     #payproc_InvoiceParams{
-        party_id = PartyID,
-        details  = encode_invoice_details(InvoiceParams),
-        cost     = encode_invoice_cost(Amount, Currency, Cart),
-        due      = capi_handler_utils:get_time(<<"dueDate">>, InvoiceParams),
-        context  = capi_handler_encoder:encode_invoice_context(InvoiceParams),
-        shop_id  = genlib_map:get(<<"shopID">>, InvoiceParams)
+        party_id    = PartyID,
+        details     = encode_invoice_details(InvoiceParams),
+        cost        = encode_invoice_cost(Amount, Currency, Cart),
+        due         = capi_handler_utils:get_time(<<"dueDate">>, InvoiceParams),
+        context     = capi_handler_encoder:encode_invoice_context(InvoiceParams),
+        shop_id     = genlib_map:get(<<"shopID">>, InvoiceParams),
+        id          = genlib_map:get(<<"id">>, InvoiceParams),
+        external_id = genlib_map:get(<<"externalID">>, InvoiceParams, undefined)
     }.
 
 encode_invoice_cost(Amount, Currency, Cart) when Amount =/= undefined, Cart =/= undefined ->
