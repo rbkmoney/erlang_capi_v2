@@ -4,7 +4,7 @@
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
 
 -export([general_error/2]).
--export([logic_error/2]).
+-export([logic_error/1, logic_error/2]).
 -export([server_error/1]).
 -export([format_request_errors/1]).
 
@@ -42,11 +42,15 @@
 general_error(Code, Message) ->
     create_erorr_resp(Code, #{<<"message">> => genlib:to_binary(Message)}).
 
+-spec logic_error(term()) ->
+    response().
+
+logic_error(externalIDConflict) ->
+    create_erorr_resp(409, undefined).
+
 -spec logic_error(term(), io_lib:chars() | binary()) ->
     response().
 
-logic_error(externalIDConflict, Message) ->
-    create_erorr_resp(409, Message);
 logic_error(Code, Message) ->
     Data = #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)},
     create_erorr_resp(400, Data).
@@ -112,7 +116,7 @@ service_call({ServiceName, Function, Args}, #{woody_context := WoodyContext}) ->
 service_call_idemp({ReqParams, #{woody_context := WoodyCtx} = Context}, Fun) ->
     PartyID = get_party_id(Context),
     ExternalID = maps:get(<<"externalID">>, ReqParams, <<"undefined">>),
-    IdempKey = <<"wapi/", PartyID/binary, "/", ExternalID/binary>>,
+    IdempKey = <<"capi/", PartyID/binary, "/", ExternalID/binary>>,
     case capi_bender:get_id(IdempKey, ReqParams, WoodyCtx) of
         {ok, ID} -> Fun(ReqParams#{<<"id">> => ID});
         {error, external_id_conflict} = Err -> {exception, Err}

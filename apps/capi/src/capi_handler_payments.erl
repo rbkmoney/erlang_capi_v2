@@ -5,7 +5,7 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/2, logic_error/2]).
+-import(capi_handler_utils, [general_error/2, logic_error/1, logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -45,7 +45,7 @@ process_request('CreatePayment', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 {error, external_id_conflict} ->
-                    {ok, logic_error(externalIDConflict, undefined)};
+                    {ok, logic_error(externalIDConflict)};
                 #payproc_InvalidInvoiceStatus{} ->
                     {ok, logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)};
                 #payproc_InvoicePaymentPending{} ->
