@@ -326,10 +326,10 @@ create_invoice_idemp_fail_test(Config) ->
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
     ], Config),
 
-    {ok, _}    = capi_client_invoices:create_invoice(?config(context, Config), Req),
-    BadExternalID = {error, {400,
+    {ok, _} = capi_client_invoices:create_invoice(?config(context, Config), Req),
+    BadExternalID = {error, {409,
         #{
-            <<"code">>    => <<"invalidRequest">>,
+            <<"code">>    => <<"externalIDConflict">>,
             <<"message">> => <<"ExternalID alredy used in another request">>
         }
     }},
