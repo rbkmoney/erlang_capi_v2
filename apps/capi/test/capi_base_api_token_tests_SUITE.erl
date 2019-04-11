@@ -1,6 +1,7 @@
 -module(capi_base_api_token_tests_SUITE).
-% -include_lib("eunit/include/eunit.hrl").
+
 -include_lib("common_test/include/ct.hrl").
+-include_lib("stdlib/include/assert.hrl").
 
 -include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("dmsl/include/dmsl_payment_processing_errors_thrift.hrl").
@@ -250,7 +251,7 @@ init_per_testcase(_Name, C) ->
 end_per_testcase(_Name, C) ->
     capi_ct_helper:stop_mocked_service_sup(?config(test_sup, C)),
     ok.
--include_lib("stdlib/include/assert.hrl").
+
 %%% Tests
 -spec create_invoice_ok_test(config()) ->
     _.

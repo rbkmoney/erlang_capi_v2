@@ -7,7 +7,6 @@
 -export([process_request/3]).
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
-
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
