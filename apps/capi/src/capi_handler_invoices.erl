@@ -3,6 +3,8 @@
 -include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
 
+-define(INVOICE_PREFIX, <<"invoice">>).
+
 -behaviour(capi_handler).
 -export([process_request/3]).
 -import(capi_handler_utils, [general_error/2, logic_error/1, logic_error/2]).
@@ -14,15 +16,20 @@
 ) ->
     {ok | error, capi_handler:response() | noimpl}.
 
-process_request('CreateInvoice', Req, Context) ->
+process_request('CreateInvoice', Req, #{woody_context := WoodyCtx} = Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
+    InvoiceParams = maps:get('InvoiceParams', Req),
+    ExternalID = maps:get(<<"externalID">>, InvoiceParams, <<"undefined">>),
+    IdempotentKey = capi_handler_utils:get_idempotent_key(?INVOICE_PREFIX, PartyID, ExternalID),
+    Hash = erlang:phash2(InvoiceParams),
     try
-        InvoiceParams = maps:get('InvoiceParams', Req),
-        capi_handler_utils:service_call_idemp({InvoiceParams, Context}, fun(Params) ->
-            Call = {invoicing, 'Create', [encode_invoice_params(PartyID, Params)]},
-            capi_handler_utils:service_call_with([user_info, party_creation], Call, Context)
-        end)
+        case capi_bender:gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) of
+            {ok, ID} ->
+                Call = {invoicing, 'Create', [encode_invoice_params(PartyID, InvoiceParams#{<<"id">> => ID})]},
+                capi_handler_utils:service_call_with([user_info, party_creation], Call, Context);
+            Err -> {exception, Err}
+        end
     of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             {ok, {201, [], capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, PartyID, ExtraProperties)}};

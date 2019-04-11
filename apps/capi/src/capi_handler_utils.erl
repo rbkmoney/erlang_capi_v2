@@ -10,7 +10,7 @@
 
 -export([service_call_with/3]).
 -export([service_call/2]).
--export([service_call_idemp/2]).
+-export([get_idempotent_key/3]).
 
 -export([get_my_party/1]).
 -export([get_auth_context/1]).
@@ -110,17 +110,11 @@ service_call_with_([], Call, Context) ->
 service_call({ServiceName, Function, Args}, #{woody_context := WoodyContext}) ->
     capi_woody_client:call_service(ServiceName, Function, Args, WoodyContext).
 
--spec service_call_idemp({map(), processing_context()}, function()) ->
-    woody:result().
+-spec get_idempotent_key(binary(), binary(), binary()) ->
+    binary().
 
-service_call_idemp({ReqParams, #{woody_context := WoodyCtx} = Context}, Fun) ->
-    PartyID = get_party_id(Context),
-    ExternalID = maps:get(<<"externalID">>, ReqParams, <<"undefined">>),
-    IdempKey = <<"capi/", PartyID/binary, "/", ExternalID/binary>>,
-    case capi_bender:get_id(IdempKey, ReqParams, WoodyCtx) of
-        {ok, ID} -> Fun(ReqParams#{<<"id">> => ID});
-        {error, external_id_conflict} = Err -> {exception, Err}
-    end.
+get_idempotent_key(Prefix, PartyID, ExternalID) ->
+    <<"capi/", Prefix/binary, "/", PartyID/binary, "/", ExternalID/binary>>.
 
 get_party_params(Context) ->
     #payproc_PartyParams{

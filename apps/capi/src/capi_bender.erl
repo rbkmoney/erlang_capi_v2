@@ -4,22 +4,37 @@
 -include_lib("bender_proto/include/msgpack_thrift.hrl").
 
 -type woody_context() :: woody_context:ctx().
--type request_data()  :: capi_hanlder:request_data().
 
--export([get_id/3]).
+-export([gen_by_snowflake/3]).
+-export([gen_by_sequence/4]).
 
--spec get_id(binary(), request_data(), woody_context()) ->
+-spec gen_by_snowflake(binary(), integer(), woody_context()) ->
     {ok, binary()} |
     {error, external_id_conflict}.
 
-get_id(IdempKey, Params, ProcessContext) ->
+gen_by_snowflake(IdempotentKey, Hash, ProcessContext) ->
     Snowflake = {snowflake, #bender_SnowflakeSchema{}},
-    Ctx = capi_msgp_marshalling:marshal(#{<<"params_hash">> => erlang:phash2(Params)}),
-    Args = [IdempKey, Snowflake, Ctx],
+    Context = capi_msgp_marshalling:marshal(#{<<"params_hash">> => Hash}),
+    generate_id([IdempotentKey, Snowflake, Context], ProcessContext).
+
+-spec gen_by_sequence(binary(), binary(), integer(), woody_context()) ->
+    {ok, binary()} |
+    {error, external_id_conflict}.
+
+gen_by_sequence(IdempotentKey, ParentID, Hash, ProcessContext) ->
+    Sequince = {sequince, #bender_SequenceSchema{
+        sequence_id = ParentID,
+        minimum = 100
+    }},
+    Context = capi_msgp_marshalling:marshal(#{<<"params_hash">> => Hash}),
+    generate_id([IdempotentKey, Sequince, Context], ProcessContext).
+
+%% Internal
+generate_id([_, _, Context] = Args, ProcessContext) ->
     case capi_woody_client:call_service(bender, 'GenerateID', Args, ProcessContext) of
         {ok, #bender_GenerationResult{internal_id = ID, context = undefined}} ->
             {ok, ID};
-        {ok, #bender_GenerationResult{internal_id = ID, context = Ctx}} ->
+        {ok, #bender_GenerationResult{internal_id = ID, context = Context}} ->
             {ok, ID};
         {ok, _Other} ->
             {error, external_id_conflict}

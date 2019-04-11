@@ -274,10 +274,6 @@ create_invoice_ok_test(Config) ->
 -spec create_invoice_idemp_ok_test(config()) ->
     _.
 create_invoice_idemp_ok_test(Config) ->
-    % _ = dbg:tracer(),
-    % _ = dbg:p(all, c),
-    % _ = dbg:tpl({?MODULE, 'debug', '_'}, x),
-    % _ = dbg:tpl({capi_handler_utils, 'debug', '_'}, x),
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
     capi_ct_helper:mock_services([

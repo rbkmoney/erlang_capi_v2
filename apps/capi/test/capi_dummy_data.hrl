@@ -50,18 +50,7 @@
     end
 ).
 
--define(INVOICE, #domain_Invoice{
-    id          = ?STRING,
-    created_at  = ?TIMESTAMP,
-    status      = ?INVOICE_STATUS(unpaid),
-    due         = ?TIMESTAMP,
-    details     = ?DETAILS,
-    cost        = ?CASH,
-    context     = ?CONTENT,
-    shop_id     = ?STRING,
-    owner_id    = ?STRING,
-    template_id = ?STRING
-}).
+-define(INVOICE, ?INVOICE(?STRING, undefined)).
 
 -define(INVOICE(ID, EID), #domain_Invoice{
     id          = ID,
