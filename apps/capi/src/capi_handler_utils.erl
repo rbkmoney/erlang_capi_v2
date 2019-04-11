@@ -45,9 +45,8 @@ general_error(Code, Message) ->
 -spec logic_error(term(), io_lib:chars() | binary()) ->
     response().
 
-logic_error(<<"externalIDConflict">>, Message) ->
-    Data = #{<<"code">> => <<"externalIDConflict">>, <<"message">> => genlib:to_binary(Message)},
-    create_erorr_resp(409, Data);
+logic_error(externalIDConflict, Message) ->
+    create_erorr_resp(409, Message);
 logic_error(Code, Message) ->
     Data = #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)},
     create_erorr_resp(400, Data).

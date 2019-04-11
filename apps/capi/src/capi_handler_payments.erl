@@ -45,7 +45,7 @@ process_request('CreatePayment', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 {error, external_id_conflict} ->
-                    {ok, logic_error(<<"externalIDConflict">>, <<"ExternalID alredy used in another request">>)};
+                    {ok, logic_error(externalIDConflict, undefined)};
                 #payproc_InvalidInvoiceStatus{} ->
                     {ok, logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)};
                 #payproc_InvoicePaymentPending{} ->

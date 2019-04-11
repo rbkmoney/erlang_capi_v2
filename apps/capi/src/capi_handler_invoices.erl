@@ -29,7 +29,7 @@ process_request('CreateInvoice', Req, Context) ->
         {exception, Exception} ->
             case Exception of
                 {error, external_id_conflict} ->
-                    {ok, logic_error(<<"externalIDConflict">>, <<"ExternalID alredy used in another request">>)};
+                    {ok, logic_error(externalIDConflict, undefined)};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)};
