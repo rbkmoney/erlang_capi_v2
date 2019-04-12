@@ -7,8 +7,6 @@
 -export([process_request/3]).
 -import(capi_handler_utils, [general_error/2, logic_error/1, logic_error/2]).
 
--define(PAYMENT_PREFIX, <<"payment">>).
-
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
@@ -19,9 +17,9 @@
 process_request('CreatePayment', Req, #{woody_context := WoodyCtx} = Context) ->
     InvoiceID     = maps:get('invoiceID', Req),
     PaymentParams = maps:get('PaymentParams', Req),
-    ExternalID    = maps:get(<<"externalID">>, PaymentParams, <<"undefined">>),
+    ExternalID    = maps:get(<<"externalID">>, PaymentParams, undefined),
     PartyID       = capi_handler_utils:get_party_id(Context),
-    IdempotentKey = capi_handler_utils:get_idempotent_key(?PAYMENT_PREFIX, PartyID, ExternalID),
+    IdempotentKey = capi_handler_utils:get_idempotent_key(<<"payment">>, PartyID, ExternalID),
     Hash = erlang:phash2(PaymentParams),
     Result =
         try

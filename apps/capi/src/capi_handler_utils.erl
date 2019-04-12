@@ -110,11 +110,12 @@ service_call_with_([], Call, Context) ->
 service_call({ServiceName, Function, Args}, #{woody_context := WoodyContext}) ->
     capi_woody_client:call_service(ServiceName, Function, Args, WoodyContext).
 
--spec get_idempotent_key(binary(), binary(), binary()) ->
+-spec get_idempotent_key(binary(), binary(), binary() | undefined) ->
     binary().
-
+get_idempotent_key(Prefix, PartyID, undefined) ->
+    <<"capi-v2/", Prefix/binary, "/", PartyID/binary, "/undefined">>;
 get_idempotent_key(Prefix, PartyID, ExternalID) ->
-    <<"capi/", Prefix/binary, "/", PartyID/binary, "/", ExternalID/binary>>.
+    <<"capi-v2/", Prefix/binary, "/", PartyID/binary, "/", ExternalID/binary>>.
 
 get_party_params(Context) ->
     #payproc_PartyParams{

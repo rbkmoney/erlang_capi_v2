@@ -3,8 +3,6 @@
 -include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
 
--define(INVOICE_PREFIX, <<"invoice">>).
-
 -behaviour(capi_handler).
 -export([process_request/3]).
 -import(capi_handler_utils, [general_error/2, logic_error/1, logic_error/2]).
@@ -20,8 +18,8 @@ process_request('CreateInvoice', Req, #{woody_context := WoodyCtx} = Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     InvoiceParams = maps:get('InvoiceParams', Req),
-    ExternalID = maps:get(<<"externalID">>, InvoiceParams, <<"undefined">>),
-    IdempotentKey = capi_handler_utils:get_idempotent_key(?INVOICE_PREFIX, PartyID, ExternalID),
+    ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
+    IdempotentKey = capi_handler_utils:get_idempotent_key(<<"invoice">>, PartyID, ExternalID),
     Hash = erlang:phash2(InvoiceParams),
     try
         case capi_bender:gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) of
