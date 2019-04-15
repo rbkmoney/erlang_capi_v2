@@ -5,7 +5,8 @@
 
 -behaviour(capi_handler).
 -export([process_request/3]).
--import(capi_handler_utils, [general_error/2, logic_error/1, logic_error/2]).
+-import(capi_handler_utils, [general_error/2, logic_error/2]).
+
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -14,27 +15,17 @@
 ) ->
     {ok | error, capi_handler:response() | noimpl}.
 
-process_request('CreateInvoice', Req, #{woody_context := WoodyCtx} = Context) ->
+process_request('CreateInvoice', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     InvoiceParams = maps:get('InvoiceParams', Req),
-    ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
-    IdempotentKey = capi_handler_utils:get_idempotent_key(<<"invoice">>, PartyID, ExternalID),
-    Hash = erlang:phash2(InvoiceParams),
-    try
-        case capi_bender:gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) of
-            {ok, ID} ->
-                Call = {invoicing, 'Create', [encode_invoice_params(PartyID, InvoiceParams#{<<"id">> => ID})]},
-                capi_handler_utils:service_call_with([user_info, party_creation], Call, Context);
-            Err -> {exception, Err}
-        end
-    of
+    try create_invoice(PartyID, InvoiceParams, Context) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             {ok, {201, [], capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, PartyID, ExtraProperties)}};
         {exception, Exception} ->
             case Exception of
-                {error, external_id_conflict} ->
-                    {ok, logic_error(externalIDConflict)};
+                {error, {external_id_conflict, InvoiceID, ExternalID}} ->
+                    {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)};
@@ -174,6 +165,18 @@ process_request('GetInvoicePaymentMethods', Req, Context) ->
 
 process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
+
+create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context) ->
+    ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
+    IdempotentKey = capi_bender:get_idempotent_key(<<"invoice">>, PartyID, ExternalID),
+    Hash = erlang:phash2(InvoiceParams),
+    case capi_bender:gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) of
+        {ok, ID} ->
+            Call = {invoicing, 'Create', [encode_invoice_params(PartyID, InvoiceParams#{<<"id">> => ID})]},
+            capi_handler_utils:service_call_with([user_info, party_creation], Call, Context);
+        {error, {external_id_conflict, ID}} ->
+            {exception, {error, {external_id_conflict, ID, ExternalID}}}
+    end.
 
 encode_invoice_params(PartyID, InvoiceParams) ->
     Amount = genlib_map:get(<<"amount">>, InvoiceParams),

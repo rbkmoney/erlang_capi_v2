@@ -313,7 +313,6 @@ create_invoice_idemp_fail_test(Config) ->
         <<"description">> => <<"test_invoice_description">>,
         <<"externalID">>  => ExternalID
     },
-
     Ctx = capi_msgp_marshalling:marshal(#{<<"params_hash">> => erlang:phash2(Req)}),
     capi_ct_helper:mock_services([
         {invoicing, fun('Create', [_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}]) ->
@@ -322,8 +321,13 @@ create_invoice_idemp_fail_test(Config) ->
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
     ], Config),
 
-    {ok, _} = capi_client_invoices:create_invoice(?config(context, Config), Req),
-    BadExternalID = {error, {409, #{}}},
+    {ok, #{<<"invoice">> := Invoice}} = capi_client_invoices:create_invoice(?config(context, Config), Req),
+    InvoiceID = maps:get(<<"id">>, Invoice),
+    BadExternalID = {error, {409, #{
+        <<"externalID">> => ExternalID,
+        <<"id">>         => InvoiceID,
+        <<"message">>    => <<"This ExternalID is being used by another request">>
+    }}},
     Response = capi_client_invoices:create_invoice(?config(context, Config), Req#{<<"product">> => <<"test_product2">>}),
     ?assertEqual(BadExternalID, Response).
 

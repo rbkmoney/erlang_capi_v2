@@ -4,13 +4,12 @@
 -include_lib("dmsl/include/dmsl_domain_thrift.hrl").
 
 -export([general_error/2]).
--export([logic_error/1, logic_error/2]).
+-export([logic_error/2]).
 -export([server_error/1]).
 -export([format_request_errors/1]).
 
 -export([service_call_with/3]).
 -export([service_call/2]).
--export([get_idempotent_key/3]).
 
 -export([get_my_party/1]).
 -export([get_auth_context/1]).
@@ -42,15 +41,18 @@
 general_error(Code, Message) ->
     create_erorr_resp(Code, #{<<"message">> => genlib:to_binary(Message)}).
 
--spec logic_error(term()) ->
-    response().
+-spec logic_error
+    (term(), io_lib:chars() | binary()) -> response();
+    (term(), {binary(), binary() | undefined}) -> response().
 
-logic_error(externalIDConflict) ->
-    create_erorr_resp(409, undefined).
-
--spec logic_error(term(), io_lib:chars() | binary()) ->
-    response().
-
+logic_error(externalIDConflict, {ID, undefined}) ->
+    logic_error(externalIDConflict, {ID, <<"undefined">>});
+logic_error(externalIDConflict, {ID, ExternalID}) ->
+    Data = #{
+        <<"externalID">> => ExternalID,
+        <<"id">> => ID,
+        <<"message">> => <<"This ExternalID is being used by another request">>},
+    create_erorr_resp(409, Data);
 logic_error(Code, Message) ->
     Data = #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)},
     create_erorr_resp(400, Data).
@@ -109,13 +111,6 @@ service_call_with_([], Call, Context) ->
 
 service_call({ServiceName, Function, Args}, #{woody_context := WoodyContext}) ->
     capi_woody_client:call_service(ServiceName, Function, Args, WoodyContext).
-
--spec get_idempotent_key(binary(), binary(), binary() | undefined) ->
-    binary().
-get_idempotent_key(Prefix, PartyID, undefined) ->
-    <<"capi-v2/", Prefix/binary, "/", PartyID/binary, "/undefined">>;
-get_idempotent_key(Prefix, PartyID, ExternalID) ->
-    <<"capi-v2/", Prefix/binary, "/", PartyID/binary, "/", ExternalID/binary>>.
 
 get_party_params(Context) ->
     #payproc_PartyParams{
