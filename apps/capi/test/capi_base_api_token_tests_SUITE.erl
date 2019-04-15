@@ -326,7 +326,7 @@ create_invoice_idemp_fail_test(Config) ->
     BadExternalID = {error, {409, #{
         <<"externalID">> => ExternalID,
         <<"id">>         => InvoiceID,
-        <<"message">>    => <<"This 'externalID' is being used by another request">>
+        <<"message">>    => <<"This 'externalID' has been used by another request">>
     }}},
     Response = capi_client_invoices:create_invoice(?config(context, Config), Req#{<<"product">> => <<"test_product2">>}),
     ?assertEqual(BadExternalID, Response).
