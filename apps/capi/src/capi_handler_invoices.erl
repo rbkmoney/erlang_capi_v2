@@ -23,8 +23,6 @@ process_request('CreateInvoice', Req, Context) ->
             {ok, {201, [], capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, PartyID, ExtraProperties)}};
         {exception, Exception} ->
             case Exception of
-                {error, {external_id_conflict, InvoiceID, ExternalID}} ->
-                    {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})};
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)};
@@ -39,7 +37,9 @@ process_request('CreateInvoice', Req, Context) ->
         invoice_cart_empty ->
             {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
         invalid_invoice_cost ->
-            {ok, logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)}
+            {ok, logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)};
+        {external_id_conflict, InvoiceID, ExternalID} ->
+            {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
     end;
 
 process_request('CreateInvoiceAccessToken', Req, Context) ->
@@ -172,24 +172,24 @@ create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context) -
     Hash = erlang:phash2(InvoiceParams),
     case capi_bender:gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) of
         {ok, ID} ->
-            Call = {invoicing, 'Create', [encode_invoice_params(PartyID, InvoiceParams#{<<"id">> => ID})]},
+            Call = {invoicing, 'Create', [encode_invoice_params(ID, PartyID, InvoiceParams)]},
             capi_handler_utils:service_call_with([user_info, party_creation], Call, Context);
         {error, {external_id_conflict, ID}} ->
-            {exception, {error, {external_id_conflict, ID, ExternalID}}}
+            throw({external_id_conflict, ID, ExternalID})
     end.
 
-encode_invoice_params(PartyID, InvoiceParams) ->
+encode_invoice_params(ID, PartyID, InvoiceParams) ->
     Amount = genlib_map:get(<<"amount">>, InvoiceParams),
     Currency = genlib_map:get(<<"currency">>, InvoiceParams),
     Cart = genlib_map:get(<<"cart">>, InvoiceParams),
     #payproc_InvoiceParams{
+        id          = ID,
         party_id    = PartyID,
         details     = encode_invoice_details(InvoiceParams),
         cost        = encode_invoice_cost(Amount, Currency, Cart),
         due         = capi_handler_utils:get_time(<<"dueDate">>, InvoiceParams),
         context     = capi_handler_encoder:encode_invoice_context(InvoiceParams),
         shop_id     = genlib_map:get(<<"shopID">>, InvoiceParams),
-        id          = genlib_map:get(<<"id">>, InvoiceParams),
         external_id = genlib_map:get(<<"externalID">>, InvoiceParams, undefined)
     }.
 

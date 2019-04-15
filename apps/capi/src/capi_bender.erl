@@ -41,7 +41,6 @@ get_idempotent_key(Prefix, PartyID, ExternalID) ->
 %% Internal
 
 gen_external_id() ->
-    % showflake:serialize(showflake:new()).
     genlib:unique().
 
 generate_id([Key, BenderSchema, Hash], ProcessContext) ->
