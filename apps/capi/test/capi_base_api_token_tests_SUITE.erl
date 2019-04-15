@@ -313,7 +313,9 @@ create_invoice_idemp_fail_test(Config) ->
         <<"description">> => <<"test_invoice_description">>,
         <<"externalID">>  => ExternalID
     },
-
+    _ = dbg:tracer(),
+    _ = dbg:p(all, c),
+    _ = dbg:tpl({swag_server_handler_api, validate_response, '_'}, x),
     Ctx = capi_msgp_marshalling:marshal(#{<<"params_hash">> => erlang:phash2(Req)}),
     capi_ct_helper:mock_services([
         {invoicing, fun('Create', [_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}]) ->

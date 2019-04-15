@@ -46,11 +46,16 @@ general_error(Code, Message) ->
     (term(), {binary(), binary(), io_lib:chars() | binary()}) -> response().
 
 logic_error(externalIDConflict, {_ID, _ExternalID}) ->
-    % _Data = #{
-    %     <<"externalID">> => genlib:to_binary(ExternalID),
-    %     <<"id">> => genlib:to_binary(ID)},
+    % Data = #{
+    %     "externalID" => <<"string">>,
+    %     "id" => <<"string">>,
+    %     "message" => <<"string">>
+    % },
+        % <<"externalID">> => ExternalID,
+        % <<"id">> => ID,
         % <<"message">> => <<"This ExternalID is being used by another request">>},
-    create_erorr_resp(409, undefined);
+    Data = #{<<"code">> => genlib:to_binary(<<"invalidRequest">>), <<"message">> => <<"msg">>},
+    create_erorr_resp(400, Data);
 logic_error(Code, Message) ->
     Data = #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)},
     create_erorr_resp(400, Data).
