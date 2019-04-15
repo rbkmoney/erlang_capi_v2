@@ -7,7 +7,6 @@
 -export([process_request/3]).
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
-
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
@@ -42,6 +41,7 @@ process_request('CreateInvoice', Req, Context) ->
         invalid_invoice_cost ->
             {ok, logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)}
     end;
+
 process_request('CreateInvoiceAccessToken', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
