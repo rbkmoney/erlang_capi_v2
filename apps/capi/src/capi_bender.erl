@@ -7,12 +7,13 @@
 
 -export([gen_by_snowflake/3]).
 -export([gen_by_sequence/4]).
+-export([get_idempotent_key/3]).
 
--define(SCHEMA_VER1, <<"ver1">>).
+-define(SCHEMA_VER1, 1).
 
 -spec gen_by_snowflake(binary(), integer(), woody_context()) ->
     {ok, binary()} |
-    {error, external_id_conflict}.
+    {error, {external_id_conflict, binary()}}.
 
 gen_by_snowflake(IdempotentKey, Hash, ProcessContext) ->
     Snowflake = {snowflake, #bender_SnowflakeSchema{}},
@@ -20,7 +21,7 @@ gen_by_snowflake(IdempotentKey, Hash, ProcessContext) ->
 
 -spec gen_by_sequence(binary(), binary(), integer(), woody_context()) ->
     {ok, binary()} |
-    {error, external_id_conflict}.
+    {error, {external_id_conflict, binary()}}.
 
 gen_by_sequence(IdempotentKey, ParentID, Hash, ProcessContext) ->
     Sequence = {sequence, #bender_SequenceSchema{
@@ -29,7 +30,20 @@ gen_by_sequence(IdempotentKey, ParentID, Hash, ProcessContext) ->
     }},
     generate_id([IdempotentKey, Sequence, Hash], ProcessContext).
 
+-spec get_idempotent_key(binary(), binary(), binary() | undefined) ->
+    binary().
+
+get_idempotent_key(Prefix, PartyID, undefined) ->
+    get_idempotent_key(Prefix, PartyID, gen_external_id());
+get_idempotent_key(Prefix, PartyID, ExternalID) ->
+    <<"capi-v2/", Prefix/binary, "/", PartyID/binary, "/", ExternalID/binary>>.
+
 %% Internal
+
+gen_external_id() ->
+    % showflake:serialize(showflake:new()).
+    genlib:unique().
+
 generate_id([Key, BenderSchema, Hash], ProcessContext) ->
     Context = capi_msgp_marshalling:marshal(#{
         <<"version">>     => ?SCHEMA_VER1,
@@ -45,5 +59,5 @@ generate_id([Key, BenderSchema, Hash], ProcessContext) ->
     case Result of
         {ok, ID}        -> {ok, ID};
         {ok, ID, Hash}  -> {ok, ID};
-        {ok, _, _Other} -> {error, external_id_conflict}
+        {ok, ID, _Other} -> {error, {external_id_conflict, ID}}
     end.

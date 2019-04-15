@@ -14,23 +14,13 @@
 ) ->
     {ok | error, capi_handler:response() | noimpl}.
 
-process_request('CreatePayment', Req, #{woody_context := WoodyCtx} = Context) ->
+process_request('CreatePayment', Req, Context) ->
     InvoiceID     = maps:get('invoiceID', Req),
     PaymentParams = maps:get('PaymentParams', Req),
-    ExternalID    = maps:get(<<"externalID">>, PaymentParams, undefined),
     PartyID       = capi_handler_utils:get_party_id(Context),
-    IdempotentKey = capi_handler_utils:get_idempotent_key(<<"payment">>, PartyID, ExternalID),
-    Hash = erlang:phash2(PaymentParams),
     Result =
         try
-            case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Hash, WoodyCtx) of
-                {ok, ID} ->
-                    Params = encode_invoice_payment_params(ID, ExternalID, PaymentParams),
-                    Call = {invoicing, 'StartPayment', [InvoiceID, Params]},
-                    capi_handler_utils:service_call_with([user_info], Call, Context);
-                Err ->
-                    {exception, Err}
-            end
+            create_payment(InvoiceID, PartyID, PaymentParams, Context)
         catch
             throw:Error when
                 Error =:= invalid_token orelse
@@ -309,6 +299,19 @@ process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 %%
+
+create_payment(PartyID, InvoiceID, PaymentParams, #{woody_context := WoodyCtx} = Context) ->
+    ExternalID    = maps:get(<<"externalID">>, PaymentParams, undefined),
+    IdempotentKey = capi_handler_utils:get_idempotent_key(<<"payment">>, PartyID, ExternalID),
+    Hash = erlang:phash2(PaymentParams),
+    case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Hash, WoodyCtx) of
+        {ok, ID} ->
+            Params = encode_invoice_payment_params(ID, ExternalID, PaymentParams),
+            Call = {invoicing, 'StartPayment', [InvoiceID, Params]},
+            capi_handler_utils:service_call_with([user_info], Call, Context);
+        Err ->
+            {exception, Err}
+    end.
 
 encode_invoice_payment_params(ID, ExternalID, PaymentParams) ->
     Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),

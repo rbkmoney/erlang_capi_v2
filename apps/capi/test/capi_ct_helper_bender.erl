@@ -5,7 +5,7 @@
 -export([get_result/1]).
 -export([get_result/2]).
 
--spec get_result(binary()) -> any().
+-spec get_result(binary()) -> bender_thrift:bender_GenerationResult().
 -spec get_result(binary(), msgpack_thrift:'Value'() | undefined) -> bender_thrift:bender_GenerationResult().
 
 get_result(ID) ->
