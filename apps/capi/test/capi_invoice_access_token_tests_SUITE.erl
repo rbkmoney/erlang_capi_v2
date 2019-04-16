@@ -36,6 +36,7 @@
     get_invoice_payment_methods_ok_test/1,
     create_payment_ok_test/1,
     create_payment_with_empty_cvv_ok_test/1,
+    create_payment_with_googlepay_plain_ok_test/1,
     get_payments_ok_test/1,
     get_payment_by_id_ok_test/1,
     get_client_payment_status_test/1,
@@ -81,6 +82,7 @@ invoice_access_token_tests() ->
         get_invoice_payment_methods_ok_test,
         create_payment_ok_test,
         create_payment_with_empty_cvv_ok_test,
+        create_payment_with_googlepay_plain_ok_test,
         get_payments_ok_test,
         get_client_payment_status_test,
         get_payment_by_id_ok_test,
@@ -603,6 +605,74 @@ create_payment_with_empty_cvv_ok_test(Config) ->
     },
     {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
 
+-spec create_payment_with_googlepay_plain_ok_test(_) ->
+    _.
+create_payment_with_googlepay_plain_ok_test(Config) ->
+    capi_ct_helper:mock_services([
+        {payment_tool_provider_google_pay,
+            fun('Unwrap', _) ->
+                {ok, ?UNWRAPPED_PAYMENT_TOOL(
+                    ?GOOGLE_PAY_DETAILS,
+                    {card, #paytoolprv_Card{
+                        pan = <<"1234567890123456">>,
+                        exp_date = #paytoolprv_ExpDate{month = 10, year = 2018}
+                    }}
+                )}
+            end
+        },
+        {cds_storage,
+            fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end
+        },
+        {invoicing,fun
+                ('StartPayment', [_UserInfo, _InvoiceID,
+                    #payproc_InvoicePaymentParams{
+                        payer = {payment_resource, #payproc_PaymentResourcePayerParams{
+                            resource = #domain_DisposablePaymentResource{
+                                payment_tool = {
+                                    bank_card,
+                                    #domain_BankCard{
+                                        is_cvv_empty = undefined,
+                                        token_provider = undefined,
+                                        payment_system = mastercard
+                                    }
+                                }
+                            }
+                        }}
+                    }
+                ]) -> {ok, ?PAYPROC_PAYMENT}
+            end},
+        {binbase,
+            fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end
+        }
+    ], Config),
+    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
+    {ok, #{
+            <<"paymentToolDetails">> := Details = #{<<"paymentSystem">> := <<"mastercard">>},
+            <<"paymentToolToken">> := Token,
+            <<"paymentSession">> := Session
+        }
+    } = capi_client_tokens:create_payment_resource(?config(context, Config), #{
+            <<"paymentTool">> => #{
+                <<"paymentToolType">> => <<"TokenizedCardData">>,
+                <<"provider">> => <<"GooglePay">>,
+                <<"gatewayMerchantID">> => <<"SomeMerchantID">>,
+                <<"paymentToken">> => #{}
+            },
+            <<"clientInfo">> => ClientInfo
+        }),
+    false = maps:is_key(<<"tokenProvider">>, Details),
+    Req2 = #{
+        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
+        <<"payer">> => #{
+            <<"payerType">> => <<"PaymentResourcePayer">>,
+            <<"paymentSession">> => Session,
+            <<"paymentToolToken">> => Token,
+            <<"contactInfo">> => #{
+                <<"email">> => <<"bla@bla.ru">>
+            }
+        }
+    },
+    {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
 
 -spec get_payments_ok_test(config()) ->
     _.
