@@ -17,10 +17,8 @@
 process_request('CreateInvoice', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
-    try
-        Call = {invoicing, 'Create', [encode_invoice_params(PartyID, maps:get('InvoiceParams', Req))]},
-        capi_handler_utils:service_call_with([user_info, party_creation], Call, Context)
-    of
+    InvoiceParams = maps:get('InvoiceParams', Req),
+    try create_invoice(PartyID, InvoiceParams, Context) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             {ok, {201, [], capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, PartyID, ExtraProperties)}};
         {exception, Exception} ->
@@ -39,7 +37,9 @@ process_request('CreateInvoice', Req, Context) ->
         invoice_cart_empty ->
             {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
         invalid_invoice_cost ->
-            {ok, logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)}
+            {ok, logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)};
+        {external_id_conflict, InvoiceID, ExternalID} ->
+            {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
     end;
 
 process_request('CreateInvoiceAccessToken', Req, Context) ->
@@ -166,17 +166,31 @@ process_request('GetInvoicePaymentMethods', Req, Context) ->
 process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
-encode_invoice_params(PartyID, InvoiceParams) ->
+create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context) ->
+    ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
+    IdempotentKey = capi_bender:get_idempotent_key(<<"invoice">>, PartyID, ExternalID),
+    Hash = erlang:phash2(InvoiceParams),
+    case capi_bender:gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) of
+        {ok, ID} ->
+            Call = {invoicing, 'Create', [encode_invoice_params(ID, PartyID, InvoiceParams)]},
+            capi_handler_utils:service_call_with([user_info, party_creation], Call, Context);
+        {error, {external_id_conflict, ID}} ->
+            throw({external_id_conflict, ID, ExternalID})
+    end.
+
+encode_invoice_params(ID, PartyID, InvoiceParams) ->
     Amount = genlib_map:get(<<"amount">>, InvoiceParams),
     Currency = genlib_map:get(<<"currency">>, InvoiceParams),
     Cart = genlib_map:get(<<"cart">>, InvoiceParams),
     #payproc_InvoiceParams{
-        party_id = PartyID,
-        details  = encode_invoice_details(InvoiceParams),
-        cost     = encode_invoice_cost(Amount, Currency, Cart),
-        due      = capi_handler_utils:get_time(<<"dueDate">>, InvoiceParams),
-        context  = capi_handler_encoder:encode_invoice_context(InvoiceParams),
-        shop_id  = genlib_map:get(<<"shopID">>, InvoiceParams)
+        id          = ID,
+        party_id    = PartyID,
+        details     = encode_invoice_details(InvoiceParams),
+        cost        = encode_invoice_cost(Amount, Currency, Cart),
+        due         = capi_handler_utils:get_time(<<"dueDate">>, InvoiceParams),
+        context     = capi_handler_encoder:encode_invoice_context(InvoiceParams),
+        shop_id     = genlib_map:get(<<"shopID">>, InvoiceParams),
+        external_id = genlib_map:get(<<"externalID">>, InvoiceParams, undefined)
     }.
 
 encode_invoice_cost(Amount, Currency, Cart) when Amount =/= undefined, Cart =/= undefined ->
