@@ -643,7 +643,8 @@ create_payment_with_googlepay_plain_ok_test(Config) ->
             end},
         {binbase,
             fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end
-        }
+        },
+        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
     {ok, #{
