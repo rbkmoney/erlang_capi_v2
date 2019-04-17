@@ -7,6 +7,7 @@
 
 -export([gen_by_snowflake/3]).
 -export([gen_by_sequence/4]).
+-export([gen_by_constant/4]).
 -export([get_idempotent_key/3]).
 
 -define(SCHEMA_VER1, 1).
@@ -17,7 +18,10 @@
 
 gen_by_snowflake(IdempotentKey, Hash, ProcessContext) ->
     Snowflake = {snowflake, #bender_SnowflakeSchema{}},
-    generate_id([IdempotentKey, Snowflake, Hash], ProcessContext).
+    case generate_id([IdempotentKey, Snowflake, Hash], ProcessContext) of
+        {ok, {_, ID}} -> {ok, ID};
+        Error -> Error
+    end.
 
 -spec gen_by_sequence(binary(), binary(), integer(), woody_context()) ->
     {ok, binary()} |
@@ -28,7 +32,19 @@ gen_by_sequence(IdempotentKey, ParentID, Hash, ProcessContext) ->
         sequence_id = ParentID,
         minimum = 100
     }},
-    generate_id([IdempotentKey, Sequence, Hash], ProcessContext).
+    case generate_id([IdempotentKey, Sequence, Hash], ProcessContext) of
+        {ok, {_, ID}} -> {ok, ID};
+        Error -> Error
+    end.
+
+-spec gen_by_constant(binary(), binary(), integer(), woody_context()) ->
+    {ok,    {boolean(), binary()}} |
+    {error, {external_id_conflict, binary()}}.
+
+gen_by_constant(IdempotentKey, ConstantID, Hash, ProcessContext) ->
+    Constant = {constant, #bender_ConstantSchema{internal_id = ConstantID}},
+    generate_id([IdempotentKey, Constant, Hash], ProcessContext).
+
 
 -spec get_idempotent_key(binary(), binary(), binary() | undefined) ->
     binary().
@@ -55,8 +71,9 @@ generate_id([Key, BenderSchema, Hash], ProcessContext) ->
             #{<<"params_hash">> := BenderHash} = capi_msgp_marshalling:unmarshal(Ctx),
             {ok, InternalID, BenderHash}
     end,
+    Created = true,
     case Result of
-        {ok, ID}        -> {ok, ID};
-        {ok, ID, Hash}  -> {ok, ID};
+        {ok, ID}         -> {ok,    {Created, ID}};
+        {ok, ID, Hash}   -> {ok,    {not Created, ID}};
         {ok, ID, _Other} -> {error, {external_id_conflict, ID}}
     end.

@@ -149,8 +149,12 @@ get_customer_ok_test(Config) ->
 create_binding_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
+            {cds_storage, fun
+                ('PutSession', _) -> {ok, ok};
+                ('PutCard', _) -> {ok, ?PUT_CARD_RESULT}
+            end},
             {customer_management, fun('StartBinding', _) -> {ok, ?CUSTOMER_BINDING} end},
+            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end},
             {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end}
         ],
         Config
