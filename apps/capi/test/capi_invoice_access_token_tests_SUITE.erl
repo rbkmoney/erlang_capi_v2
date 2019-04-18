@@ -241,7 +241,7 @@ create_visa_payment_resource_ok_test(Config) ->
 -spec create_visa_payment_resource_idemp_ok_test(_) ->
     _.
 create_visa_payment_resource_idemp_ok_test(Config) ->
-    ExternalID = <<"Degusi !pidori">>,
+    ExternalID = <<"Degusi :P">>,
     capi_ct_helper:mock_services([
         {cds_storage, fun
             ('PutSession', _) -> {ok, ok};
@@ -293,7 +293,7 @@ create_visa_payment_resource_idemp_ok_test(Config) ->
 -spec create_visa_payment_resource_idemp_fail_test(_) ->
     _.
 create_visa_payment_resource_idemp_fail_test(Config) ->
-    ExternalID = <<"Degusi !pidori">>,
+    ExternalID = <<"Degusi :P">>,
     BenderKey = <<"bender key">>,
     Token1 = <<"TOKEN1">>,
     Token2 = <<"TOKEN2">>,
