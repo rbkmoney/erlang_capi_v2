@@ -286,7 +286,8 @@ create_visa_payment_resource_idemp_ok_test(Config) ->
     }} = capi_client_tokens:create_payment_resource(?config(context, Config), Params),
     {ok, #{
         <<"paymentToolToken">> := ToolToken,
-        <<"paymentSession">>   := ToolSession
+        <<"paymentSession">>   := ToolSession,
+        <<"paymentToolDetails">> := PaymentToolDetails
     }} = capi_client_tokens:create_payment_resource(?config(context, Config), Params).
 
 -spec create_visa_payment_resource_idemp_fail_test(_) ->
@@ -347,7 +348,6 @@ create_visa_payment_resource_idemp_fail_test(Config) ->
     {ok, _} = capi_client_tokens:create_payment_resource(?config(context, Config), Params),
     {error, {409, #{
         <<"externalID">> := ExternalID,
-        <<"id">>         := BenderKey,
         <<"message">>    := <<"This 'externalID' has been used by another request">>
     }}} = capi_client_tokens:create_payment_resource(?config(context, Config), Params2).
 

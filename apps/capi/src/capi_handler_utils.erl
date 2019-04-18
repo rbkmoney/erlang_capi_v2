@@ -53,6 +53,11 @@ logic_error(externalIDConflict, {ID, ExternalID}) ->
         <<"id">> => ID,
         <<"message">> => <<"This 'externalID' has been used by another request">>},
     create_erorr_resp(409, Data);
+logic_error(externalIDConflict, ExternalID) ->
+    Data = #{
+        <<"externalID">> => ExternalID,
+        <<"message">> => <<"This 'externalID' has been used by another request">>},
+    create_erorr_resp(409, Data);
 logic_error(Code, Message) ->
     Data = #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)},
     create_erorr_resp(400, Data).

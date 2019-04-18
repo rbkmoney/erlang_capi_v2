@@ -147,13 +147,11 @@ put_card_data_to_cds(CardData, SessionData, {ExternalID, IdempotentKey}, Context
     RandomID = gen_random_id(),
     Hash = erlang:phash2(Token),
     case capi_bender:gen_by_constant(IdempotentKey, RandomID, Hash, WoodyCtx) of
-        {ok, {true, SessionID}} ->
+        {ok, SessionID} ->
             ok = put_session_to_cds(SessionID, SessionData, Context),
             {BankCard, SessionID};
-        {ok, {false, SessionID}} ->
-            {BankCard, SessionID};
-        {error, {external_id_conflict, ID}} ->
-            throw({ok, logic_error(externalIDConflict, {ID, ExternalID})})
+        {error, {external_id_conflict, _}} ->
+            throw({ok, logic_error(externalIDConflict, ExternalID)})
     end.
 
 lookup_bank_info(Pan, Context) ->
