@@ -137,7 +137,7 @@ put_card_to_cds(CardData, SessionData, Context) ->
 
 put_session_to_cds(SessionID, SessionData, Context) ->
     Call = {cds_storage, 'PutSession', [SessionID, SessionData]},
-    {ok, _} = capi_handler_utils:service_call(Call, Context),
+    {ok, ok} = capi_handler_utils:service_call(Call, Context),
     ok.
 
 put_card_data_to_cds(CardData, SessionData, {ExternalID, IdempotentKey}, Context) ->
