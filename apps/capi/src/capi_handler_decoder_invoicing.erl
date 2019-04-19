@@ -86,7 +86,8 @@ decode_payment(InvoiceID, Payment, Context) ->
         <<"amount"                >> => Amount,
         <<"currency"              >> => capi_handler_decoder_utils:decode_currency(Currency),
         <<"payer"                 >> => decode_payer(Payment#domain_InvoicePayment.payer),
-        <<"makeRecurrent"         >> => decode_make_recurrent(Payment#domain_InvoicePayment.make_recurrent)
+        <<"makeRecurrent"         >> => decode_make_recurrent(Payment#domain_InvoicePayment.make_recurrent),
+        <<"cart"                  >> => decode_invoice_cart(Payment#domain_InvoicePayment.cart)
     }, decode_payment_status(Payment#domain_InvoicePayment.status, Context)).
 
 decode_payer({customer, #domain_CustomerPayer{customer_id = ID}}) ->
@@ -216,7 +217,8 @@ decode_refund(Refund, Context) ->
             <<"createdAt">> => Refund#domain_InvoicePaymentRefund.created_at,
             <<"reason"   >> => Refund#domain_InvoicePaymentRefund.reason,
             <<"amount"   >> => Amount,
-            <<"currency" >> => capi_handler_decoder_utils:decode_currency(Currency)
+            <<"currency" >> => capi_handler_decoder_utils:decode_currency(Currency),
+            <<"cart"     >> => decode_invoice_cart(#domain_InvoicePaymentRefund.cart)
         },
         decode_refund_status(Refund#domain_InvoicePaymentRefund.status, Context)
     ).

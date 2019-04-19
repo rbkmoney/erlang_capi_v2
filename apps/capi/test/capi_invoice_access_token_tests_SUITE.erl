@@ -837,7 +837,18 @@ capture_partial_payment_ok_test(Config) ->
     Req = #{
         <<"reason">> => ?STRING,
         <<"amount">> => 123,
-        <<"currency">> => ?RUB
+        <<"currency">> => ?RUB,
+        <<"cart">> => [
+            #{
+                <<"taxMode">> => #{
+                    <<"type">> => <<"InvoiceLineTaxVAT">>,
+                    <<"rate">> => <<"10%">>
+                },
+                <<"product">> => ?STRING,
+                <<"price">> =>    10,
+                <<"quantity">> => 5
+            }
+        ]
     },
     ok = capi_client_payments:capture_payment(?config(context, Config), Req, ?STRING, ?STRING).
 

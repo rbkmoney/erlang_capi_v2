@@ -153,7 +153,8 @@ process_request('CapturePayment', Req, Context) ->
         PaymentID,
         #payproc_InvoicePaymentCaptureParams{
             reason = maps:get(<<"reason">>, CaptureParams),
-            cash = encode_optional_cash(CaptureParams, InvoiceID, PaymentID, Context)
+            cash = encode_optional_cash(CaptureParams, InvoiceID, PaymentID, Context),
+            cart = encode_optional_cart(CaptureParams)
         }
     ],
     Call = {invoicing, 'CapturePaymentNew', CallArgs},
@@ -202,7 +203,8 @@ process_request('CreateRefund', Req, Context) ->
     RefundParams = maps:get('RefundParams', Req),
     Params = #payproc_InvoicePaymentRefundParams{
         reason = genlib_map:get(<<"reason">>, RefundParams),
-        cash = encode_optional_cash(RefundParams, InvoiceID, PaymentID, Context)
+        cash = encode_optional_cash(RefundParams, InvoiceID, PaymentID, Context),
+        cart = encode_optional_cart(RefundParams)
     },
     Call = {invoicing, 'RefundPayment', [InvoiceID, PaymentID, Params]},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
@@ -384,6 +386,11 @@ encode_optional_cash(Params = #{<<"amount">> := _}, InvoiceID, PaymentID, Contex
     }} = capi_handler_utils:get_payment_by_id(InvoiceID, PaymentID, Context),
     capi_handler_encoder:encode_cash(Params#{<<"currency">> => capi_handler_decoder_utils:decode_currency(Currency)});
 encode_optional_cash(_, _, _, _) ->
+    undefined.
+
+encode_optional_cart(Params = #{<<"cart">> := _}) ->
+    capi_handler_encoder:encode_invoice_cart(Params);
+encode_optional_cart(_) ->
     undefined.
 
 %%
