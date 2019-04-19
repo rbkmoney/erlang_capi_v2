@@ -7,6 +7,7 @@
 
 -export([gen_by_snowflake/3]).
 -export([gen_by_sequence/4]).
+-export([gen_by_constant/4]).
 -export([get_idempotent_key/3]).
 
 -define(SCHEMA_VER1, 1).
@@ -29,6 +30,16 @@ gen_by_sequence(IdempotentKey, ParentID, Hash, ProcessContext) ->
         minimum = 100
     }},
     generate_id([IdempotentKey, Sequence, Hash], ProcessContext).
+
+
+-spec gen_by_constant(binary(), binary(), integer(), woody_context()) ->
+    {ok,    binary()} |
+    {error, {external_id_conflict, binary()}}.
+
+gen_by_constant(IdempotentKey, ConstantID, Hash, ProcessContext) ->
+    Constant = {constant, #bender_ConstantSchema{internal_id = ConstantID}},
+    generate_id([IdempotentKey, Constant, Hash], ProcessContext).
+
 
 -spec get_idempotent_key(binary(), binary(), binary() | undefined) ->
     binary().
@@ -56,7 +67,7 @@ generate_id([Key, BenderSchema, Hash], ProcessContext) ->
             {ok, InternalID, BenderHash}
     end,
     case Result of
-        {ok, ID}        -> {ok, ID};
-        {ok, ID, Hash}  -> {ok, ID};
+        {ok, ID}         -> {ok, ID};
+        {ok, ID, Hash}   -> {ok, ID};
         {ok, ID, _Other} -> {error, {external_id_conflict, ID}}
     end.
