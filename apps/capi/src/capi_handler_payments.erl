@@ -302,7 +302,7 @@ process_request(_OperationID, _Req, _Context) ->
 
 %%
 
-create_payment(PartyID, InvoiceID, PaymentParams, #{woody_context := WoodyCtx} = Context) ->
+create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} = Context) ->
     ExternalID    = maps:get(<<"externalID">>, PaymentParams, undefined),
     IdempotentKey = capi_bender:get_idempotent_key(<<"payment">>, PartyID, ExternalID),
     Hash = erlang:phash2(PaymentParams),
