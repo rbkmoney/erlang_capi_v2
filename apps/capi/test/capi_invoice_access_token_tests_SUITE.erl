@@ -140,7 +140,10 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
     ExtraProperties = #{<<"ip_replacement_allowed">> => <<"true">>},
     {ok, Token} = capi_ct_helper:issue_token([{[invoices], write}], unlimited, ExtraProperties),
-    capi_ct_helper:mock_services([{invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end}], MockServiceSup),
+    capi_ct_helper:mock_services([
+        {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end},
+        {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
+    ], MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"amount">> => ?INTEGER,
@@ -161,7 +164,10 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
 init_per_group(operations_by_invoice_access_token_after_token_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
     {ok, Token} = capi_ct_helper:issue_token([{[invoices], write}], unlimited),
-    capi_ct_helper:mock_services([{invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}], MockServiceSup),
+    capi_ct_helper:mock_services([
+        {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end},
+        {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
+    ], MockServiceSup),
     {ok, #{<<"payload">> := InvAccToken}
     } = capi_client_invoices:create_invoice_access_token(capi_ct_helper:get_context(Token), ?STRING),
     capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
@@ -194,24 +200,20 @@ end_per_testcase(_Name, C) ->
 create_visa_payment_resource_ok_test(Config) ->
     capi_ct_helper:mock_services([
         {cds_storage, fun
-            ('PutCardData', [
-                #'CardData'{pan = <<"411111", _:6/binary, Mask:4/binary>>},
-                #'SessionData'{
-                    auth_data = {card_security_code, #'CardSecurityCode'{
-                        value = <<"232">>
-                    }}
-                }
+            ('PutSession', _) -> {ok, ok};
+            ('PutCard', [
+                #'CardData'{pan = <<"411111", _:6/binary, Mask:4/binary>>}
             ]) ->
-                {ok, #'PutCardDataResult'{
+                {ok, #'PutCardResult'{
                     bank_card = #domain_BankCard{
                         token = ?STRING,
                         payment_system = visa,
                         bin = <<"411111">>,
                         masked_pan = Mask
-                    },
-                    session_id = ?STRING
+                    }
                 }}
         end},
+        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end},
         {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT(<<"VISA">>)} end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
@@ -236,25 +238,21 @@ create_visa_payment_resource_ok_test(Config) ->
     _.
 create_visa_with_empty_cvv_ok_test(Config) ->
     capi_ct_helper:mock_services([
-        {cds_storage, fun
-            ('PutCardData', [
-                #'CardData'{pan = <<"411111", _:6/binary, Mask:4/binary>>},
-                #'SessionData'{
-                    auth_data = {card_security_code, #'CardSecurityCode'{
-                        value = <<>>
-                    }}
-                }
+         {cds_storage, fun
+            ('PutSession', _) -> {ok, ok};
+            ('PutCard', [
+                #'CardData'{pan = <<"411111", _:6/binary, Mask:4/binary>>}
             ]) ->
-                {ok, #'PutCardDataResult'{
+                {ok, #'PutCardResult'{
                     bank_card = #domain_BankCard{
                         token = ?STRING,
                         payment_system = visa,
                         bin = <<"411111">>,
                         masked_pan = Mask
-                    },
-                    session_id = ?STRING
+                    }
                 }}
         end},
+        {bender,  fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end},
         {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT(<<"VISA">>)} end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
@@ -279,24 +277,18 @@ create_visa_with_empty_cvv_ok_test(Config) ->
 create_nspkmir_payment_resource_ok_test(Config) ->
     capi_ct_helper:mock_services([
         {cds_storage, fun
-            ('PutCardData', [
-                #'CardData'{pan = <<"22001111", _:6/binary, Mask:2/binary>>},
-                #'SessionData'{
-                    auth_data = {card_security_code, #'CardSecurityCode'{
-                        value = <<"232">>
-                    }}
-                }
-            ]) ->
-                {ok, #'PutCardDataResult'{
+            ('PutSession', _) -> {ok, ok};
+            ('PutCard', [#'CardData'{pan = <<"22001111", _:6/binary, Mask:2/binary>>}]) ->
+                {ok, #'PutCardResult'{
                     bank_card = #domain_BankCard{
                         token = ?STRING,
                         payment_system = nspkmir,
                         bin = <<"22001111">>,
                         masked_pan = Mask
-                    },
-                    session_id = ?STRING
+                    }
                 }}
         end},
+        {bender,  fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end},
         {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT(<<"NSPK MIR">>)} end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
@@ -392,7 +384,11 @@ ip_replacement_allowed_test(Config) ->
 create_applepay_tokenized_payment_resource_ok_test(Config) ->
     capi_ct_helper:mock_services([
         {payment_tool_provider_apple_pay, fun('Unwrap', _) -> {ok, ?UNWRAPPED_PAYMENT_TOOL(?APPLE_PAY_DETAILS)} end},
-        {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
+        {cds_storage, fun
+            ('PutSession', _) -> {ok, ok};
+            ('PutCard', _)    -> {ok, ?PUT_CARD_RESULT}
+        end},
+        {bender,  fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end},
         {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
@@ -412,7 +408,11 @@ create_applepay_tokenized_payment_resource_ok_test(Config) ->
 create_googlepay_tokenized_payment_resource_ok_test(Config) ->
     capi_ct_helper:mock_services([
         {payment_tool_provider_google_pay, fun('Unwrap', _) -> {ok, ?UNWRAPPED_PAYMENT_TOOL(?GOOGLE_PAY_DETAILS)} end},
-        {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
+        {cds_storage, fun
+            ('PutSession', _) -> {ok, ok};
+            ('PutCard', _)    -> {ok, ?PUT_CARD_RESULT}
+        end},
+        {bender,  fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end},
         {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end}
     ], Config),
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
@@ -445,9 +445,11 @@ create_googlepay_plain_payment_resource_ok_test(Config) ->
                 )}
             end
         },
-        {cds_storage,
-            fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end
-        },
+        {cds_storage, fun
+            ('PutSession', _) -> {ok, ok};
+            ('PutCard', _)    -> {ok, ?PUT_CARD_RESULT}
+        end},
+        {bender,  fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end},
         {binbase,
             fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end
         }
@@ -504,7 +506,11 @@ get_invoice_payment_methods_ok_test(Config) ->
 create_payment_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
+            {cds_storage, fun
+                ('PutSession', _) -> {ok, ok};
+                ('PutCard', _)    -> {ok, ?PUT_CARD_RESULT}
+            end},
+            {bender,  fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end},
             {invoicing, fun('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT} end},
             {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end}
         ],
@@ -544,7 +550,11 @@ create_payment_ok_test(Config) ->
 create_payment_with_empty_cvv_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
+            {cds_storage, fun
+                ('PutSession', _) -> {ok, ok};
+                ('PutCard', _)    -> {ok, ?PUT_CARD_RESULT}
+            end},
+            {bender,  fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end},
             {invoicing,fun
                 ('StartPayment', [_UserInfo, _InvoiceID,
                     #payproc_InvoicePaymentParams{
@@ -606,9 +616,11 @@ create_payment_with_googlepay_plain_ok_test(Config) ->
                 )}
             end
         },
-        {cds_storage,
-            fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end
-        },
+        {cds_storage, fun
+            ('PutSession', _) -> {ok, ok};
+            ('PutCard', _)    -> {ok, ?PUT_CARD_RESULT}
+        end},
+        {bender,  fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end},
         {invoicing,fun
                 ('StartPayment', [_UserInfo, _InvoiceID,
                     #payproc_InvoicePaymentParams{
@@ -711,7 +723,11 @@ capture_partial_payment_ok_test(Config) ->
 create_first_recurrent_payment_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
+            {cds_storage, fun
+                ('PutSession', _) -> {ok, ok};
+                ('PutCard', _)    -> {ok, ?PUT_CARD_RESULT}
+            end},
+            {bender,  fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end},
             {invoicing, fun('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT} end},
             {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end}
         ],
@@ -752,7 +768,11 @@ create_first_recurrent_payment_ok_test(Config) ->
 create_second_recurrent_payment_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {cds_storage, fun('PutCardData', _) -> {ok, ?PUT_CARD_DATA_RESULT} end},
+            {cds_storage, fun
+                ('PutSession', _) -> {ok, ok};
+                ('PutCard', _)    -> {ok, ?PUT_CARD_RESULT}
+            end},
+            {bender,  fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end},
             {invoicing, fun('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}
         ],
         Config

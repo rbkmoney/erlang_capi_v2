@@ -23,12 +23,20 @@ process_request('CreatePaymentResource', Req, Context) ->
     ClientInfo = enrich_client_info(maps:get(<<"clientInfo">>, Params), Context),
     try
         Data = maps:get(<<"paymentTool">>, Params), % "V" ????
+        PartyID = capi_handler_utils:get_party_id(Context),
+        ExternalID = maps:get(<<"externalID">>, Params, undefined),
+        IdempotentKey = capi_bender:get_idempotent_key(<<"resources">>, PartyID, ExternalID),
+        IdempotentParams = {ExternalID, IdempotentKey},
         {PaymentTool, PaymentSessionID} =
             case Data of
-                #{<<"paymentToolType">> := <<"CardData"           >>} -> process_card_data(Data, Context);
-                #{<<"paymentToolType">> := <<"PaymentTerminalData">>} -> process_payment_terminal_data(Data);
-                #{<<"paymentToolType">> := <<"DigitalWalletData"  >>} -> process_digital_wallet_data(Data);
-                #{<<"paymentToolType">> := <<"TokenizedCardData"  >>} -> process_tokenized_card_data(Data, Context)
+                #{<<"paymentToolType">> := <<"CardData"           >>} ->
+                    process_card_data(Data, IdempotentParams, Context);
+                #{<<"paymentToolType">> := <<"PaymentTerminalData">>} ->
+                    process_payment_terminal_data(Data);
+                #{<<"paymentToolType">> := <<"DigitalWalletData"  >>} ->
+                    process_digital_wallet_data(Data);
+                #{<<"paymentToolType">> := <<"TokenizedCardData"  >>} ->
+                    process_tokenized_card_data(Data, IdempotentParams, Context)
             end,
         PaymentResource =
             #domain_DisposablePaymentResource{
@@ -77,10 +85,11 @@ prepare_client_ip(Context) ->
 get_peer_info(#{swagger_context := #{peer := Peer}}) ->
     Peer.
 
-process_card_data(Data, Context) ->
+process_card_data(Data, IdempotentParams, Context) ->
     put_card_data_to_cds(
         encode_card_data(Data),
         encode_session_data(Data),
+        IdempotentParams,
         Context
     ).
 
@@ -114,18 +123,37 @@ encode_session_data(CardData) ->
         }}
     }.
 
-put_card_data_to_cds(CardData, SessionData, Context) ->
+put_card_to_cds(CardData, SessionData, Context) ->
     BinData = lookup_bank_info(CardData#'CardData'.pan, Context),
-    Call = {cds_storage, 'PutCardData', [CardData, SessionData]},
+    Call = {cds_storage, 'PutCard', [CardData]},
     case capi_handler_utils:service_call(Call, Context) of
-        {ok, #'PutCardDataResult'{session_id = SessionID, bank_card = BankCard}} ->
-            {{bank_card, expand_card_info(
+        {ok, #'PutCardResult'{bank_card = BankCard}} ->
+            {bank_card, expand_card_info(
                 BankCard,
                 BinData,
                 undef_cvv(SessionData)
-            )}, SessionID};
+            )};
         {exception, #'InvalidCardData'{}} ->
             throw({ok, logic_error(invalidRequest, <<"Card data is invalid">>)})
+    end.
+
+put_session_to_cds(SessionID, SessionData, Context) ->
+    Call = {cds_storage, 'PutSession', [SessionID, SessionData]},
+    {ok, ok} = capi_handler_utils:service_call(Call, Context),
+    ok.
+
+put_card_data_to_cds(CardData, SessionData, {ExternalID, IdempotentKey}, Context) ->
+     #{woody_context := WoodyCtx} = Context,
+    BankCard = put_card_to_cds(CardData, SessionData, Context),
+    {bank_card, #domain_BankCard{token = Token}} = BankCard,
+    RandomID = gen_random_id(),
+    Hash = erlang:phash2(Token),
+    case capi_bender:gen_by_constant(IdempotentKey, RandomID, Hash, WoodyCtx) of
+        {ok, SessionID} ->
+            ok = put_session_to_cds(SessionID, SessionData, Context),
+            {BankCard, SessionID};
+        {error, {external_id_conflict, _}} ->
+            throw({ok, logic_error(externalIDConflict, ExternalID)})
     end.
 
 lookup_bank_info(Pan, Context) ->
@@ -208,7 +236,7 @@ process_digital_wallet_data(Data) ->
     end,
     {{digital_wallet, DigitalWallet}, <<>>}.
 
-process_tokenized_card_data(Data, Context) ->
+process_tokenized_card_data(Data, IdempotentParams, Context) ->
     Call = {get_token_provider_service_name(Data), 'Unwrap', [encode_wrapped_payment_tool(Data)]},
     UnwrappedPaymentTool = case capi_handler_utils:service_call(Call, Context) of
         {ok, Tool} ->
@@ -220,6 +248,7 @@ process_tokenized_card_data(Data, Context) ->
         put_card_data_to_cds(
             encode_tokenized_card_data(UnwrappedPaymentTool),
             encode_tokenized_session_data(UnwrappedPaymentTool),
+            IdempotentParams,
             Context
         ),
         UnwrappedPaymentTool
@@ -356,3 +385,7 @@ encode_tokenized_session_data(#paytoolprv_UnwrappedPaymentTool{
             value = <<"">>
         }}
     }.
+
+gen_random_id() ->
+    Random = crypto:strong_rand_bytes(16),
+    genlib_format:format_int_base(binary:decode_unsigned(Random), 62).

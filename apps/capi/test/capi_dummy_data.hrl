@@ -478,7 +478,7 @@
         shop_id = ?STRING,
         types = ordsets:from_list([
             {created,
-             #webhooker_InvoiceCreated{}} 
+             #webhooker_InvoiceCreated{}}
 
           , {status_changed,
              #webhooker_InvoiceStatusChanged{
@@ -888,9 +888,8 @@
     status = {succeeded, #payproc_CustomerBindingSucceeded{}}
 }).
 
--define(PUT_CARD_DATA_RESULT, #'PutCardDataResult'{
-    bank_card = ?BANK_CARD,
-    session_id = ?STRING
+-define(PUT_CARD_RESULT, #'PutCardResult'{
+    bank_card = ?BANK_CARD
 }).
 
 -define(UNWRAPPED_PAYMENT_TOOL(Details),
