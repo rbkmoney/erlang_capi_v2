@@ -73,20 +73,7 @@ handle_request(OperationID, Req, Context) ->
 process_request('CreateInvoice', Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
     try
-        Params = encode_invoice_params(PartyID, maps:get('InvoiceParams', Req)),
-        UserInfo = get_user_info(Context),
-        prepare_party(
-           Context,
-           ReqCtx,
-           fun () ->
-               service_call(
-                   invoicing,
-                   'Create',
-                   [UserInfo, Params],
-                   ReqCtx
-               )
-           end
-        )
+        create_invoice(PartyID, maps:get('InvoiceParams', Req), Context, ReqCtx)
     of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             {ok, {201, [], make_invoice_and_token(Invoice, PartyID, Context)}};
@@ -111,20 +98,9 @@ process_request('CreateInvoice', Req, Context, ReqCtx) ->
 process_request('CreatePayment', Req, Context, ReqCtx) ->
     InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('PaymentParams', Req),
-    Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
-    Payer = genlib_map:get(<<"payer">>, PaymentParams),
-    UserInfo = get_user_info(Context),
+    PartyID = get_party_id(Context),
     Result = try
-        Params =  #payproc_InvoicePaymentParams{
-            'payer' = encode_payer_params(Payer),
-            'flow' = encode_flow(Flow)
-        },
-        service_call(
-            invoicing,
-            'StartPayment',
-            [UserInfo, InvoiceID, Params],
-            ReqCtx
-        )
+        create_payment(PartyID, InvoiceID, PaymentParams, Context, ReqCtx)
     catch
         throw:Error when Error =:= invalid_token orelse Error =:= invalid_payment_session ->
             {error, Error}
@@ -165,17 +141,19 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
 process_request('CreatePaymentResource', Req, Context, ReqCtx) ->
     Params = maps:get('PaymentResourceParams', Req),
     ClientInfo = enrich_client_info(maps:get(<<"clientInfo">>, Params), Context),
+    PartyID = get_party_id(Context),
     try
         V = maps:get(<<"paymentTool">>, Params),
+        IdempotentKey = capi_bender:get_idempotent_key(<<"resources">>, PartyID, undefined),
         {PaymentTool, PaymentSessionID} = case V of
             #{<<"paymentToolType">> := <<"CardData">>} ->
-                process_card_data(V, ReqCtx);
+                process_card_data(V, IdempotentKey, ReqCtx);
             #{<<"paymentToolType">> := <<"PaymentTerminalData">>} ->
                 process_payment_terminal_data(V, ReqCtx);
             #{<<"paymentToolType">> := <<"DigitalWalletData">>} ->
                 process_digital_wallet_data(V, ReqCtx);
             #{<<"paymentToolType">> := <<"TokenizedCardData">>} ->
-                process_tokenized_card_data(V, ReqCtx)
+                process_tokenized_card_data(V, IdempotentKey, ReqCtx)
         end,
         {ok, {201, [], decode_disposable_payment_resource(#domain_DisposablePaymentResource{
             payment_tool = PaymentTool,
@@ -820,22 +798,9 @@ process_request('DeleteInvoiceTemplate', Req, Context, ReqCtx) ->
 process_request('CreateInvoiceWithTemplate', Req, Context, ReqCtx) ->
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
     InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
-    UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     try
-        Params = encode_invoice_params_with_tpl(InvoiceTplID, InvoiceParams),
-        prepare_party(
-            Context,
-            ReqCtx,
-            fun () ->
-                service_call(
-                    invoicing,
-                    'CreateWithTemplate',
-                    [UserInfo, Params],
-                    ReqCtx
-                   )
-            end
-        )
+        create_invoice_with_template(PartyID, InvoiceTplID, InvoiceParams, Context,  ReqCtx)
     of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             {ok, {201, [], make_invoice_and_token(Invoice, PartyID, Context)}};
@@ -1681,6 +1646,47 @@ process_request('GetCustomerEvents', Req, _Context, ReqCtx) ->
             end
     end.
 
+create_invoice(PartyID, InvoiceParams, Context, ReqCtx) ->
+    IdempotentKey = capi_bender:get_idempotent_key(<<"invoice">>, PartyID, undefined),
+    Hash = erlang:phash2(InvoiceParams),
+    {ok, ID} = capi_bender:gen_by_snowflake(IdempotentKey, Hash, ReqCtx),
+    UserInfo = get_user_info(Context),
+    Params = encode_invoice_params(ID, PartyID, InvoiceParams),
+    prepare_party(
+        Context,
+        ReqCtx,
+        fun () ->
+            service_call(invoicing, 'Create', [UserInfo, Params], ReqCtx)
+        end).
+
+create_invoice_with_template(PartyID, InvoiceTplID, InvoiceParams, Context,  ReqCtx) ->
+    UserInfo = get_user_info(Context),
+    IdempotentKey = capi_bender:get_idempotent_key(<<"invoice">>, PartyID, undefined),
+    Hash = erlang:phash2(InvoiceParams),
+    {ok, ID} = capi_bender:gen_by_snowflake(IdempotentKey, Hash, ReqCtx),
+    Params = encode_invoice_params_with_tpl(ID, InvoiceTplID, InvoiceParams),
+    prepare_party(
+        Context,
+        ReqCtx,
+        fun () ->
+            service_call(invoicing, 'CreateWithTemplate', [UserInfo, Params], ReqCtx)
+        end
+    ).
+
+create_payment(PartyID, InvoiceID, PaymentParams, Context, ReqCtx) ->
+    Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
+    Payer = genlib_map:get(<<"payer">>, PaymentParams),
+    UserInfo = get_user_info(Context),
+    IdempotentKey = capi_bender:get_idempotent_key(<<"payment">>, PartyID, undefined),
+    Hash = erlang:phash2(PaymentParams),
+    {ok, ID} = capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Hash, ReqCtx),
+    Params =  #payproc_InvoicePaymentParams{
+        id = ID,
+        payer = encode_payer_params(Payer),
+        flow = encode_flow(Flow)
+    },
+    service_call(invoicing, 'StartPayment', [UserInfo, InvoiceID, Params], ReqCtx).
+
 check_payment_institution(Realm, Residence, PaymentInstitution) ->
     check_payment_institution_realm(Realm, PaymentInstitution) andalso
         check_payment_institution_residence(Residence, PaymentInstitution).
@@ -1855,11 +1861,12 @@ get_party_params(Context) ->
 get_peer_info(#{peer := Peer}) ->
     Peer.
 
-encode_invoice_params(PartyID, InvoiceParams) ->
+encode_invoice_params(ID, PartyID, InvoiceParams) ->
     Amount = genlib_map:get(<<"amount">>, InvoiceParams),
     Currency = genlib_map:get(<<"currency">>, InvoiceParams),
     Cart = genlib_map:get(<<"cart">>, InvoiceParams),
     #payproc_InvoiceParams{
+        id       = ID,
         party_id = PartyID,
         details  = encode_invoice_details(InvoiceParams),
         cost     = encode_invoice_cost(Amount, Currency, Cart),
@@ -1893,8 +1900,9 @@ get_invoice_cart_amount(Cart) ->
         Cart
     ).
 
-encode_invoice_params_with_tpl(InvoiceTplID, InvoiceParams) ->
+encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams) ->
     #payproc_InvoiceWithTemplateParams{
+        id          = InvoiceID,
         template_id = InvoiceTplID,
         cost        = encode_optional_invoice_cost(InvoiceParams),
         context     = encode_optional_context(InvoiceParams)
@@ -4828,8 +4836,10 @@ compute_terms(ServiceName, Args, Context) ->
 reply_5xx(Code) when Code >= 500 andalso Code < 600 ->
     {Code, [], <<>>}.
 
-process_card_data(Data, ReqCtx) ->
-    put_card_data_to_cds(encode_card_data(Data), encode_session_data(Data), ReqCtx).
+process_card_data(Data, IdempotentKey, ReqCtx) ->
+    SessionData = encode_session_data(Data),
+    CardData = encode_card_data(Data),
+    put_card_data_to_cds(CardData, SessionData, IdempotentKey, ReqCtx).
 
 encode_card_data(CardData) ->
     {Month, Year} = parse_exp_date(genlib_map:get(<<"expDate">>, CardData)),
@@ -4869,7 +4879,7 @@ process_digital_wallet_data(Data, _ReqCtx) ->
     end,
     {{digital_wallet, DigitalWallet}, <<>>}.
 
-process_tokenized_card_data(Data, ReqCtx) ->
+process_tokenized_card_data(Data, IdempotentKey, ReqCtx) ->
     CallResult = service_call(
         get_token_provider_service_name(Data),
         'Unwrap',
@@ -4886,6 +4896,7 @@ process_tokenized_card_data(Data, ReqCtx) ->
         put_card_data_to_cds(
             encode_tokenized_card_data(UnwrappedPaymentTool),
             encode_tokenized_session_data(UnwrappedPaymentTool),
+            IdempotentKey,
             ReqCtx
         ),
         UnwrappedPaymentTool
@@ -5021,23 +5032,30 @@ encode_tokenized_session_data(#paytoolprv_UnwrappedPaymentTool{
         }}
     }.
 
-put_card_data_to_cds(CardData, SessionData, ReqCtx) ->
+put_card_to_cds(CardData, ReqCtx) ->
     BinData = lookup_bank_info(CardData#'CardData'.pan, ReqCtx),
-    case service_call(cds_storage, 'PutCardData', [CardData, SessionData], ReqCtx) of
-        {ok, #'PutCardDataResult'{session_id = SessionID, bank_card = BankCard}} ->
-            {{bank_card, expand_card_info(BankCard, BinData)}, SessionID};
-        {exception, Exception} ->
-            case Exception of
-                #'InvalidCardData'{} ->
-                    throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}});
-                #'KeyringLocked'{} ->
-                    % TODO
-                    % It's better for the cds to signal woody-level unavailability when the
-                    % keyring is locked, isn't it? It could always mention keyring lock as a
-                    % reason in a woody error definition.
-                    throw({error, reply_5xx(503)})
-            end
+    case service_call(cds_storage, 'PutCard', [CardData], ReqCtx) of
+        {ok, #'PutCardResult'{bank_card = BankCard}} ->
+            {bank_card, expand_card_info(
+                BankCard,
+                BinData
+            )};
+        {exception, #'InvalidCardData'{}} ->
+            throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}})
     end.
+
+put_session_to_cds(SessionID, SessionData, ReqCtx) ->
+    {ok, ok} = service_call(cds_storage, 'PutSession', [SessionID, SessionData], ReqCtx),
+    ok.
+
+put_card_data_to_cds(CardData, SessionData, IdempotentKey, ReqCtx) ->
+    BankCard = put_card_to_cds(CardData, ReqCtx),
+    {bank_card, #domain_BankCard{token = Token}} = BankCard,
+    RandomID = gen_random_id(),
+    Hash = erlang:phash2(Token),
+    {ok, SessionID} = capi_bender:gen_by_constant(IdempotentKey, RandomID, Hash, ReqCtx),
+    ok = put_session_to_cds(SessionID, SessionData, ReqCtx),
+    {BankCard, SessionID}.
 
 lookup_bank_info(Pan, ReqCtx) ->
     RequestVersion = {'last', #binbase_Last{}},
@@ -5150,3 +5168,7 @@ decode_optional(Arg, DecodeFun) when Arg /= undefined ->
     DecodeFun(Arg);
 decode_optional(undefined, _) ->
     undefined.
+
+gen_random_id() ->
+    Random = crypto:strong_rand_bytes(16),
+    genlib_format:format_int_base(binary:decode_unsigned(Random), 62).
