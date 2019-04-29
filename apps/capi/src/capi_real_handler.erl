@@ -1661,7 +1661,7 @@ create_invoice(PartyID, InvoiceParams, Context, ReqCtx) ->
 
 create_invoice_with_template(PartyID, InvoiceTplID, InvoiceParams, Context,  ReqCtx) ->
     UserInfo = get_user_info(Context),
-    IdempotentKey = capi_bender:get_idempotent_key(<<"invoice">>, PartyID, undefined),
+    IdempotentKey = capi_bender:get_idempotent_key(<<"invoice_template">>, PartyID, undefined),
     Hash = erlang:phash2(InvoiceParams),
     {ok, ID} = capi_bender:gen_by_snowflake(IdempotentKey, Hash, ReqCtx),
     Params = encode_invoice_params_with_tpl(ID, InvoiceTplID, InvoiceParams),
