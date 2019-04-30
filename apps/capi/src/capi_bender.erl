@@ -24,9 +24,9 @@ gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) ->
     {ok, binary()} |
     {error, {external_id_conflict, binary()}}.
 
-gen_by_sequence(IdempotentKey, SequinceID, Hash, WoodyCtx) ->
+gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyCtx) ->
     Sequence = {sequence, #bender_SequenceSchema{
-        sequence_id = SequinceID,
+        sequence_id = SequenceID,
         minimum = 100
     }},
     generate_id(IdempotentKey, Sequence, Hash, WoodyCtx).
