@@ -344,8 +344,10 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
     MockServiceSup = start_mocked_service_sup(),
     {ok, Token} = issue_token([{[invoices], write}], unlimited),
     mock_services([
-        {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end},
-        {invoicing, fun('Create', [_, #payproc_InvoiceParams{id = <<"bender_key">>}]) -> {ok, ?PAYPROC_INVOICE} end}
+        {bender,    fun('GenerateID', _) ->
+            {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end},
+        {invoicing, fun('Create', [_, #payproc_InvoiceParams{id = <<"bender_key">>}]) ->
+            {ok, ?PAYPROC_INVOICE} end}
     ], MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
