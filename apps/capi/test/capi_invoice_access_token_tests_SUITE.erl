@@ -630,7 +630,7 @@ create_payment_ok_test(Config) ->
                 ('PutCard', _) -> {ok, ?PUT_CARD_RESULT}
             end},
             {invoicing, fun('StartPayment', [_, _, IPP]) ->
-                #payproc_InvoicePaymentParams{id = ID, external_id = EID} = IPP,
+                #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
                 {ok, ?PAYPROC_PAYMENT(ID, EID)}
             end},
             {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end},
@@ -664,9 +664,13 @@ create_payment_ok_test(Config) ->
             <<"contactInfo">> => #{
                 <<"email">> => <<"bla@bla.ru">>
             }
-        }
+        },
+        <<"metadata">> => ?JSON
     },
-    {ok, #{<<"id">> := BenderKey, <<"externalID">> := ExternalID}} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
+    {ok, #{
+        <<"id">> := BenderKey,
+        <<"externalID">> := ExternalID
+    }} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
 
 -spec create_payment_with_empty_cvv_ok_test(config()) ->
     _.

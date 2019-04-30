@@ -322,7 +322,8 @@ encode_invoice_payment_params(ID, ExternalID, PaymentParams) ->
         external_id     = ExternalID,
         payer           = encode_payer_params(genlib_map:get(<<"payer">>, PaymentParams)),
         flow            = encode_flow(Flow),
-        make_recurrent = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false)
+        make_recurrent  = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false),
+        context         = capi_handler_encoder:encode_payment_context(PaymentParams)
     }.
 
 encode_payer_params(#{
@@ -390,4 +391,3 @@ encode_optional_cash(_, _, _, _) ->
 
 decode_invoice_payment(InvoiceID, #payproc_InvoicePayment{payment = Payment}, Context) ->
     capi_handler_decoder_invoicing:decode_payment(InvoiceID, Payment, Context).
-

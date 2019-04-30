@@ -77,16 +77,17 @@ decode_payment(InvoiceID, Payment, Context) ->
         currency = Currency
     } = Payment#domain_InvoicePayment.cost,
     capi_handler_utils:merge_and_compact(#{
-        <<"id"                    >> => Payment#domain_InvoicePayment.id,
-        <<"externalID"            >> => Payment#domain_InvoicePayment.external_id,
-        <<"invoiceID"             >> => InvoiceID,
-        <<"createdAt"             >> => Payment#domain_InvoicePayment.created_at,
+        <<"id"           >> => Payment#domain_InvoicePayment.id,
+        <<"externalID"   >> => Payment#domain_InvoicePayment.external_id,
+        <<"invoiceID"    >> => InvoiceID,
+        <<"createdAt"    >> => Payment#domain_InvoicePayment.created_at,
         % TODO whoops, nothing to get it from yet
-        <<"flow"                  >> => decode_flow(Payment#domain_InvoicePayment.flow),
-        <<"amount"                >> => Amount,
-        <<"currency"              >> => capi_handler_decoder_utils:decode_currency(Currency),
-        <<"payer"                 >> => decode_payer(Payment#domain_InvoicePayment.payer),
-        <<"makeRecurrent"         >> => decode_make_recurrent(Payment#domain_InvoicePayment.make_recurrent)
+        <<"flow"         >> => decode_flow(Payment#domain_InvoicePayment.flow),
+        <<"amount"       >> => Amount,
+        <<"currency"     >> => capi_handler_decoder_utils:decode_currency(Currency),
+        <<"payer"        >> => decode_payer(Payment#domain_InvoicePayment.payer),
+        <<"makeRecurrent">> => decode_make_recurrent(Payment#domain_InvoicePayment.make_recurrent),
+        <<"metadata"     >> => capi_handler_decoder_utils:decode_context(Payment#domain_InvoicePayment.context)
     }, decode_payment_status(Payment#domain_InvoicePayment.status, Context)).
 
 decode_payer({customer, #domain_CustomerPayer{customer_id = ID}}) ->
