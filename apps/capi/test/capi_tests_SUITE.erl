@@ -345,7 +345,7 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
     {ok, Token} = issue_token([{[invoices], write}], unlimited),
     mock_services([
         {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end},
-        {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end}
+        {invoicing, fun('Create', [_, #payproc_InvoiceParams{ id = <<"bender_key">>}]) -> {ok, ?PAYPROC_INVOICE} end}
     ], MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
@@ -566,7 +566,7 @@ authorization_bad_token_error_test(Config) ->
 create_invoice_ok_test(Config) ->
     mock_services([
         {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"key">>)} end},
-        {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end}
+        {invoicing, fun('Create', [_, #payproc_InvoiceParams{ id = <<"key">>}]) -> {ok, ?PAYPROC_INVOICE} end}
     ], Config),
     Req = #{
         <<"shopID">> => ?STRING,
@@ -584,7 +584,7 @@ create_invoice_ok_test(Config) ->
 create_invoice_with_tpl_ok_test(Config) ->
     mock_services([
         {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"key">>)} end},
-        {invoicing, fun('CreateWithTemplate', _) -> {ok, ?PAYPROC_INVOICE} end}
+        {invoicing, fun('CreateWithTemplate', [_, #payproc_InvoiceWithTemplateParams{ id = <<"key">>}]) -> {ok, ?PAYPROC_INVOICE} end}
     ], Config),
     Req = #{
         <<"amount">> => ?INTEGER,
@@ -597,7 +597,6 @@ create_invoice_with_tpl_ok_test(Config) ->
     _.
 get_invoice_ok_test(Config) ->
     mock_services([
-        {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end},
         {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}
     ], Config),
     {ok, _} = capi_client_invoices:get_invoice_by_id(?config(context, Config), ?STRING).
@@ -716,8 +715,16 @@ create_payment_ok_test(Config) ->
                 ('PutSession', _) -> {ok, ok};
                 ('PutCard', _) -> {ok, ?PUT_CARD_RESULT}
             end},
-            {invoicing, fun('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT} end},
-            {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end},
+            {invoicing, fun(
+                'StartPayment',
+                [_, <<"TEST">>, #payproc_InvoicePaymentParams{id = <<"payment_key">>}]
+            ) ->
+                {ok, ?PAYPROC_PAYMENT}
+            end},
+            {bender, fun
+                ('GenerateID', [_, {sequence,  _}, _]) -> {ok, capi_ct_helper_bender:get_result(<<"payment_key">>)};
+                ('GenerateID', [_, {constant,  _}, _]) -> {ok, capi_ct_helper_bender:get_result(<<"session_key">>)}
+            end},
             {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end}
         ],
         Config
