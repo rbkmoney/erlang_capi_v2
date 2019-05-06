@@ -234,6 +234,58 @@ create_visa_payment_resource_ok_test(Config) ->
         <<"clientInfo">> => ClientInfo
     }).
 
+-spec create_visa_payment_resource_idemp_ok_test(_) ->
+    _.
+create_visa_payment_resource_idemp_ok_test(Config) ->
+    ExternalID = <<"Degusi :P">>,
+    capi_ct_helper:mock_services([
+        {cds_storage, fun
+            ('PutSession', _) -> {ok, ok};
+            ('PutCard', [
+                #'CardData'{pan = <<"411111", _:6/binary, Mask:4/binary>>}
+            ]) ->
+                {ok, #'PutCardResult'{
+                    bank_card = #domain_BankCard{
+                        token = ?STRING,
+                        payment_system = visa,
+                        bin = <<"411111">>,
+                        masked_pan = Mask
+                    }
+                }}
+        end},
+        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end},
+        {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT(<<"VISA">>)} end}
+    ], Config),
+    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
+    Params = #{
+        <<"externalID">> => ExternalID,
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"CardData">>,
+            <<"cardNumber">>      => <<"4111111111111111">>,
+            <<"cardHolder">>      => <<"Alexander Weinerschnitzel">>,
+            <<"expDate">>         => <<"08/27">>,
+            <<"cvv">>             => <<"232">>
+        },
+        <<"clientInfo">> => ClientInfo
+    },
+    PaymentToolDetails = #{
+        <<"detailsType">>    => <<"PaymentToolDetailsBankCard">>,
+        <<"paymentSystem">>  => <<"visa">>,
+        <<"lastDigits">>     => <<"1111">>,
+        <<"bin">>            => <<"411111">>,
+        <<"cardNumberMask">> => <<"411111******1111">>
+    },
+    {ok, #{
+        <<"paymentToolToken">>   := ToolToken,
+        <<"paymentSession">>     := ToolSession,
+        <<"paymentToolDetails">> := PaymentToolDetails
+    }} = capi_client_tokens:create_payment_resource(?config(context, Config), Params),
+    {ok, #{
+        <<"paymentToolToken">> := ToolToken,
+        <<"paymentSession">>   := ToolSession,
+        <<"paymentToolDetails">> := PaymentToolDetails
+    }} = capi_client_tokens:create_payment_resource(?config(context, Config), Params).
+
 -spec create_visa_with_empty_cvv_ok_test(_) ->
     _.
 create_visa_with_empty_cvv_ok_test(Config) ->
