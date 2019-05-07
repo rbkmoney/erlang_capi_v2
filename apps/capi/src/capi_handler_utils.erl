@@ -39,7 +39,7 @@
     response().
 
 general_error(Code, Message) ->
-    create_erorr_resp(Code, #{<<"message">> => genlib:to_binary(Message)}).
+    create_error_resp(Code, #{<<"message">> => genlib:to_binary(Message)}).
 
 -spec logic_error
     (term(), io_lib:chars() | binary()) -> response();
@@ -52,19 +52,19 @@ logic_error(externalIDConflict, {ID, ExternalID}) ->
         <<"externalID">> => ExternalID,
         <<"id">> => ID,
         <<"message">> => <<"This 'externalID' has been used by another request">>},
-    create_erorr_resp(409, Data);
+    create_error_resp(409, Data);
 logic_error(externalIDConflict, ExternalID) ->
     Data = #{
         <<"externalID">> => ExternalID,
         <<"message">> => <<"This 'externalID' has been used by another request">>},
-    create_erorr_resp(409, Data);
+    create_error_resp(409, Data);
 logic_error(Code, Message) ->
     Data = #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)},
-    create_erorr_resp(400, Data).
+    create_error_resp(400, Data).
 
-create_erorr_resp(Code, Data) ->
-    create_erorr_resp(Code, [], Data).
-create_erorr_resp(Code, Headers, Data) ->
+create_error_resp(Code, Data) ->
+    create_error_resp(Code, [], Data).
+create_error_resp(Code, Headers, Data) ->
     {Code, Headers, Data}.
 
 -spec server_error(integer()) ->
