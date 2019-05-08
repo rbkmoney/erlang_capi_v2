@@ -20,7 +20,7 @@ process_request('CreateInvoice', Req, Context) ->
     InvoiceParams = maps:get('InvoiceParams', Req),
     try create_invoice(PartyID, InvoiceParams, Context) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {201, [], capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, PartyID, ExtraProperties)}};
+            {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, PartyID, ExtraProperties)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
@@ -50,7 +50,7 @@ process_request('CreateInvoiceAccessToken', Req, Context) ->
                 capi_handler_utils:get_party_id(Context),
                 {invoice, InvoiceID}
             ),
-            {ok, {201, [], Response}};
+            {ok, {201, #{}, Response}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -63,7 +63,7 @@ process_request('CreateInvoiceAccessToken', Req, Context) ->
 process_request('GetInvoiceByID', Req, Context) ->
     case capi_handler_utils:get_invoice_by_id(maps:get(invoiceID, Req), Context) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {200, [], capi_handler_decoder_invoicing:decode_invoice(Invoice)}};
+            {ok, {200, #{}, capi_handler_decoder_invoicing:decode_invoice(Invoice)}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -77,7 +77,7 @@ process_request('FulfillInvoice', Req, Context) ->
     Call = {invoicing, 'Fulfill', [maps:get(invoiceID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))]},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidInvoiceStatus{} ->
@@ -97,7 +97,7 @@ process_request('RescindInvoice', Req, Context) ->
     Call = {invoicing, 'Rescind', [maps:get(invoiceID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))]},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidInvoiceStatus{} ->
@@ -133,7 +133,7 @@ process_request('GetInvoiceEvents', Req, Context) ->
         ),
     case Result of
         {ok, Events} when is_list(Events) ->
-            {ok, {200, [], Events}};
+            {ok, {200, #{}, Events}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -151,7 +151,7 @@ process_request('GetInvoiceEvents', Req, Context) ->
 process_request('GetInvoicePaymentMethods', Req, Context) ->
     case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, [maps:get(invoiceID, Req)], Context) of
         {ok, PaymentMethods} when is_list(PaymentMethods) ->
-            {ok, {200, [], PaymentMethods}};
+            {ok, {200, #{}, PaymentMethods}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->

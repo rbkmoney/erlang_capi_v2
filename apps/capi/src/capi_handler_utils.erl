@@ -35,7 +35,7 @@
 -type processing_context() :: capi_handler:processing_context().
 -type response()           :: capi_handler:response().
 
--spec general_error(integer(), binary()) ->
+-spec general_error(cowboy:http_status(), binary()) ->
     response().
 
 general_error(Code, Message) ->
@@ -63,15 +63,15 @@ logic_error(Code, Message) ->
     create_error_resp(400, Data).
 
 create_error_resp(Code, Data) ->
-    create_error_resp(Code, [], Data).
+    create_error_resp(Code, #{}, Data).
 create_error_resp(Code, Headers, Data) ->
     {Code, Headers, Data}.
 
 -spec server_error(integer()) ->
-    {integer(), [], <<>>}.
+    {integer(), #{}, <<>>}.
 
 server_error(Code) when Code >= 500 andalso Code < 600 ->
-    {Code, [], <<>>}.
+    {Code, #{}, <<>>}.
 
 -spec format_request_errors(list()) ->
     binary().

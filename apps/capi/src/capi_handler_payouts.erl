@@ -18,7 +18,7 @@
 process_request('GetPayoutTools', Req, Context) ->
     case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
         {ok, #domain_Contract{payout_tools = PayoutTools}} ->
-            {ok, {200, [], [decode_payout_tool(P) || P <- PayoutTools]}};
+            {ok, {200, #{}, [decode_payout_tool(P) || P <- PayoutTools]}};
         {exception, #payproc_ContractNotFound{}} ->
             {ok, general_error(404, <<"Contract not found">>)}
     end;
@@ -29,7 +29,7 @@ process_request('GetPayoutToolByID', Req, Context) ->
             PayoutToolID = maps:get('payoutToolID', Req),
             case lists:keyfind(PayoutToolID, #domain_PayoutTool.id, PayoutTools) of
                 #domain_PayoutTool{} = P ->
-                    {ok, {200, [], decode_payout_tool(P)}};
+                    {ok, {200, #{}, decode_payout_tool(P)}};
                 false ->
                     {ok, general_error(404, <<"PayoutTool not found">>)}
             end;
@@ -43,7 +43,7 @@ process_request('GetPayout', Req, Context) ->
         {ok, Payout} ->
             case check_party_in_payout(capi_handler_utils:get_party_id(Context), Payout) of
                 true ->
-                    {ok, {200, [], decode_payout(Payout)}};
+                    {ok, {200, #{}, decode_payout(Payout)}};
                 false ->
                     {ok, general_error(404, <<"Payout not found">>)}
             end;
@@ -58,7 +58,7 @@ process_request('CreatePayout', Req, Context) ->
     ),
     case capi_handler_utils:service_call({payouts, 'CreatePayout', [CreateRequest]}, Context) of
         {ok, Payout} ->
-            {ok, {201, [], decode_payout(Payout)}};
+            {ok, {201, #{}, decode_payout(Payout)}};
         {exception, Exception} ->
             case Exception of
                 #'payout_processing_InvalidPayoutTool'{} ->
@@ -74,7 +74,7 @@ process_request('CreatePayout', Req, Context) ->
 process_request('GetScheduleByRef', Req, Context) ->
     case get_schedule_by_id(genlib:to_int(maps:get(scheduleID, Req)), Context) of
         {ok, Schedule} ->
-            {ok, {200, [], decode_business_schedule(Schedule)}};
+            {ok, {200, #{}, decode_business_schedule(Schedule)}};
         {error, not_found} ->
             {ok, general_error(404, <<"Schedule not found">>)}
     end;

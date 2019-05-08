@@ -7,7 +7,7 @@
 -behaviour(swag_server_logic_handler).
 
 %% API callbacks
--export([authorize_api_key/4]).
+-export([authorize_api_key/3]).
 -export([handle_request/4]).
 
 %% Handler behaviour
@@ -30,10 +30,10 @@
 %% @WARNING Must be refactored in case of different classes of users using this API
 -define(REALM, <<"external">>).
 
--spec authorize_api_key(swag_server:logic_handler(_), swag_server:operation_id(), swag_server:api_key(), handler_opts()) ->
+-spec authorize_api_key(swag_server:operation_id(), swag_server:api_key(), handler_opts()) ->
     Result :: false | {true, capi_auth:context()}.
 
-authorize_api_key(_Handler, OperationID, ApiKey, _HandlerOpts) ->
+authorize_api_key(OperationID, ApiKey, _HandlerOpts) ->
     _ = capi_utils:logtag_process(operation_id, OperationID),
     capi_auth:authorize_api_key(OperationID, ApiKey).
 
@@ -88,7 +88,7 @@ handle_request(_Handler, OperationID, Req, SwagContext = #{auth_context := AuthC
                 process_request(OperationID, Req, Context, get_handlers());
             {error, _} = Error ->
                 _ = lager:info("Operation ~p authorization failed due to ~p", [OperationID, Error]),
-                {ok, {401, [], undefined}}
+                {ok, {401, #{}, undefined}}
         end
     catch
         error:{woody_error, {Source, Class, Details}} ->

@@ -16,7 +16,7 @@
 
 process_request('GetContracts', _Req, Context) ->
     Party = capi_utils:unwrap(capi_handler_utils:get_my_party(Context)),
-    {ok, {200, [], decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
+    {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
 
 process_request('GetContractByID', Req, Context) ->
     ContractID = maps:get('contractID', Req),
@@ -25,14 +25,14 @@ process_request('GetContractByID', Req, Context) ->
         undefined ->
             {ok, general_error(404, <<"Contract not found">>)};
         Contract ->
-            {ok, {200, [], decode_contract(Contract, Party#domain_Party.contractors)}}
+            {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}}
     end;
 
 process_request('GetContractAdjustments', Req, Context) ->
     case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
         {ok, #domain_Contract{adjustments = Adjustments}} ->
             Resp = [decode_contract_adjustment(A) || A <- Adjustments],
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {exception, #payproc_ContractNotFound{}} ->
             {ok, general_error(404, <<"Contract not found">>)}
     end;
@@ -43,7 +43,7 @@ process_request('GetContractAdjustmentByID', Req, Context) ->
             AdjustmentID = maps:get('adjustmentID', Req),
             case lists:keyfind(AdjustmentID, #domain_ContractAdjustment.id, Adjustments) of
                 #domain_ContractAdjustment{} = A ->
-                    {ok, {200, [], decode_contract_adjustment(A)}};
+                    {ok, {200, #{}, decode_contract_adjustment(A)}};
                 false ->
                     {ok, general_error(404, <<"Adjustment not found">>)}
             end;
