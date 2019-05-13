@@ -318,10 +318,10 @@ create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} =
 encode_invoice_payment_params(ID, ExternalID, PaymentParams) ->
     Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
     #payproc_InvoicePaymentParams{
-        id              = ID,
-        external_id     = ExternalID,
-        payer           = encode_payer_params(genlib_map:get(<<"payer">>, PaymentParams)),
-        flow            = encode_flow(Flow),
+        id             = ID,
+        external_id    = ExternalID,
+        payer          = encode_payer_params(genlib_map:get(<<"payer">>, PaymentParams)),
+        flow           = encode_flow(Flow),
         make_recurrent = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false)
     }.
 
