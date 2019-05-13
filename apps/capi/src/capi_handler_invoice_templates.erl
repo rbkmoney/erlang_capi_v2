@@ -177,7 +177,7 @@ process_request(_OperationID, _Req, _Context) ->
 create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx} = Context) ->
     ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
     IdempotentKey = capi_bender:get_idempotent_key(<<"invoice_template">>, PartyID, ExternalID),
-    Hash = erlang:phash2(InvoiceParams),
+    Hash = erlang:phash2({InvoiceTplID, InvoiceParams}),
     case capi_bender:gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) of
         {ok, ID} ->
             Call = {invoicing, 'CreateWithTemplate', [encode_invoice_params_with_tpl(ID, InvoiceTplID, InvoiceParams)]},
@@ -262,6 +262,7 @@ encode_lifetime(DD, MM, YY) ->
 encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams) ->
     #payproc_InvoiceWithTemplateParams{
         id          = InvoiceID,
+        external_id = genlib_map:get(<<"externalID">>, InvoiceParams, undefined),
         template_id = InvoiceTplID,
         cost        = encode_optional_invoice_cost(InvoiceParams),
         context     = encode_optional_context(InvoiceParams)

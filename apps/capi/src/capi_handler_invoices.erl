@@ -189,7 +189,8 @@ encode_invoice_params(ID, PartyID, InvoiceParams) ->
         cost     = encode_invoice_cost(Amount, Currency, Cart),
         due      = capi_handler_utils:get_time(<<"dueDate">>, InvoiceParams),
         context  = capi_handler_encoder:encode_invoice_context(InvoiceParams),
-        shop_id  = genlib_map:get(<<"shopID">>, InvoiceParams)
+        shop_id  = genlib_map:get(<<"shopID">>, InvoiceParams),
+        external_id = genlib_map:get(<<"externalID">>, InvoiceParams, undefined)
     }.
 
 encode_invoice_cost(Amount, Currency, Cart) when Amount =/= undefined, Cart =/= undefined ->

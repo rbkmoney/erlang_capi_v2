@@ -47,7 +47,7 @@ gen_by_constant(IdempotentKey, ConstantID, Hash, WoodyCtx) ->
 get_idempotent_key(Prefix, PartyID, undefined) ->
     get_idempotent_key(Prefix, PartyID, gen_external_id());
 get_idempotent_key(Prefix, PartyID, ExternalID) ->
-    <<"capi-v2/", Prefix/binary, "/", PartyID/binary, "/", ExternalID/binary>>.
+    <<"capi-v3/", Prefix/binary, "/", PartyID/binary, "/", ExternalID/binary>>.
 
 %% Internal
 

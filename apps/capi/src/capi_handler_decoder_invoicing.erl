@@ -245,6 +245,7 @@ decode_invoice(Invoice) ->
         Invoice#domain_Invoice.details,
     capi_handler_utils:merge_and_compact(#{
         <<"id"               >> => Invoice#domain_Invoice.id,
+        <<"externalID"       >> => Invoice#domain_Invoice.external_id,
         <<"shopID"           >> => Invoice#domain_Invoice.shop_id,
         <<"createdAt"        >> => Invoice#domain_Invoice.created_at,
         <<"dueDate"          >> => Invoice#domain_Invoice.due,

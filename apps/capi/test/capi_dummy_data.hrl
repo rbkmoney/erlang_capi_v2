@@ -50,8 +50,10 @@
     end
 ).
 
--define(INVOICE, #domain_Invoice{
-    id          = ?STRING,
+-define(INVOICE, ?INVOICE(?STRING, undefined)).
+
+-define(INVOICE(ID, EID), #domain_Invoice{
+    id          = ID,
     created_at  = ?TIMESTAMP,
     status      = ?INVOICE_STATUS(unpaid),
     due         = ?TIMESTAMP,
@@ -60,7 +62,8 @@
     context     = ?CONTENT,
     shop_id     = ?STRING,
     owner_id    = ?STRING,
-    template_id = ?STRING
+    template_id = ?STRING,
+    external_id = EID
 }).
 
 -define(PAYPROC_INVOICE(Payments), #payproc_Invoice{
@@ -68,6 +71,16 @@
     payments = Payments
 }).
 -define(PAYPROC_INVOICE, ?PAYPROC_INVOICE([])).
+
+-define(PAYPROC_INVOICE_WITH_ID(ID), #payproc_Invoice{
+    invoice  = ?INVOICE(ID, undefined),
+    payments = []
+}).
+
+-define(PAYPROC_INVOICE_WITH_ID(ID, EID), #payproc_Invoice{
+    invoice  = ?INVOICE(ID, EID),
+    payments = []
+}).
 
 -define(INVOICE_LINE, #domain_InvoiceLine{
     product = ?STRING,

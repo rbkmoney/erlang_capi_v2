@@ -24,6 +24,8 @@
 
 -export([
     create_visa_payment_resource_ok_test/1,
+    create_visa_payment_resource_idemp_ok_test/1,
+    create_visa_payment_resource_idemp_fail_test/1,
     create_visa_with_empty_cvv_ok_test/1,
     create_nspkmir_payment_resource_ok_test/1,
     create_euroset_payment_resource_ok_test/1,
@@ -102,6 +104,8 @@ groups() ->
         {payment_resources, [],
             [
                 create_visa_payment_resource_ok_test,
+                create_visa_payment_resource_idemp_ok_test,
+                create_visa_payment_resource_idemp_fail_test,
                 create_visa_with_empty_cvv_ok_test,
                 create_nspkmir_payment_resource_ok_test,
                 create_euroset_payment_resource_ok_test,
@@ -285,6 +289,67 @@ create_visa_payment_resource_idemp_ok_test(Config) ->
         <<"paymentSession">>   := ToolSession,
         <<"paymentToolDetails">> := PaymentToolDetails
     }} = capi_client_tokens:create_payment_resource(?config(context, Config), Params).
+
+-spec create_visa_payment_resource_idemp_fail_test(_) ->
+    _.
+create_visa_payment_resource_idemp_fail_test(Config) ->
+    ExternalID = <<"Degusi :P">>,
+    BenderKey = <<"bender key">>,
+    Token1 = <<"TOKEN1">>,
+    Token2 = <<"TOKEN2">>,
+    Ctx = capi_msgp_marshalling:marshal(#{<<"params_hash">> => erlang:phash2(Token1)}),
+    capi_ct_helper:mock_services([
+        {cds_storage, fun
+            ('PutSession', _) -> {ok, ok};
+            ('PutCard', [
+                #'CardData'{pan = <<"511111", _:6/binary, Mask:4/binary>>}
+            ]) ->
+                {ok, #'PutCardResult'{
+                    bank_card = #domain_BankCard{
+                        token = Token2,
+                        payment_system = visa,
+                        bin = <<"511111">>,
+                        masked_pan = Mask
+                    }
+                }};
+            ('PutCard', [
+                #'CardData'{pan = <<"411111", _:6/binary, Mask:4/binary>>}
+            ]) ->
+                {ok, #'PutCardResult'{
+                    bank_card = #domain_BankCard{
+                        token = Token1,
+                        payment_system = visa,
+                        bin = <<"411111">>,
+                        masked_pan = Mask
+                    }
+                }}
+        end},
+        {bender,  fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end},
+        {binbase, fun('Lookup', _)     -> {ok, ?BINBASE_LOOKUP_RESULT(<<"VISA">>)} end}
+    ], Config),
+    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
+    PaymentTool = #{
+            <<"paymentToolType">> => <<"CardData">>,
+            <<"cardNumber">>      => <<"4111111111111111">>,
+            <<"cardHolder">>      => <<"Alexander Weinerschnitzel">>,
+            <<"expDate">>         => <<"08/27">>,
+            <<"cvv">>             => <<"232">>
+        },
+    Params = #{
+        <<"externalID">>  => ExternalID,
+        <<"paymentTool">> => PaymentTool,
+        <<"clientInfo">>  => ClientInfo
+    },
+    Params2 = #{
+        <<"externalID">>  => ExternalID,
+        <<"paymentTool">> => PaymentTool#{<<"cardNumber">> => <<"5111111111111111">>},
+        <<"clientInfo">>  => ClientInfo
+    },
+    {ok, _} = capi_client_tokens:create_payment_resource(?config(context, Config), Params),
+    {error, {409, #{
+        <<"externalID">> := ExternalID,
+        <<"message">>    := <<"This 'externalID' has been used by another request">>
+    }}} = capi_client_tokens:create_payment_resource(?config(context, Config), Params2).
 
 -spec create_visa_with_empty_cvv_ok_test(_) ->
     _.
