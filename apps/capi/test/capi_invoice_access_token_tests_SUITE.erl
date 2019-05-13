@@ -621,14 +621,18 @@ get_invoice_payment_methods_ok_test(Config) ->
 -spec create_payment_ok_test(config()) ->
     _.
 create_payment_ok_test(Config) ->
+    BenderKey = <<"bender_key">>,
+    ExternalID = <<"merch_id">>,
     capi_ct_helper:mock_services(
         [
             {cds_storage, fun
                 ('PutSession', _) -> {ok, ok};
                 ('PutCard', _)    -> {ok, ?PUT_CARD_RESULT}
             end},
-            {bender,  fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end},
-            {invoicing, fun('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT} end},
+            {bender,  fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end},
+            {invoicing, fun('StartPayment', [_, _, IPP]) ->
+                #payproc_InvoicePaymentParams{id = ID, external_id = EID} = IPP,
+                {ok, ?PAYPROC_PAYMENT(ID, EID)} end},
             {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end}
         ],
         Config
@@ -650,6 +654,7 @@ create_payment_ok_test(Config) ->
         <<"paymentSession">> := Session
     }} = capi_client_tokens:create_payment_resource(?config(context, Config), Req1),
     Req2 = #{
+        <<"externalID">> => ExternalID,
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"payer">> => #{
             <<"payerType">> => <<"PaymentResourcePayer">>,
@@ -660,7 +665,7 @@ create_payment_ok_test(Config) ->
             }
         }
     },
-    {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
+    {ok, #{<<"id">> := BenderKey, <<"externalID">> := ExternalID}} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
 
 -spec create_payment_with_empty_cvv_ok_test(config()) ->
     _.

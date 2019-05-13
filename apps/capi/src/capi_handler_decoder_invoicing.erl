@@ -78,6 +78,7 @@ decode_payment(InvoiceID, Payment, Context) ->
     } = Payment#domain_InvoicePayment.cost,
     capi_handler_utils:merge_and_compact(#{
         <<"id"                    >> => Payment#domain_InvoicePayment.id,
+        <<"externalID"            >> => Payment#domain_InvoicePayment.external_id,
         <<"invoiceID"             >> => InvoiceID,
         <<"createdAt"             >> => Payment#domain_InvoicePayment.created_at,
         % TODO whoops, nothing to get it from yet

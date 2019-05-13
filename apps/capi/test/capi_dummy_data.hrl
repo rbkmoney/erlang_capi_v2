@@ -140,8 +140,8 @@
 
 -define(PAYER, {payment_resource, ?PAYMENT_RESOURCE_PAYER}).
 
--define(PAYMENT(Status), #domain_InvoicePayment{
-    id               = ?STRING,
+-define(PAYMENT(ID, IED, Status), #domain_InvoicePayment{
+    id               = ID,
     created_at       = ?TIMESTAMP,
     domain_revision  = ?INTEGER,
     status           = Status,
@@ -149,9 +149,13 @@
     cost             = ?CASH,
     flow             = {instant, #domain_InvoicePaymentFlowInstant{}},
     context          = ?CONTENT,
-    make_recurrent   = false
+    make_recurrent   = false,
+    external_id      = IED
 }).
--define(PAYMENT, ?PAYMENT({pending, #domain_InvoicePaymentPending{}})).
+
+-define(PAYMENT, ?PAYMENT(?STRING, undefined, {pending, #domain_InvoicePaymentPending{}})).
+
+-define(PAYMENT(ID, IED), ?PAYMENT(ID, IED, {pending, #domain_InvoicePaymentPending{}})).
 
 -define(RECURRENT_PAYMENT(Status), #domain_InvoicePayment{
     id               = ?STRING,
@@ -174,7 +178,9 @@
 
 -define(PAYPROC_PAYMENT, ?PAYPROC_PAYMENT(?PAYMENT, [?REFUND], [?ADJUSTMENT])).
 
--define(FAILED_PAYMENT(Failure), ?PAYMENT({failed, #domain_InvoicePaymentFailed{failure = Failure}})).
+-define(PAYPROC_PAYMENT(ID, IED), ?PAYPROC_PAYMENT(?PAYMENT(ID, IED), [?REFUND], [?ADJUSTMENT])).
+
+-define(FAILED_PAYMENT(Failure), ?PAYMENT(?STRING, ?STRING, {failed, #domain_InvoicePaymentFailed{failure = Failure}})).
 
 -define(PAYPROC_FAILED_PAYMENT(Failure), ?PAYPROC_PAYMENT(?FAILED_PAYMENT(Failure), [], [])).
 
