@@ -586,7 +586,8 @@ create_invoice_ok_test(Config) ->
 create_invoice_with_tpl_ok_test(Config) ->
     mock_services([
         {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"key">>)} end},
-        {invoicing, fun('CreateWithTemplate', [_, #payproc_InvoiceWithTemplateParams{ id = <<"key">>}]) -> {ok, ?PAYPROC_INVOICE} end}
+        {invoicing, fun('CreateWithTemplate', [_, #payproc_InvoiceWithTemplateParams{ id = <<"key">>}]) ->
+            {ok, ?PAYPROC_INVOICE} end}
     ], Config),
     Req = #{
         <<"amount">> => ?INTEGER,
@@ -606,6 +607,10 @@ get_invoice_ok_test(Config) ->
 -spec get_invoice_events_ok_test(config()) ->
     _.
 get_invoice_events_ok_test(Config) ->
+    Inc = fun
+        (X) when is_integer(X) -> X + 1;
+        (_) -> 1
+    end,
     _ = mock_services([
         {invoicing, fun
             ('GetEvents', [_, _, #payproc_EventRange{'after' = ID, limit = N}]) ->
@@ -617,7 +622,7 @@ get_invoice_events_ok_test(Config) ->
                     ?INVOICE_EVENT_PRIVATE(5),
                     ?INVOICE_EVENT_PRIVATE(6),
                     ?INVOICE_EVENT(7)
-                ], if is_integer(ID) -> ID + 1; true -> 1 end, N)}
+                ], Inc(ID), N)}
         end}
     ], Config),
     {ok, [#{<<"id">> := 1}, #{<<"id">> := 2}, #{<<"id">> := 4}]} =
@@ -1279,8 +1284,8 @@ search_invoices_ok_test(Config) ->
     Query = [
         {limit, 2},
         {offset, 2},
-        {from_time, {{2015, 08, 11},{19, 42, 35}}},
-        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {from_time, {{2015, 08, 11}, {19, 42, 35}}},
+        {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {invoiceStatus, <<"fulfilled">>},
         {payerEmail, <<"test@test.ru">>},
         {payerIP, <<"192.168.0.1">>},
@@ -1306,8 +1311,8 @@ search_payments_ok_test(Config) ->
     Query = [
         {limit, 2},
         {offset, 2},
-        {from_time, {{2015, 08, 11},{19, 42, 35}}},
-        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {from_time, {{2015, 08, 11}, {19, 42, 35}}},
+        {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {payerEmail, <<"test@test.ru">>},
         {payerIP, <<"192.168.0.0.1">>},
         {paymentStatus, <<"processed">>},
@@ -1332,8 +1337,8 @@ search_payouts_ok_test(Config) ->
     Query = [
         {limit, 2},
         {offset, 2},
-        {from_time, {{2015, 08, 11},{19, 42, 35}}},
-        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {from_time, {{2015, 08, 11}, {19, 42, 35}}},
+        {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {shopID, <<"testShopID">>},
         {payoutID, <<"testPayoutID">>},
         {payoutToolType, <<"PayoutCard">>}
@@ -1348,8 +1353,8 @@ get_payment_conversion_stats_ok_test(Config) ->
     Query = [
         {limit, 2},
         {offset, 2},
-        {from_time, {{2015, 08, 11},{19, 42, 35}}},
-        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {from_time, {{2015, 08, 11}, {19, 42, 35}}},
+        {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {split_unit, minute},
         {split_size, 1}
     ],
@@ -1362,8 +1367,8 @@ get_payment_revenue_stats_ok_test(Config) ->
     Query = [
         {limit, 2},
         {offset, 2},
-        {from_time, {{2015, 08, 11},{19, 42, 35}}},
-        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {from_time, {{2015, 08, 11}, {19, 42, 35}}},
+        {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {split_unit, minute},
         {split_size, 1}
     ],
@@ -1376,8 +1381,8 @@ get_payment_geo_stats_ok_test(Config) ->
     Query = [
         {limit, 2},
         {offset, 0},
-        {from_time, {{2015, 08, 11},{19, 42, 35}}},
-        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {from_time, {{2015, 08, 11}, {19, 42, 35}}},
+        {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {split_unit, minute},
         {split_size, 1}
     ],
@@ -1390,8 +1395,8 @@ get_payment_rate_stats_ok_test(Config) ->
     Query = [
         {limit, 2},
         {offset, 0},
-        {from_time, {{2015, 08, 11},{19, 42, 35}}},
-        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {from_time, {{2015, 08, 11}, {19, 42, 35}}},
+        {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {split_unit, minute},
         {split_size, 1}
     ],
@@ -1404,8 +1409,8 @@ get_payment_method_stats_ok_test(Config) ->
     Query = [
         {limit, 2},
         {offset, 0},
-        {from_time, {{2015, 08, 11},{19, 42, 35}}},
-        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {from_time, {{2015, 08, 11}, {19, 42, 35}}},
+        {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {split_unit, minute},
         {split_size, 1},
         {paymentMethod, <<"bankCard">>}
@@ -1421,7 +1426,10 @@ get_reports_ok_test(Config) ->
 -spec download_report_file_ok_test(_) ->
     _.
 download_report_file_ok_test(Config) ->
-    mock_services([{reporting, fun('GetReport', _) -> {ok, ?REPORT}; ('GeneratePresignedUrl', _) -> {ok, ?STRING} end}], Config),
+    mock_services([{reporting, fun
+        ('GetReport', _) -> {ok, ?REPORT};
+        ('GeneratePresignedUrl', _) -> {ok, ?STRING} end}
+    ], Config),
     {ok, _} = capi_client_reports:download_file(?config(context, Config), ?STRING, ?INTEGER, ?STRING).
 
 -spec get_categories_ok_test(config()) ->
@@ -1443,7 +1451,8 @@ get_schedule_by_ref_ok_test(Config) ->
     _.
 get_payment_institutions(Config) ->
     {ok, [_Something]} = capi_client_payment_institutions:get_payment_institutions(?config(context, Config)),
-    {ok, []} = capi_client_payment_institutions:get_payment_institutions(?config(context, Config), <<"RUS">>, <<"live">>),
+    {ok, []} =
+        capi_client_payment_institutions:get_payment_institutions(?config(context, Config), <<"RUS">>, <<"live">>),
     {ok, [#{<<"realm">> := <<"test">>}]} =
         capi_client_payment_institutions:get_payment_institutions(?config(context, Config), <<"RUS">>, <<"test">>).
 
@@ -1461,7 +1470,8 @@ get_payment_institution_payment_terms(Config) ->
         ],
         Config
     ),
-    {ok, _} = capi_client_payment_institutions:get_payment_institution_payment_terms(?config(context, Config), ?INTEGER).
+    {ok, _} =
+        capi_client_payment_institutions:get_payment_institution_payment_terms(?config(context, Config), ?INTEGER).
 
 -spec get_payment_institution_payout_terms(config()) ->
     _.
