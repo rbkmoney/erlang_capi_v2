@@ -17,17 +17,13 @@
 process_request('CreatePayment', Req, Context) ->
     InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('PaymentParams', Req),
-    Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
+    PartyID = capi_handler_utils:get_party_id(Context),
     Result =
         try
-            Params =  #payproc_InvoicePaymentParams{
-                'payer' = encode_payer_params(genlib_map:get(<<"payer">>, PaymentParams)),
-                'flow' = encode_flow(Flow),
-                'make_recurrent' = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false)
-            },
-            Call = {invoicing, 'StartPayment', [InvoiceID, Params]},
-            capi_handler_utils:service_call_with([user_info], Call, Context)
+            create_payment(InvoiceID, PartyID, PaymentParams, Context)
         catch
+            {external_id_conflict, _, _} = Error ->
+                {error, Error};
             throw:Error when
                 Error =:= invalid_token orelse
                 Error =:= invalid_payment_session
@@ -81,7 +77,9 @@ process_request('CreatePayment', Req, Context) ->
             {ok, logic_error(
                 invalidPaymentSession,
                 <<"Specified payment session is invalid">>
-            )}
+            )};
+        {error, {external_id_conflict, PaymentID, ExternalID}} ->
+            {ok, logic_error(externalIDConflict, {PaymentID, ExternalID})}
     end;
 
 process_request('GetPayments', Req, Context) ->
@@ -303,6 +301,29 @@ process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 %%
+
+create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} = Context) ->
+    ExternalID    = maps:get(<<"externalID">>, PaymentParams, undefined),
+    IdempotentKey = capi_bender:get_idempotent_key(<<"payment">>, PartyID, ExternalID),
+    Hash = erlang:phash2(PaymentParams),
+    case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Hash, WoodyCtx) of
+        {ok, ID} ->
+            Params = encode_invoice_payment_params(ID, ExternalID, PaymentParams),
+            Call = {invoicing, 'StartPayment', [InvoiceID, Params]},
+            capi_handler_utils:service_call_with([user_info], Call, Context);
+        {error, {external_id_conflict, ID}} ->
+            throw({external_id_conflict, ID, ExternalID})
+   end.
+
+encode_invoice_payment_params(ID, ExternalID, PaymentParams) ->
+    Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
+    #payproc_InvoicePaymentParams{
+        id             = ID,
+        external_id    = ExternalID,
+        payer          = encode_payer_params(genlib_map:get(<<"payer">>, PaymentParams)),
+        flow           = encode_flow(Flow),
+        make_recurrent = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false)
+    }.
 
 encode_payer_params(#{
     <<"payerType" >> := <<"CustomerPayer">>,

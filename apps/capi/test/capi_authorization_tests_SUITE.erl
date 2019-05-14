@@ -30,7 +30,7 @@
 ]).
 
 -define(badresp(Code), {error, {invalid_response_code, Code}}).
--define(emptyresp(Code), {error,{Code, #{}}}).
+-define(emptyresp(Code), {error, {Code, #{}}}).
 
 -type test_case_name()  :: atom().
 -type config()          :: [{atom(), any()}].

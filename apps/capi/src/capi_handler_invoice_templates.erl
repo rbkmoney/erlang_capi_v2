@@ -117,13 +117,11 @@ process_request('DeleteInvoiceTemplate', Req, Context) ->
     end;
 
 process_request('CreateInvoiceWithTemplate', Req, Context) ->
+    PartyID = capi_handler_utils:get_party_id(Context),
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
     InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
-    try
-        Call = {invoicing, 'CreateWithTemplate', [encode_invoice_params_with_tpl(InvoiceTplID, InvoiceParams)]},
-capi_handler_utils:        service_call_with([user_info, party_creation], Call, Context)
-    of
+    try create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             {ok, {201, [], capi_handler_decoder_invoicing:make_invoice_and_token(
                 Invoice, capi_handler_utils:get_party_id(Context), ExtraProperties)
@@ -148,7 +146,9 @@ capi_handler_utils:        service_call_with([user_info, party_creation], Call, 
         throw:{bad_invoice_params, currency_no_amount} ->
             {ok, logic_error(invalidRequest, <<"Amount is required for the currency">>)};
         throw:{bad_invoice_params, amount_no_currency} ->
-            {ok, logic_error(invalidRequest, <<"Currency is required for the amount">>)}
+            {ok, logic_error(invalidRequest, <<"Currency is required for the amount">>)};
+        throw:{external_id_conflict, InvoiceID, ExternalID} ->
+            {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
     end;
 
 process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
@@ -173,6 +173,18 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
 
 process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
+
+create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx} = Context) ->
+    ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
+    IdempotentKey = capi_bender:get_idempotent_key(<<"invoice_template">>, PartyID, ExternalID),
+    Hash = erlang:phash2({InvoiceTplID, InvoiceParams}),
+    case capi_bender:gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) of
+        {ok, ID} ->
+            Call = {invoicing, 'CreateWithTemplate', [encode_invoice_params_with_tpl(ID, InvoiceTplID, InvoiceParams)]},
+            capi_handler_utils:service_call_with([user_info, party_creation], Call, Context);
+        {error, {external_id_conflict, ID}} ->
+            throw({external_id_conflict, ID, ExternalID})
+    end.
 
 encode_invoice_tpl_create_params(PartyID, Params) ->
     Details = encode_invoice_tpl_details(genlib_map:get(<<"details">>, Params)),
@@ -247,8 +259,10 @@ encode_lifetime(DD, MM, YY) ->
         years  = YY
       }.
 
-encode_invoice_params_with_tpl(InvoiceTplID, InvoiceParams) ->
+encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams) ->
     #payproc_InvoiceWithTemplateParams{
+        id          = InvoiceID,
+        external_id = genlib_map:get(<<"externalID">>, InvoiceParams, undefined),
         template_id = InvoiceTplID,
         cost        = encode_optional_invoice_cost(InvoiceParams),
         context     = encode_optional_context(InvoiceParams)
