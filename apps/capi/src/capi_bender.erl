@@ -16,30 +16,29 @@
     {ok, binary()} |
     {error, {external_id_conflict, binary()}}.
 
-gen_by_snowflake(IdempotentKey, Hash, ProcessContext) ->
+gen_by_snowflake(IdempotentKey, Hash, WoodyContext) ->
     Snowflake = {snowflake, #bender_SnowflakeSchema{}},
-    generate_id([IdempotentKey, Snowflake, Hash], ProcessContext).
+    generate_id(IdempotentKey, Snowflake, Hash, WoodyContext).
 
 -spec gen_by_sequence(binary(), binary(), integer(), woody_context()) ->
     {ok, binary()} |
     {error, {external_id_conflict, binary()}}.
 
-gen_by_sequence(IdempotentKey, ParentID, Hash, ProcessContext) ->
+gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext) ->
     Sequence = {sequence, #bender_SequenceSchema{
-        sequence_id = ParentID,
+        sequence_id = SequenceID,
         minimum = 100
     }},
-    generate_id([IdempotentKey, Sequence, Hash], ProcessContext).
+    generate_id(IdempotentKey, Sequence, Hash, WoodyContext).
 
 
 -spec gen_by_constant(binary(), binary(), integer(), woody_context()) ->
     {ok,    binary()} |
     {error, {external_id_conflict, binary()}}.
 
-gen_by_constant(IdempotentKey, ConstantID, Hash, ProcessContext) ->
+gen_by_constant(IdempotentKey, ConstantID, Hash, WoodyContext) ->
     Constant = {constant, #bender_ConstantSchema{internal_id = ConstantID}},
-    generate_id([IdempotentKey, Constant, Hash], ProcessContext).
-
+    generate_id(IdempotentKey, Constant, Hash, WoodyContext).
 
 -spec get_idempotent_key(binary(), binary(), binary() | undefined) ->
     binary().
@@ -47,20 +46,20 @@ gen_by_constant(IdempotentKey, ConstantID, Hash, ProcessContext) ->
 get_idempotent_key(Prefix, PartyID, undefined) ->
     get_idempotent_key(Prefix, PartyID, gen_external_id());
 get_idempotent_key(Prefix, PartyID, ExternalID) ->
-    <<"capi-v2/", Prefix/binary, "/", PartyID/binary, "/", ExternalID/binary>>.
+    <<"capi/", Prefix/binary, "/", PartyID/binary, "/", ExternalID/binary>>.
 
 %% Internal
 
 gen_external_id() ->
     genlib:unique().
 
-generate_id([Key, BenderSchema, Hash], ProcessContext) ->
+generate_id(Key, BenderSchema, Hash, WoodyContext) ->
     Context = capi_msgp_marshalling:marshal(#{
         <<"version">>     => ?SCHEMA_VER1,
         <<"params_hash">> => Hash
     }),
     Args = [Key, BenderSchema, Context],
-    Result = case capi_woody_client:call_service(bender, 'GenerateID', Args, ProcessContext) of
+    Result = case capi_woody_client:call_service(bender, 'GenerateID', Args, WoodyContext) of
         {ok, #bender_GenerationResult{internal_id = InternalID, context = undefined}} -> {ok, InternalID};
         {ok, #bender_GenerationResult{internal_id = InternalID, context = Ctx}}       ->
             #{<<"params_hash">> := BenderHash} = capi_msgp_marshalling:unmarshal(Ctx),
