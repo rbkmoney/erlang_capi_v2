@@ -462,7 +462,8 @@ create_qw_payment_resource_ok_test(Config) ->
     _.
 
 ip_replacement_not_allowed_test(Config) ->
-    % In this case we have no ip_replacement_allowed field, perhaps we could also test token with this field set to false
+    % In this case we have no ip_replacement_allowed field,
+    % perhaps we could also test token with this field set to false
     ClientIP = <<"::ffff:42.42.42.42">>,
     ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>, <<"ip">> => ClientIP},
     {ok, Res} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
@@ -593,6 +594,10 @@ get_invoice_ok_test(Config) ->
 -spec get_invoice_events_ok_test(config()) ->
     _.
 get_invoice_events_ok_test(Config) ->
+    Inc = fun
+        (X) when is_integer(X) -> X + 1;
+        (_) -> 1
+    end,
     _ = capi_ct_helper:mock_services([
         {invoicing, fun
             ('GetEvents', [_, _, #payproc_EventRange{'after' = ID, limit = N}]) ->
@@ -604,7 +609,7 @@ get_invoice_events_ok_test(Config) ->
                     ?INVOICE_EVENT_PRIVATE(5),
                     ?INVOICE_EVENT_PRIVATE(6),
                     ?INVOICE_EVENT(7)
-                ], if is_integer(ID) -> ID + 1; true -> 1 end, N)}
+                ], Inc(ID), N)}
         end}
     ], Config),
     {ok, [#{<<"id">> := 1}, #{<<"id">> := 2}, #{<<"id">> := 4}]} =
@@ -665,7 +670,8 @@ create_payment_ok_test(Config) ->
             }
         }
     },
-    {ok, #{<<"id">> := BenderKey, <<"externalID">> := ExternalID}} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
+    {ok, #{<<"id">> := BenderKey, <<"externalID">> := ExternalID}} =
+        capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
 
 -spec create_payment_with_empty_cvv_ok_test(config()) ->
     _.
@@ -677,7 +683,7 @@ create_payment_with_empty_cvv_ok_test(Config) ->
                 ('PutCard', _)    -> {ok, ?PUT_CARD_RESULT}
             end},
             {bender,  fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end},
-            {invoicing,fun
+            {invoicing, fun
                 ('StartPayment', [_UserInfo, _InvoiceID,
                     #payproc_InvoicePaymentParams{
                         payer = {payment_resource, #payproc_PaymentResourcePayerParams{
@@ -743,7 +749,7 @@ create_payment_with_googlepay_plain_ok_test(Config) ->
             ('PutCard', _)    -> {ok, ?PUT_CARD_RESULT}
         end},
         {bender,  fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end},
-        {invoicing,fun
+        {invoicing, fun
                 ('StartPayment', [_UserInfo, _InvoiceID,
                     #payproc_InvoicePaymentParams{
                         payer = {payment_resource, #payproc_PaymentResourcePayerParams{

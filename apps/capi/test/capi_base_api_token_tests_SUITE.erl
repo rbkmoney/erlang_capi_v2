@@ -330,7 +330,10 @@ create_invoice_idemp_fail_test(Config) ->
         <<"id">>         => InvoiceID,
         <<"message">>    => <<"This 'externalID' has been used by another request">>
     }}},
-    Response = capi_client_invoices:create_invoice(?config(context, Config), Req#{<<"product">> => <<"test_product2">>}),
+    Response = capi_client_invoices:create_invoice(
+        ?config(context, Config),
+        Req#{<<"product">> => <<"test_product2">>}
+    ),
     ?assertEqual(BadExternalID, Response).
 
 -spec create_invoice_access_token_ok_test(config()) ->
@@ -388,7 +391,10 @@ create_invoice_with_template_test(Config) ->
     BenderKey  = <<"bender_key">>,
     capi_ct_helper:mock_services([
         {invoice_templating, fun('Create', _) -> {ok, ?INVOICE_TPL} end},
-        {invoicing, fun('CreateWithTemplate', [_UserInfo, #payproc_InvoiceWithTemplateParams{id = ID, external_id = EID}]) ->
+        {invoicing, fun(
+            'CreateWithTemplate',
+            [_UserInfo, #payproc_InvoiceWithTemplateParams{id = ID, external_id = EID}]
+        ) ->
             {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
         end},
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
@@ -427,7 +433,8 @@ create_invoice_with_template_test(Config) ->
         <<"metadata">>    => #{<<"invoice_dummy_metadata">> => <<"test_value">>},
         <<"externalID">>  => ExternalID
     },
-    {ok, #{<<"invoice">> := Invoice}} = capi_client_invoice_templates:create_invoice(?config(context, Config), TemplateID, Req),
+    {ok, #{<<"invoice">> := Invoice}} =
+        capi_client_invoice_templates:create_invoice(?config(context, Config), TemplateID, Req),
     ?assertEqual(BenderKey,  maps:get(<<"id">>, Invoice)),
     ?assertEqual(ExternalID, maps:get(<<"externalID">>, Invoice)).
 
@@ -473,7 +480,7 @@ get_merchant_payment_status_test(Config) ->
         <<"status">> := <<"failed">>,
         <<"error" >> :=
             #{<<"code">> := <<"authorization_failed">>, <<"subError">> :=
-                #{<<"code">> := <<"payment_tool_rejected">>,<<"subError">> :=
+                #{<<"code">> := <<"payment_tool_rejected">>, <<"subError">> :=
                     #{<<"code">> := <<"bank_card_rejected">>, <<"subError">> :=
                         #{<<"code">> := <<"cvv_invalid">>}}}}
     }} = get_failed_payment_with_invalid_cvv(Config).
@@ -654,7 +661,9 @@ suspend_shop_ok_test(Config) ->
 -spec get_claim_by_id_ok_test(config()) ->
     _.
 get_claim_by_id_ok_test(Config) ->
-    capi_ct_helper:mock_services([{party_management, fun('GetClaim', _) -> {ok, ?CLAIM(?CLAIM_CHANGESET)} end}], Config),
+    capi_ct_helper:mock_services([
+        {party_management, fun('GetClaim', _) -> {ok, ?CLAIM(?CLAIM_CHANGESET)} end}
+    ], Config),
     {ok, _} = capi_client_claims:get_claim_by_id(?config(context, Config), ?INTEGER).
 
 -spec get_claims_ok_test(config()) ->
@@ -678,7 +687,9 @@ revoke_claim_ok_test(Config) ->
 -spec create_claim_ok_test(config()) ->
     _.
 create_claim_ok_test(Config) ->
-    capi_ct_helper:mock_services([{party_management, fun('CreateClaim', _) -> {ok, ?CLAIM(?CLAIM_CHANGESET)} end}], Config),
+    capi_ct_helper:mock_services([
+        {party_management, fun('CreateClaim', _) -> {ok, ?CLAIM(?CLAIM_CHANGESET)} end}
+    ], Config),
     Changeset = [
         #{
             <<"partyModificationType">> => <<"ContractModification">>,
@@ -808,7 +819,9 @@ update_claim_by_id_test(_) ->
 -spec create_claim_invalid_residence_test(config()) ->
     _.
 create_claim_invalid_residence_test(Config) ->
-    capi_ct_helper:mock_services([{party_management, fun('CreateClaim', _) -> {ok, ?CLAIM(?CLAIM_CHANGESET)} end}], Config),
+    capi_ct_helper:mock_services([
+        {party_management, fun('CreateClaim', _) -> {ok, ?CLAIM(?CLAIM_CHANGESET)} end}
+    ], Config),
     Changeset = [
         #{
             <<"partyModificationType">> => <<"ContractModification">>,
@@ -961,7 +974,9 @@ get_webhook_by_id(Config) ->
 -spec delete_webhook_by_id(config()) ->
     _.
 delete_webhook_by_id(Config) ->
-    capi_ct_helper:mock_services([{webhook_manager, fun('Get', _) -> {ok, ?WEBHOOK}; ('Delete', _) -> {ok, ok} end}], Config),
+    capi_ct_helper:mock_services([
+        {webhook_manager, fun('Get', _) -> {ok, ?WEBHOOK}; ('Delete', _) -> {ok, ok} end}
+    ], Config),
     ok = capi_client_webhooks:delete_webhook_by_id(?config(context, Config), ?INTEGER_BINARY).
 
 -spec get_locations_names_ok_test(config()) ->
@@ -980,8 +995,8 @@ search_invoices_ok_test(Config) ->
     capi_ct_helper:mock_services([{merchant_stat, fun('GetInvoices', _) -> {ok, ?STAT_RESPONSE_INVOICES} end}], Config),
     Query = [
         {limit, 2},
-        {from_time, {{2015, 08, 11},{19, 42, 35}}},
-        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {from_time, {{2015, 08, 11}, {19, 42, 35}}},
+        {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {invoiceStatus, <<"fulfilled">>},
         {payerEmail, <<"test@test.ru">>},
         {payerIP, <<"192.168.0.1">>},
@@ -1008,8 +1023,8 @@ search_payments_ok_test(Config) ->
     capi_ct_helper:mock_services([{merchant_stat, fun('GetPayments', _) -> {ok, ?STAT_RESPONSE_PAYMENTS} end}], Config),
     Query = [
         {limit, 2},
-        {from_time, {{2015, 08, 11},{19, 42, 35}}},
-        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {from_time, {{2015, 08, 11}, {19, 42, 35}}},
+        {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {payerEmail, <<"test@test.ru">>},
         {payerIP, <<"192.168.0.0.1">>},
         {shopID, ?STRING},
@@ -1036,8 +1051,8 @@ search_refunds_ok_test(Config) ->
     Query = [
         {limit, 2},
         {offset, 2},
-        {from_time, {{2015, 08, 11},{19, 42, 35}}},
-        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {from_time, {{2015, 08, 11}, {19, 42, 35}}},
+        {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {shopID, ?STRING},
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
@@ -1054,8 +1069,8 @@ search_payouts_ok_test(Config) ->
     Query = [
         {limit, 2},
         {offset, 2},
-        {from_time, {{2015, 08, 11},{19, 42, 35}}},
-        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {from_time, {{2015, 08, 11}, {19, 42, 35}}},
+        {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {shopID, ?STRING},
         {payoutID, <<"testPayoutID">>},
         {payoutToolType, <<"Wallet">>}
@@ -1066,12 +1081,14 @@ search_payouts_ok_test(Config) ->
 -spec get_payment_conversion_stats_ok_test(_) ->
     _.
 get_payment_conversion_stats_ok_test(Config) ->
-    capi_ct_helper:mock_services([{merchant_stat, fun('GetStatistics', _) -> {ok, ?STAT_RESPONSE_RECORDS} end}], Config),
+    capi_ct_helper:mock_services([
+        {merchant_stat, fun('GetStatistics', _) -> {ok, ?STAT_RESPONSE_RECORDS} end}
+    ], Config),
     Query = [
         {limit, 2},
         {offset, 2},
-        {from_time, {{2015, 08, 11},{19, 42, 35}}},
-        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {from_time, {{2015, 08, 11}, {19, 42, 35}}},
+        {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {shopID, ?STRING},
         {split_unit, minute},
         {split_size, 1}
@@ -1081,12 +1098,14 @@ get_payment_conversion_stats_ok_test(Config) ->
 -spec get_payment_revenue_stats_ok_test(config()) ->
     _.
 get_payment_revenue_stats_ok_test(Config) ->
-    capi_ct_helper:mock_services([{merchant_stat, fun('GetStatistics', _) -> {ok, ?STAT_RESPONSE_RECORDS} end}], Config),
+    capi_ct_helper:mock_services([
+        {merchant_stat, fun('GetStatistics', _) -> {ok, ?STAT_RESPONSE_RECORDS} end}
+    ], Config),
     Query = [
         {limit, 2},
         {offset, 2},
-        {from_time, {{2015, 08, 11},{19, 42, 35}}},
-        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {from_time, {{2015, 08, 11}, {19, 42, 35}}},
+        {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {shopID, ?STRING},
         {split_unit, minute},
         {split_size, 1}
@@ -1096,12 +1115,14 @@ get_payment_revenue_stats_ok_test(Config) ->
 -spec get_payment_geo_stats_ok_test(config()) ->
     _.
 get_payment_geo_stats_ok_test(Config) ->
-    capi_ct_helper:mock_services([{merchant_stat, fun('GetStatistics', _) -> {ok, ?STAT_RESPONSE_RECORDS} end}], Config),
+    capi_ct_helper:mock_services([
+        {merchant_stat, fun('GetStatistics', _) -> {ok, ?STAT_RESPONSE_RECORDS} end}
+    ], Config),
     Query = [
         {limit, 2},
         {offset, 0},
-        {from_time, {{2015, 08, 11},{19, 42, 35}}},
-        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {from_time, {{2015, 08, 11}, {19, 42, 35}}},
+        {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {shopID, ?STRING},
         {split_unit, minute},
         {split_size, 1}
@@ -1111,12 +1132,14 @@ get_payment_geo_stats_ok_test(Config) ->
 -spec get_payment_rate_stats_ok_test(config()) ->
     _.
 get_payment_rate_stats_ok_test(Config) ->
-    capi_ct_helper:mock_services([{merchant_stat, fun('GetStatistics', _) -> {ok, ?STAT_RESPONSE_RECORDS} end}], Config),
+    capi_ct_helper:mock_services([
+        {merchant_stat, fun('GetStatistics', _) -> {ok, ?STAT_RESPONSE_RECORDS} end}
+    ], Config),
     Query = [
         {limit, 2},
         {offset, 0},
-        {from_time, {{2015, 08, 11},{19, 42, 35}}},
-        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {from_time, {{2015, 08, 11}, {19, 42, 35}}},
+        {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {shopID, ?STRING},
         {split_unit, minute},
         {split_size, 1}
@@ -1126,12 +1149,14 @@ get_payment_rate_stats_ok_test(Config) ->
 -spec get_payment_method_stats_ok_test(config()) ->
     _.
 get_payment_method_stats_ok_test(Config) ->
-    capi_ct_helper:mock_services([{merchant_stat, fun('GetStatistics', _) -> {ok, ?STAT_RESPONSE_RECORDS} end}], Config),
+    capi_ct_helper:mock_services([
+        {merchant_stat, fun('GetStatistics', _) -> {ok, ?STAT_RESPONSE_RECORDS} end}
+    ], Config),
     Query = [
         {limit, 2},
         {offset, 0},
-        {from_time, {{2015, 08, 11},{19, 42, 35}}},
-        {to_time, {{2020, 08, 11},{19, 42, 35}}},
+        {from_time, {{2015, 08, 11}, {19, 42, 35}}},
+        {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {shopID, ?STRING},
         {split_unit, minute},
         {split_size, 1},
@@ -1160,12 +1185,20 @@ create_report_ok_test(Config) ->
             ('GetReport', [_, _, ?INTEGER]) -> {ok, ?REPORT}
         end}
     ], Config),
-    {ok, _} = capi_client_reports:create_report(?config(context, Config), ?STRING, ?REPORT_TYPE, ?TIMESTAMP, ?TIMESTAMP).
+    {ok, _} = capi_client_reports:create_report(
+        ?config(context, Config),
+        ?STRING,
+        ?REPORT_TYPE,
+        ?TIMESTAMP,
+        ?TIMESTAMP
+    ).
 
 -spec download_report_file_ok_test(_) ->
     _.
 download_report_file_ok_test(Config) ->
-    capi_ct_helper:mock_services([{reporting, fun('GetReport', _) -> {ok, ?REPORT}; ('GeneratePresignedUrl', _) -> {ok, ?STRING} end}], Config),
+    capi_ct_helper:mock_services([
+        {reporting, fun('GetReport', _) -> {ok, ?REPORT}; ('GeneratePresignedUrl', _) -> {ok, ?STRING} end}
+    ], Config),
     {ok, _} = capi_client_reports:download_file(?config(context, Config), ?STRING, ?INTEGER, ?STRING).
 
 -spec get_categories_ok_test(config()) ->
@@ -1187,7 +1220,8 @@ get_schedule_by_ref_ok_test(Config) ->
     _.
 get_payment_institutions(Config) ->
     {ok, [_Something]} = capi_client_payment_institutions:get_payment_institutions(?config(context, Config)),
-    {ok, []} = capi_client_payment_institutions:get_payment_institutions(?config(context, Config), <<"RUS">>, <<"live">>),
+    {ok, []} =
+        capi_client_payment_institutions:get_payment_institutions(?config(context, Config), <<"RUS">>, <<"live">>),
     {ok, [#{<<"realm">> := <<"test">>}]} =
         capi_client_payment_institutions:get_payment_institutions(?config(context, Config), <<"RUS">>, <<"test">>).
 
@@ -1205,7 +1239,10 @@ get_payment_institution_payment_terms(Config) ->
         ],
         Config
     ),
-    {ok, _} = capi_client_payment_institutions:get_payment_institution_payment_terms(?config(context, Config), ?INTEGER).
+    {ok, _} = capi_client_payment_institutions:get_payment_institution_payment_terms(
+        ?config(context, Config),
+        ?INTEGER
+    ).
 
 -spec get_payment_institution_payout_terms(config()) ->
     _.
