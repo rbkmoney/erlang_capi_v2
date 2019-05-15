@@ -43,11 +43,8 @@ init_suite(Module, Config) ->
             fun('Checkout', _) -> {ok, ?SNAPSHOT} end
         }
     ], SupPid),
-    ct:log("Services mocked"),
-    Dmt = start_app(dmt_client, [{max_cache_size, #{}}, {service_urls, ServiceURLs}, {cache_update_interval, 50000}, {woody_event_handlers, [hay_woody_event_handler]}]),
-    ct:log("Dmt_client started"),
-    Apps2 = Dmt ++ start_capi(Config),
-    ct:log("Capi started"),
+    Apps2 = start_app(dmt_client, [{max_cache_size, #{}}, {service_urls, ServiceURLs}, {cache_update_interval, 50000}]) ++
+        start_capi(Config),
     [{apps, lists:reverse(Apps2 ++ Apps1)}, {suite_test_sup, SupPid} | Config].
 
 -spec start_app(app_name()) ->
@@ -81,8 +78,7 @@ start_app(AppName, Env) ->
 -spec start_capi(config()) ->
     [app_name()].
 
-start_capi(_Config) ->
-    ct:log("Capi start called"),
+start_capi(Config) ->
     CapiEnv = [
         {ip, ?CAPI_IP},
         {port, ?CAPI_PORT},
@@ -92,7 +88,7 @@ start_capi(_Config) ->
                 signee => capi,
                 keyset => #{
                     % TODO use crypto:generate_key here when move on 21 Erlang
-                   % capi => {pem_file, get_keysource("keys/local/private.pem", Config)}
+                   capi => {pem_file, get_keysource("keys/local/private.pem", Config)}
                 }
             }
         }}
@@ -190,9 +186,7 @@ mock_services_(Services, SupPid) when is_pid(SupPid) ->
             handlers => lists:map(fun mock_service_handler/1, Services)
         }
     ),
-    ct:log("ChildSpec: ~p", [ChildSpec]),
     {ok, _} = supervisor:start_child(SupPid, ChildSpec),
-    ct:log("Supevisor started"),
     lists:foldl(
         fun (Service, Acc) ->
             ServiceName = get_service_name(Service),

@@ -78,7 +78,7 @@ get_handlers() ->
 ) ->
     {ok | error,   response()}.
 
-handle_request(_Handler, OperationID, Req, SwagContext = #{auth_context := AuthContext}) ->
+handle_request(OperationID, Req, SwagContext = #{auth_context := AuthContext}, _HandlerOpts) ->
     _ = lager:info("Processing request ~p", [OperationID]),
     try
         case capi_auth:authorize_operation(OperationID, Req, AuthContext) of
