@@ -5,6 +5,7 @@
         kernel,
         stdlib,
         thrift,
+        bender_proto,
         dmsl,
         genlib,
         lager
