@@ -43,7 +43,8 @@ init_suite(Module, Config) ->
             fun('Checkout', _) -> {ok, ?SNAPSHOT} end
         }
     ], SupPid),
-    Apps2 = start_app(dmt_client, [{max_cache_size, #{}}, {service_urls, ServiceURLs}, {cache_update_interval, 50000}]) ++
+    Apps2 =
+        start_app(dmt_client, [{max_cache_size, #{}}, {service_urls, ServiceURLs}, {cache_update_interval, 50000}]) ++
         start_capi(Config),
     [{apps, lists:reverse(Apps2 ++ Apps1)}, {suite_test_sup, SupPid} | Config].
 
