@@ -18,14 +18,14 @@
 child_spec({HealthRoutes, LogicHandler}) ->
     {Transport, TransportOpts} = get_socket_transport(),
     CowboyOpts = get_cowboy_config(HealthRoutes, LogicHandler),
-    AcceptorsPool = genlib_app:env(?APP, acceptors_poolsize, ?DEFAULT_ACCEPTORS_POOLSIZE),
-    ranch:child_spec(?MODULE, AcceptorsPool,
+    ranch:child_spec(?MODULE,
         Transport, TransportOpts, cowboy_clear, CowboyOpts).
 
 get_socket_transport() ->
     {ok, IP} = inet:parse_address(genlib_app:env(?APP, ip, ?DEFAULT_IP_ADDR)),
     Port     = genlib_app:env(?APP, port, ?DEFAULT_PORT),
-    {ranch_tcp, [{ip, IP}, {port, Port}]}.
+    AcceptorsPool = genlib_app:env(?APP, acceptors_poolsize, ?DEFAULT_ACCEPTORS_POOLSIZE),
+    {ranch_tcp, #{socket_opts => [{ip, IP}, {port, Port}], num_acceptors => AcceptorsPool}}.
 
 get_cowboy_config(HealthRoutes, LogicHandler) ->
     Dispatch =
