@@ -1,8 +1,6 @@
 -module(capi_swagger_server).
 
--export([child_spec   /1]).
-% -export([request_hook /1]).
-% -export([response_hook/4]).
+-export([child_spec /1]).
 
 -define(APP, capi).
 -define(DEFAULT_ACCEPTORS_POOLSIZE, 100).
@@ -55,33 +53,3 @@ squash_routes(Routes) ->
         orddict:new(),
         Routes
     )).
-
-% -spec request_hook(cowboy_req:req()) ->
-%     cowboy_req:req().
-
-% request_hook(Req) ->
-%     cowboy_req:set_meta(?START_TIME_TAG, genlib_time:ticks(), Req).
-
-% -spec response_hook(cowboy:http_status(), cowboy:http_headers(), iodata(), cowboy_req:req()) ->
-%     cowboy_req:req().
-
-% response_hook(Code, Headers, Body, Req) ->
-%     try
-%         {Code1, Headers1, Req1} = handle_response(Code, Headers, Req),
-%         _ = log_access(Code1, Headers1, Body, Req1),
-%         Req1
-%     catch
-%         Class:Reason:Stacktrace ->
-%             Stack = genlib_format:format_stacktrace(StackTrace, [newlines]),
-%             _ = lager:warning(
-%                 "Response hook failed for: [~p, ~p, ~p]~nwith: ~p:~p~nstacktrace: ~ts",
-%                 [Code, Headers, Req, Class, Reason, Stack]
-%             ),
-%             Req
-%     end.
-
-
-
-% log_access(Code, Headers, Body, Req) ->
-%     LogFun = cowboy_access_log:get_response_hook(capi_access_lager_event),
-%     LogFun(Code, Headers, Body, Req).
