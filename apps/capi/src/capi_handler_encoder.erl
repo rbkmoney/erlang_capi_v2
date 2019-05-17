@@ -13,6 +13,7 @@
 -export([encode_invoice_cart/1]).
 -export([encode_stat_request/1]).
 -export([encode_invoice_context/1]).
+-export([encode_payment_context/1]).
 -export([encode_invoice_line_meta/1]).
 -export([encode_residence/1]).
 -export([encode_content/2]).
@@ -180,10 +181,10 @@ encode_invoice_line_tax_mode(#{<<"type">> := <<"InvoiceLineTaxVAT">>} = TaxMode)
     %% https://github.com/rbkmoney/starrys/blob/master/docs/settings.md
     genlib_map:get(<<"rate">>, TaxMode).
 
+-define(DEFAULT_INVOICE_META, #{}).
+
 -spec encode_invoice_context(request_data()) ->
     encode_data().
-
--define(DEFAULT_INVOICE_META, #{}).
 
 encode_invoice_context(Params) ->
     encode_invoice_context(Params, ?DEFAULT_INVOICE_META).
@@ -191,6 +192,14 @@ encode_invoice_context(Params) ->
 encode_invoice_context(Params, DefaultMeta) ->
     Context = genlib_map:get(<<"metadata">>, Params, DefaultMeta),
     encode_content(json, Context).
+
+-spec encode_payment_context(request_data()) ->
+    encode_data() | undefined.
+
+encode_payment_context(#{<<"metadata">> := Context}) ->
+    encode_content(json, Context);
+encode_payment_context(#{}) ->
+    undefined.
 
 -spec encode_content(json, term()) ->
     encode_data().

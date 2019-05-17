@@ -4,7 +4,8 @@
 -define(BANKID_RU, <<"PUTIN">>).
 -define(BANKID_US, <<"TRAMP">>).
 -define(WALLET_TOOL, <<"TOOL">>).
--define(JSON, <<"{}">>).
+-define(JSON, #{<<"bla">> => [42]}).
+-define(JSON_SERIAL, <<"{\"bla\":[42]}">>).
 -define(INTEGER, 10000).
 -define(INTEGER_BINARY, <<"10000">>).
 -define(TIMESTAMP, <<"2016-03-22T06:12:27Z">>).
@@ -25,7 +26,7 @@
 
 -define(CONTENT, #'Content'{
     type = <<"application/json">>,
-    data = ?JSON
+    data = ?JSON_SERIAL
 }).
 
 -define(LIFETIME_INTERVAL, #domain_LifetimeInterval{

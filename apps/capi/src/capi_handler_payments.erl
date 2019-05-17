@@ -304,7 +304,7 @@ process_request(_OperationID, _Req, _Context) ->
 
 %%
 
-create_payment(PartyID, InvoiceID, PaymentParams, #{woody_context := WoodyCtx} = Context) ->
+create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} = Context) ->
     ExternalID    = maps:get(<<"externalID">>, PaymentParams, undefined),
     IdempotentKey = capi_bender:get_idempotent_key(<<"payment">>, PartyID, ExternalID),
     Hash = erlang:phash2(PaymentParams),
@@ -324,7 +324,8 @@ encode_invoice_payment_params(ID, ExternalID, PaymentParams) ->
         external_id     = ExternalID,
         payer           = encode_payer_params(genlib_map:get(<<"payer">>, PaymentParams)),
         flow            = encode_flow(Flow),
-        make_recurrent = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false)
+        make_recurrent  = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false),
+        context         = capi_handler_encoder:encode_payment_context(PaymentParams)
     }.
 
 encode_payer_params(#{
@@ -397,4 +398,3 @@ encode_optional_cart(_) ->
 
 decode_invoice_payment(InvoiceID, #payproc_InvoicePayment{payment = Payment}, Context) ->
     capi_handler_decoder_invoicing:decode_payment(InvoiceID, Payment, Context).
-
