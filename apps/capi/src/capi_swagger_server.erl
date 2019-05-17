@@ -42,7 +42,11 @@ get_cowboy_config(HealthRoutes, LogicHandler) ->
             cowboy_router,
             cowboy_cors,
             cowboy_handler
-        ]
+        ],
+        stream_handlers => [
+            cowboy_stream_h, cowboy_access_log_h, capi_stream_handler
+        ],
+        sink => capi
     }.
 
 squash_routes(Routes) ->

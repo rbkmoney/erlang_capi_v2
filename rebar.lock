@@ -106,7 +106,7 @@
   1},
  {<<"woody">>,
   {git,"git@github.com:rbkmoney/woody_erlang.git",
-       {ref,"eae1fd1cf1cdcad878c900552ad6067d5855c1a3"}},
+       {ref,"1f72c9b1e3f6cd1e2e5e671212984f34f87b3057"}},
   0},
  {<<"woody_user_identity">>,
   {git,"git@github.com:rbkmoney/woody_erlang_user_identity.git",
