@@ -157,7 +157,7 @@ process_request('CapturePayment', Req, Context) ->
             cart = encode_optional_cart(CaptureParams)
         }
     ],
-    Call = {invoicing, 'CapturePaymentNew', CallArgs},
+    Call = {invoicing, 'CapturePayment', CallArgs},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _} ->
             {ok, {202, [], undefined}};
