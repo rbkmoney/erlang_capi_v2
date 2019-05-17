@@ -404,11 +404,14 @@ process_request('CapturePayment', Req, Context, ReqCtx) ->
     Params = maps:get('Reason', Req),
     Reason = maps:get(<<"reason">>, Params),
     UserInfo = get_user_info(Context),
+    CaptureParams = #payproc_InvoicePaymentCaptureParams{
+        reason = Reason
+    },
 
     Result = service_call(
         invoicing,
-        'CapturePayment',
-        [UserInfo, InvoiceID, PaymentID, Reason],
+        'CapturePaymentNew',
+        [UserInfo, InvoiceID, PaymentID, CaptureParams],
         ReqCtx
     ),
     case Result of
