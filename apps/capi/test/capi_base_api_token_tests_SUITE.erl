@@ -537,7 +537,8 @@ create_partial_refund(Config) ->
     Req = #{
         <<"reason">> => ?STRING,
         <<"currency">> => ?RUB,
-        <<"amount">> => ?INTEGER
+        <<"amount">> => ?INTEGER,
+        <<"cart">> => ?INVOICE_CART
     },
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 

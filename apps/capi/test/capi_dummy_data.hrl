@@ -67,6 +67,18 @@
     external_id = EID
 }).
 
+-define(INVOICE_CART, [
+    #{
+        <<"taxMode">>  => #{
+            <<"type">> => <<"InvoiceLineTaxVAT">>,
+            <<"rate">> => <<"10%">>
+        },
+        <<"product">>  => ?STRING,
+        <<"price">>    => 10,
+        <<"quantity">> => 5
+    }
+]).
+
 -define(PAYPROC_INVOICE(Payments), #payproc_Invoice{
     invoice = ?INVOICE,
     payments = Payments

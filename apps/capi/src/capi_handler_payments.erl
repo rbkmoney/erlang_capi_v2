@@ -148,17 +148,19 @@ process_request('CapturePayment', Req, Context) ->
     CaptureParams = maps:get('CaptureParams', Req),
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
-    CallArgs = [
-        InvoiceID,
-        PaymentID,
-        #payproc_InvoicePaymentCaptureParams{
-            reason = maps:get(<<"reason">>, CaptureParams),
-            cash = encode_optional_cash(CaptureParams, InvoiceID, PaymentID, Context),
-            cart = capi_handler_encoder:encode_invoice_cart(CaptureParams)
-        }
-    ],
-    Call = {invoicing, 'CapturePayment', CallArgs},
-    case capi_handler_utils:service_call_with([user_info], Call, Context) of
+    try
+        CallArgs = [
+            InvoiceID,
+            PaymentID,
+            #payproc_InvoicePaymentCaptureParams{
+                reason = maps:get(<<"reason">>, CaptureParams),
+                cash = encode_optional_cash(CaptureParams, InvoiceID, PaymentID, Context),
+                cart = capi_handler_encoder:encode_invoice_cart(CaptureParams)
+            }
+        ],
+        Call = {invoicing, 'CapturePayment', CallArgs},
+        capi_handler_utils:service_call_with([user_info], Call, Context)
+    of
         {ok, _} ->
             {ok, {202, [], undefined}};
         {exception, Exception} ->
@@ -195,19 +197,24 @@ process_request('CapturePayment', Req, Context) ->
                         io_lib:format("Max amount: ~p", [PaymentAmount])
                     )}
             end
+    catch
+        throw:invoice_cart_empty ->
+            {ok, logic_error(invalidInvoiceCart, <<"bla bla">>)}
     end;
 
 process_request('CreateRefund', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
     RefundParams = maps:get('RefundParams', Req),
-    Params = #payproc_InvoicePaymentRefundParams{
-        reason = genlib_map:get(<<"reason">>, RefundParams),
-        cash = encode_optional_cash(RefundParams, InvoiceID, PaymentID, Context),
-        cart = capi_handler_encoder:encode_invoice_cart(RefundParams)
-    },
-    Call = {invoicing, 'RefundPayment', [InvoiceID, PaymentID, Params]},
-    case capi_handler_utils:service_call_with([user_info], Call, Context) of
+    try
+        Params = #payproc_InvoicePaymentRefundParams{
+            reason = genlib_map:get(<<"reason">>, RefundParams),
+            cash = encode_optional_cash(RefundParams, InvoiceID, PaymentID, Context),
+            cart = capi_handler_encoder:encode_invoice_cart(RefundParams)
+        },
+        Call = {invoicing, 'RefundPayment', [InvoiceID, PaymentID, Params]},
+        capi_handler_utils:service_call_with([user_info], Call, Context)
+    of
         {ok, Refund} ->
             {ok, {201, [], capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
         {exception, Exception} ->
@@ -261,6 +268,9 @@ process_request('CreateRefund', Req, Context) ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)}
             end
+    catch
+        throw:invoice_cart_empty ->
+            {ok, logic_error(invalidInvoiceCart, <<"bla bla">>)}
     end;
 
 process_request('GetRefunds', Req, Context) ->
