@@ -199,7 +199,7 @@ process_request('CapturePayment', Req, Context) ->
             end
     catch
         throw:invoice_cart_empty ->
-            {ok, logic_error(invalidInvoiceCart, <<"bla bla">>)}
+            {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)}
     end;
 
 process_request('CreateRefund', Req, Context) ->
@@ -270,7 +270,7 @@ process_request('CreateRefund', Req, Context) ->
             end
     catch
         throw:invoice_cart_empty ->
-            {ok, logic_error(invalidInvoiceCart, <<"bla bla">>)}
+            {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)}
     end;
 
 process_request('GetRefunds', Req, Context) ->
