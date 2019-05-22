@@ -79,7 +79,7 @@ get_handlers() ->
     {ok | error,   response()}.
 
 handle_request(OperationID, Req, SwagContext = #{auth_context := AuthContext}, _HandlerOpts) ->
-    _ = lager:info("Processing request ~p", [OperationID]),
+    _ = logger:info("Processing request ~p", [OperationID]),
     try
         case capi_auth:authorize_operation(OperationID, Req, AuthContext) of
             ok ->
@@ -87,14 +87,14 @@ handle_request(OperationID, Req, SwagContext = #{auth_context := AuthContext}, _
                 Context = create_processing_context(SwagContext, WoodyContext),
                 process_request(OperationID, Req, Context, get_handlers());
             {error, _} = Error ->
-                _ = lager:info("Operation ~p authorization failed due to ~p", [OperationID, Error]),
+                _ = logger:info("Operation ~p authorization failed due to ~p", [OperationID, Error]),
                 {ok, {401, #{}, undefined}}
         end
     catch
         error:{woody_error, {Source, Class, Details}} ->
             process_woody_error(Source, Class, Details);
         throw:{bad_deadline, Deadline} ->
-            _ = lager:warning("Operation ~p failed due to invalid deadline ~p", [OperationID, Deadline]),
+            _ = logger:warning("Operation ~p failed due to invalid deadline ~p", [OperationID, Deadline]),
             {ok, logic_error(invalidDeadline, <<"Invalid data in X-Request-Deadline header">>)}
     end.
 
@@ -126,7 +126,7 @@ create_processing_context(SwaggerContext, WoodyContext) ->
 
 create_woody_context(#{'X-Request-ID' := RequestID}, AuthContext) ->
     RpcID = #{trace_id := TraceID} = woody_context:new_rpc_id(genlib:to_binary(RequestID)),
-    _ = lager:debug("Created TraceID:~p for RequestID:~p", [TraceID , RequestID]),
+    _ = logger:debug("Created TraceID:~p for RequestID:~p", [TraceID , RequestID]),
     woody_user_identity:put(collect_user_identity(AuthContext), woody_context:new(RpcID)).
 
 collect_user_identity(AuthContext) ->

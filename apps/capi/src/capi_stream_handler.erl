@@ -71,7 +71,7 @@ send_oops_resp(Code, Headers, File, Req) ->
             {ok, _} ->
                 ok;
             {error, Error} ->
-                _ = lager:warning("Failed to send oops body: ~p", [Error]),
+                _ = logger:warning("Failed to send oops body: ~p", [Error]),
                 ok
         end
     end,
@@ -90,7 +90,7 @@ get_oops_body_safe(Code) ->
     try get_oops_body(Code)
     catch
         Error:Reason ->
-            _ = lager:warning("Invalid oops body config for code: ~p. Error: ~p:~p", [Code, Error, Reason]),
+            _ = logger:warning("Invalid oops body config for code: ~p. Error: ~p:~p", [Code, Error, Reason]),
             undefined
     end.
 
