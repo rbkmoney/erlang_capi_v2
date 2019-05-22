@@ -842,10 +842,15 @@ capture_payment_ok_test(Config) ->
 -spec capture_partial_payment_ok_test(config()) ->
     _.
 capture_partial_payment_ok_test(Config) ->
-    capi_ct_helper:mock_services([{invoicing, fun('CapturePayment', _) -> {ok, ok} end}], Config),
+    capi_ct_helper:mock_services([{invoicing, fun('CapturePayment', [_, _, _,
+        #payproc_InvoicePaymentCaptureParams{
+            cash = ?CASH,
+            cart = ?THRIFT_INVOICE_CART
+        }
+    ]) -> {ok, ok} end}], Config),
     Req = #{
         <<"reason">> => ?STRING,
-        <<"amount">> => 123,
+        <<"amount">> => ?INTEGER,
         <<"currency">> => ?RUB,
         <<"cart">> => ?INVOICE_CART
     },

@@ -74,8 +74,8 @@
             <<"rate">> => <<"10%">>
         },
         <<"product">>  => ?STRING,
-        <<"price">>    => 10,
-        <<"quantity">> => 5
+        <<"price">>    => ?INTEGER,
+        <<"quantity">> => ?INTEGER
     }
 ]).
 
@@ -99,7 +99,18 @@
     product = ?STRING,
     quantity = ?INTEGER,
     price = ?CASH,
-    metadata = #{?STRING => {obj, #{}}}
+    metadata = #{?STRING := {obj, #{}}}
+}).
+
+-define(THRIFT_INVOICE_CART, #domain_InvoiceCart{
+    lines = [
+        #domain_InvoiceLine{
+            product = ?STRING,
+            quantity = ?INTEGER,
+            price = ?CASH,
+            metadata = #{<<"TaxMode">> := {str, <<"10%">>}}
+        }
+    ]
 }).
 
 -define(INVOICE_TPL, #domain_InvoiceTemplate{
