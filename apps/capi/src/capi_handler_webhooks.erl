@@ -23,7 +23,7 @@ process_request('CreateWebhook', Req, Context) ->
             Webhook = capi_utils:unwrap(
                 capi_handler_utils:service_call({webhook_manager, 'Create', [WebhookParams]}, Context)
             ),
-            {ok, {201, [], decode_webhook(Webhook)}};
+            {ok, {201, #{}, decode_webhook(Webhook)}};
         {exception, #payproc_ShopNotFound{}} ->
             {ok, logic_error(invalidShopID, <<"Shop not found">>)}
     end;
@@ -32,14 +32,14 @@ process_request('GetWebhooks', _Req, Context) ->
     Webhooks = capi_utils:unwrap(
         capi_handler_utils:service_call_with([party_id], {webhook_manager, 'GetList', []}, Context)
     ),
-    {ok, {200, [], [decode_webhook(V) || V <- Webhooks]}};
+    {ok, {200, #{}, [decode_webhook(V) || V <- Webhooks]}};
 
 process_request('GetWebhookByID', Req, Context) ->
     case encode_webhook_id(maps:get(webhookID, Req)) of
         {ok, WebhookID} ->
             case get_webhook(WebhookID, Context) of
                 {ok, Webhook} ->
-                    {ok, {200, [], decode_webhook(Webhook)}};
+                    {ok, {200, #{}, decode_webhook(Webhook)}};
                 {exception, #webhooker_WebhookNotFound{}} ->
                     {ok, general_error(404, <<"Webhook not found">>)}
             end;
@@ -52,9 +52,9 @@ process_request('DeleteWebhookByID', Req, Context) ->
         {ok, WebhookID} ->
             case delete_webhook(WebhookID, Context) of
                 {ok, _} ->
-                    {ok, {204, [], undefined}};
+                    {ok, {204, #{}, undefined}};
                 {exception, #webhooker_WebhookNotFound{}} ->
-                    {ok, {204, [], undefined}}
+                    {ok, {204, #{}, undefined}}
             end;
         error ->
             {ok, general_error(404, <<"Webhook not found">>)}

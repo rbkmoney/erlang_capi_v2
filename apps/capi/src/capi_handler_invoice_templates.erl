@@ -26,7 +26,7 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
         )
     of
         {ok, InvoiceTpl} ->
-            {ok, {201, [], make_invoice_tpl_and_token(InvoiceTpl, PartyID, ExtraProperties)}};
+            {ok, {201, #{}, make_invoice_tpl_and_token(InvoiceTpl, PartyID, ExtraProperties)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
@@ -50,7 +50,7 @@ process_request('GetInvoiceTemplateByID', Req, Context) ->
     Call = {invoice_templating, 'Get', [maps:get('invoiceTemplateID', Req)]},
     case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
         {ok, InvoiceTpl} ->
-            {ok, {200, [], decode_invoice_tpl(InvoiceTpl)}};
+            {ok, {200, #{}, decode_invoice_tpl(InvoiceTpl)}};
         {exception, E} when
             E == #payproc_InvalidUser{};
             E == #payproc_InvoiceTemplateNotFound{};
@@ -66,7 +66,7 @@ process_request('UpdateInvoiceTemplate', Req, Context) ->
         capi_handler_utils:service_call_with([user_info, party_creation], Call, Context)
     of
         {ok, InvoiceTpl} ->
-            {ok, {200, [], decode_invoice_tpl(InvoiceTpl)}};
+            {ok, {200, #{}, decode_invoice_tpl(InvoiceTpl)}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -100,7 +100,7 @@ process_request('DeleteInvoiceTemplate', Req, Context) ->
     Call = {invoice_templating, 'Delete', [maps:get('invoiceTemplateID', Req)]},
     case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
         {ok, _R} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -123,7 +123,7 @@ process_request('CreateInvoiceWithTemplate', Req, Context) ->
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     try create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {201, [], capi_handler_decoder_invoicing:make_invoice_and_token(
+            {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(
                 Invoice, capi_handler_utils:get_party_id(Context), ExtraProperties)
             }};
         {exception, Exception} ->
@@ -160,7 +160,7 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
         ),
     case Result of
         {ok, PaymentMethods} when is_list(PaymentMethods) ->
-            {ok, {200, [], PaymentMethods}};
+            {ok, {200, #{}, PaymentMethods}};
         {exception, E} when
             E == #payproc_InvalidUser{};
             E == #payproc_InvoiceTemplateNotFound{};

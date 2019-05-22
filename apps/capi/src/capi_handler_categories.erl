@@ -15,12 +15,12 @@
 
 process_request('GetCategories', _Req, #{woody_context := WoodyContext}) ->
     Categories = capi_utils:unwrap(capi_domain:get_categories(WoodyContext)),
-    {ok, {200, [], [decode_category(C) || C <- Categories]}};
+    {ok, {200, #{}, [decode_category(C) || C <- Categories]}};
 
 process_request('GetCategoryByRef', Req, Context) ->
     case get_category_by_id(genlib:to_int(maps:get(categoryID, Req)), Context) of
         {ok, Category} ->
-            {ok, {200, [], decode_category(Category)}};
+            {ok, {200, #{}, decode_category(Category)}};
         {error, not_found} ->
             {ok, general_error(404, <<"Category not found">>)}
     end;

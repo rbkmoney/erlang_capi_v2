@@ -24,7 +24,7 @@ process_request('GetLocationsNames', Req, Context) ->
                     [],
                     LocationNames
                 ),
-            {ok, {200, [], PreparedLocationNames}};
+            {ok, {200, #{}, PreparedLocationNames}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
             FormattedErrors = capi_handler_utils:format_request_errors(Errors),
             {ok, logic_error(invalidRequest, FormattedErrors)}

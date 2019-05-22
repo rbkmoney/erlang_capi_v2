@@ -142,7 +142,7 @@ process_search_request_result(QueryType, Result, Context, #{decode_fun := Decode
                 <<"totalCount">> => TotalCount,
                 <<"continuationToken">> => ContinuationToken
             }),
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
             FormattedErrors = capi_handler_utils:format_request_errors(Errors),
             {ok, logic_error(invalidRequest, FormattedErrors)};

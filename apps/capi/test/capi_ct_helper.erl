@@ -89,7 +89,7 @@ start_capi(Config) ->
                 signee => capi,
                 keyset => #{
                     % TODO use crypto:generate_key here when move on 21 Erlang
-                    capi => {pem_file, get_keysource("keys/local/private.pem", Config)}
+                   capi => {pem_file, get_keysource("keys/local/private.pem", Config)}
                 }
             }
         }}

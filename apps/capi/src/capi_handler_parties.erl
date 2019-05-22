@@ -14,22 +14,22 @@
 
 process_request('GetMyParty', _Req, Context) ->
     Party = capi_utils:unwrap(capi_handler_utils:get_my_party(Context)),
-    {ok, {200, [], capi_handler_decoder_party:decode_party(Party)}};
+    {ok, {200, #{}, capi_handler_decoder_party:decode_party(Party)}};
 process_request('ActivateMyParty', _Req, Context) ->
     Call = {party_management, 'Activate', []},
     case capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context) of
         {ok, _R} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, #payproc_InvalidPartyStatus{status = {suspension, {active, _}}}} ->
-            {ok, {204, [], undefined}}
+            {ok, {204, #{}, undefined}}
     end;
 process_request('SuspendMyParty', _Req, Context) ->
     Call = {party_management, 'Suspend', []},
     case capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context) of
         {ok, _R} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, #payproc_InvalidPartyStatus{status = {suspension, {suspended, _}}}} ->
-            {ok, {204, [], undefined}}
+            {ok, {204, #{}, undefined}}
     end;
 
 %%
