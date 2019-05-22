@@ -98,7 +98,7 @@ service_call_with_([party_id|T], {ServiceName, Function, Args}, Context) ->
 service_call_with_([party_creation|T], Call, Context) ->
     case service_call_with_(T, Call, Context) of
         {exception, #payproc_PartyNotFound{}} ->
-            _ = lager:info("Attempting to create a missing party"),
+            _ = logger:info("Attempting to create a missing party"),
             CreateCall = {party_management, 'Create', [get_party_params(Context)]},
             case service_call_with([user_info, party_id], CreateCall, Context) of
                 {ok       , _                     } -> service_call_with_(T, Call, Context);
