@@ -116,12 +116,12 @@ process_request('DeleteInvoiceTemplate', Req, Context) ->
             end
     end;
 
-process_request('CreateInvoiceWithTemplate', Req, Context) ->
+process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
     InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
-    try create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context) of
+    try create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, OperationID) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             {ok, {201, [], capi_handler_decoder_invoicing:make_invoice_and_token(
                 Invoice, capi_handler_utils:get_party_id(Context), ExtraProperties)
@@ -174,9 +174,9 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
 process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
-create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx} = Context) ->
+create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
     ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
-    IdempotentKey = capi_bender:get_idempotent_key(<<"invoice_template">>, PartyID, ExternalID),
+    IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2({InvoiceTplID, InvoiceParams}),
     case capi_bender:gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) of
         {ok, ID} ->

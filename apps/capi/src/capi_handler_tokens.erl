@@ -18,14 +18,14 @@
 ) ->
     {ok | error, capi_handler:response() | noimpl}.
 
-process_request('CreatePaymentResource', Req, Context) ->
+process_request('CreatePaymentResource' = OperationID, Req, Context) ->
     Params = maps:get('PaymentResourceParams', Req),
     ClientInfo = enrich_client_info(maps:get(<<"clientInfo">>, Params), Context),
     try
         Data = maps:get(<<"paymentTool">>, Params), % "V" ????
         PartyID = capi_handler_utils:get_party_id(Context),
         ExternalID = maps:get(<<"externalID">>, Params, undefined),
-        IdempotentKey = capi_bender:get_idempotent_key(<<"resources">>, PartyID, ExternalID),
+        IdempotentKey = capi_bender:get_idempotent_key(OperationID, PartyID, ExternalID),
         IdempotentParams = {ExternalID, IdempotentKey},
         {PaymentTool, PaymentSessionID} =
             case Data of
