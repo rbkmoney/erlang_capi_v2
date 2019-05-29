@@ -14,13 +14,13 @@
 ) ->
     {ok | error, capi_handler:response() | noimpl}.
 
-process_request('CreatePayment', Req, Context) ->
+process_request('CreatePayment' = OperationID, Req, Context) ->
     InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('PaymentParams', Req),
     PartyID = capi_handler_utils:get_party_id(Context),
     Result =
         try
-            create_payment(InvoiceID, PartyID, PaymentParams, Context)
+            create_payment(InvoiceID, PartyID, PaymentParams, Context, OperationID)
         catch
             {external_id_conflict, _, _} = Error ->
                 {error, Error};
@@ -302,9 +302,9 @@ process_request(_OperationID, _Req, _Context) ->
 
 %%
 
-create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} = Context) ->
+create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
     ExternalID    = maps:get(<<"externalID">>, PaymentParams, undefined),
-    IdempotentKey = capi_bender:get_idempotent_key(<<"payment">>, PartyID, ExternalID),
+    IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2(PaymentParams),
     case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Hash, WoodyCtx) of
         {ok, ID} ->
