@@ -1,8 +1,6 @@
 -module(capi_stream_handler).
 -behaviour(cowboy_stream).
 
--dialyzer(no_undefined_callbacks).
-
 -define(APP, capi).
 
 %% callback exports
@@ -54,23 +52,20 @@ early_error(StreamID, Reason, PartialReq, Resp, Opts) ->
 
 %% private functions
 
-handle_response({response, Code, Headers, Req}) when Code >= 500 ->
-    send_oops_resp(Code, Headers, get_oops_body_safe(Code), Req);
+handle_response({response, Code, Headers, Body}) when Code >= 500 ->
+    send_oops_resp({Code, Headers, get_oops_body_safe(Code), Body});
 handle_response({response, _, _, _} = Resp) ->
     Resp.
 
-%% cowboy_req:reply/4 has a faulty spec in case of response body fun.
--dialyzer({[no_contracts, no_fail_call], send_oops_resp/4}).
-
-send_oops_resp(Code, Headers, undefined, Req) ->
-    {response, Code, Headers, Req};
-send_oops_resp(Code, Headers, File, Req) ->
+send_oops_resp({_, _, undefined, _} = Resp) ->
+    Resp;
+send_oops_resp({Code, Headers0, File, _}) ->
     FileSize = filelib:file_size(File),
-    Headers1 = Headers#{
-        <<"content-type">> => <<"text/plain; charset=utf-8">>
+    Headers = Headers0#{
+        <<"content-type">> => <<"text/plain; charset=utf-8">>,
+        <<"content-length">> => integer_to_list(FileSize)
     },
-    Req1 = cowboy_req:reply(Code, Headers1, {sendfile, 0, FileSize, File}, Req),
-    {response, Code, Headers1, Req1}.
+    {response, Code, Headers, {sendfile, 0, FileSize, File}}.
 
 get_oops_body_safe(Code) ->
     try get_oops_body(Code)
