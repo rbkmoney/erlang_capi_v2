@@ -70,10 +70,10 @@ handle_request(OperationID, Req, Context) ->
 ) ->
     {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
 
-process_request('CreateInvoice', Req, Context, ReqCtx) ->
+process_request('CreateInvoice' = OperationID, Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
     try
-        create_invoice(PartyID, maps:get('InvoiceParams', Req), Context, ReqCtx)
+        create_invoice(PartyID, maps:get('InvoiceParams', Req), Context, ReqCtx, OperationID)
     of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             {ok, {201, [], make_invoice_and_token(Invoice, PartyID, Context)}};
@@ -95,12 +95,12 @@ process_request('CreateInvoice', Req, Context, ReqCtx) ->
             {ok, {400, [], logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)}}
     end;
 
-process_request('CreatePayment', Req, Context, ReqCtx) ->
+process_request('CreatePayment' = OperationID, Req, Context, ReqCtx) ->
     InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('PaymentParams', Req),
     PartyID = get_party_id(Context),
     Result = try
-        create_payment(PartyID, InvoiceID, PaymentParams, Context, ReqCtx)
+        create_payment(PartyID, InvoiceID, PaymentParams, Context, ReqCtx, OperationID)
     catch
         throw:Error when Error =:= invalid_token orelse Error =:= invalid_payment_session ->
             {error, Error}
@@ -138,13 +138,13 @@ process_request('CreatePayment', Req, Context, ReqCtx) ->
             )}}
     end;
 
-process_request('CreatePaymentResource', Req, Context, ReqCtx) ->
+process_request('CreatePaymentResource' = OperationID, Req, Context, ReqCtx) ->
     Params = maps:get('PaymentResourceParams', Req),
     ClientInfo = enrich_client_info(maps:get(<<"clientInfo">>, Params), Context),
     PartyID = get_party_id(Context),
     try
         V = maps:get(<<"paymentTool">>, Params),
-        IdempotentKey = capi_bender:get_idempotent_key(<<"resources">>, PartyID, undefined),
+        IdempotentKey = capi_bender:get_idempotent_key(OperationID, PartyID, undefined),
         {PaymentTool, PaymentSessionID} = case V of
             #{<<"paymentToolType">> := <<"CardData">>} ->
                 process_card_data(V, IdempotentKey, ReqCtx);
@@ -798,12 +798,12 @@ process_request('DeleteInvoiceTemplate', Req, Context, ReqCtx) ->
             end
     end;
 
-process_request('CreateInvoiceWithTemplate', Req, Context, ReqCtx) ->
+process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context, ReqCtx) ->
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
     InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
     PartyID = get_party_id(Context),
     try
-        create_invoice_with_template(PartyID, InvoiceTplID, InvoiceParams, Context,  ReqCtx)
+        create_invoice_with_template(PartyID, InvoiceTplID, InvoiceParams, Context, ReqCtx, OperationID)
     of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             {ok, {201, [], make_invoice_and_token(Invoice, PartyID, Context)}};
@@ -1649,8 +1649,8 @@ process_request('GetCustomerEvents', Req, _Context, ReqCtx) ->
             end
     end.
 
-create_invoice(PartyID, InvoiceParams, Context, ReqCtx) ->
-    IdempotentKey = capi_bender:get_idempotent_key(<<"invoice">>, PartyID, undefined),
+create_invoice(PartyID, InvoiceParams, Context, ReqCtx, BenderPrefix) ->
+    IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, undefined),
     Hash = erlang:phash2(InvoiceParams),
     {ok, ID} = capi_bender:gen_by_snowflake(IdempotentKey, Hash, ReqCtx),
     UserInfo = get_user_info(Context),
@@ -1662,9 +1662,9 @@ create_invoice(PartyID, InvoiceParams, Context, ReqCtx) ->
             service_call(invoicing, 'Create', [UserInfo, Params], ReqCtx)
         end).
 
-create_invoice_with_template(PartyID, InvoiceTplID, InvoiceParams, Context,  ReqCtx) ->
+create_invoice_with_template(PartyID, InvoiceTplID, InvoiceParams, Context, ReqCtx, BenderPrefix) ->
+    IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, undefined),
     UserInfo = get_user_info(Context),
-    IdempotentKey = capi_bender:get_idempotent_key(<<"invoice_template">>, PartyID, undefined),
     Hash = erlang:phash2({InvoiceTplID, InvoiceParams}),
     {ok, ID} = capi_bender:gen_by_snowflake(IdempotentKey, Hash, ReqCtx),
     Params = encode_invoice_params_with_tpl(ID, InvoiceTplID, InvoiceParams),
@@ -1676,11 +1676,11 @@ create_invoice_with_template(PartyID, InvoiceTplID, InvoiceParams, Context,  Req
         end
     ).
 
-create_payment(PartyID, InvoiceID, PaymentParams, Context, ReqCtx) ->
+create_payment(PartyID, InvoiceID, PaymentParams, Context, ReqCtx, BenderPrefix) ->
+    IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, undefined),
     Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
     Payer = genlib_map:get(<<"payer">>, PaymentParams),
     UserInfo = get_user_info(Context),
-    IdempotentKey = capi_bender:get_idempotent_key(<<"payment">>, PartyID, undefined),
     Hash = erlang:phash2(PaymentParams),
     {ok, ID} = capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Hash, ReqCtx),
     Params =  #payproc_InvoicePaymentParams{
