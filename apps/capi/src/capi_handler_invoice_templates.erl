@@ -176,6 +176,8 @@ process_request(_OperationID, _Req, _Context) ->
 
 create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
     ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
+    % CAPI#344: Since the prefixes are different, it's possible to create 2 copies of the same Invoice with the same
+    % externalId by using `CreateInvoice` and `CreateInvoiceWithTemplate` together
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2({InvoiceTplID, InvoiceParams}),
     case capi_bender:gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) of
