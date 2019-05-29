@@ -341,7 +341,9 @@ decode_payment_method(payment_terminal, Providers) ->
 decode_payment_method(digital_wallet, Providers) ->
     [#{<<"method">> => <<"DigitalWallet">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}];
 decode_payment_method(tokenized_bank_card, TokenizedBankCards) ->
-    decode_tokenized_bank_cards(TokenizedBankCards).
+    decode_tokenized_bank_cards(TokenizedBankCards);
+decode_payment_method(crypto_currency, CryptoCurrency) ->
+    [#{<<"method">> => <<"CryptoCurrency">>, <<"cryptoCurrencyType">> => atom_to_binary(CryptoCurrency, utf8)}].
 
 decode_tokenized_bank_cards(TokenizedBankCards) ->
     PropTokenizedBankCards = [
