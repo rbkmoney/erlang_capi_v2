@@ -40,9 +40,11 @@ gen_by_constant(IdempotentKey, ConstantID, Hash, WoodyContext) ->
     Constant = {constant, #bender_ConstantSchema{internal_id = ConstantID}},
     generate_id(IdempotentKey, Constant, Hash, WoodyContext).
 
--spec get_idempotent_key(binary(), binary(), binary() | undefined) ->
+-spec get_idempotent_key(atom() | binary(), binary(), binary() | undefined) ->
     binary().
 
+get_idempotent_key(Prefix, PartyID, ExternalID) when is_atom(Prefix) ->
+    get_idempotent_key(atom_to_binary(Prefix, utf8), PartyID, ExternalID);
 get_idempotent_key(Prefix, PartyID, undefined) ->
     get_idempotent_key(Prefix, PartyID, gen_external_id());
 get_idempotent_key(Prefix, PartyID, ExternalID) ->
