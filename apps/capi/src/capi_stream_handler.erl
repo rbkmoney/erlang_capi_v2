@@ -66,24 +66,10 @@ send_oops_resp(Code, Headers, undefined, Req) ->
     {response, Code, Headers, Req};
 send_oops_resp(Code, Headers, File, Req) ->
     FileSize = filelib:file_size(File),
-    F = fun(Socket, Transport) ->
-        case Transport:sendfile(Socket, File) of
-            {ok, _} ->
-                ok;
-            {error, Error} ->
-                _ = logger:warning("Failed to send oops body: ~p", [Error]),
-                ok
-        end
-    end,
-    Headers1 = lists:foldl(
-        fun({K, V}, Acc) -> lists:keystore(K, 1, Acc, {K, V}) end,
-        Headers,
-        [
-            {<<"content-type">>, <<"text/plain; charset=utf-8">>},
-            {<<"content-length">>, integer_to_list(FileSize)}
-        ]
-    ),
-    Req1 = cowboy_req:reply(Code, Headers1, {FileSize, F}, Req),
+    Headers1 = Headers#{
+        <<"content-type">> => <<"text/plain; charset=utf-8">>
+    },
+    Req1 = cowboy_req:reply(Code, Headers1, {sendfile, 0, FileSize, File}, Req),
     {response, Code, Headers1, Req1}.
 
 get_oops_body_safe(Code) ->
