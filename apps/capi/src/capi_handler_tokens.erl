@@ -238,7 +238,7 @@ process_digital_wallet_data(Data) ->
 
 process_crypto_wallet_data(Data) ->
     #{<<"cryptoCurrency">> := CryptoCurrency} = Data,
-    {{crypto_wallet, CryptoCurrency}, <<>>}.
+    {{crypto_currency, capi_handler_decoder_utils:convert_crypto_currency_from_swag(CryptoCurrency)}, <<>>}.
 
 process_tokenized_card_data(Data, IdempotentParams, Context) ->
     Call = {get_token_provider_service_name(Data), 'Unwrap', [encode_wrapped_payment_tool(Data)]},
