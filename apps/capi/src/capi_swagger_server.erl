@@ -16,8 +16,7 @@
 child_spec({HealthRoutes, LogicHandler}) ->
     {Transport, TransportOpts} = get_socket_transport(),
     CowboyOpts = get_cowboy_config(HealthRoutes, LogicHandler),
-    ranch:child_spec(?MODULE,
-        Transport, TransportOpts, cowboy_clear, CowboyOpts).
+    ranch:child_spec(?MODULE, Transport, TransportOpts, cowboy_clear, CowboyOpts).
 
 get_socket_transport() ->
     {ok, IP} = inet:parse_address(genlib_app:env(?APP, ip, ?DEFAULT_IP_ADDR)),
@@ -42,7 +41,7 @@ get_cowboy_config(HealthRoutes, LogicHandler) ->
             cowboy_handler
         ],
         stream_handlers => [
-            cowboy_stream_h, cowboy_access_log_h, capi_stream_handler
+            cowboy_access_log_h, capi_stream_h, cowboy_stream_h
         ]
     }.
 

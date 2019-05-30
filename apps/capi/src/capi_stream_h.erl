@@ -1,4 +1,4 @@
--module(capi_stream_handler).
+-module(capi_stream_h).
 -behaviour(cowboy_stream).
 
 -define(APP, capi).
@@ -53,18 +53,18 @@ early_error(StreamID, Reason, PartialReq, Resp, Opts) ->
 %% private functions
 
 handle_response({response, Code, Headers, Body}) when Code >= 500 ->
-    send_oops_resp({Code, Headers, get_oops_body_safe(Code), Body});
+    send_oops_resp(Code, Headers, get_oops_body_safe(Code), Body);
 handle_response({response, _, _, _} = Resp) ->
     Resp.
 
-send_oops_resp({_, _, undefined, _} = Resp) ->
-    Resp;
-send_oops_resp({Code, Headers0, File, _}) ->
+send_oops_resp(Code, Headers, undefined, Body) ->
+    {response, Code, Headers, Body};
+send_oops_resp(Code, Headers0, File, _) ->
     FileSize = filelib:file_size(File),
-    Headers = Headers0#{
+    Headers = maps:merge(Headers0, #{
         <<"content-type">> => <<"text/plain; charset=utf-8">>,
         <<"content-length">> => integer_to_list(FileSize)
-    },
+    }),
     {response, Code, Headers, {sendfile, 0, FileSize, File}}.
 
 get_oops_body_safe(Code) ->
