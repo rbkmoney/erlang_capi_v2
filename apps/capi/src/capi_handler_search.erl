@@ -282,9 +282,7 @@ decode_stat_payment_tool_token({bank_card, BankCard}) ->
 decode_stat_payment_tool_token({payment_terminal, PaymentTerminal}) ->
     decode_payment_terminal(PaymentTerminal);
 decode_stat_payment_tool_token({digital_wallet, DigitalWallet}) ->
-    decode_digital_wallet(DigitalWallet);
-decode_stat_payment_tool_token({crypto_currency, CryptoCurrency}) ->
-    decode_crypto_currency(CryptoCurrency).
+    decode_digital_wallet(DigitalWallet).
 
 decode_bank_card(#merchstat_BankCard{
     'token'          = Token,
@@ -321,12 +319,6 @@ decode_digital_wallet(#merchstat_DigitalWallet{
         <<"type"    >> => <<"digital_wallet">>,
         <<"provider">> => atom_to_binary(Provider, utf8),
         <<"id"      >> => ID
-    }).
-
-decode_crypto_currency(CryptoCurrency) ->
-    capi_utils:map_to_base64url(#{
-        <<"type"    >> => <<"crypto_currency">>,
-        <<"crypto_currency">> => atom_to_binary(CryptoCurrency, utf8)
     }).
 
 decode_stat_payment_tool_details({bank_card, V}) ->

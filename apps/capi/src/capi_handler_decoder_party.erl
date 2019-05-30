@@ -194,7 +194,7 @@ decode_payment_tool_token({payment_terminal, PaymentTerminal}) ->
     decode_payment_terminal(PaymentTerminal);
 decode_payment_tool_token({digital_wallet, DigitalWallet}) ->
     decode_digital_wallet(DigitalWallet);
-decode_payment_tool_token({crypto_wallet, CryptoCurrency}) ->
+decode_payment_tool_token({crypto_currency, CryptoCurrency}) ->
     decode_crypto_wallet(CryptoCurrency).
 
 decode_bank_card(#domain_BankCard{
@@ -252,7 +252,7 @@ decode_digital_wallet(#domain_DigitalWallet{
 decode_crypto_wallet(CryptoCurrency) ->
     capi_utils:map_to_base64url(#{
         <<"type"           >> => <<"crypto_wallet">>,
-        <<"crypto_currency">> => atom_to_binary(CryptoCurrency, utf8)
+        <<"crypto_currency">> => capi_handler_decoder_utils:convert_crypto_currency(CryptoCurrency)
     }).
 
 decode_payment_tool_details({bank_card, V}) ->
@@ -261,8 +261,11 @@ decode_payment_tool_details({payment_terminal, V}) ->
     decode_payment_terminal_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsPaymentTerminal">>});
 decode_payment_tool_details({digital_wallet, V}) ->
     decode_digital_wallet_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsDigitalWallet">>});
-decode_payment_tool_details({crypto_wallet, V}) ->
-    decode_crypto_wallet_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsCryptoWallet">>}).
+decode_payment_tool_details({crypto_currency, CryptoCurrency}) ->
+    #{
+        <<"detailsType">> => <<"PaymentToolDetailsCryptoWallet">>,
+        <<"cryptoCurrency">> => capi_handler_decoder_utils:convert_crypto_currency(CryptoCurrency)
+    }.
 
 decode_bank_card_details(BankCard, V) ->
     LastDigits = capi_handler_decoder_utils:decode_last_digits(BankCard#domain_BankCard.masked_pan),
@@ -289,11 +292,6 @@ decode_digital_wallet_details(#domain_DigitalWallet{provider = qiwi, id = ID}, V
     V#{
         <<"digitalWalletDetailsType">> => <<"DigitalWalletDetailsQIWI">>,
         <<"phoneNumberMask"         >> => mask_phone_number(ID)
-    }.
-
-decode_crypto_wallet_details(CryptoCurrency, V) ->
-    V#{
-        <<"cryptoCurrency">> => genlib:to_binary(CryptoCurrency)
     }.
 
 mask_phone_number(PhoneNumber) ->

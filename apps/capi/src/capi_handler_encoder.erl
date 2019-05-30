@@ -115,7 +115,7 @@ encode_digital_wallet(#{<<"provider">> := Provider, <<"id">> := ID}) ->
     }}.
 
 encode_crypto_wallet(#{<<"crypto_currency">> := CryptoCurrency}) ->
-    {crypto_wallet, binary_to_existing_atom(CryptoCurrency, utf8)}.
+    {crypto_currency, capi_handler_decoder_utils:convert_crypto_currency(CryptoCurrency)}.
 
 -spec encode_cash(request_data()) ->
     encode_data().
