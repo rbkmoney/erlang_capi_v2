@@ -38,7 +38,7 @@ process_request('CreatePaymentResource' = OperationID, Req, Context) ->
                     process_digital_wallet_data(Data);
                 #{<<"paymentToolType">> := <<"TokenizedCardData"  >>} ->
                     process_tokenized_card_data(Data, IdempotentParams, Context);
-                #{<<"paymentToolType">> := <<"CryptoWalletData" >>} ->
+                #{<<"paymentToolType">> := <<"CryptoWalletData"   >>} ->
                     process_crypto_wallet_data(Data)
             end,
         PaymentResource =
