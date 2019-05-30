@@ -252,7 +252,7 @@ decode_digital_wallet(#domain_DigitalWallet{
 decode_crypto_wallet(CryptoCurrency) ->
     capi_utils:map_to_base64url(#{
         <<"type"           >> => <<"crypto_wallet">>,
-        <<"crypto_currency">> => capi_handler_decoder_utils:convert_crypto_currency(CryptoCurrency)
+        <<"crypto_currency">> => capi_handler_decoder_utils:convert_crypto_currency_to_swag(CryptoCurrency)
     }).
 
 decode_payment_tool_details({bank_card, V}) ->
@@ -264,7 +264,7 @@ decode_payment_tool_details({digital_wallet, V}) ->
 decode_payment_tool_details({crypto_currency, CryptoCurrency}) ->
     #{
         <<"detailsType">> => <<"PaymentToolDetailsCryptoWallet">>,
-        <<"cryptoCurrency">> => capi_handler_decoder_utils:convert_crypto_currency(CryptoCurrency)
+        <<"cryptoCurrency">> => capi_handler_decoder_utils:convert_crypto_currency_to_swag(CryptoCurrency)
     }.
 
 decode_bank_card_details(BankCard, V) ->
