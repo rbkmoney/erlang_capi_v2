@@ -27,7 +27,7 @@
 
 -behaviour(supervisor).
 
--define(OOPS_BODY, ?config(data_dir, Config) ++ "cutest_cat_alive").
+-define(OOPS_BODY, filename:join(?config(data_dir, Config), "cutest_cat_alive")).
 
 -spec init([]) ->
     {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
