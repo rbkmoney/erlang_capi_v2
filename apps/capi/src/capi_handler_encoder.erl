@@ -51,7 +51,9 @@ encode_payment_tool_token(Token) ->
         #{<<"type">> := <<"payment_terminal">>} = Encoded ->
             encode_payment_terminal(Encoded);
         #{<<"type">> := <<"digital_wallet">>} = Encoded ->
-            encode_digital_wallet(Encoded)
+            encode_digital_wallet(Encoded);
+        #{<<"type">> := <<"crypto_wallet">>} = Encoded ->
+            encode_crypto_wallet(Encoded)
     catch
         error:badarg ->
             erlang:throw(invalid_token)
@@ -111,6 +113,9 @@ encode_digital_wallet(#{<<"provider">> := Provider, <<"id">> := ID}) ->
         provider = binary_to_existing_atom(Provider, utf8),
         id       = ID
     }}.
+
+encode_crypto_wallet(#{<<"crypto_currency">> := CryptoCurrency}) ->
+    {crypto_currency, capi_handler_decoder_utils:convert_crypto_currency_from_swag(CryptoCurrency)}.
 
 -spec encode_cash(request_data()) ->
     encode_data().
