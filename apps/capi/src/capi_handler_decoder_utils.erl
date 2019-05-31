@@ -13,6 +13,8 @@
 -export([decode_category_ref/1]).
 -export([decode_context/1]).
 -export([decode_optional/2]).
+-export([convert_crypto_currency_from_swag/1]).
+-export([convert_crypto_currency_to_swag/1]).
 
 -export_type([decode_data/0]).
 
@@ -90,3 +92,18 @@ decode_optional(Arg, DecodeFun) when Arg /= undefined ->
     DecodeFun(Arg);
 decode_optional(undefined, _) ->
     undefined.
+
+-spec convert_crypto_currency_from_swag(binary()) -> atom().
+
+convert_crypto_currency_from_swag(<<"bitcoinCash">>) ->
+    bitcoin_cash;
+convert_crypto_currency_from_swag(CryptoCurrency) when is_binary(CryptoCurrency) ->
+    binary_to_existing_atom(CryptoCurrency, utf8).
+
+-spec convert_crypto_currency_to_swag(atom()) -> binary().
+
+convert_crypto_currency_to_swag(bitcoin_cash) ->
+    <<"bitcoinCash">>;
+convert_crypto_currency_to_swag(CryptoCurrency) when is_atom(CryptoCurrency) ->
+    atom_to_binary(CryptoCurrency, utf8).
+

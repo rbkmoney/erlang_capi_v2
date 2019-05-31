@@ -341,7 +341,13 @@ decode_payment_method(payment_terminal, Providers) ->
 decode_payment_method(digital_wallet, Providers) ->
     [#{<<"method">> => <<"DigitalWallet">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}];
 decode_payment_method(tokenized_bank_card, TokenizedBankCards) ->
-    decode_tokenized_bank_cards(TokenizedBankCards).
+    decode_tokenized_bank_cards(TokenizedBankCards);
+decode_payment_method(crypto_wallet, CryptoCurrencies) ->
+    [#{
+        <<"method">> => <<"CryptoWallet">>,
+        <<"cryptoCurrency">> =>
+            lists:map(fun capi_handler_decoder_utils:convert_crypto_currency_to_swag/1, CryptoCurrencies)
+    }].
 
 decode_tokenized_bank_cards(TokenizedBankCards) ->
     PropTokenizedBankCards = [
