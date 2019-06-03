@@ -112,6 +112,23 @@ process_request('GetPaymentByID', Req, Context) ->
             end
     end;
 
+process_request('GetPaymentByExternalID', Req, Context) ->
+    ExternalID = maps:get(externalID, Req),
+    case capi_handler_utils:get_payment_by_external_id(ExternalID, Context) of
+        {ok, Payment} ->
+            InvoiceID = undefined, %% TODO Add InvoiceID
+            {ok, {200, [], decode_invoice_payment(InvoiceID, Payment, Context)}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvoicePaymentNotFound{} ->
+                    {ok, general_error(404, <<"Payment not found">>)};
+                #payproc_InvalidUser{} ->
+                    {ok, general_error(404, <<"Invoice not found">>)};
+                #payproc_InvoiceNotFound{} ->
+                    {ok, general_error(404, <<"Invoice not found">>)}
+            end
+    end;
+
 process_request('CancelPayment', Req, Context) ->
     CallArgs = [maps:get(invoiceID, Req), maps:get(paymentID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))],
     Call = {invoicing, 'CancelPayment', CallArgs},
