@@ -502,11 +502,8 @@ woody_retry_test(Config) ->
         }}
     ]),
     {Time, ?badresp(503)} = timer:tc(capi_client_parties, get_my_party, [?config(context, Config)]),
-    ?assert(
-        true,
-        (Time > 4000000) and (Time < 6000000),
-        Time
-    ).
+    _ = ?assert(Time > 4000000),
+    _ = ?assert(Time < 6000000).
 
 -spec woody_unknown_test(config()) ->
     _.
