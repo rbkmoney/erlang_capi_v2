@@ -153,7 +153,9 @@ process_request('CreatePaymentResource' = OperationID, Req, Context, ReqCtx) ->
             #{<<"paymentToolType">> := <<"DigitalWalletData">>} ->
                 process_digital_wallet_data(V, ReqCtx);
             #{<<"paymentToolType">> := <<"TokenizedCardData">>} ->
-                process_tokenized_card_data(V, IdempotentKey, ReqCtx)
+                process_tokenized_card_data(V, IdempotentKey, ReqCtx);
+            #{<<"paymentToolType">> := <<"CryptoWalletData">>} ->
+                process_crypto_wallet_data(V, ReqCtx)
         end,
         {ok, {201, [], decode_disposable_payment_resource(#domain_DisposablePaymentResource{
             payment_tool = PaymentTool,
@@ -1994,7 +1996,9 @@ encode_payment_tool_token(Token) ->
         #{<<"type">> := <<"payment_terminal">>} = Encoded ->
             encode_payment_terminal(Encoded);
         #{<<"type">> := <<"digital_wallet">>} = Encoded ->
-            encode_digital_wallet(Encoded)
+            encode_digital_wallet(Encoded);
+        #{<<"type">> := <<"crypto_wallet">>} = Encoded ->
+            encode_crypto_wallet(Encoded)
     catch
         error:badarg ->
             erlang:throw(invalid_token)
@@ -2043,6 +2047,12 @@ decode_digital_wallet(#domain_DigitalWallet{
         <<"type">> => <<"digital_wallet">>,
         <<"provider">> => atom_to_binary(Provider, utf8),
         <<"id">> => ID
+    }).
+
+decode_crypto_wallet(CryptoCurrency) ->
+    capi_utils:map_to_base64url(#{
+        <<"type"           >> => <<"crypto_wallet">>,
+        <<"crypto_currency">> => convert_crypto_currency_to_swag(CryptoCurrency)
     }).
 
 decode_client_info(ClientInfo) ->
@@ -2518,6 +2528,9 @@ encode_digital_wallet(#{<<"provider">> := Provider, <<"id">> := ID}) ->
         id = ID
     }}.
 
+encode_crypto_wallet(#{<<"crypto_currency">> := CryptoCurrency}) ->
+    {crypto_wallet, convert_crypto_currency_from_swag(CryptoCurrency)}.
+
 encode_token_provider(TokenProvider) when TokenProvider /= undefined ->
     binary_to_existing_atom(TokenProvider, utf8);
 encode_token_provider(undefined) ->
@@ -2793,14 +2806,21 @@ decode_payment_tool_token({bank_card, BankCard}) ->
 decode_payment_tool_token({payment_terminal, PaymentTerminal}) ->
     decode_payment_terminal(PaymentTerminal);
 decode_payment_tool_token({digital_wallet, DigitalWallet}) ->
-    decode_digital_wallet(DigitalWallet).
+    decode_digital_wallet(DigitalWallet);
+decode_payment_tool_token({crypto_currency, CryptoCurrency}) ->
+    decode_crypto_wallet(CryptoCurrency).
 
 decode_payment_tool_details({bank_card, V}) ->
     decode_bank_card_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsBankCard">>});
 decode_payment_tool_details({payment_terminal, V}) ->
     decode_payment_terminal_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsPaymentTerminal">>});
 decode_payment_tool_details({digital_wallet, V}) ->
-    decode_digital_wallet_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsDigitalWallet">>}).
+    decode_digital_wallet_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsDigitalWallet">>});
+decode_payment_tool_details({crypto_currency, CryptoCurrency}) ->
+    #{
+        <<"detailsType">> => <<"PaymentToolDetailsCryptoWallet">>,
+        <<"cryptoCurrency">> => convert_crypto_currency_to_swag(CryptoCurrency)
+    }.
 
 decode_bank_card_details(BankCard, V) ->
     LastDigits = decode_last_digits(BankCard#domain_BankCard.masked_pan),
@@ -4905,6 +4925,10 @@ process_tokenized_card_data(Data, IdempotentKey, ReqCtx) ->
         UnwrappedPaymentTool
     ).
 
+process_crypto_wallet_data(Data, _ReqCtx) ->
+    #{<<"cryptoCurrency">> := CryptoCurrency} = Data,
+    {{crypto_currency, convert_crypto_currency_from_swag(CryptoCurrency)}, <<>>}.
+
 get_token_provider_service_name(Data) ->
     case Data of
         #{<<"provider">> := <<"ApplePay">>} ->
@@ -5105,6 +5129,20 @@ encode_binbase_payment_system(<<"JCB">>)                       -> jcb;
 encode_binbase_payment_system(<<"NSPK MIR">>)                  -> nspkmir;
 encode_binbase_payment_system(_) ->
     throw({encode_binbase_payment_system, invalid_payment_system}).
+
+-spec convert_crypto_currency_from_swag(binary()) -> atom().
+
+convert_crypto_currency_from_swag(<<"bitcoinCash">>) ->
+    bitcoin_cash;
+convert_crypto_currency_from_swag(CryptoCurrency) when is_binary(CryptoCurrency) ->
+    binary_to_existing_atom(CryptoCurrency, utf8).
+
+-spec convert_crypto_currency_to_swag(atom()) -> binary().
+
+convert_crypto_currency_to_swag(bitcoin_cash) ->
+    <<"bitcoinCash">>;
+convert_crypto_currency_to_swag(CryptoCurrency) when is_atom(CryptoCurrency) ->
+    atom_to_binary(CryptoCurrency, utf8).
 
 enrich_client_info(ClientInfo, Context) ->
     ClientInfo#{<<"ip">> => prepare_client_ip(Context)}.

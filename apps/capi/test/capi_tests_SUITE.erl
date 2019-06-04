@@ -1,6 +1,7 @@
 -module(capi_tests_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
+-include_lib("eunit/include/eunit.hrl").
 
 -include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("dmsl/include/dmsl_accounter_thrift.hrl").
@@ -73,6 +74,7 @@
     create_nspkmir_payment_resource_ok_test/1,
     create_euroset_payment_resource_ok_test/1,
     create_qw_payment_resource_ok_test/1,
+    create_crypto_payment_resource_ok_test/1,
     create_applepay_tokenized_payment_resource_ok_test/1,
     create_googlepay_tokenized_payment_resource_ok_test/1,
     create_googlepay_plain_payment_resource_ok_test/1,
@@ -192,6 +194,8 @@ customer_access_token_tests() ->
         get_customer_events_ok_test
     ].
 
+-spec test() -> _.
+
 -spec groups() ->
     [{group_name(), list(), [test_case_name()]}].
 groups() ->
@@ -210,6 +214,7 @@ groups() ->
                 create_nspkmir_payment_resource_ok_test,
                 create_euroset_payment_resource_ok_test,
                 create_qw_payment_resource_ok_test,
+                create_crypto_payment_resource_ok_test,
                 create_applepay_tokenized_payment_resource_ok_test,
                 create_googlepay_tokenized_payment_resource_ok_test,
                 create_googlepay_plain_payment_resource_ok_test
@@ -497,7 +502,8 @@ woody_retry_test(Config) ->
         }}
     ]),
     {Time, ?badresp(503)} = timer:tc(capi_client_parties, get_my_party, [?config(context, Config)]),
-    true = (Time > 4000000) and (Time < 6000000).
+    _ = ?assert(Time > 4000000),
+    _ = ?assert(Time < 6000000).
 
 -spec woody_unknown_test(config()) ->
     _.
@@ -945,6 +951,21 @@ create_qw_payment_resource_ok_test(Config) ->
             <<"paymentToolType">> => <<"DigitalWalletData">>,
             <<"digitalWalletType">> => <<"DigitalWalletQIWI">>,
             <<"phoneNumber">> => <<"+79876543210">>
+        },
+        <<"clientInfo">> => ClientInfo
+    }).
+
+-spec create_crypto_payment_resource_ok_test(_) ->
+    _.
+create_crypto_payment_resource_ok_test(Config) ->
+    ClientInfo = #{<<"fingerprint">> => <<"test fingerprint">>},
+    {ok, #{<<"paymentToolDetails">> := #{
+        <<"detailsType">> := <<"PaymentToolDetailsCryptoWallet">>,
+        <<"cryptoCurrency">> := <<"bitcoinCash">>
+    }}} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
+        <<"paymentTool">> => #{
+            <<"paymentToolType">> => <<"CryptoWalletData">>,
+            <<"cryptoCurrency">> => <<"bitcoinCash">>
         },
         <<"clientInfo">> => ClientInfo
     }).
