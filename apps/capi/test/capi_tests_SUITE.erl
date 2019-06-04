@@ -1,6 +1,7 @@
 -module(capi_tests_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
+-include_lib("eunit/include/eunit.hrl").
 
 -include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("dmsl/include/dmsl_accounter_thrift.hrl").
@@ -192,6 +193,8 @@ customer_access_token_tests() ->
         get_binding_ok_test,
         get_customer_events_ok_test
     ].
+
+-spec test() -> _.
 
 -spec groups() ->
     [{group_name(), list(), [test_case_name()]}].
@@ -499,7 +502,11 @@ woody_retry_test(Config) ->
         }}
     ]),
     {Time, ?badresp(503)} = timer:tc(capi_client_parties, get_my_party, [?config(context, Config)]),
-    true = (Time > 4000000) and (Time < 6000000).
+    ?assert(
+        true,
+        (Time > 4000000) and (Time < 6000000),
+        Time
+    ).
 
 -spec woody_unknown_test(config()) ->
     _.
