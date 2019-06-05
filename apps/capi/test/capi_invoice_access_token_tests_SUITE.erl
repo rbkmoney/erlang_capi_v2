@@ -144,7 +144,7 @@ end_per_suite(C) ->
     config().
 init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    ExtraProperties = #{<<"ip_replacement_allowed">> => <<"true">>},
+    ExtraProperties = #{<<"ip_replacement_allowed">> => true},
     {ok, Token} = capi_ct_helper:issue_token([{[invoices], write}], unlimited, ExtraProperties),
     capi_ct_helper:mock_services([
         {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end},

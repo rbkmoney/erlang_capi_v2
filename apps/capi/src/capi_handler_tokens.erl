@@ -70,7 +70,7 @@ enrich_client_info(ClientInfo, Context) ->
 is_ip_replacement_allowed(Context) ->
     Claims = capi_handler_utils:get_auth_context(Context),
     case capi_auth:get_claim(<<"ip_replacement_allowed">>, Claims, undefined) of
-        <<"true">> ->
+        true ->
             true;
         _ ->
             false
