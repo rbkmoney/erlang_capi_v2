@@ -62,7 +62,7 @@ enrich_client_info(ClientInfo, Context) ->
         true ->
             UncheckedIP = maps:get(<<"ip">>, ClientInfo, prepare_client_ip(Context)),
             validate_ip(UncheckedIP);
-        _ ->
+        false ->
             prepare_client_ip(Context)
     end,
     ClientInfo#{<<"ip">> => IP}.
@@ -72,7 +72,10 @@ is_ip_replacement_allowed(Context) ->
     case capi_auth:get_claim(<<"ip_replacement_allowed">>, Claims, undefined) of
         true ->
             true;
-        _ ->
+        undefined ->
+            false;
+        Value ->
+            _ = lager:notice("Unexpected ip_replacement_allowed value: ~p", [Value]),
             false
     end.
 
