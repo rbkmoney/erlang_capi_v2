@@ -59,11 +59,11 @@ process_request(_OperationID, _Req, _Context) ->
 
 enrich_client_info(ClientInfo, Context) ->
     Claims = capi_handler_utils:get_auth_context(Context),
-    IP = case capi_auth:get_claim(<<"ip_replacement_allowed">>, Claims, undefined) of
+    IP = case capi_auth:get_claim(<<"ip_replacement_allowed">>, Claims, false) of
         true ->
             UncheckedIP = maps:get(<<"ip">>, ClientInfo, prepare_client_ip(Context)),
             validate_ip(UncheckedIP);
-        undefined ->
+        false ->
             prepare_client_ip(Context);
         Value ->
             _ = lager:notice("Unexpected ip_replacement_allowed value: ~p", [Value]),
