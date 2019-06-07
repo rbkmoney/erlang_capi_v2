@@ -98,7 +98,8 @@
     get_payment_institution_payment_terms/1,
     get_payment_institution_payout_terms/1,
     check_no_payment_by_external_id_test/1,
-    check_no_internal_id_for_external_id_test/1
+    check_no_internal_id_for_external_id_test/1,
+    retrieve_payment_by_external_id_test/1
 ]).
 
 -define(CAPI_PORT                   , 8080).
@@ -200,7 +201,8 @@ groups() ->
                 get_payment_institution_payout_terms,
                 delete_customer_ok_test,
                 check_no_payment_by_external_id_test,
-                check_no_internal_id_for_external_id_test
+                check_no_internal_id_for_external_id_test,
+                retrieve_payment_by_external_id_test
             ]
         }
     ].
@@ -1241,6 +1243,23 @@ check_no_internal_id_for_external_id_test(Config) ->
     {error, {404, #{
         <<"message">> := <<"externalID not found">>
     }}} =
+        capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
+
+-spec retrieve_payment_by_external_id_test(config()) ->
+    _.
+retrieve_payment_by_external_id_test(Config) ->
+    PaymentID = capi_ct_helper:unique_id(),
+    ExternalID = capi_ct_helper:unique_id(),
+    capi_ct_helper:mock_services([
+        {invoicing, fun('Get', _)        -> {ok, ?PAYPROC_INVOICE} end},
+        {invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT(PaymentID, ExternalID)} end},
+        {bender,  fun('GetInternalID', _) ->
+            InternalKey = capi_ct_helper:unique_id(),
+            {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, {bin, <<"123">>})} end}
+    ], Config),
+    {ok, #{
+        <<"externalID">> := ExternalID
+    }} =
         capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
 
 -spec get_payment_institutions(config()) ->

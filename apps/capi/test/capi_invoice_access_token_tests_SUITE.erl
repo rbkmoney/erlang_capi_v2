@@ -38,7 +38,6 @@
     get_invoice_events_ok_test/1,
     get_invoice_payment_methods_ok_test/1,
     create_payment_ok_test/1,
-    retrieve_payment_by_external_id_test/1,
     create_payment_with_empty_cvv_ok_test/1,
     create_payment_with_googlepay_plain_ok_test/1,
     get_payments_ok_test/1,
@@ -85,7 +84,6 @@ invoice_access_token_tests() ->
         get_invoice_events_ok_test,
         get_invoice_payment_methods_ok_test,
         create_payment_ok_test,
-        retrieve_payment_by_external_id_test,
         create_payment_with_empty_cvv_ok_test,
         create_payment_with_googlepay_plain_ok_test,
         get_payments_ok_test,
@@ -645,60 +643,6 @@ get_invoice_payment_methods_ok_test(Config) ->
 -spec create_payment_ok_test(config()) ->
     _.
 create_payment_ok_test(Config) ->
-    BenderKey = <<"bender_key">>,
-    ExternalID = <<"merch_id">>,
-    capi_ct_helper:mock_services(
-        [
-            {cds_storage, fun
-                ('PutSession', _) -> {ok, ok};
-                ('PutCard', _) -> {ok, ?PUT_CARD_RESULT}
-            end},
-            {invoicing, fun('StartPayment', [_, _, IPP]) ->
-                #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
-                {ok, ?PAYPROC_PAYMENT(ID, EID)}
-            end},
-            {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end},
-            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
-        ],
-        Config
-    ),
-    Req1 = #{
-        <<"paymentTool">> => #{
-            <<"paymentToolType">> => <<"CardData">>,
-            <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
-            <<"cardNumber">> => <<"4111111111111111">>,
-            <<"expDate">> => <<"08/27">>,
-            <<"cvv">> => <<"232">>
-        },
-        <<"clientInfo">> => #{
-            <<"fingerprint">> => <<"test fingerprint">>
-        }
-    },
-    {ok, #{
-        <<"paymentToolToken">> := Token,
-        <<"paymentSession">> := Session
-    }} = capi_client_tokens:create_payment_resource(?config(context, Config), Req1),
-    Req2 = #{
-        <<"externalID">> => ExternalID,
-        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
-        <<"payer">> => #{
-            <<"payerType">> => <<"PaymentResourcePayer">>,
-            <<"paymentSession">> => Session,
-            <<"paymentToolToken">> => Token,
-            <<"contactInfo">> => #{
-                <<"email">> => <<"bla@bla.ru">>
-            }
-        },
-        <<"metadata">> => ?JSON
-    },
-    {ok, #{
-        <<"id">> := BenderKey,
-        <<"externalID">> := ExternalID
-    }} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
-
--spec retrieve_payment_by_external_id_test(config()) ->
-    _.
-retrieve_payment_by_external_id_test(Config) ->
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
     capi_ct_helper:mock_services(
