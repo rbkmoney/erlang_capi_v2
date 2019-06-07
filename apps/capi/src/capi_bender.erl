@@ -9,6 +9,9 @@
 -export([gen_by_sequence/4]).
 -export([gen_by_constant/4]).
 -export([get_idempotent_key/3]).
+-export([get_internal_id/2]).
+
+-export([no_internal_id/0]).
 
 -define(SCHEMA_VER1, 1).
 
@@ -49,6 +52,26 @@ get_idempotent_key(Prefix, PartyID, undefined) ->
     get_idempotent_key(Prefix, PartyID, gen_external_id());
 get_idempotent_key(Prefix, PartyID, ExternalID) ->
     <<"capi/", Prefix/binary, "/", PartyID/binary, "/", ExternalID/binary>>.
+
+-spec get_internal_id(binary(), woody_context()) ->
+    {ok, binary()} | {error, internal_id_not_found}.
+
+get_internal_id(ExternalID, WoodyContext) ->
+    case capi_woody_client:call_service(bender, 'GetInternalID', [ExternalID], WoodyContext) of
+        {ok, #bender_GetInternalIDResult{
+            internal_id = InternalID,
+            context = Context}
+        } ->
+            {ok, InternalID, Context};
+        {exception, #bender_InternalIDNotFound{}} ->
+            {error, internal_id_not_found}
+    end.
+
+-spec no_internal_id() ->
+    #bender_InternalIDNotFound{}.
+
+no_internal_id() ->
+    #bender_InternalIDNotFound{}.
 
 %% Internal
 

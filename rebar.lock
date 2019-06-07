@@ -3,7 +3,7 @@
  {<<"bear">>,{pkg,<<"bear">>,<<"0.8.7">>},2},
  {<<"bender_proto">>,
   {git,"git@github.com:rbkmoney/bender-proto.git",
-       {ref,"70f25cc97512522d37a40ee6b9aedb039150fca0"}},
+       {ref,"d765b9dfeb89d6eefccb947356dab85fbff592a9"}},
   0},
  {<<"binbase_proto">>,
   {git,"git@github.com:rbkmoney/binbase-proto.git",
