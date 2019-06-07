@@ -68,7 +68,7 @@ get_internal_id(ExternalID, WoodyContext) ->
     end.
 
 -spec no_internal_id() ->
-    #bender_InternalIDNotFound{}.
+    bender_thrift:'InternalIDNotFound'().
 
 no_internal_id() ->
     #bender_InternalIDNotFound{}.
