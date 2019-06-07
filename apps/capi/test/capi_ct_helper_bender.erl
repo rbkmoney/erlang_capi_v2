@@ -8,7 +8,8 @@
 
 -spec get_result(binary()) -> bender_thrift:bender_GenerationResult().
 -spec get_result(binary(), msgpack_thrift:'Value'() | undefined) -> bender_thrift:bender_GenerationResult().
--spec get_internal_id_result(binary(), msgpack_thrift:'Value'() | undefined) -> bender_thrift:bender_GetInternalIDResult().
+-spec get_internal_id_result(binary(), msgpack_thrift:'Value'() | undefined) ->
+    bender_thrift:bender_GetInternalIDResult().
 
 get_result(ID) ->
     get_result(ID, undefined).
