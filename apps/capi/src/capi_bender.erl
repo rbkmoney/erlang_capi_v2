@@ -60,7 +60,8 @@ get_internal_id(ExternalID, WoodyContext) ->
     case capi_woody_client:call_service(bender, 'GetInternalID', [ExternalID], WoodyContext) of
         {ok, #bender_GetInternalIDResult{
             internal_id = InternalID,
-            context = Context}
+            context = Context
+        }} ->
         } ->
             {ok, InternalID, Context};
         {exception, #bender_InternalIDNotFound{}} ->
