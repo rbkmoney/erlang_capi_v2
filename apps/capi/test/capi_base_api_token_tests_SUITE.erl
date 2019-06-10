@@ -99,7 +99,8 @@
     get_payment_institution_payout_terms/1,
     check_no_payment_by_external_id_test/1,
     check_no_internal_id_for_external_id_test/1,
-    retrieve_payment_by_external_id_test/1
+    retrieve_payment_by_external_id_test/1,
+    check_no_invoice_by_external_id_test/1
 ]).
 
 -define(CAPI_PORT                   , 8080).
@@ -202,7 +203,8 @@ groups() ->
                 delete_customer_ok_test,
                 check_no_payment_by_external_id_test,
                 check_no_internal_id_for_external_id_test,
-                retrieve_payment_by_external_id_test
+                retrieve_payment_by_external_id_test,
+                check_no_invoice_by_external_id_test
             ]
         }
     ].
@@ -1229,6 +1231,22 @@ check_no_payment_by_external_id_test(Config) ->
 
     {error, {404, #{
         <<"message">> := <<"Payment not found">>
+    }}} =
+        capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
+
+-spec check_no_invoice_by_external_id_test(config()) ->
+    _.
+check_no_invoice_by_external_id_test(Config) ->
+    ExternalID = capi_ct_helper:unique_id(),
+    BenderContext = capi_msgp_marshalling:marshal(#{}),
+    capi_ct_helper:mock_services([
+        {bender,  fun('GetInternalID', _) ->
+            InternalKey = capi_ct_helper:unique_id(),
+            {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)} end}
+    ], Config),
+
+    {error, {404, #{
+        <<"message">> := <<"Invoice not found">>
     }}} =
         capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
 
