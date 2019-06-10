@@ -119,6 +119,8 @@ process_request('GetPaymentByExternalID', Req, Context) ->
             {ok, {200, [], decode_invoice_payment(InvoiceID, Payment, Context)}};
         {error, internal_id_not_found} ->
             {ok, general_error(404, <<"Payment not found">>)};
+        {error, invoice_not_found} ->
+            {ok, general_error(404, <<"Invoice not found">>)};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvoicePaymentNotFound{} ->
@@ -426,7 +428,7 @@ get_payment_by_external_id(ExternalID, #{woody_context := WoodyContext} = Contex
     end.
 
 get_payment(undefined, _, _) ->
-    {exception, #payproc_InvoiceNotFound{}};
+    {error, invoice_not_found};
 get_payment(InvoiceID, PaymentID, Context) ->
     case capi_handler_utils:get_payment_by_id(InvoiceID, PaymentID, Context) of
         {ok, Payment} ->
