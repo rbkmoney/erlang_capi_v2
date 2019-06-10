@@ -4,8 +4,8 @@
 -include_lib("bender_proto/include/msgpack_thrift.hrl").
 
 -type woody_context() :: woody_context:ctx().
--type context_data() :: maps:map(binary(), term()).
--type bender_context() :: maps:map(binary(), term()).
+-type context_data() :: #{binary() => term()}.
+-type bender_context() :: #{binary() => term()}.
 -export_type([
     bender_context/0,
     context_data/0
@@ -19,7 +19,6 @@
 -export([gen_by_constant/5]).
 -export([get_idempotent_key/3]).
 -export([get_internal_id/2]).
--export([get_context_data/1]).
 
 -export([no_internal_id/0]).
 
@@ -93,7 +92,8 @@ get_internal_id(ExternalID, WoodyContext) ->
             internal_id = InternalID,
             context = Context
         }} ->
-            {ok, InternalID, capi_msgp_marshalling:unmarshal(Context)};
+            UnmarshaledCtx = capi_msgp_marshalling:unmarshal(Context),
+            {ok, InternalID, get_context_data(UnmarshaledCtx)};
         {exception, #bender_InternalIDNotFound{}} ->
             {error, internal_id_not_found}
     end.

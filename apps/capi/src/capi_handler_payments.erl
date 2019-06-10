@@ -418,8 +418,9 @@ get_payment_by_external_id(ExternalID, #{woody_context := WoodyContext} = Contex
     PartyID    = capi_handler_utils:get_party_id(Context),
     PaymentKey = capi_bender:get_idempotent_key('CreatePayment', PartyID, ExternalID),
     case capi_bender:get_internal_id(PaymentKey, WoodyContext) of
-        {ok, PaymentID, BenderContext} ->
-            InvoiceID = get_invoice_id(BenderContext),
+        {ok, PaymentID, CtxData} ->
+            InvoiceID =
+                maps:get(<<"invoice_id">>, CtxData, undefined),
             get_payment(InvoiceID, PaymentID, Context);
         Error ->
             Error
@@ -433,10 +434,4 @@ get_payment(InvoiceID, PaymentID, Context) ->
             {ok, InvoiceID, Payment};
         Error ->
             Error
-    end.
-
-get_invoice_id(Context) ->
-    case capi_bender:get_context_data(Context) of
-        undefined -> undefined;
-        CtxData -> maps:get(<<"invoice_id">>, CtxData, undefined)
     end.
