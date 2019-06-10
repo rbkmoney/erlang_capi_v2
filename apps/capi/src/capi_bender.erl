@@ -4,12 +4,22 @@
 -include_lib("bender_proto/include/msgpack_thrift.hrl").
 
 -type woody_context() :: woody_context:ctx().
+-type context_data() :: maps:map(binary(), term()).
+-type bender_context() :: maps:map(binary(), term()).
+-export_type([
+    bender_context/0,
+    context_data/0
+]).
 
+-export([gen_by_snowflake/4]).
 -export([gen_by_snowflake/3]).
 -export([gen_by_sequence/4]).
+-export([gen_by_sequence/5]).
 -export([gen_by_constant/4]).
+-export([gen_by_constant/5]).
 -export([get_idempotent_key/3]).
 -export([get_internal_id/2]).
+-export([get_context_data/1]).
 
 -export([no_internal_id/0]).
 
@@ -20,19 +30,33 @@
     {error, {external_id_conflict, binary()}}.
 
 gen_by_snowflake(IdempotentKey, Hash, WoodyContext) ->
+    gen_by_snowflake(IdempotentKey, Hash, WoodyContext, #{}).
+
+-spec gen_by_snowflake(binary(), integer(), woody_context(), context_data()) ->
+    {ok, binary()} |
+    {error, {external_id_conflict, binary()}}.
+
+gen_by_snowflake(IdempotentKey, Hash, WoodyContext, CtxData) ->
     Snowflake = {snowflake, #bender_SnowflakeSchema{}},
-    generate_id(IdempotentKey, Snowflake, Hash, WoodyContext).
+    generate_id(IdempotentKey, Snowflake, Hash, WoodyContext, CtxData).
 
 -spec gen_by_sequence(binary(), binary(), integer(), woody_context()) ->
     {ok, binary()} |
     {error, {external_id_conflict, binary()}}.
 
 gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext) ->
+    gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext, #{}).
+
+-spec gen_by_sequence(binary(), binary(), integer(), woody_context(), context_data()) ->
+    {ok, binary()} |
+    {error, {external_id_conflict, binary()}}.
+
+gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext, CtxData) ->
     Sequence = {sequence, #bender_SequenceSchema{
         sequence_id = SequenceID,
         minimum = 100
     }},
-    generate_id(IdempotentKey, Sequence, Hash, WoodyContext).
+    generate_id(IdempotentKey, Sequence, Hash, WoodyContext, CtxData).
 
 
 -spec gen_by_constant(binary(), binary(), integer(), woody_context()) ->
@@ -40,8 +64,15 @@ gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext) ->
     {error, {external_id_conflict, binary()}}.
 
 gen_by_constant(IdempotentKey, ConstantID, Hash, WoodyContext) ->
+    gen_by_constant(IdempotentKey, ConstantID, Hash, WoodyContext, #{}).
+
+-spec gen_by_constant(binary(), binary(), integer(), woody_context(), context_data()) ->
+    {ok,    binary()} |
+    {error, {external_id_conflict, binary()}}.
+
+gen_by_constant(IdempotentKey, ConstantID, Hash, WoodyContext, CtxData) ->
     Constant = {constant, #bender_ConstantSchema{internal_id = ConstantID}},
-    generate_id(IdempotentKey, Constant, Hash, WoodyContext).
+    generate_id(IdempotentKey, Constant, Hash, WoodyContext, CtxData).
 
 -spec get_idempotent_key(atom() | binary(), binary(), binary() | undefined) ->
     binary().
@@ -62,8 +93,7 @@ get_internal_id(ExternalID, WoodyContext) ->
             internal_id = InternalID,
             context = Context
         }} ->
-        } ->
-            {ok, InternalID, Context};
+            {ok, InternalID, capi_msgp_marshalling:unmarshal(Context)};
         {exception, #bender_InternalIDNotFound{}} ->
             {error, internal_id_not_found}
     end.
@@ -79,10 +109,11 @@ no_internal_id() ->
 gen_external_id() ->
     genlib:unique().
 
-generate_id(Key, BenderSchema, Hash, WoodyContext) ->
+generate_id(Key, BenderSchema, Hash, WoodyContext, CtxData) ->
     Context = capi_msgp_marshalling:marshal(#{
         <<"version">>     => ?SCHEMA_VER1,
-        <<"params_hash">> => Hash
+        <<"params_hash">> => Hash,
+        <<"context_data">>  => CtxData
     }),
     Args = [Key, BenderSchema, Context],
     Result = case capi_woody_client:call_service(bender, 'GenerateID', Args, WoodyContext) of
@@ -96,3 +127,8 @@ generate_id(Key, BenderSchema, Hash, WoodyContext) ->
         {ok, ID, Hash}   -> {ok, ID};
         {ok, ID, _Other} -> {error, {external_id_conflict, ID}}
     end.
+
+-spec get_context_data(bender_context()) -> undefined | context_data().
+
+get_context_data(Context) ->
+    maps:get(<<"context_data">>, Context, undefined).

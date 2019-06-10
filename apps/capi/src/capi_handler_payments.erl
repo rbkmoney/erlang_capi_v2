@@ -118,7 +118,7 @@ process_request('GetPaymentByExternalID', Req, Context) ->
         {ok, InvoiceID, Payment} ->
             {ok, {200, [], decode_invoice_payment(InvoiceID, Payment, Context)}};
         {error, internal_id_not_found} ->
-            {ok, general_error(404, <<"externalID not found">>)};
+            {ok, general_error(404, <<"Payment not found">>)};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvoicePaymentNotFound{} ->
@@ -324,7 +324,8 @@ create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} =
     ExternalID    = maps:get(<<"externalID">>, PaymentParams, undefined),
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2(PaymentParams),
-    case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Hash, WoodyCtx) of
+    CtxData = #{<<"invoice_id">> => InvoiceID},
+    case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Hash, WoodyCtx, CtxData) of
         {ok, ID} ->
             Params = encode_invoice_payment_params(ID, ExternalID, PaymentParams),
             Call = {invoicing, 'StartPayment', [InvoiceID, Params]},
@@ -415,20 +416,27 @@ decode_invoice_payment(InvoiceID, #payproc_InvoicePayment{payment = Payment}, Co
 
 get_payment_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
     PartyID    = capi_handler_utils:get_party_id(Context),
-    InvoiceKey = capi_bender:get_idempotent_key('CreateInvoice', PartyID, ExternalID),
-    case capi_bender:get_internal_id(InvoiceKey, WoodyContext) of
-        {ok, InvoiceID, _} ->
-            PaymentKey = capi_bender:get_idempotent_key('CreatePayment', PartyID, ExternalID),
-            case capi_bender:get_internal_id(PaymentKey, WoodyContext) of
-                {ok, PaymentID, _} ->
-                    case capi_handler_utils:get_payment_by_id(InvoiceID, PaymentID, Context) of
-                        {ok, Payment} ->
-                            {ok, InvoiceID, Payment};
-                        Error ->
-                            Error
-                    end
-
-            end;
+    PaymentKey = capi_bender:get_idempotent_key('CreatePayment', PartyID, ExternalID),
+    case capi_bender:get_internal_id(PaymentKey, WoodyContext) of
+        {ok, PaymentID, BenderContext} ->
+            InvoiceID = get_invoice_id(BenderContext),
+            get_payment(InvoiceID, PaymentID, Context);
         Error ->
             Error
+    end.
+
+get_payment(undefined, _, _) ->
+    {error, payment_not_found};
+get_payment(InvoiceID, PaymentID, Context) ->
+    case capi_handler_utils:get_payment_by_id(InvoiceID, PaymentID, Context) of
+        {ok, Payment} ->
+            {ok, InvoiceID, Payment};
+        Error ->
+            Error
+    end.
+
+get_invoice_id(Context) ->
+    case capi_bender:get_context_data(Context) of
+        undefined -> undefined;
+        CtxData -> maps:get(<<"invoice_id">>, CtxData, undefined)
     end.

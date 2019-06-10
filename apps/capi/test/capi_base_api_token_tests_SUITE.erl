@@ -1219,12 +1219,12 @@ get_schedule_by_ref_ok_test(Config) ->
     _.
 check_no_payment_by_external_id_test(Config) ->
     ExternalID = capi_ct_helper:unique_id(),
+    BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{<<"invoice_id">> => <<"123">>}}),
     capi_ct_helper:mock_services([
-        {invoicing, fun('Get', _)         -> {ok, ?PAYPROC_INVOICE} end},
         {invoicing, fun('GetPayment', _)  -> throw(#payproc_InvoicePaymentNotFound{}) end},
         {bender,  fun('GetInternalID', _) ->
             InternalKey = capi_ct_helper:unique_id(),
-            {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, {bin, <<"123">>})} end}
+            {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)} end}
     ], Config),
 
     {error, {404, #{
@@ -1241,7 +1241,7 @@ check_no_internal_id_for_external_id_test(Config) ->
     ], Config),
 
     {error, {404, #{
-        <<"message">> := <<"externalID not found">>
+        <<"message">> := <<"Payment not found">>
     }}} =
         capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
 
@@ -1250,12 +1250,12 @@ check_no_internal_id_for_external_id_test(Config) ->
 retrieve_payment_by_external_id_test(Config) ->
     PaymentID = capi_ct_helper:unique_id(),
     ExternalID = capi_ct_helper:unique_id(),
+    BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{<<"invoice_id">> => <<"123">>}}),
     capi_ct_helper:mock_services([
-        {invoicing, fun('Get', _)        -> {ok, ?PAYPROC_INVOICE} end},
         {invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT(PaymentID, ExternalID)} end},
         {bender,  fun('GetInternalID', _) ->
             InternalKey = capi_ct_helper:unique_id(),
-            {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, {bin, <<"123">>})} end}
+            {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)} end}
     ], Config),
     {ok, #{
         <<"externalID">> := ExternalID
