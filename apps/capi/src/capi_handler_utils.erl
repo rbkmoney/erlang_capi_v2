@@ -28,7 +28,6 @@
 -export([wrap_payment_session/2]).
 -export([get_invoice_by_id/2]).
 -export([get_payment_by_id/3]).
--export([get_payment_by_external_id/2]).
 -export([get_contract_by_id/2]).
 
 -export([create_dsl/3]).
@@ -311,12 +310,6 @@ get_invoice_by_id(InvoiceID, Context) ->
 
 get_payment_by_id(InvoiceID, PaymentID, Context) ->
     service_call_with([user_info], {invoicing, 'GetPayment', [InvoiceID, PaymentID]}, Context).
-
--spec get_payment_by_external_id(binary(), processing_context()) ->
-    woody:result().
-
-get_payment_by_external_id(ExternalID, Context) ->
-    service_call_with([user_info], {invoicing, 'GetPaymentByExternalID', [ExternalID]}, Context).
 
 -spec get_contract_by_id(binary(), processing_context()) ->
     woody:result().
