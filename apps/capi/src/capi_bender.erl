@@ -20,8 +20,6 @@
 -export([get_idempotent_key/3]).
 -export([get_internal_id/2]).
 
--export([no_internal_id/0]).
-
 -define(SCHEMA_VER1, 1).
 
 -spec gen_by_snowflake(binary(), integer(), woody_context()) ->
@@ -97,12 +95,6 @@ get_internal_id(ExternalID, WoodyContext) ->
         {exception, #bender_InternalIDNotFound{}} ->
             {error, internal_id_not_found}
     end.
-
--spec no_internal_id() ->
-    bender_thrift:'InternalIDNotFound'().
-
-no_internal_id() ->
-    #bender_InternalIDNotFound{}.
 
 %% Internal
 

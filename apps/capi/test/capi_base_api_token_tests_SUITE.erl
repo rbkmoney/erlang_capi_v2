@@ -1255,7 +1255,7 @@ check_no_invoice_by_external_id_test(Config) ->
 check_no_internal_id_for_external_id_test(Config) ->
     ExternalID = capi_ct_helper:unique_id(),
     capi_ct_helper:mock_services([
-        {bender,  fun('GetInternalID', _) -> throw(capi_bender:no_internal_id()) end}
+        {bender,  fun('GetInternalID', _) -> throw(capi_ct_helper_bender:no_internal_id()) end}
     ], Config),
 
     {error, {404, #{

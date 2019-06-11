@@ -5,11 +5,14 @@
 -export([get_result/1]).
 -export([get_result/2]).
 -export([get_internal_id_result/2]).
+-export([no_internal_id/0]).
 
 -spec get_result(binary()) -> bender_thrift:bender_GenerationResult().
 -spec get_result(binary(), msgpack_thrift:'Value'() | undefined) -> bender_thrift:bender_GenerationResult().
 -spec get_internal_id_result(binary(), msgpack_thrift:'Value'() | undefined) ->
     bender_thrift:bender_GetInternalIDResult().
+-spec no_internal_id() -> bender_thrift:'InternalIDNotFound'().
+
 
 get_result(ID) ->
     get_result(ID, undefined).
@@ -25,3 +28,6 @@ get_internal_id_result(ID, Ctx) ->
         internal_id = ID,
         context = Ctx
     }.
+
+no_internal_id() ->
+    #bender_InternalIDNotFound{}.
