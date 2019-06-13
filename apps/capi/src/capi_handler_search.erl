@@ -64,6 +64,8 @@ process_request('SearchPayments', Req, Context) ->
         <<"payment_token_provider"   >> => genlib_map:get('bankCardTokenProvider', Req),
         <<"payment_system"           >> => genlib_map:get('bankCardPaymentSystem', Req),
         <<"payment_bin"              >> => genlib_map:get('bin', Req)
+        % <<"rrn"                      >> => genlib_map:get('rrn', Req),
+        % <<"approval_code"            >> => genlib_map:get('approval_code', Req)
     },
     Opts = #{
         thrift_fun => 'GetPayments',
