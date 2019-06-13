@@ -21,3 +21,4 @@ apps/swag_client/*
 .\#*
 Dockerfile
 docker-compose.yml
+tags
