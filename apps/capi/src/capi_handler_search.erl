@@ -202,11 +202,27 @@ decode_stat_payment(Stat, Context) ->
         <<"payer"          >> => decode_stat_payer(Stat#merchstat_StatPayment.payer),
         <<"geoLocationInfo">> => decode_geo_location_info(Stat#merchstat_StatPayment.location_info),
         <<"metadata"       >> => capi_handler_decoder_utils:decode_context(Stat#merchstat_StatPayment.context),
+        % <<"transactionInfo">> => decode_stat_tx_info(Stat#merchstat_StatPayment.transaction_info),
         <<"makeRecurrent"  >> => capi_handler_decoder_invoicing:decode_make_recurrent(
             Stat#merchstat_StatPayment.make_recurrent
         ),
         <<"statusChangedAt">> => decode_status_changed_at(Stat#merchstat_StatPayment.status)
     }, decode_stat_payment_status(Stat#merchstat_StatPayment.status, Context)).
+
+% decode_stat_tx_info(undefined) ->
+%     undefined;
+% decode_stat_tx_info(TransactionInfo) ->
+%     ID             = TransactionInfo#domain_TransactionInfo.id,
+%     Timestamp      = TransactionInfo#domain_TransactionInfo.timestamp,
+%     AdditionalInfo = TransactionInfo#domain_TransactionInfo.additional_info,
+%     RRN = AdditionalInfo#domain_AdditionalTransactionInfo.rrn,
+%     AAC = AdditionalInfo#domain_AdditionalTransactionInfo.approval_code,
+%     #{
+%         <<"id           ">> => ID,
+%         <<"timestamp    ">> => Timestamp,
+%         <<"rrn          ">> => RRN,
+%         <<"approval_code">> => AAC
+%     }.
 
 decode_stat_payer({customer, #merchstat_CustomerPayer{customer_id = ID}}) ->
     #{
