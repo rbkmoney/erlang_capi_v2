@@ -213,10 +213,11 @@ decode_stat_payment(Stat, Context) ->
 
 decode_stat_tx_info(undefined) ->
     undefined;
-decode_stat_tx_info(TransactionInfo) ->
+decode_stat_tx_info(#domain_TransactionInfo{additional_info = undefined}) ->
+    undefined;
+decode_stat_tx_info(TransactionInfo = #domain_TransactionInfo{additional_info = AdditionalInfo}) ->
     ID             = TransactionInfo#domain_TransactionInfo.id,
     Timestamp      = TransactionInfo#domain_TransactionInfo.timestamp,
-    AdditionalInfo = TransactionInfo#domain_TransactionInfo.additional_info,
     RRN = AdditionalInfo#domain_AdditionalTransactionInfo.rrn,
     AAC = AdditionalInfo#domain_AdditionalTransactionInfo.approval_code,
     #{
