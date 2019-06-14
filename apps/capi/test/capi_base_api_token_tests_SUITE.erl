@@ -1042,7 +1042,7 @@ search_payments_ok_test(Config) ->
         {payerFingerprint, <<"blablablalbalbal">>},
         % {lastDigits, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
         % {bin, <<"424242">>},
-        {rrn, <<"090909090909">>},
+        % {rrn, <<"090909090909">>},
         {bankCardTokenProvider, <<"applepay">>},
         {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000},
