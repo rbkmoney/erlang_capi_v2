@@ -63,9 +63,9 @@ process_request('SearchPayments', Req, Context) ->
         <<"payment_amount"           >> => genlib_map:get('paymentAmount', Req),
         <<"payment_token_provider"   >> => genlib_map:get('bankCardTokenProvider', Req),
         <<"payment_system"           >> => genlib_map:get('bankCardPaymentSystem', Req),
-        <<"payment_bin"              >> => genlib_map:get('bin', Req)
-        % <<"rrn"                      >> => genlib_map:get('rrn', Req),
-        % <<"approval_code"            >> => genlib_map:get('approval_code', Req)
+        <<"payment_bin"              >> => genlib_map:get('bin', Req),
+        <<"payment_rrn"              >> => genlib_map:get('rrn', Req),
+        <<"payment_approval_code"    >> => genlib_map:get('approval_code', Req)
     },
     Opts = #{
         thrift_fun => 'GetPayments',
@@ -204,27 +204,27 @@ decode_stat_payment(Stat, Context) ->
         <<"payer"          >> => decode_stat_payer(Stat#merchstat_StatPayment.payer),
         <<"geoLocationInfo">> => decode_geo_location_info(Stat#merchstat_StatPayment.location_info),
         <<"metadata"       >> => capi_handler_decoder_utils:decode_context(Stat#merchstat_StatPayment.context),
-        % <<"transactionInfo">> => decode_stat_tx_info(Stat#merchstat_StatPayment.transaction_info),
+        <<"transactionInfo">> => decode_stat_tx_info(Stat#merchstat_StatPayment.transaction_info),
         <<"makeRecurrent"  >> => capi_handler_decoder_invoicing:decode_make_recurrent(
             Stat#merchstat_StatPayment.make_recurrent
         ),
         <<"statusChangedAt">> => decode_status_changed_at(Stat#merchstat_StatPayment.status)
     }, decode_stat_payment_status(Stat#merchstat_StatPayment.status, Context)).
 
-% decode_stat_tx_info(undefined) ->
-%     undefined;
-% decode_stat_tx_info(TransactionInfo) ->
-%     ID             = TransactionInfo#domain_TransactionInfo.id,
-%     Timestamp      = TransactionInfo#domain_TransactionInfo.timestamp,
-%     AdditionalInfo = TransactionInfo#domain_TransactionInfo.additional_info,
-%     RRN = AdditionalInfo#domain_AdditionalTransactionInfo.rrn,
-%     AAC = AdditionalInfo#domain_AdditionalTransactionInfo.approval_code,
-%     #{
-%         <<"id           ">> => ID,
-%         <<"timestamp    ">> => Timestamp,
-%         <<"rrn          ">> => RRN,
-%         <<"approval_code">> => AAC
-%     }.
+decode_stat_tx_info(undefined) ->
+    undefined;
+decode_stat_tx_info(TransactionInfo) ->
+    ID             = TransactionInfo#domain_TransactionInfo.id,
+    Timestamp      = TransactionInfo#domain_TransactionInfo.timestamp,
+    AdditionalInfo = TransactionInfo#domain_TransactionInfo.additional_info,
+    RRN = AdditionalInfo#domain_AdditionalTransactionInfo.rrn,
+    AAC = AdditionalInfo#domain_AdditionalTransactionInfo.approval_code,
+    #{
+        <<"id           ">> => ID,
+        <<"timestamp    ">> => Timestamp,
+        <<"rrn          ">> => RRN,
+        <<"approval_code">> => AAC
+    }.
 
 decode_stat_payer({customer, #merchstat_CustomerPayer{customer_id = ID}}) ->
     #{
