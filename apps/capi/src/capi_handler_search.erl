@@ -220,12 +220,13 @@ decode_stat_tx_info(TransactionInfo = #domain_TransactionInfo{additional_info = 
     Timestamp      = TransactionInfo#domain_TransactionInfo.timestamp,
     RRN = AdditionalInfo#domain_AdditionalTransactionInfo.rrn,
     AAC = AdditionalInfo#domain_AdditionalTransactionInfo.approval_code,
-    #{
-        <<"id           ">> => ID,
-        <<"timestamp    ">> => Timestamp,
-        <<"rrn          ">> => RRN,
+    ParsedTransactionInfo = #{
+        <<"id"           >> => ID,
+        <<"timestamp"    >> => Timestamp,
+        <<"rrn"          >> => RRN,
         <<"approval_code">> => AAC
-    }.
+    },
+    genlib_map:compact(ParsedTransactionInfo).
 
 decode_stat_payer({customer, #merchstat_CustomerPayer{customer_id = ID}}) ->
     #{
