@@ -1042,13 +1042,12 @@ search_payments_ok_test(Config) ->
         {payerFingerprint, <<"blablablalbalbal">>},
         % {lastDigits, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
         % {bin, <<"424242">>},
-        % {rrn, <<"090909090909">>},
+        {rrn, <<"090909090909">>},
         {bankCardTokenProvider, <<"applepay">>},
         {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000},
         {continuationToken, <<"come_back_next_time">>}
     ],
-
     {ok, _, _} = capi_client_searches:search_payments(?config(context, Config), ?STRING, Query).
 
 -spec search_refunds_ok_test(config()) ->
