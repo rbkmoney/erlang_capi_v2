@@ -343,13 +343,11 @@ deduplicate_payment_methods(Methods) ->
         EqFun = fun(V) ->
             payment_methods_equivalent(V, Value)
         end,
-        % We filter elements, that are alike Value
-        case lists:filter(EqFun, AccIn) of
-            [Alike] = Filtered ->
-                % AccIn contained values alike Value, so we need to merge them and replace
+        case lists:partition(EqFun, AccIn) of
+            {[Alike], NotAlike} ->
                 Merged = lists:umerge(maps:get(<<"paymentSystems">>, Value), maps:get(<<"paymentSystems">>, Alike)),
-                [Value#{<<"paymentSystems">> => Merged} | lists:subtract(AccIn, Filtered)];
-            [] ->
+                [Value#{<<"paymentSystems">> => Merged} | NotAlike];
+            {[], _} ->
                 [Value | AccIn]
         end
     end,
