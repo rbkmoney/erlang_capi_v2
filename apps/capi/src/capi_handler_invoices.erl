@@ -150,7 +150,8 @@ process_request('GetInvoiceEvents', Req, Context) ->
 
 process_request('GetInvoicePaymentMethods', Req, Context) ->
     case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, [maps:get(invoiceID, Req)], Context) of
-        {ok, PaymentMethods} when is_list(PaymentMethods) ->
+        {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
+            PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
             {ok, {200, [], PaymentMethods}};
         {exception, Exception} ->
             case Exception of
