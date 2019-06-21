@@ -30,12 +30,12 @@ process_request('SearchInvoices', Req, Context) ->
         <<"payment_email"            >> => genlib_map:get('payerEmail', Req),
         <<"payment_ip"               >> => genlib_map:get('payerIP', Req),
         <<"payment_fingerprint"      >> => genlib_map:get('payerFingerprint', Req),
-        <<"payment_last_digits"      >> => genlib_map:get('lastDigits', Req),
         <<"payment_amount"           >> => genlib_map:get('paymentAmount', Req),
         <<"invoice_amount"           >> => genlib_map:get('invoiceAmount', Req),
         <<"payment_token_provider"   >> => genlib_map:get('bankCardTokenProvider', Req),
         <<"payment_system"           >> => genlib_map:get('bankCardPaymentSystem', Req),
-        <<"payment_bin"              >> => genlib_map:get('bin', Req)
+        <<"payment_first6"           >> => genlib_map:get('first6', Req),
+        <<"payment_last4"            >> => genlib_map:get('last4', Req)
     },
     Opts = #{
         thrift_fun => 'GetInvoices',
@@ -59,13 +59,13 @@ process_request('SearchPayments', Req, Context) ->
         <<"payment_email"            >> => genlib_map:get('payerEmail', Req),
         <<"payment_ip"               >> => genlib_map:get('payerIP', Req),
         <<"payment_fingerprint"      >> => genlib_map:get('payerFingerprint', Req),
-        <<"payment_last_digits"      >> => genlib_map:get('lastDigits', Req),
         <<"payment_amount"           >> => genlib_map:get('paymentAmount', Req),
         <<"payment_token_provider"   >> => genlib_map:get('bankCardTokenProvider', Req),
         <<"payment_system"           >> => genlib_map:get('bankCardPaymentSystem', Req),
-        <<"payment_bin"              >> => genlib_map:get('bin', Req),
         <<"payment_rrn"              >> => genlib_map:get('rrn', Req),
-        <<"payment_approval_code"    >> => genlib_map:get('approval_code', Req)
+        <<"payment_approval_code"    >> => genlib_map:get('approval_code', Req),
+        <<"payment_first6"           >> => genlib_map:get('first6', Req),
+        <<"payment_last4"            >> => genlib_map:get('last4', Req)
     },
     Opts = #{
         thrift_fun => 'GetPayments',
