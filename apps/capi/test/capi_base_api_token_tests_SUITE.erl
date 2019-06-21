@@ -1014,7 +1014,13 @@ search_invoices_ok_test(Config) ->
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
         {payerFingerprint, <<"blablablalbalbal">>},
-        % {lastDigits, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
+        % %%@FIXME cannot be used until getting the newest api client
+        % swag generates an invalid regex
+        % {pattern, "/^\\d{6,8}$/"} instead of
+        % {pattern, "^\\d{6,8}$"} for the api
+        % the handler is fine
+        %
+        % {lastDigits, <<"2222">>},
         % {bin, <<"424242">>},
         {bankCardTokenProvider, <<"applepay">>},
         {bankCardPaymentSystem, <<"visa">>},
@@ -1040,14 +1046,20 @@ search_payments_ok_test(Config) ->
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
         {payerFingerprint, <<"blablablalbalbal">>},
-        % {lastDigits, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
+        % %%@FIXME cannot be used until getting the newest api client
+        % swag generates an invalid regex
+        % {pattern, "/^\\d{6,8}$/"} instead of
+        % {pattern, "^\\d{6,8}$"} for the api
+        % the handler is fine
+        %
+        % {lastDigits, <<"2222">>}
         % {bin, <<"424242">>},
+        % {rrn, <<"090909090909">>},
         {bankCardTokenProvider, <<"applepay">>},
         {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000},
         {continuationToken, <<"come_back_next_time">>}
     ],
-
     {ok, _, _} = capi_client_searches:search_payments(?config(context, Config), ?STRING, Query).
 
 -spec search_refunds_ok_test(config()) ->
