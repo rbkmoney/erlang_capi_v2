@@ -1053,7 +1053,7 @@ search_payments_ok_test(Config) ->
         % the handler is fine
         %
         % {first6, <<"424242">>},
-        % {last4, <<"2222">>}
+        % {last4, <<"2222">>},
         % {rrn, <<"090909090909">>},
         {bankCardTokenProvider, <<"applepay">>},
         {bankCardPaymentSystem, <<"visa">>},
