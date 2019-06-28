@@ -1007,8 +1007,14 @@ search_invoices_ok_test(Config) ->
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
         {payerFingerprint, <<"blablablalbalbal">>},
-        % {lastDigits, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
-        % {bin, <<"424242">>},
+        % %%@FIXME cannot be used until getting the newest api client
+        % swag generates an invalid regex
+        % {pattern, "/^\\d{6,8}$/"} instead of
+        % {pattern, "^\\d{6,8}$"} for the api
+        % the handler is fine
+        %
+        % {first6, <<"424242">>},
+        % {last4, <<"2222">>},
         {bankCardTokenProvider, <<"applepay">>},
         {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000},
@@ -1034,8 +1040,14 @@ search_payments_ok_test(Config) ->
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
         {payerFingerprint, <<"blablablalbalbal">>},
-        % {lastDigits, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
-        % {bin, <<"424242">>},
+        % %%@FIXME cannot be used until getting the newest api client
+        % swag generates an invalid regex
+        % {pattern, "/^\\d{6,8}$/"} instead of
+        % {pattern, "^\\d{6,8}$"} for the api
+        % the handler is fine
+        %
+        % {first6, <<"424242">>},
+        % {last4, <<"2222">>},
         {bankCardTokenProvider, <<"applepay">>},
         {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000},
