@@ -630,7 +630,15 @@
     currency_symbolic_code = ?RUB,
     payer = Payer,
     context = ?CONTENT,
-    domain_revision = ?INTEGER
+    domain_revision = ?INTEGER,
+    transaction_info = ?TX_INFO
+}).
+
+ -define(TX_INFO, #domain_TransactionInfo{
+    id = <<"111">>,
+    timestamp = <<"111111111111">>,
+    extra = #{<<>> => <<>>},
+    additional_info = #domain_AdditionalTransactionInfo{rrn = <<"090909090909">>}
 }).
 
 -define (STAT_PAYER(PaymentTool), ?STAT_PAYER(PaymentTool, ?STRING)).
