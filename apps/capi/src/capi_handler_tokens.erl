@@ -66,7 +66,7 @@ enrich_client_info(ClientInfo, Context) ->
         false ->
             prepare_client_ip(Context);
         Value ->
-            _ = lager:notice("Unexpected ip_replacement_allowed value: ~p", [Value]),
+            _ = logger:notice("Unexpected ip_replacement_allowed value: ~p", [Value]),
             prepare_client_ip(Context)
     end,
     ClientInfo#{<<"ip">> => IP}.
