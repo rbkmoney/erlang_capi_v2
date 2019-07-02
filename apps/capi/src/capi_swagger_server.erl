@@ -16,7 +16,8 @@
 child_spec({HealthRoutes, LogicHandler}) ->
     {Transport, TransportOpts} = get_socket_transport(),
     CowboyOpts = get_cowboy_config(HealthRoutes, LogicHandler),
-    ranch:child_spec(?MODULE, Transport, TransportOpts, cowboy_clear, CowboyOpts).
+    CowboyOpts1 = cowboy_access_log_h:set_extra_info_fun(get_operation_id(CowboyOpts), CowboyOpts),
+    ranch:child_spec(?MODULE, Transport, TransportOpts, cowboy_clear, CowboyOpts1).
 
 get_socket_transport() ->
     {ok, IP} = inet:parse_address(genlib_app:env(?APP, ip, ?DEFAULT_IP_ADDR)),
@@ -51,3 +52,19 @@ squash_routes(Routes) ->
         orddict:new(),
         Routes
     )).
+
+get_operation_id(#{env := Env}) ->
+    fun (Req) ->
+        case cowboy_router:execute(Req, Env) of
+            {ok, _, #{handler_opts := {Operations, _Handler}}} ->
+                Method = cowboy_req:method(Req),
+                case maps:get(Method, Operations, undefined) of
+                    undefined ->
+                        #{};
+                    OperationID ->
+                        #{operation_id => OperationID}
+                end;
+            _ ->
+                #{}
+        end
+    end.
