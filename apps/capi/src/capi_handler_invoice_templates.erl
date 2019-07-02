@@ -159,7 +159,8 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
             Context
         ),
     case Result of
-        {ok, PaymentMethods} when is_list(PaymentMethods) ->
+        {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
+            PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
             {ok, {200, #{}, PaymentMethods}};
         {exception, E} when
             E == #payproc_InvalidUser{};

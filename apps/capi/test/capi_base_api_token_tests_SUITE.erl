@@ -96,7 +96,11 @@
     get_payment_institutions/1,
     get_payment_institution_by_ref/1,
     get_payment_institution_payment_terms/1,
-    get_payment_institution_payout_terms/1
+    get_payment_institution_payout_terms/1,
+    check_no_payment_by_external_id_test/1,
+    check_no_internal_id_for_external_id_test/1,
+    retrieve_payment_by_external_id_test/1,
+    check_no_invoice_by_external_id_test/1
 ]).
 
 -define(CAPI_PORT                   , 8080).
@@ -196,7 +200,11 @@ groups() ->
                 get_payment_institution_by_ref,
                 get_payment_institution_payment_terms,
                 get_payment_institution_payout_terms,
-                delete_customer_ok_test
+                delete_customer_ok_test,
+                check_no_payment_by_external_id_test,
+                check_no_internal_id_for_external_id_test,
+                retrieve_payment_by_external_id_test,
+                check_no_invoice_by_external_id_test
             ]
         }
     ].
@@ -1006,8 +1014,14 @@ search_invoices_ok_test(Config) ->
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
         {payerFingerprint, <<"blablablalbalbal">>},
-        % {lastDigits, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
-        % {bin, <<"424242">>},
+        % %%@FIXME cannot be used until getting the newest api client
+        % swag generates an invalid regex
+        % {pattern, "/^\\d{6,8}$/"} instead of
+        % {pattern, "^\\d{6,8}$"} for the api
+        % the handler is fine
+        %
+        % {first6, <<"424242">>},
+        % {last4, <<"2222">>},
         {bankCardTokenProvider, <<"applepay">>},
         {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000},
@@ -1032,14 +1046,20 @@ search_payments_ok_test(Config) ->
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
         {payerFingerprint, <<"blablablalbalbal">>},
-        % {lastDigits, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
-        % {bin, <<"424242">>},
+        % %%@FIXME cannot be used until getting the newest api client
+        % swag generates an invalid regex
+        % {pattern, "/^\\d{6,8}$/"} instead of
+        % {pattern, "^\\d{6,8}$"} for the api
+        % the handler is fine
+        %
+        % {first6, <<"424242">>},
+        % {last4, <<"2222">>},
+        % {rrn, <<"090909090909">>},
         {bankCardTokenProvider, <<"applepay">>},
         {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000},
         {continuationToken, <<"come_back_next_time">>}
     ],
-
     {ok, _, _} = capi_client_searches:search_payments(?config(context, Config), ?STRING, Query).
 
 -spec search_refunds_ok_test(config()) ->
@@ -1208,6 +1228,69 @@ get_category_by_ref_ok_test(Config) ->
     _.
 get_schedule_by_ref_ok_test(Config) ->
     {ok, _} = capi_client_payouts:get_schedule_by_ref(?config(context, Config), ?INTEGER).
+
+-spec check_no_payment_by_external_id_test(config()) ->
+    _.
+check_no_payment_by_external_id_test(Config) ->
+    ExternalID = capi_ct_helper:unique_id(),
+    BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{<<"invoice_id">> => <<"123">>}}),
+    capi_ct_helper:mock_services([
+        {invoicing, fun('GetPayment', _)  -> throw(#payproc_InvoicePaymentNotFound{}) end},
+        {bender,  fun('GetInternalID', _) ->
+            InternalKey = capi_ct_helper:unique_id(),
+            {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)} end}
+    ], Config),
+
+    {error, {404, #{
+        <<"message">> := <<"Payment not found">>
+    }}} =
+        capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
+
+-spec check_no_invoice_by_external_id_test(config()) ->
+    _.
+check_no_invoice_by_external_id_test(Config) ->
+    ExternalID = capi_ct_helper:unique_id(),
+    BenderContext = capi_msgp_marshalling:marshal(#{}),
+    capi_ct_helper:mock_services([
+        {bender,  fun('GetInternalID', _) ->
+            InternalKey = capi_ct_helper:unique_id(),
+            {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)} end}
+    ], Config),
+
+    {error, {404, #{
+        <<"message">> := <<"Invoice not found">>
+    }}} =
+        capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
+
+-spec check_no_internal_id_for_external_id_test(config()) ->
+    _.
+check_no_internal_id_for_external_id_test(Config) ->
+    ExternalID = capi_ct_helper:unique_id(),
+    capi_ct_helper:mock_services([
+        {bender,  fun('GetInternalID', _) -> throw(capi_ct_helper_bender:no_internal_id()) end}
+    ], Config),
+
+    {error, {404, #{
+        <<"message">> := <<"Payment not found">>
+    }}} =
+        capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
+
+-spec retrieve_payment_by_external_id_test(config()) ->
+    _.
+retrieve_payment_by_external_id_test(Config) ->
+    PaymentID = capi_ct_helper:unique_id(),
+    ExternalID = capi_ct_helper:unique_id(),
+    BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{<<"invoice_id">> => <<"123">>}}),
+    capi_ct_helper:mock_services([
+        {invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT(PaymentID, ExternalID)} end},
+        {bender,  fun('GetInternalID', _) ->
+            InternalKey = capi_ct_helper:unique_id(),
+            {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)} end}
+    ], Config),
+    {ok, #{
+        <<"externalID">> := ExternalID
+    }} =
+        capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
 
 -spec get_payment_institutions(config()) ->
     _.
