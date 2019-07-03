@@ -33,7 +33,7 @@ process_request('CreatePayment' = OperationID, Req, Context) ->
 
     case Result of
         {ok, Payment} ->
-            {ok, {201, [], decode_invoice_payment(InvoiceID, Payment, Context)}};
+            {ok, {201, #{}, decode_invoice_payment(InvoiceID, Payment, Context)}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidInvoiceStatus{} ->
@@ -86,7 +86,7 @@ process_request('GetPayments', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
         {ok, #'payproc_Invoice'{payments = Payments}} ->
-            {ok, {200, [], [decode_invoice_payment(InvoiceID, P, Context) || P <- Payments]}};
+            {ok, {200, #{}, [decode_invoice_payment(InvoiceID, P, Context) || P <- Payments]}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -100,7 +100,7 @@ process_request('GetPaymentByID', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     case capi_handler_utils:get_payment_by_id(InvoiceID, maps:get(paymentID, Req), Context) of
         {ok, Payment} ->
-            {ok, {200, [], decode_invoice_payment(InvoiceID, Payment, Context)}};
+            {ok, {200, #{}, decode_invoice_payment(InvoiceID, Payment, Context)}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvoicePaymentNotFound{} ->
@@ -116,7 +116,7 @@ process_request('GetPaymentByExternalID', Req, Context) ->
     ExternalID = maps:get(externalID, Req),
     case get_payment_by_external_id(ExternalID, Context) of
         {ok, InvoiceID, Payment} ->
-            {ok, {200, [], decode_invoice_payment(InvoiceID, Payment, Context)}};
+            {ok, {200, #{}, decode_invoice_payment(InvoiceID, Payment, Context)}};
         {error, internal_id_not_found} ->
             {ok, general_error(404, <<"Payment not found">>)};
         {error, invoice_not_found} ->
@@ -137,7 +137,7 @@ process_request('CancelPayment', Req, Context) ->
     Call = {invoicing, 'CancelPayment', CallArgs},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _} ->
-            {ok, {202, [], undefined}};
+            {ok, {202, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvoicePaymentNotFound{} ->
@@ -179,7 +179,7 @@ process_request('CapturePayment', Req, Context) ->
     Call = {invoicing, 'CapturePaymentNew', CallArgs},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _} ->
-            {ok, {202, [], undefined}};
+            {ok, {202, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvoicePaymentNotFound{} ->
@@ -227,7 +227,7 @@ process_request('CreateRefund', Req, Context) ->
     Call = {invoicing, 'RefundPayment', [InvoiceID, PaymentID, Params]},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, Refund} ->
-            {ok, {201, [], capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
+            {ok, {201, #{}, capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -284,7 +284,7 @@ process_request('CreateRefund', Req, Context) ->
 process_request('GetRefunds', Req, Context) ->
     case capi_handler_utils:get_payment_by_id(maps:get(invoiceID, Req), maps:get(paymentID, Req), Context) of
         {ok, #payproc_InvoicePayment{refunds = Refunds}} ->
-            {ok, {200, [], [capi_handler_decoder_invoicing:decode_refund(R, Context) || R <- Refunds]}};
+            {ok, {200, #{}, [capi_handler_decoder_invoicing:decode_refund(R, Context) || R <- Refunds]}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -301,7 +301,7 @@ process_request('GetRefundByID', Req, Context) ->
         {invoicing, 'GetPaymentRefund', [maps:get(invoiceID, Req), maps:get(paymentID, Req), maps:get(refundID, Req)]},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, Refund} ->
-            {ok, {200, [], capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
+            {ok, {200, #{}, capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvoicePaymentRefundNotFound{} ->

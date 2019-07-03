@@ -5,9 +5,11 @@
 -include_lib("dmsl/include/dmsl_domain_config_thrift.hrl").
 
 -export([init_suite/2]).
+-export([init_suite/3]).
 -export([start_app/1]).
 -export([start_app/2]).
 -export([start_capi/1]).
+-export([start_capi/2]).
 -export([issue_token/2]).
 -export([issue_token/3]).
 -export([issue_token/4]).
@@ -32,10 +34,15 @@
 
 -spec init_suite(module(), config()) ->
     config().
+
 init_suite(Module, Config) ->
+    init_suite(Module, Config, []).
+
+-spec init_suite(module(), config(), any()) ->
+    config().
+init_suite(Module, Config, CapiEnv) ->
     SupPid = start_mocked_service_sup(Module),
     Apps1 =
-        start_app(lager) ++
         start_app(woody),
     ServiceURLs = mock_services_([
         {
@@ -46,22 +53,11 @@ init_suite(Module, Config) ->
     ], SupPid),
     Apps2 =
         start_app(dmt_client, [{max_cache_size, #{}}, {service_urls, ServiceURLs}, {cache_update_interval, 50000}]) ++
-        start_capi(Config),
+        start_capi(Config, CapiEnv),
     [{apps, lists:reverse(Apps2 ++ Apps1)}, {suite_test_sup, SupPid} | Config].
 
 -spec start_app(app_name()) ->
     [app_name()].
-
-start_app(lager = AppName) ->
-    start_app(AppName, [
-        {async_threshold, 1},
-        {async_threshold_window, 0},
-        {error_logger_hwm, 600},
-        {suppress_application_start_stop, true},
-        {handlers, [
-            {lager_common_test_backend, [warning, {lager_logstash_formatter, []}]}
-        ]}
-    ]);
 
 start_app(woody = AppName) ->
     start_app(AppName, [
@@ -81,7 +77,13 @@ start_app(AppName, Env) ->
     [app_name()].
 
 start_capi(Config) ->
-    CapiEnv = [
+    start_capi(Config, []).
+
+-spec start_capi(config(), list()) ->
+    [app_name()].
+
+start_capi(Config, ExtraEnv) ->
+    CapiEnv = ExtraEnv ++ [
         {ip, ?CAPI_IP},
         {port, ?CAPI_PORT},
         {service_type, real},
