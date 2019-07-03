@@ -631,14 +631,12 @@
     payer = Payer,
     context = ?CONTENT,
     domain_revision = ?INTEGER,
-    transaction_info = ?TX_INFO
+    additional_transaction_info = ?TX_INFO
 }).
 
--define(TX_INFO, #domain_TransactionInfo{
-    id = <<"111">>,
-    timestamp = <<"111111111111">>,
-    extra = #{<<>> => <<>>},
-    additional_info = #domain_AdditionalTransactionInfo{rrn = <<"090909090909">>}
+-define(TX_INFO, #domain_AdditionalTransactionInfo{
+    rrn = <<"090909090909">>,
+    approval_code = <<"808080">>
 }).
 
 -define (STAT_PAYER(PaymentTool), ?STAT_PAYER(PaymentTool, ?STRING)).
