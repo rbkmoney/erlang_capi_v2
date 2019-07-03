@@ -44,7 +44,7 @@ process_request('CreatePaymentResource' = OperationID, Req, Context) ->
                 payment_session_id = PaymentSessionID,
                 client_info = capi_handler_encoder:encode_client_info(ClientInfo)
             },
-        {ok, {201, [], capi_handler_decoder_party:decode_disposable_payment_resource(PaymentResource)}}
+        {ok, {201, #{}, capi_handler_decoder_party:decode_disposable_payment_resource(PaymentResource)}}
     catch
         Result -> Result
     end;

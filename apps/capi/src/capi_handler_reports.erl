@@ -30,7 +30,7 @@ process_request('GetReports', Req, Context) ->
     Call = {reporting, 'GetReports', [ReportRequest, ReportTypes]},
     case capi_handler_utils:service_call(Call, Context) of
         {ok, Reports} ->
-            {ok, {200, [], [decode_report(R) || R <- Reports]}};
+            {ok, {200, #{}, [decode_report(R) || R <- Reports]}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
@@ -48,7 +48,7 @@ process_request('GetReport', Req, Context) ->
     Call = {reporting, 'GetReport', [PartyId, ShopId, ReportId]},
     case capi_handler_utils:service_call(Call, Context) of
         {ok, Report} ->
-            {ok, {200, [], decode_report(Report)}};
+            {ok, {200, #{}, decode_report(Report)}};
         {exception, #reports_ReportNotFound{}} ->
             {ok, general_error(404, <<"Report not found">>)}
     end;
@@ -73,7 +73,7 @@ process_request('CreateReport', Req, Context) ->
                 {reporting, 'GetReport', [PartyId, ShopId, ReportId]},
                 Context
             ),
-            {ok, {201, [], decode_report(Report)}};
+            {ok, {201, #{}, decode_report(Report)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
@@ -113,7 +113,7 @@ generate_report_presigned_url(FileID, Context) ->
     Call = {reporting, 'GeneratePresignedUrl', [FileID, ExpiresAt]},
     case capi_handler_utils:service_call(Call, Context) of
         {ok, URL} ->
-            {ok, {200, [], #{<<"url">> => URL}}};
+            {ok, {200, #{}, #{<<"url">> => URL}}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
