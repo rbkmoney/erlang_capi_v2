@@ -41,7 +41,7 @@ authorize_api_key(OperationID, ApiKey, _HandlerOpts) ->
 
 -type operation_id()        :: swag_server:operation_id().
 -type request_context()     :: swag_server:request_context().
--type response()            :: swag_server_logic_handler:response().
+-type response()            :: swag_server:response().
 -type handler_opts()        :: swag_server:handler_opts(_).
 -type processing_context()  :: #{
     swagger_context := swag_server:request_context(),
