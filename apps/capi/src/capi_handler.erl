@@ -34,7 +34,6 @@
     Result :: false | {true, capi_auth:context()}.
 
 authorize_api_key(OperationID, ApiKey, _HandlerOpts) ->
-    _ = capi_utils:logtag_process(operation_id, OperationID),
     capi_auth:authorize_api_key(OperationID, ApiKey).
 
 -type request_data()        :: #{atom() | binary() => term()}.

@@ -1,6 +1,5 @@
 -module(capi_utils).
 
--export([logtag_process/2]).
 -export([base64url_to_map/1]).
 -export([map_to_base64url/1]).
 
@@ -15,12 +14,6 @@
 -export([define/2]).
 
 -define(MAX_DEADLINE_TIME, 1*60*1000). % 1 min
-
--spec logtag_process(atom(), any()) -> ok.
-
-logtag_process(Key, Value) when is_atom(Key) ->
-    % TODO preformat into binary?
-    logger:update_process_metadata(#{Key => Value}).
 
 -spec base64url_to_map(binary()) -> map() | no_return().
 base64url_to_map(Base64) when is_binary(Base64) ->
