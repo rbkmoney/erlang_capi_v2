@@ -70,26 +70,28 @@ format_event(_EventType, _RpcID, _EventMeta, _Msg) ->
 %%
 
 log(RpcID, {Level, {Format, Args}}, MD) ->
-    lager:log(Level, [{pid, self()}] ++ rpc_id_to_md(RpcID) ++ orddict:to_list(MD), Format, Args).
+    logger:log(Level, Format, Args, maps:merge(MD, rpc_id_to_md(RpcID))).
 
 rpc_id_to_md(undefined) ->
-    [];
+    #{};
 rpc_id_to_md(RpcID = #{}) ->
-    maps:to_list(RpcID).
+    RpcID.
 
 %%
 
 enter(Name, Meta) ->
-    lager:md(collect(Name, Meta)).
+    logger:update_process_metadata(collect(Name, Meta)).
 
 leave(Name) ->
-    lager:md(orddict:erase(Name, lager:md())).
+    logger:set_process_metadata(maps:remove(Name, capi_utils:get_process_metadata())).
 
 collect(Name, Meta) ->
-    orddict:store(Name, maps:merge(find_scope(Name), Meta), lager:md()).
+    % basically an update?
+    PreparedMeta = maps:merge(find_scope(Name), Meta),
+    maps:put(Name, PreparedMeta, capi_utils:get_process_metadata()).
 
 find_scope(Name) ->
-    case orddict:find(Name, lager:md()) of
+    case maps:find(Name, capi_utils:get_process_metadata()) of
         {ok, V = #{}} -> V;
         error         -> #{}
     end.
