@@ -37,13 +37,13 @@
 -type protocol() :: ipv4 | ipv6.
 -export_type([protocol/0]).
 
--type protocol_opts() :: [{connect_options, [inet4 | inet6]}].
+-type protocol_opts() :: [{connect_options, [inet | inet6]}].
 -export_type([protocol_opts/0]).
 
 -spec protocol_to_opt(protocol()) ->
     protocol_opts().
 protocol_to_opt(ipv4) ->
-    [{connect_options, [inet4]}];
+    [{connect_options, [inet]}];
 protocol_to_opt(ipv6) ->
     [{connect_options, [inet6]}].
 

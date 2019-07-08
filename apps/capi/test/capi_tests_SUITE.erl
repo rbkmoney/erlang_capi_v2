@@ -322,7 +322,6 @@ groups() ->
 init_per_suite(Config) ->
     SupPid = start_mocked_service_sup(),
     Apps1 =
-        capi_ct_helper:start_app(lager) ++
         capi_ct_helper:start_app(woody),
     ServiceURLs = mock_services_([
         {
