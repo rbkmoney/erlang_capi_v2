@@ -217,7 +217,7 @@ decode_stat_tx_info(TransactionInfo) ->
     RRN = TransactionInfo#domain_AdditionalTransactionInfo.rrn,
     AAC = TransactionInfo#domain_AdditionalTransactionInfo.approval_code,
     ParsedTransactionInfo = #{
-        <<"rrn"          >> => RRN,
+        <<"rrn"         >> => RRN,
         <<"approvalCode">> => AAC
     },
     genlib_map:compact(ParsedTransactionInfo).
