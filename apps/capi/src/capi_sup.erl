@@ -4,6 +4,8 @@
 -module(capi_sup).
 -behaviour(supervisor).
 
+-define(APP, capi).
+
 %% API
 -export([start_link/0]).
 
@@ -24,8 +26,9 @@ start_link() ->
 init([]) ->
     AuthorizerSpecs = get_authorizer_child_specs(),
     {LogicHandler, LogicHandlerSpecs} = get_logic_handler_info(),
-    HealthRoutes = [{'_', [erl_health_handle:get_route(genlib_app:env(capi, health_checkers, []))]}],
-    SwaggerSpec = capi_swagger_server:child_spec({HealthRoutes, LogicHandler}),
+    HealthRoutes = [{'_', [erl_health_handle:get_route(genlib_app:env(?APP, health_checkers, []))]}],
+    SwaggerHandlerOpts = genlib_app:env(?APP, swagger_handler_opts, #{}),
+    SwaggerSpec = capi_swagger_server:child_spec({HealthRoutes, LogicHandler, SwaggerHandlerOpts}),
     {ok, {
         {one_for_all, 0, 1},
             AuthorizerSpecs ++ LogicHandlerSpecs ++ [SwaggerSpec]
@@ -34,7 +37,7 @@ init([]) ->
 -spec get_authorizer_child_specs() -> [supervisor:child_spec()].
 
 get_authorizer_child_specs() ->
-    Authorizers = genlib_app:env(capi, authorizers, #{}),
+    Authorizers = genlib_app:env(?APP, authorizers, #{}),
     [
         get_authorizer_child_spec(jwt, maps:get(jwt, Authorizers))
     ].
@@ -47,7 +50,7 @@ get_authorizer_child_spec(jwt, Options) ->
 -spec get_logic_handler_info() -> {Handler :: atom(), [Spec :: supervisor:child_spec()] | []} .
 
 get_logic_handler_info() ->
-    case genlib_app:env(capi, service_type) of
+    case genlib_app:env(?APP, service_type) of
         real ->
             {capi_handler, []};
         undefined ->
