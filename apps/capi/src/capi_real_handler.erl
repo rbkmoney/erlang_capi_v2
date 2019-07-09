@@ -15,8 +15,8 @@
 -behaviour(swag_server_logic_handler).
 
 %% API callbacks
--export([authorize_api_key/2]).
--export([handle_request/3]).
+-export([authorize_api_key/3]).
+-export([handle_request/4]).
 
 %% @WARNING Must be refactored in case of different classes of users using this API
 -define(REALM, <<"external">>).
@@ -30,32 +30,34 @@
 
 -define(CAPI_NS, <<"com.rbkmoney.capi">>).
 
--spec authorize_api_key(swag_server:operation_id(), swag_server:api_key()) ->
+-spec authorize_api_key(swag_server:operation_id(), swag_server:api_key(), handler_opts()) ->
     Result :: false | {true, capi_auth:context()}.
 
-authorize_api_key(OperationID, ApiKey) ->
+authorize_api_key(OperationID, ApiKey, _HandlerOpts) ->
     _ = capi_utils:logtag_process(operation_id, OperationID),
     capi_auth:authorize_api_key(OperationID, ApiKey).
 
 -type request_data() :: #{atom() | binary() => term()}.
+-type handler_opts()        :: swag_server:handler_opts(_).
 
 -spec handle_request(
     OperationID :: swag_server:operation_id(),
     Req :: request_data(),
-    Context :: swag_server:request_context()
+    Context :: swag_server:request_context(),
+    handler_opts()
 ) ->
-    {ok | error, swag_server_logic_handler:response()}.
+    {ok | error, swag_server:response()}.
 
-handle_request(OperationID, Req, Context) ->
-    _ = lager:info("Processing request ~p", [OperationID]),
+handle_request(OperationID, Req, Context, _HandlerOpts) ->
+    _ = logger:info("Processing request ~p", [OperationID]),
     try
         case capi_auth:authorize_operation(OperationID, Req, get_auth_context(Context)) of
             ok ->
                 ReqContext = create_context(Req, get_auth_context(Context)),
                 process_request(OperationID, Req, Context, ReqContext);
             {error, _} = Error ->
-                _ = lager:info("Operation ~p authorization failed due to ~p", [OperationID, Error]),
-                {error, {401, [], general_error(<<"Unauthorized operation">>)}}
+                _ = logger:info("Operation ~p authorization failed due to ~p", [OperationID, Error]),
+                {error, {401, #{}, general_error(<<"Unauthorized operation">>)}}
         end
     catch
         error:{woody_error, {Source, Class, Details}} ->
@@ -68,7 +70,7 @@ handle_request(OperationID, Req, Context) ->
     Context :: swag_server:request_context(),
     ReqCtx :: woody_context:ctx()
 ) ->
-    {Code :: non_neg_integer(), Headers :: [], Response :: #{}}.
+    {Code :: non_neg_integer(), Headers :: #{}, Response :: #{}}.
 
 process_request('CreateInvoice' = OperationID, Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
@@ -76,23 +78,23 @@ process_request('CreateInvoice' = OperationID, Req, Context, ReqCtx) ->
         create_invoice(PartyID, maps:get('InvoiceParams', Req), Context, ReqCtx, OperationID)
     of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {201, [], make_invoice_and_token(Invoice, PartyID, Context)}};
+            {ok, {201, #{}, make_invoice_and_token(Invoice, PartyID, Context)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                    {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}};
                 #payproc_ShopNotFound{} ->
-                    {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}};
+                    {ok, {400, #{}, logic_error(invalidShopID, <<"Shop not found">>)}};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
+                    {ok, {400, #{}, logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
             end
     catch
         invoice_cart_empty ->
-            {ok, {400, [], logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)}};
+            {ok, {400, #{}, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)}};
         invalid_invoice_cost ->
-            {ok, {400, [], logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)}}
+            {ok, {400, #{}, logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)}}
     end;
 
 process_request('CreatePayment' = OperationID, Req, Context, ReqCtx) ->
@@ -108,31 +110,31 @@ process_request('CreatePayment' = OperationID, Req, Context, ReqCtx) ->
 
     case Result of
         {ok, Payment} ->
-            {ok, {201, [], decode_invoice_payment(InvoiceID, Payment)}};
+            {ok, {201, #{}, decode_invoice_payment(InvoiceID, Payment)}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidInvoiceStatus{} ->
-                    {ok, {400, [], logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)}};
+                    {ok, {400, #{}, logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)}};
                 #payproc_InvoicePaymentPending{} ->
-                    {ok, {400, [], logic_error(invoicePaymentPending, <<"Invoice payment pending">>)}};
+                    {ok, {400, #{}, logic_error(invoicePaymentPending, <<"Invoice payment pending">>)}};
                 #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                    {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                    {ok, {400, #{}, logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}}
             end;
         {error, invalid_token} ->
-            {ok, {400, [], logic_error(
+            {ok, {400, #{}, logic_error(
                 invalidPaymentToolToken,
                 <<"Specified payment tool token is invalid">>
             )}};
         {error, invalid_payment_session} ->
-            {ok, {400, [], logic_error(
+            {ok, {400, #{}, logic_error(
                 invalidPaymentSession,
                 <<"Specified payment session is invalid">>
             )}}
@@ -157,7 +159,7 @@ process_request('CreatePaymentResource' = OperationID, Req, Context, ReqCtx) ->
             #{<<"paymentToolType">> := <<"CryptoWalletData">>} ->
                 process_crypto_wallet_data(V, ReqCtx)
         end,
-        {ok, {201, [], decode_disposable_payment_resource(#domain_DisposablePaymentResource{
+        {ok, {201, #{}, decode_disposable_payment_resource(#domain_DisposablePaymentResource{
             payment_tool = PaymentTool,
             payment_session_id = PaymentSessionID,
             client_info = encode_client_info(ClientInfo)
@@ -175,13 +177,13 @@ process_request('CreateInvoiceAccessToken', Req, Context, ReqCtx) ->
     case Result of
         {ok, #'payproc_Invoice'{}} ->
             Token = make_invoice_access_token(InvoiceID, PartyID, Context),
-            {ok, {201, [], Token}};
+            {ok, {201, #{}, Token}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}}
             end
     end;
 
@@ -192,13 +194,13 @@ process_request('GetInvoiceByID', Req, Context, ReqCtx) ->
     case Result of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             Resp = decode_invoice(Invoice),
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}}
             end
     end;
 
@@ -218,19 +220,19 @@ process_request('FulfillInvoice', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidInvoiceStatus{} ->
-                    {ok, {400, [], logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)}};
+                    {ok, {400, #{}, logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)}};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                    {ok, {400, #{}, logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}}
             end
     end;
 
@@ -249,21 +251,21 @@ process_request('RescindInvoice', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidInvoiceStatus{} ->
-                    {ok, {400, [], logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)}};
+                    {ok, {400, #{}, logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)}};
                 #payproc_InvoicePaymentPending{} ->
-                    {ok, {400, [], logic_error(invoicePaymentPending, <<"Invoice payment pending">>)}};
+                    {ok, {400, #{}, logic_error(invoicePaymentPending, <<"Invoice payment pending">>)}};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                    {ok, {400, #{}, logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}}
             end
     end;
 
@@ -291,17 +293,17 @@ process_request('GetInvoiceEvents', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, Events} when is_list(Events) ->
-            {ok, {200, [], Events}};
+            {ok, {200, #{}, Events}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [],  general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{},  general_error(<<"Invoice not found">>)}};
                 #payproc_EventNotFound{} ->
-                    {ok, {404, [], general_error(<<"Event not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Event not found">>)}};
                 #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
+                    {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}}
             end
     end;
 
@@ -316,13 +318,13 @@ process_request('GetInvoicePaymentMethods', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, PaymentMethods} when is_list(PaymentMethods) ->
-            {ok, {200, [], PaymentMethods}};
+            {ok, {200, #{}, PaymentMethods}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}}
             end
     end;
 
@@ -333,13 +335,13 @@ process_request('GetPayments', Req, Context, ReqCtx) ->
     case Result of
         {ok, #'payproc_Invoice'{payments = Payments}} ->
             Resp = [decode_invoice_payment(InvoiceID, P) || P <- Payments],
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}}
             end
     end;
 
@@ -351,15 +353,15 @@ process_request('GetPaymentByID', Req, Context, ReqCtx) ->
     case Result of
         {ok, Payment} ->
             Resp = decode_invoice_payment(InvoiceID, Payment),
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvoicePaymentNotFound{} ->
-                    {ok, {404, [], general_error(<<"Payment not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Payment not found">>)}};
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}}
             end
     end;
 
@@ -378,25 +380,25 @@ process_request('CancelPayment', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _} ->
-            {ok, {202, [], undefined}};
+            {ok, {202, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvoicePaymentNotFound{} ->
-                    {ok, {404, [], general_error(<<"Payment not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Payment not found">>)}};
                 #payproc_InvalidPaymentStatus{} ->
-                    {ok, {400, [], logic_error(invalidPaymentStatus, <<"Invalid payment status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPaymentStatus, <<"Invalid payment status">>)}};
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}};
                 #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                    {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}};
                 #payproc_OperationNotPermitted{} ->
-                    {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
+                    {ok, {400, #{}, logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
+                    {ok, {400, #{}, logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
             end
     end;
 
@@ -418,25 +420,25 @@ process_request('CapturePayment', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _} ->
-            {ok, {202, [], undefined}};
+            {ok, {202, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvoicePaymentNotFound{} ->
-                    {ok, {404, [], general_error(<<"Payment not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Payment not found">>)}};
                 #payproc_InvalidPaymentStatus{} ->
-                    {ok, {400, [], logic_error(invalidPaymentStatus, <<"Invalid payment status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPaymentStatus, <<"Invalid payment status">>)}};
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}};
                 #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                    {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}};
                 #payproc_OperationNotPermitted{} ->
-                    {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
+                    {ok, {400, #{}, logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
+                    {ok, {400, #{}, logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
             end
     end;
 
@@ -549,9 +551,9 @@ process_request('GetLocationsNames', Req, _Context, ReqCtx) ->
                 [],
                 LocationNames
             ),
-            {ok, {200, [], PreparedLocationNames}};
+            {ok, {200, #{}, PreparedLocationNames}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
-            {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
+            {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}}
     end;
 
 process_request('CreateRefund', Req, Context, ReqCtx) ->
@@ -578,36 +580,36 @@ process_request('CreateRefund', Req, Context, ReqCtx) ->
     case Result of
         {ok, Refund} ->
             Resp = decode_refund(Refund),
-            {ok, {201, [], Resp}};
+            {ok, {201, #{}, Resp}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}};
                 #payproc_InvoicePaymentNotFound{} ->
-                    {ok, {404, [], general_error(<<"Payment not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Payment not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}};
                 #payproc_OperationNotPermitted{} ->
-                    {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
+                    {ok, {400, #{}, logic_error(operationNotPermitted, <<"Operation not permitted">>)}};
                 #payproc_InvalidPaymentStatus{} ->
-                    {ok, {400, [], logic_error(invalidPaymentStatus, <<"Invalid invoice payment status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPaymentStatus, <<"Invalid invoice payment status">>)}};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                    {ok, {400, #{}, logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
                 #payproc_InvalidContractStatus{} ->
-                    {ok, {400, [], logic_error(invalidContractStatus, <<"Invalid contract status">>)}};
+                    {ok, {400, #{}, logic_error(invalidContractStatus, <<"Invalid contract status">>)}};
                 #payproc_InsufficientAccountBalance{} ->
-                    {ok, {400, [], logic_error(
+                    {ok, {400, #{}, logic_error(
                         insufficentAccountBalance,
                         <<"Operation can not be conducted because of insufficient funds on the merchant account">>
                     )}};
                 #payproc_InvoicePaymentAmountExceeded{} ->
-                    {ok, {400, [], logic_error(invoicePaymentAmountExceeded, <<"Payment amount exceeded">>)}};
+                    {ok, {400, #{}, logic_error(invoicePaymentAmountExceeded, <<"Payment amount exceeded">>)}};
                 #payproc_InconsistentRefundCurrency{} ->
-                    {ok, {400, [], logic_error(inconsistentRefundCurrency, <<"Inconsistent refund currency">>)}};
+                    {ok, {400, #{}, logic_error(inconsistentRefundCurrency, <<"Inconsistent refund currency">>)}};
                 #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
+                    {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}}
             end
     end;
 
@@ -619,15 +621,15 @@ process_request('GetRefunds', Req, Context, ReqCtx) ->
     case Result of
         {ok, #payproc_InvoicePayment{refunds = Refunds}} ->
             Resp = [decode_refund(R) || R <- Refunds],
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}};
                 #payproc_InvoicePaymentNotFound{} ->
-                    {ok, {404, [], general_error(<<"Payment not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Payment not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}}
             end
     end;
 
@@ -645,17 +647,17 @@ process_request('GetRefundByID', Req, Context, ReqCtx) ->
     case Result of
         {ok, Refund} ->
             Resp = decode_refund(Refund),
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvoicePaymentRefundNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice payment refund not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice payment refund not found">>)}};
                 #payproc_InvoicePaymentNotFound{} ->
-                    {ok, {404, [], general_error(<<"Payment not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Payment not found">>)}};
                 #payproc_InvoiceNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}};
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Invoice not found">>)}}
             end
     end;
 
@@ -678,21 +680,21 @@ process_request('CreateInvoiceTemplate', Req, Context, ReqCtx) ->
         )
     of
         {ok, InvoiceTpl} ->
-            {ok, {201, [], make_invoice_tpl_and_token(InvoiceTpl, PartyID, Context)}};
+            {ok, {201, #{}, make_invoice_tpl_and_token(InvoiceTpl, PartyID, Context)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                    {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}};
                 #payproc_ShopNotFound{} ->
-                    {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}};
+                    {ok, {400, #{}, logic_error(invalidShopID, <<"Shop not found">>)}};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
+                    {ok, {400, #{}, logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
             end
     catch
         throw:zero_invoice_lifetime ->
-            {ok, {400, [], logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}}
+            {ok, {400, #{}, logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}}
     end;
 
 process_request('GetInvoiceTemplateByID', Req, Context, ReqCtx) ->
@@ -707,13 +709,13 @@ process_request('GetInvoiceTemplateByID', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, InvoiceTpl} ->
-            {ok, {200, [], decode_invoice_tpl(InvoiceTpl)}};
+            {ok, {200, #{}, decode_invoice_tpl(InvoiceTpl)}};
         {exception, E} when
             E == #payproc_InvalidUser{};
             E == #payproc_InvoiceTemplateNotFound{};
             E == #payproc_InvoiceTemplateRemoved{}
         ->
-            {ok, {404, [], general_error(<<"Invoice template not found">>)}}
+            {ok, {404, #{}, general_error(<<"Invoice template not found">>)}}
     end;
 
 process_request('UpdateInvoiceTemplate', Req, Context, ReqCtx) ->
@@ -740,31 +742,31 @@ process_request('UpdateInvoiceTemplate', Req, Context, ReqCtx) ->
         )
     of
         {ok, InvoiceTpl} ->
-            {ok, {200, [], decode_invoice_tpl(InvoiceTpl)}};
+            {ok, {200, #{}, decode_invoice_tpl(InvoiceTpl)}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice Template not found">>)}};
                 #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                    {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                    {ok, {400, #{}, logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
                 #payproc_InvoiceTemplateNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice Template not found">>)}};
                 #payproc_InvoiceTemplateRemoved{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Invoice Template not found">>)}}
             end
     catch
         throw:#payproc_InvalidUser{} ->
-            {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
+            {ok, {404, #{}, general_error(<<"Invoice Template not found">>)}};
         throw:#payproc_InvoiceTemplateNotFound{} ->
-            {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
+            {ok, {404, #{}, general_error(<<"Invoice Template not found">>)}};
         throw:#payproc_InvoiceTemplateRemoved{} ->
-            {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
+            {ok, {404, #{}, general_error(<<"Invoice Template not found">>)}};
         throw:zero_invoice_lifetime ->
-            {ok, {400, [], logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}}
+            {ok, {400, #{}, logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}}
     end;
 
 process_request('DeleteInvoiceTemplate', Req, Context, ReqCtx) ->
@@ -784,19 +786,19 @@ process_request('DeleteInvoiceTemplate', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _R} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice Template not found">>)}};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                    {ok, {400, #{}, logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
                 #payproc_InvoiceTemplateNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice Template not found">>)}};
                 #payproc_InvoiceTemplateRemoved{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Invoice Template not found">>)}}
             end
     end;
 
@@ -808,27 +810,27 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context, ReqCtx)
         create_invoice_with_template(PartyID, InvoiceTplID, InvoiceParams, Context, ReqCtx, OperationID)
     of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {201, [], make_invoice_and_token(Invoice, PartyID, Context)}};
+            {ok, {201, #{}, make_invoice_and_token(Invoice, PartyID, Context)}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice Template not found">>)}};
                 #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                    {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                    {ok, {400, #{}, logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
                 #payproc_InvoiceTemplateNotFound{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Invoice Template not found">>)}};
                 #payproc_InvoiceTemplateRemoved{} ->
-                    {ok, {404, [], general_error(<<"Invoice Template not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Invoice Template not found">>)}}
             end
     catch
         throw:{bad_invoice_params, currency_no_amount} ->
-            {ok, {400, [], logic_error(invalidRequest, <<"Amount is required for the currency">>)}};
+            {ok, {400, #{}, logic_error(invalidRequest, <<"Amount is required for the currency">>)}};
         throw:{bad_invoice_params, amount_no_currency} ->
-            {ok, {400, [], logic_error(invalidRequest, <<"Currency is required for the amount">>)}}
+            {ok, {400, #{}, logic_error(invalidRequest, <<"Currency is required for the amount">>)}}
     end;
 
 process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context, ReqCtx) ->
@@ -844,13 +846,13 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, PaymentMethods} when is_list(PaymentMethods) ->
-            {ok, {200, [], PaymentMethods}};
+            {ok, {200, #{}, PaymentMethods}};
         {exception, E} when
             E == #payproc_InvalidUser{};
             E == #payproc_InvoiceTemplateNotFound{};
             E == #payproc_InvoiceTemplateRemoved{}
         ->
-            {ok, {404, [], general_error(<<"Invoice template not found">>)}}
+            {ok, {404, #{}, general_error(<<"Invoice template not found">>)}}
     end;
 
 process_request('ActivateShop', Req, Context, ReqCtx) ->
@@ -873,15 +875,15 @@ process_request('ActivateShop', Req, Context, ReqCtx) ->
 
     case Result of
         {ok, _R} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_ShopNotFound{} ->
-                    {ok, {404, [], general_error(<<"Shop not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Shop not found">>)}};
                 #payproc_InvalidShopStatus{
                     status = {suspension, {active, _}}
                 } ->
-                    {ok, {204, [], undefined}}
+                    {ok, {204, #{}, undefined}}
             end
     end;
 
@@ -905,15 +907,15 @@ process_request('SuspendShop', Req, Context, ReqCtx) ->
 
     case Result of
         {ok, _R} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_ShopNotFound{} ->
-                    {ok, {404, [], general_error(<<"Shop not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Shop not found">>)}};
                 #payproc_InvalidShopStatus{
                     status = {suspension, {suspended, _}}
                 } ->
-                    {ok, {204, [], undefined}}
+                    {ok, {204, #{}, undefined}}
             end
     end;
 
@@ -922,7 +924,7 @@ process_request('GetShops', _Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
     {ok, #domain_Party{shops = Shops}} = get_my_party(Context, ReqCtx, UserInfo, PartyID),
     Resp = decode_shops_map(Shops),
-    {ok, {200, [], Resp}};
+    {ok, {200, #{}, Resp}};
 
 process_request('GetShopByID', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
@@ -944,9 +946,9 @@ process_request('GetShopByID', Req, Context, ReqCtx) ->
     case Result of
         {ok, Shop} ->
             Resp = decode_shop(Shop),
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {exception, #payproc_ShopNotFound{}} ->
-            {ok, {404, [], general_error(<<"Shop not found">>)}}
+            {ok, {404, #{}, general_error(<<"Shop not found">>)}}
     end;
 
 process_request('GetReports', Req, Context, ReqCtx) ->
@@ -964,13 +966,13 @@ process_request('GetReports', Req, Context, ReqCtx) ->
     case Result of
         {ok, Reports} ->
             Resp = [decode_report(R) || #reports_Report{status = created} = R <- Reports],
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                    {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}};
                 #reports_DatasetTooBig{limit = Limit} ->
-                    {ok, {400, [], limit_exceeded_error(Limit)}}
+                    {ok, {400, #{}, limit_exceeded_error(Limit)}}
             end
     end;
 
@@ -986,17 +988,17 @@ process_request('DownloadFile', Req, Context, ReqCtx) ->
                 true ->
                     generate_report_presigned_url(FileID, ReqCtx);
                 false ->
-                    {ok, {404, [], general_error(<<"File not found">>)}}
+                    {ok, {404, #{}, general_error(<<"File not found">>)}}
             end;
         {exception, #reports_ReportNotFound{}} ->
-            {ok, {404, [], general_error(<<"Report not found">>)}}
+            {ok, {404, #{}, general_error(<<"Report not found">>)}}
     end;
 
 process_request('GetContracts', _Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     PartyID = get_party_id(Context),
     {ok, Party} = get_my_party(Context, ReqCtx, UserInfo, PartyID),
-    {ok, {200, [], decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
+    {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
 
 process_request('GetContractByID', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
@@ -1006,9 +1008,9 @@ process_request('GetContractByID', Req, Context, ReqCtx) ->
     {ok, Party} = get_my_party(Context, ReqCtx, UserInfo, PartyID),
     case genlib_map:get(ContractID, Party#domain_Party.contracts) of
         undefined ->
-            {ok, {404, [], general_error(<<"Contract not found">>)}};
+            {ok, {404, #{}, general_error(<<"Contract not found">>)}};
         Contract ->
-            {ok, {200, [], decode_contract(Contract, Party#domain_Party.contractors)}}
+            {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}}
     end;
 
 process_request('GetPayoutTools', Req, Context, ReqCtx) ->
@@ -1020,9 +1022,9 @@ process_request('GetPayoutTools', Req, Context, ReqCtx) ->
     case Result of
         {ok, #domain_Contract{payout_tools = PayoutTools}} ->
             Resp = [decode_payout_tool(P) || P <- PayoutTools],
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {exception, #payproc_ContractNotFound{}} ->
-            {ok, {404, [], general_error(<<"Contract not found">>)}}
+            {ok, {404, #{}, general_error(<<"Contract not found">>)}}
     end;
 
 process_request('GetPayoutToolByID', Req, Context, ReqCtx) ->
@@ -1036,12 +1038,12 @@ process_request('GetPayoutToolByID', Req, Context, ReqCtx) ->
         {ok, #domain_Contract{payout_tools = PayoutTools}} ->
             case lists:keyfind(PayoutToolID, #domain_PayoutTool.id, PayoutTools) of
                 #domain_PayoutTool{} = P ->
-                    {ok, {200, [], decode_payout_tool(P)}};
+                    {ok, {200, #{}, decode_payout_tool(P)}};
                 false ->
-                    {ok, {404, [], general_error(<<"PayoutTool not found">>)}}
+                    {ok, {404, #{}, general_error(<<"PayoutTool not found">>)}}
             end;
         {exception, #payproc_ContractNotFound{}} ->
-            {ok, {404, [], general_error(<<"Contract not found">>)}}
+            {ok, {404, #{}, general_error(<<"Contract not found">>)}}
     end;
 
 process_request('GetContractAdjustments', Req, Context, ReqCtx) ->
@@ -1053,9 +1055,9 @@ process_request('GetContractAdjustments', Req, Context, ReqCtx) ->
     case Result of
         {ok, #domain_Contract{adjustments = Adjustments}} ->
             Resp = [decode_contract_adjustment(A) || A <- Adjustments],
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {exception, #payproc_ContractNotFound{}} ->
-            {ok, {404, [], general_error(<<"Contract not found">>)}}
+            {ok, {404, #{}, general_error(<<"Contract not found">>)}}
     end;
 
 process_request('GetContractAdjustmentByID', Req, Context, ReqCtx) ->
@@ -1069,12 +1071,12 @@ process_request('GetContractAdjustmentByID', Req, Context, ReqCtx) ->
         {ok, #domain_Contract{adjustments = Adjustments}} ->
             case lists:keyfind(AdjustmentID, #domain_ContractAdjustment.id, Adjustments) of
                 #domain_ContractAdjustment{} = A ->
-                    {ok, {200, [], decode_contract_adjustment(A)}};
+                    {ok, {200, #{}, decode_contract_adjustment(A)}};
                 false ->
-                    {ok, {404, [], general_error(<<"Adjustment not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Adjustment not found">>)}}
             end;
         {exception, #payproc_ContractNotFound{}} ->
-            {ok, {404, [], general_error(<<"Contract not found">>)}}
+            {ok, {404, #{}, general_error(<<"Contract not found">>)}}
     end;
 
 process_request('GetMyParty', _Req, Context, ReqCtx) ->
@@ -1082,7 +1084,7 @@ process_request('GetMyParty', _Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
     {ok, Party} = get_my_party(Context, ReqCtx, UserInfo, PartyID),
     Resp = decode_party(Party),
-    {ok, {200, [], Resp}};
+    {ok, {200, #{}, Resp}};
 
 process_request('SuspendMyParty', _Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
@@ -1101,11 +1103,11 @@ process_request('SuspendMyParty', _Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _R} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidPartyStatus{status = {suspension, {suspended, _}}} ->
-                    {ok, {204, [], undefined}}
+                    {ok, {204, #{}, undefined}}
             end
     end;
 
@@ -1126,9 +1128,9 @@ process_request('ActivateMyParty', _Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _R} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, #payproc_InvalidPartyStatus{status = {suspension, {active, _}}}} ->
-            {ok, {204, [], undefined}}
+            {ok, {204, #{}, undefined}}
     end;
 
 process_request('GetCategories', _Req, Context, ReqCtx) ->
@@ -1136,7 +1138,7 @@ process_request('GetCategories', _Req, Context, ReqCtx) ->
     _ = get_party_id(Context),
     {ok, Categories} = capi_domain:get_categories(ReqCtx),
     Resp = [decode_category(C) || C <- Categories],
-    {ok, {200, [], Resp}};
+    {ok, {200, #{}, Resp}};
 
 process_request('GetCategoryByRef', Req, Context0, ReqCtx) ->
     _ = get_user_info(Context0),
@@ -1145,9 +1147,9 @@ process_request('GetCategoryByRef', Req, Context0, ReqCtx) ->
     case get_category_by_id(genlib:to_int(CategoryID), ReqCtx) of
         {ok, Category} ->
             Resp = decode_category(Category),
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {error, not_found} ->
-            {404, [], general_error(<<"Category not found">>)}
+            {404, #{}, general_error(<<"Category not found">>)}
     end;
 
 process_request('GetScheduleByRef', Req, Context, ReqCtx) ->
@@ -1156,9 +1158,9 @@ process_request('GetScheduleByRef', Req, Context, ReqCtx) ->
     ScheduleID = maps:get(scheduleID, Req),
     case get_schedule_by_id(genlib:to_int(ScheduleID), ReqCtx) of
         {ok, Schedule} ->
-            {ok, {200, [], decode_business_schedule(Schedule)}};
+            {ok, {200, #{}, decode_business_schedule(Schedule)}};
         {error, not_found} ->
-            {404, [], general_error(<<"Schedule not found">>)}
+            {404, #{}, general_error(<<"Schedule not found">>)}
     end;
 
 process_request('GetPaymentInstitutions', Req, _Context, ReqCtx) ->
@@ -1178,10 +1180,10 @@ process_request('GetPaymentInstitutions', Req, _Context, ReqCtx) ->
                 end,
                 PaymentInstObjects
             ),
-        {ok, {200, [], Resp}}
+        {ok, {200, #{}, Resp}}
     catch
         throw:{encode_residence, invalid_residence} ->
-            {ok, {400, [], logic_error(invalidRequest, <<"Invalid residence">>)}}
+            {ok, {400, #{}, logic_error(invalidRequest, <<"Invalid residence">>)}}
     end;
 
 process_request('GetPaymentInstitutionByRef', Req, _Context, ReqCtx) ->
@@ -1189,9 +1191,9 @@ process_request('GetPaymentInstitutionByRef', Req, _Context, ReqCtx) ->
     case capi_domain:get({payment_institution, ?payment_institution_ref(PaymentInstitutionID)}, ReqCtx) of
         {ok, PaymentInstitution} ->
             Resp = decode_payment_institution_obj(PaymentInstitution),
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {error, not_found} ->
-            {404, [], general_error(<<"Payment institution not found">>)}
+            {404, #{}, general_error(<<"Payment institution not found">>)}
     end;
 
 process_request('GetPaymentInstitutionPaymentTerms', Req, Context, ReqCtx) ->
@@ -1200,9 +1202,9 @@ process_request('GetPaymentInstitutionPaymentTerms', Req, Context, ReqCtx) ->
     case compute_payment_institution_terms(PaymentInstitutionID, VS, Context, ReqCtx) of
         {ok, #domain_TermSet{payments = PaymentTerms}} ->
             Resp = decode_payment_terms(PaymentTerms),
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
-            {404, [], general_error(<<"Payment institution not found">>)}
+            {404, #{}, general_error(<<"Payment institution not found">>)}
     end;
 
 process_request('GetPaymentInstitutionPayoutMethods', Req, Context, ReqCtx) ->
@@ -1213,11 +1215,11 @@ process_request('GetPaymentInstitutionPayoutMethods', Req, Context, ReqCtx) ->
             payout_methods = PayoutMethods
         }}} ->
             Resp = decode_payout_methods_selector(PayoutMethods),
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {ok, #domain_TermSet{payouts = undefined}} ->
-            {404, [], general_error(<<"Automatic payouts not allowed">>)};
+            {404, #{}, general_error(<<"Automatic payouts not allowed">>)};
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
-            {404, [], general_error(<<"Payment institution not found">>)}
+            {404, #{}, general_error(<<"Payment institution not found">>)}
     end;
 
 process_request('GetPaymentInstitutionPayoutSchedules', Req, Context, ReqCtx) ->
@@ -1225,11 +1227,11 @@ process_request('GetPaymentInstitutionPayoutSchedules', Req, Context, ReqCtx) ->
     VS = prepare_varset(Req),
     case compute_payment_institution_terms(PaymentInstitutionID, VS, Context, ReqCtx) of
         {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{payout_schedules = Schedules}}} ->
-            {ok, {200, [], decode_business_schedules_selector(Schedules)}};
+            {ok, {200, #{}, decode_business_schedules_selector(Schedules)}};
         {ok, #domain_TermSet{payouts = undefined}} ->
-            {404, [], general_error(<<"Automatic payouts not allowed">>)};
+            {404, #{}, general_error(<<"Automatic payouts not allowed">>)};
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
-            {404, [], general_error(<<"Payment institution not found">>)}
+            {404, #{}, general_error(<<"Payment institution not found">>)}
     end;
 
 process_request('GetAccountByID', Req, Context, ReqCtx) ->
@@ -1251,9 +1253,9 @@ process_request('GetAccountByID', Req, Context, ReqCtx) ->
     case Result of
         {ok, S} ->
             Resp = decode_account_state(S),
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {exception, #payproc_AccountNotFound{}} ->
-            {ok, {404, [], general_error(<<"Account not found">>)}}
+            {ok, {404, #{}, general_error(<<"Account not found">>)}}
     end;
 
 process_request('GetClaims', Req, Context, ReqCtx) ->
@@ -1273,7 +1275,7 @@ process_request('GetClaims', Req, Context, ReqCtx) ->
         end
     ),
     Resp = decode_claims(filter_claims(ClaimStatus, Claims)),
-    {ok, {200, [], Resp}};
+    {ok, {200, #{}, Resp}};
 
 process_request('GetClaimByID', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
@@ -1296,12 +1298,12 @@ process_request('GetClaimByID', Req, Context, ReqCtx) ->
             case is_wallet_claim(Claim) of
                 true ->
                     %% filter this out
-                    {ok, {404, [], general_error(<<"Claim not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Claim not found">>)}};
                 false ->
-                    {ok, {200, [], decode_claim(Claim)}}
+                    {ok, {200, #{}, decode_claim(Claim)}}
             end;
         {exception, #payproc_ClaimNotFound{}} ->
-            {ok, {404, [], general_error(<<"Claim not found">>)}}
+            {ok, {404, #{}, general_error(<<"Claim not found">>)}}
     end;
 
 process_request('CreateClaim', Req, Context, ReqCtx) ->
@@ -1324,24 +1326,24 @@ process_request('CreateClaim', Req, Context, ReqCtx) ->
         case Result of
             {ok, Claim} ->
                 Resp = decode_claim(Claim),
-                {ok, {201, [], Resp}};
+                {ok, {201, #{}, Resp}};
             {exception, Exception} ->
                 case Exception of
                     #payproc_InvalidPartyStatus{} ->
-                        {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                        {ok, {400, #{}, logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                     #payproc_ChangesetConflict{} ->
-                        {ok, {400, [], logic_error(changesetConflict, <<"Changeset conflict">>)}};
+                        {ok, {400, #{}, logic_error(changesetConflict, <<"Changeset conflict">>)}};
                     #payproc_InvalidChangeset{} ->
-                        {ok, {400, [], logic_error(invalidChangeset, <<"Invalid changeset">>)}};
+                        {ok, {400, #{}, logic_error(invalidChangeset, <<"Invalid changeset">>)}};
                     #'InvalidRequest'{errors = Errors} ->
-                        {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
+                        {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}}
                 end
         end
     catch
         throw:{encode_contract_modification, adjustment_creation_not_supported} ->
-            {ok, {400, [], logic_error(invalidChangeset, <<"Contract adjustment creation not supported">>)}};
+            {ok, {400, #{}, logic_error(invalidChangeset, <<"Contract adjustment creation not supported">>)}};
         throw:{encode_residence, invalid_residence} ->
-            {ok, {400, [], logic_error(invalidRequest, <<"Invalid residence">>)}}
+            {ok, {400, #{}, logic_error(invalidRequest, <<"Invalid residence">>)}}
     end;
 
 % TODO disabled temporary, exception handling must be fixed befor enabling
@@ -1364,7 +1366,7 @@ process_request('CreateClaim', Req, Context, ReqCtx) ->
 %         end
 %     ),
 %     Resp = decode_party(Party),
-%     {ok, {200, [], Resp}};
+%     {ok, {200, #{}, Resp}};
 
 process_request('RevokeClaimByID', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
@@ -1386,17 +1388,17 @@ process_request('RevokeClaimByID', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, _} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_ClaimNotFound{} ->
-                    {ok, {404, [], general_error(<<"Claim not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Claim not found">>)}};
                 #payproc_InvalidClaimStatus{} ->
-                    {ok, {400, [], logic_error(invalidClaimStatus, <<"Invalid claim status">>)}};
+                    {ok, {400, #{}, logic_error(invalidClaimStatus, <<"Invalid claim status">>)}};
                 #payproc_InvalidClaimRevision{} ->
-                    {ok, {400, [], logic_error(invalidClaimRevision, <<"Invalid claim revision">>)}}
+                    {ok, {400, #{}, logic_error(invalidClaimRevision, <<"Invalid claim revision">>)}}
             end
     end;
 
@@ -1407,15 +1409,15 @@ process_request('CreateWebhook', Req, Context, ReqCtx) ->
         {ok, _} ->
             {ok, Webhook} = service_call(webhook_manager, 'Create', [WebhookParams], ReqCtx),
             Resp = decode_webhook(Webhook),
-            {ok, {201, [], Resp}};
+            {ok, {201, #{}, Resp}};
         {exception, #payproc_ShopNotFound{}} ->
-            {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}}
+            {ok, {400, #{}, logic_error(invalidShopID, <<"Shop not found">>)}}
     end;
 
 process_request('GetWebhooks', _Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
     {ok, Webhooks} = service_call(webhook_manager, 'GetList', [PartyID], ReqCtx),
-    {ok, {200, [], [decode_webhook(V) || V <- Webhooks]}};
+    {ok, {200, #{}, [decode_webhook(V) || V <- Webhooks]}};
 
 process_request('GetWebhookByID', Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
@@ -1423,12 +1425,12 @@ process_request('GetWebhookByID', Req, Context, ReqCtx) ->
         {ok, WebhookID} ->
             case get_webhook(PartyID, WebhookID, ReqCtx) of
                 {ok, Webhook} ->
-                    {ok, {200, [], decode_webhook(Webhook)}};
+                    {ok, {200, #{}, decode_webhook(Webhook)}};
                 {exception, #webhooker_WebhookNotFound{}} ->
-                    {ok, {404, [], general_error(<<"Webhook not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Webhook not found">>)}}
             end;
         error ->
-            {ok, {404, [], general_error(<<"Webhook not found">>)}}
+            {ok, {404, #{}, general_error(<<"Webhook not found">>)}}
     end;
 
 process_request('DeleteWebhookByID', Req, Context, ReqCtx) ->
@@ -1437,12 +1439,12 @@ process_request('DeleteWebhookByID', Req, Context, ReqCtx) ->
         {ok, WebhookID} ->
             case delete_webhook(PartyID, WebhookID, ReqCtx) of
                 {ok, _} ->
-                    {ok, {204, [], undefined}};
+                    {ok, {204, #{}, undefined}};
                 {exception, #webhooker_WebhookNotFound{}} ->
-                    {ok, {204, [], undefined}}
+                    {ok, {204, #{}, undefined}}
             end;
         error ->
-            {ok, {404, [], general_error(<<"Webhook not found">>)}}
+            {ok, {404, #{}, general_error(<<"Webhook not found">>)}}
     end;
 
 process_request('CreateCustomer', Req, Context, ReqCtx) ->
@@ -1462,19 +1464,19 @@ process_request('CreateCustomer', Req, Context, ReqCtx) ->
     ),
     case Result of
         {ok, Customer} ->
-            {ok, {201, [], make_customer_and_token(Customer, PartyID, Context)}};
+            {ok, {201, #{}, make_customer_and_token(Customer, PartyID, Context)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                    {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}};
                 #payproc_ShopNotFound{} ->
-                    {ok, {400, [], logic_error(invalidShopID, <<"Shop not found">>)}};
+                    {ok, {400, #{}, logic_error(invalidShopID, <<"Shop not found">>)}};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                    {ok, {400, #{}, logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
                 #payproc_OperationNotPermitted{} ->
-                    {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}}
+                    {ok, {400, #{}, logic_error(operationNotPermitted, <<"Operation not permitted">>)}}
             end
     end;
 
@@ -1483,13 +1485,13 @@ process_request('GetCustomerById', Req, _Context, ReqCtx) ->
     Result = get_customer_by_id(ReqCtx, CustomerID),
     case Result of
         {ok, Customer} ->
-            {ok, {200, [], decode_customer(Customer)}};
+            {ok, {200, #{}, decode_customer(Customer)}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Customer not found">>)}}
             end
     end;
 
@@ -1503,17 +1505,17 @@ process_request('DeleteCustomer', Req, _Context, ReqCtx) ->
     ),
     case Result of
         {ok, _} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Customer not found">>)}};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
+                    {ok, {400, #{}, logic_error(invalidShopStatus, <<"Invalid shop status">>)}}
             end
     end;
 
@@ -1524,13 +1526,13 @@ process_request('CreateCustomerAccessToken', Req, Context, ReqCtx) ->
     case Result of
         {ok, #payproc_Customer{}} ->
             Token = make_customer_access_token(CustomerID, PartyID, Context),
-            {ok, {201, [], Token}};
+            {ok, {201, #{}, Token}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Customer not found">>)}}
             end
     end;
 
@@ -1552,31 +1554,31 @@ process_request('CreateBinding', Req, _Context, ReqCtx) ->
 
     case Result of
         {ok, CustomerBinding} ->
-            {ok, {201, [], decode_customer_binding(CustomerBinding)}};
+            {ok, {201, #{}, decode_customer_binding(CustomerBinding)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                    {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}};
                 #payproc_InvalidPartyStatus{} ->
-                    {ok, {400, [], logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
+                    {ok, {400, #{}, logic_error(invalidPartyStatus, <<"Invalid party status">>)}};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, {400, [], logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
+                    {ok, {400, #{}, logic_error(invalidShopStatus, <<"Invalid shop status">>)}};
                 #payproc_InvalidPaymentTool{} ->
-                    {ok, {400, [], logic_error(invalidPaymentResource, <<"Invalid payment resource">>)}};
+                    {ok, {400, #{}, logic_error(invalidPaymentResource, <<"Invalid payment resource">>)}};
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Customer not found">>)}};
                 #payproc_OperationNotPermitted{} ->
-                    {ok, {400, [], logic_error(operationNotPermitted, <<"Operation not permitted">>)}}
+                    {ok, {400, #{}, logic_error(operationNotPermitted, <<"Operation not permitted">>)}}
             end;
         {error, invalid_token} ->
-            {ok, {400, [], logic_error(
+            {ok, {400, #{}, logic_error(
                 invalidPaymentToolToken,
                 <<"Specified payment tool token is invalid">>
             )}};
         {error, invalid_payment_session} ->
-            {ok, {400, [], logic_error(
+            {ok, {400, #{}, logic_error(
                 invalidPaymentSession,
                 <<"Specified payment session is invalid">>
             )}}
@@ -1587,13 +1589,13 @@ process_request('GetBindings', Req, _Context, ReqCtx) ->
     Result = get_customer_by_id(ReqCtx, CustomerID),
     case Result of
         {ok, #payproc_Customer{bindings = Bindings}} ->
-            {ok, {200, [], [decode_customer_binding(B) || B <- Bindings]}};
+            {ok, {200, #{}, [decode_customer_binding(B) || B <- Bindings]}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Customer not found">>)}}
             end
     end;
 
@@ -1605,16 +1607,16 @@ process_request('GetBinding', Req, _Context, ReqCtx) ->
         {ok, #payproc_Customer{bindings = Bindings}} ->
             case lists:keyfind(BindingID, #payproc_CustomerBinding.id, Bindings) of
                 #payproc_CustomerBinding{} = B ->
-                    {ok, {200, [], decode_customer_binding(B)}};
+                    {ok, {200, #{}, decode_customer_binding(B)}};
                 false ->
-                    {ok, {404, [], general_error(<<"Customer binding not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Customer binding not found">>)}}
             end;
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}}
+                    {ok, {404, #{}, general_error(<<"Customer not found">>)}}
             end
     end;
 
@@ -1637,17 +1639,17 @@ process_request('GetCustomerEvents', Req, _Context, ReqCtx) ->
     ),
     case Result of
         {ok, Events} when is_list(Events) ->
-            {ok, {200, [], Events}};
+            {ok, {200, #{}, Events}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Customer not found">>)}};
                 #payproc_CustomerNotFound{} ->
-                    {ok, {404, [], general_error(<<"Customer not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Customer not found">>)}};
                 #payproc_EventNotFound{} ->
-                    {ok, {404, [], general_error(<<"Event not found">>)}};
+                    {ok, {404, #{}, general_error(<<"Event not found">>)}};
                 #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}}
+                    {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}}
             end
     end.
 
@@ -1715,13 +1717,13 @@ generate_report_presigned_url(FileID, ReqCtx) ->
     Result = service_call(reporting, 'GeneratePresignedUrl', [FileID, ExpiresAt], ReqCtx),
     case Result of
         {ok, URL} ->
-            {ok, {303, [{<<"Location">>, URL}], undefined}};
+            {ok, {303, #{<<"Location">> => URL}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
-                    {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+                    {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}};
                 #reports_FileNotFound{}->
-                    {ok, {404, [], general_error(<<"File not found">>)}}
+                    {ok, {404, #{}, general_error(<<"File not found">>)}}
             end
     end.
 
@@ -1813,7 +1815,7 @@ service_call(ServiceName, Function, Args, Context) ->
 
 create_context(#{'X-Request-ID' := RequestID}, AuthContext) ->
     RpcID = #{trace_id := TraceID} = woody_context:new_rpc_id(genlib:to_binary(RequestID)),
-    _ = lager:debug("Created TraceID:~p for RequestID:~p", [TraceID , RequestID]),
+    _ = logger:debug("Created TraceID:~p for RequestID:~p", [TraceID , RequestID]),
     WoodyContext = woody_context:new(RpcID),
     woody_user_identity:put(collect_user_identity(AuthContext), WoodyContext).
 
@@ -4516,17 +4518,17 @@ process_merchant_stat_result(
         [StatResponse] ->
             decode_stat_info(StatType, StatResponse)
     end,
-    {ok, {200, [], Resp}};
+    {ok, {200, #{}, Resp}};
 
 process_merchant_stat_result(StatType, Result) ->
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
             Resp = [decode_stat_info(StatType, S) || S <- Stats],
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
-            {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+            {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}};
         {exception, #merchstat_BadToken{}} ->
-            {ok, {400, [], logic_error(invalidRequest, <<"Invalid token">>)}}
+            {ok, {400, #{}, logic_error(invalidRequest, <<"Invalid token">>)}}
     end.
 
 process_search_request(QueryType, Query, Req, ReqCtx, Opts = #{thrift_fun := ThriftFun}) ->
@@ -4553,11 +4555,11 @@ process_search_request_result(QueryType, Result, #{decode_fun := DecodeFun}) ->
                 <<"result">> => DecodedData,
                 <<"totalCount">> => TotalCount
             }),
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
-            {ok, {400, [], logic_error(invalidRequest, format_request_errors(Errors))}};
+            {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}};
         {exception, #merchstat_BadToken{}} ->
-            {ok, {400, [], logic_error(invalidRequest, <<"Invalid token">>)}}
+            {ok, {400, #{}, logic_error(invalidRequest, <<"Invalid token">>)}}
     end.
 
 get_time(Key, Req) ->
@@ -4614,7 +4616,7 @@ prepare_party(Context, ReqCtx, ServiceCall) ->
     Result0 = ServiceCall(),
     case Result0 of
         {exception, #payproc_PartyNotFound{}} ->
-            _ = lager:info("Attempting to create a missing party"),
+            _ = logger:info("Attempting to create a missing party"),
             Result1 = create_party(Context, ReqCtx),
             case Result1 of
                 ok ->
@@ -4857,7 +4859,7 @@ compute_terms(ServiceName, Args, Context) ->
     ).
 
 reply_5xx(Code) when Code >= 500 andalso Code < 600 ->
-    {Code, [], <<>>}.
+    {Code, #{}, <<>>}.
 
 process_card_data(Data, IdempotentKey, ReqCtx) ->
     SessionData = encode_session_data(Data),
@@ -4913,7 +4915,7 @@ process_tokenized_card_data(Data, IdempotentKey, ReqCtx) ->
         {ok, Tool} ->
             Tool;
         {exception, #'InvalidRequest'{}} ->
-            throw({ok, {400, [], logic_error(invalidRequest, <<"Tokenized card data is invalid">>)}})
+            throw({ok, {400, #{}, logic_error(invalidRequest, <<"Tokenized card data is invalid">>)}})
     end,
     process_put_card_data_result(
         put_card_data_to_cds(
@@ -5068,7 +5070,7 @@ put_card_to_cds(CardData, ReqCtx) ->
                 BinData
             )};
         {exception, #'InvalidCardData'{}} ->
-            throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}})
+            throw({ok, {400, #{}, logic_error(invalidRequest, <<"Card data is invalid">>)}})
     end.
 
 put_session_to_cds(SessionID, SessionData, ReqCtx) ->
@@ -5090,7 +5092,7 @@ lookup_bank_info(Pan, ReqCtx) ->
         {ok, #'binbase_ResponseData'{bin_data = BinData, version = Version}} ->
             {BinData, Version};
         {exception, #'binbase_BinNotFound'{}} ->
-            throw({ok, {400, [], logic_error(invalidRequest, <<"Card data is invalid">>)}})
+            throw({ok, {400, #{}, logic_error(invalidRequest, <<"Card data is invalid">>)}})
     end.
 
 expand_card_info(BankCard, {BinData, Version}) ->
@@ -5109,9 +5111,9 @@ expand_card_info(BankCard, {BinData, Version}) ->
         }
     catch
         throw:{encode_binbase_payment_system, invalid_payment_system} ->
-            throw({ok, {400, [], logic_error(invalidRequest, <<"Unsupported card">>)}});
+            throw({ok, {400, #{}, logic_error(invalidRequest, <<"Unsupported card">>)}});
         throw:{encode_residence, invalid_residence} ->
-            throw({ok, {400, [], logic_error(invalidRequest, <<"Unsupported card">>)}})
+            throw({ok, {400, #{}, logic_error(invalidRequest, <<"Unsupported card">>)}})
     end.
 
 encode_binbase_payment_system(<<"VISA">>)                      -> visa;
@@ -5171,12 +5173,8 @@ unwrap_payment_session(Encoded) ->
 get_default_url_lifetime() ->
     Now = erlang:system_time(second),
     Lifetime = application:get_env(capi, reporter_url_lifetime, ?DEFAULT_URL_LIFETIME),
-    case rfc3339:format(Now + Lifetime, second) of
-        {ok, Val} when is_binary(Val)->
-            Val;
-        Error ->
-            error(Error)
-    end.
+    {ok, Val} = rfc3339:format(Now + Lifetime, second),
+    Val.
 
 compute_payment_institution_terms(PaymentInstitutionID, VS, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
