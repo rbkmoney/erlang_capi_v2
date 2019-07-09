@@ -8,6 +8,7 @@
 -export([decode_currency/1]).
 -export([decode_business_schedule_ref/1]).
 -export([decode_last_digits/1]).
+-export([decode_first_digits/1]).
 -export([decode_masked_pan/2]).
 -export([decode_operation_failure/2]).
 -export([decode_category_ref/1]).
@@ -57,6 +58,16 @@ decode_masked_pan(Bin, LastDigits) ->
 decode_last_digits(MaskedPan) when byte_size(MaskedPan) > ?MASKED_PAN_MAX_LENGTH ->
     binary:part(MaskedPan, {byte_size(MaskedPan), -?MASKED_PAN_MAX_LENGTH});
 decode_last_digits(MaskedPan) ->
+    MaskedPan.
+
+-define(FIRST_DIGITS_MAX_LENGTH, 6).
+
+-spec decode_first_digits(binary()) ->
+    binary().
+
+decode_first_digits(MaskedPan) when byte_size(MaskedPan) > ?FIRST_DIGITS_MAX_LENGTH ->
+    binary:part(MaskedPan, {0, ?FIRST_DIGITS_MAX_LENGTH});
+decode_first_digits(MaskedPan) ->
     MaskedPan.
 
 -spec decode_operation_failure(_, _) ->
