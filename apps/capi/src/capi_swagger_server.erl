@@ -59,7 +59,7 @@ squash_routes(Routes) ->
 mk_operation_id_getter(#{env := Env}) ->
     fun (Req) ->
         case cowboy_router:execute(Req, Env) of
-            {ok, _, #{handler_opts := {Operations, _Handler}}} ->
+            {ok, _, #{handler_opts := {Operations, _Handler, _SwaggerHandlerOpts}}} ->
                 Method = cowboy_req:method(Req),
                 case maps:find(Method, Operations) of
                     error ->
