@@ -108,6 +108,12 @@ encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
         terminal_type = binary_to_existing_atom(Type, utf8)
     }}.
 
+encode_digital_wallet(#{<<"provider">> := Provider, <<"id">> := ID, <<"token">> := Token}) ->
+    {digital_wallet, #domain_DigitalWallet{
+        provider = binary_to_existing_atom(Provider, utf8),
+        id       = ID,
+        token    = Token
+    }};
 encode_digital_wallet(#{<<"provider">> := Provider, <<"id">> := ID}) ->
     {digital_wallet, #domain_DigitalWallet{
         provider = binary_to_existing_atom(Provider, utf8),
