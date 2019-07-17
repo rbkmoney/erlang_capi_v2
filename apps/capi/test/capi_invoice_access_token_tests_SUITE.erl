@@ -226,8 +226,8 @@ create_visa_payment_resource_ok_test(Config) ->
     {ok, #{<<"paymentToolDetails">> := #{
         <<"detailsType">> := <<"PaymentToolDetailsBankCard">>,
         <<"paymentSystem">> := <<"visa">>,
-        <<"lastDigits">> := <<"1111">>,
-        <<"bin">> := <<"411111">>,
+        <<"last4">> := <<"1111">>,
+        <<"first6">> := <<"411111">>,
         <<"cardNumberMask">> := <<"411111******1111">>
     }}} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
         <<"paymentTool">> => #{
@@ -277,8 +277,8 @@ create_visa_payment_resource_idemp_ok_test(Config) ->
     PaymentToolDetails = #{
         <<"detailsType">>    => <<"PaymentToolDetailsBankCard">>,
         <<"paymentSystem">>  => <<"visa">>,
-        <<"lastDigits">>     => <<"1111">>,
-        <<"bin">>            => <<"411111">>,
+        <<"last4">>          => <<"1111">>,
+        <<"first6">>         => <<"411111">>,
         <<"cardNumberMask">> => <<"411111******1111">>
     },
     {ok, #{
@@ -378,8 +378,8 @@ create_visa_with_empty_cvv_ok_test(Config) ->
     {ok, #{<<"paymentToolDetails">> := #{
         <<"detailsType">> := <<"PaymentToolDetailsBankCard">>,
         <<"paymentSystem">> := <<"visa">>,
-        <<"lastDigits">> := <<"1111">>,
-        <<"bin">> := <<"411111">>,
+        <<"last4">> := <<"1111">>,
+        <<"first6">> := <<"411111">>,
         <<"cardNumberMask">> := <<"411111******1111">>
     }}} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
         <<"paymentTool">> => #{
@@ -414,9 +414,9 @@ create_nspkmir_payment_resource_ok_test(Config) ->
     {ok, #{<<"paymentToolDetails">> := #{
         <<"detailsType">> := <<"PaymentToolDetailsBankCard">>,
         <<"paymentSystem">> := <<"nspkmir">>,
-        <<"cardNumberMask">> := <<"22001111******11">>,
-        <<"lastDigits">> := <<"11">>,
-        <<"bin">> := <<"22001111">>
+        <<"cardNumberMask">> := <<"220011******1111">>,
+        <<"last4">> := <<"1111">>,
+        <<"first6">> := <<"220011">>
     }}} = capi_client_tokens:create_payment_resource(?config(context, Config), #{
         <<"paymentTool">> => #{
             <<"paymentToolType">> => <<"CardData">>,
