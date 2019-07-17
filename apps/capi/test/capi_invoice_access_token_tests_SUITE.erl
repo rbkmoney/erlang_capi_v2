@@ -38,6 +38,7 @@
     get_invoice_events_ok_test/1,
     get_invoice_payment_methods_ok_test/1,
     create_payment_ok_test/1,
+    create_payment_qiwi_access_token_ok_test/1,
     create_payment_with_empty_cvv_ok_test/1,
     create_payment_with_googlepay_plain_ok_test/1,
     get_payments_ok_test/1,
@@ -84,6 +85,7 @@ invoice_access_token_tests() ->
         get_invoice_events_ok_test,
         get_invoice_payment_methods_ok_test,
         create_payment_ok_test,
+        create_payment_qiwi_access_token_ok_test,
         create_payment_with_empty_cvv_ok_test,
         create_payment_with_googlepay_plain_ok_test,
         get_payments_ok_test,
@@ -749,6 +751,39 @@ create_payment_with_empty_cvv_ok_test(Config) ->
         }
     },
     {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
+
+-spec create_payment_qiwi_access_token_ok_test(_) ->
+  _.
+create_payment_qiwi_access_token_ok_test(Config) ->
+    capi_ct_helper:mock_services([
+        {invoicing, fun
+                ('StartPayment', [_UserInfo, _InvoiceID,
+                    #payproc_InvoicePaymentParams{
+                        payer = {payment_resource, #payproc_PaymentResourcePayerParams{
+                            resource = #domain_DisposablePaymentResource{
+                                payment_tool = {
+                                    digital_wallet,
+                                    #domain_DigitalWallet{ token = <<"benderkey0">> }
+                                }
+                            }
+                        }}
+                    }
+                ]) -> {ok, ?PAYPROC_PAYMENT}
+            end},
+        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
+    ], Config),
+    Req = #{
+        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
+        <<"payer">> => #{
+            <<"payerType">> => <<"PaymentResourcePayer">>,
+            <<"paymentSession">> => <<"eyJjbGllbnRJbmZvIjp7ImZpbmdlcnByaW50IjoidGVzdCBmaW5nZXJwcmludCIsImlwIjoiOjpmZmZmOjEyNy4wLjAuMSJ9LCJwYXltZW50U2Vzc2lvbiI6IiJ9">>,
+            <<"paymentToolToken">> => <<"eyJpZCI6Iis3OTg3NjU0MzIxMCIsInByb3ZpZGVyIjoicWl3aSIsInRva2VuIjoiYmVuZGVya2V5MCIsInR5cGUiOiJkaWdpdGFsX3dhbGxldCJ9">>,
+            <<"contactInfo">> => #{
+                <<"email">> => <<"bla@bla.ru">>
+            }
+        }
+    },
+    {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req, ?STRING).
 
 -spec create_payment_with_googlepay_plain_ok_test(_) ->
     _.
