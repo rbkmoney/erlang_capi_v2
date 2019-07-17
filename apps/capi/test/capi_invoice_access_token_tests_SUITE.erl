@@ -772,21 +772,26 @@ create_payment_qiwi_access_token_ok_test(Config) ->
             end},
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
     ], Config),
-    PaymentSessionPart0 = <<"eyJjbGllbnRJbmZvIjp7ImZpbmdlcnByaW50IjoidGVzdCBmaW5nZXJwcmludC">>,
-    PaymentSessionPart1 = <<"IsImlwIjoiOjpmZmZmOjEyNy4wLjAuMSJ9LCJwYXltZW50U2Vzc2lvbiI6IiJ9">>,
-    PaymentSession      = <<PaymentSessionPart0/binary, PaymentSessionPart1/binary>>,
-    PaymentToolTokenPart0 = <<"eyJpZCI6Iis3OTg3NjU0MzIxMCIsInByb3ZpZGVyIjoicWl3aSIsInRv">>,
-    PaymentToolTokenPart1 = <<"a2VuIjoiYmVuZGVya2V5MCIsInR5cGUiOiJkaWdpdGFsX3dhbGxldCJ9">>,
-    PaymentToolToken      = <<PaymentToolTokenPart0/binary, PaymentToolTokenPart1/binary>>,
+    PaymentToolToken = capi_utils:map_to_base64url(#{
+        <<"type"    >> => <<"digital_wallet">>,
+        <<"provider">> => atom_to_binary(qiwi, utf8),
+        <<"id"      >> => <<"+79876543210">>,
+        <<"token"   >> => <<"benderkey0">>
+    }),
+    PaymentSession = capi_utils:map_to_base64url(#{
+        <<"clientInfo"    >> => #{
+            <<"fingerprint">> => <<"test fingerprint">>,
+            <<"ip"         >> => <<"::ffff:127.0.0.1">>
+        },
+        <<"paymentSession">> => <<"asdf">>
+    }),
     Req = #{
-        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
+        <<"flow" >> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"payer">> => #{
-            <<"payerType">> => <<"PaymentResourcePayer">>,
-            <<"paymentSession">> => PaymentSession,
+            <<"payerType"       >> => <<"PaymentResourcePayer">>,
+            <<"paymentSession"  >> => PaymentSession,
             <<"paymentToolToken">> => PaymentToolToken,
-            <<"contactInfo">> => #{
-                <<"email">> => <<"bla@bla.ru">>
-            }
+            <<"contactInfo"     >> => #{ <<"email">> => <<"bla@bla.ru">> }
         }
     },
     {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req, ?STRING).
