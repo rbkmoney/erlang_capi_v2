@@ -779,11 +779,11 @@ create_payment_qiwi_access_token_ok_test(Config) ->
         <<"token"   >> => <<"benderkey0">>
     }),
     PaymentSession = capi_utils:map_to_base64url(#{
+        <<"paymentSession">> => <<"asdf">>,
         <<"clientInfo"    >> => #{
             <<"fingerprint">> => <<"test fingerprint">>,
             <<"ip"         >> => <<"::ffff:127.0.0.1">>
-        },
-        <<"paymentSession">> => <<"asdf">>
+        }
     }),
     Req = #{
         <<"flow" >> => #{<<"type">> => <<"PaymentFlowInstant">>},
