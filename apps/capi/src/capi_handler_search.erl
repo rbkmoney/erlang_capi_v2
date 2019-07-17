@@ -222,19 +222,27 @@ decode_stat_tx_info(TransactionInfo) ->
     },
     genlib_map:compact(ParsedTransactionInfo).
 
-decode_stat_payer({customer, #merchstat_CustomerPayer{customer_id = ID}}) ->
+decode_stat_payer({customer, #merchstat_CustomerPayer{
+        customer_id = ID,
+        payment_tool = PaymentTool
+    }}) ->
     #{
         <<"payerType" >> => <<"CustomerPayer">>,
+        <<"paymentToolToken"  >> => decode_stat_payment_tool_token(PaymentTool),
+        <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool),
         <<"customerID">> => ID
     };
 decode_stat_payer({recurrent, RecurrentPayer}) ->
     #merchstat_RecurrentPayer{
+        payment_tool = PaymentTool,
         recurrent_parent = RecurrentParent,
         phone_number = PhoneNumber,
         email = Email
     } = RecurrentPayer,
     #{
         <<"payerType">> => <<"RecurrentPayer">>,
+        <<"paymentToolToken"  >> => decode_stat_payment_tool_token(PaymentTool),
+        <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool),
         <<"contactInfo">> => genlib_map:compact(#{
             <<"phoneNumber">> => PhoneNumber,
             <<"email"      >> => Email
