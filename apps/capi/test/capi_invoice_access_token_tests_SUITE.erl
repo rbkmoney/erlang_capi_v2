@@ -231,29 +231,20 @@ create_payment_ok_test(Config) ->
         ],
         Config
     ),
-    PaymentResource =  #domain_DisposablePaymentResource{
-        payment_tool = {bank_card, #domain_BankCard{
-            'token'          = ?STRING,
-            'payment_system' = visa,
-            'bin'            = <<"411111">>,
-            'masked_pan'     = <<"1111">>
-        }},
-        payment_session_id = ?STRING,
-        client_info = #domain_ClientInfo{
-            fingerprint = <<"test fingerprint">>
-        }
-    },
-    #{
-        <<"paymentToolToken">> := Token,
-        <<"paymentSession">> := Session
-    } = capi_handler_decoder_party:decode_disposable_payment_resource(PaymentResource),
+    PaymentToolToken = capi_utils:map_to_base64url(#{
+        <<"type"          >> => <<"bank_card">>,
+        <<"token"         >> => ?STRING,
+        <<"payment_system">> => atom_to_binary(visa, utf8),
+        <<"bin"           >> => <<"411111">>,
+        <<"masked_pan"    >> => <<"1111">>
+    }),
     Req2 = #{
         <<"externalID">> => ExternalID,
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"payer">> => #{
             <<"payerType">> => <<"PaymentResourcePayer">>,
-            <<"paymentSession">> => Session,
-            <<"paymentToolToken">> => Token,
+            <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
+            <<"paymentToolToken">> => PaymentToolToken,
             <<"contactInfo">> => #{
                 <<"email">> => <<"bla@bla.ru">>
             }
@@ -293,29 +284,20 @@ create_payment_with_empty_cvv_ok_test(Config) ->
         ],
         Config
     ),
-    PaymentResource =  #domain_DisposablePaymentResource{
-        payment_tool = {bank_card, #domain_BankCard{
-            'token'          = ?STRING,
-            'payment_system' = visa,
-            'bin'            = <<"411111">>,
-            'masked_pan'     = <<"1111">>,
-            'is_cvv_empty'   = true
-        }},
-        payment_session_id = ?STRING,
-        client_info = #domain_ClientInfo{
-            fingerprint = <<"test fingerprint">>
-        }
-    },
-    #{
-        <<"paymentToolToken">> := Token,
-        <<"paymentSession">> := Session
-    } = capi_handler_decoder_party:decode_disposable_payment_resource(PaymentResource),
+    PaymentToolToken = capi_utils:map_to_base64url(#{
+        <<"type"          >> => <<"bank_card">>,
+        <<"token"         >> => ?STRING,
+        <<"payment_system">> => atom_to_binary(visa, utf8),
+        <<"bin"           >> => <<"411111">>,
+        <<"masked_pan"    >> => <<"1111">>,
+        <<"is_cvv_empty"  >> => atom_to_binary(true, utf8)
+    }),
     Req2 = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"payer">> => #{
             <<"payerType">> => <<"PaymentResourcePayer">>,
-            <<"paymentSession">> => Session,
-            <<"paymentToolToken">> => Token,
+            <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
+            <<"paymentToolToken">> => PaymentToolToken,
             <<"contactInfo">> => #{
                 <<"email">> => <<"bla@bla.ru">>
             }
@@ -349,18 +331,11 @@ create_payment_qiwi_access_token_ok_test(Config) ->
         <<"id"      >> => <<"+79876543210">>,
         <<"token"   >> => <<"benderkey0">>
     }),
-    PaymentSession = capi_utils:map_to_base64url(#{
-        <<"paymentSession">> => <<"asdf">>,
-        <<"clientInfo"    >> => #{
-            <<"fingerprint">> => <<"test fingerprint">>,
-            <<"ip"         >> => <<"::ffff:127.0.0.1">>
-        }
-    }),
     Req = #{
         <<"flow" >> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"payer">> => #{
             <<"payerType"       >> => <<"PaymentResourcePayer">>,
-            <<"paymentSession"  >> => PaymentSession,
+            <<"paymentSession"  >> => ?TEST_PAYMENT_SESSION,
             <<"paymentToolToken">> => PaymentToolToken,
             <<"contactInfo"     >> => #{ <<"email">> => <<"bla@bla.ru">> }
         }
@@ -409,30 +384,19 @@ create_payment_with_googlepay_plain_ok_test(Config) ->
         },
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
     ], Config),
-    PaymentResource =  #domain_DisposablePaymentResource{
-        payment_tool = {bank_card, #domain_BankCard{
-            'token'          = ?STRING,
-            'payment_system' = mastercard,
-            'bin'            = <<"411111">>,
-            'masked_pan'     = <<"1111">>
-        }},
-        payment_session_id = ?STRING,
-        client_info = #domain_ClientInfo{
-            fingerprint = <<"test fingerprint">>
-        }
-    },
-    #{
-        <<"paymentToolToken">> := Token,
-        <<"paymentSession">> := Session,
-        <<"paymentToolDetails">> := Details = #{<<"paymentSystem">> := <<"mastercard">>}
-    } = capi_handler_decoder_party:decode_disposable_payment_resource(PaymentResource),
-    false = maps:is_key(<<"tokenProvider">>, Details),
+    PaymentToolToken = capi_utils:map_to_base64url(#{
+        <<"type"          >> => <<"bank_card">>,
+        <<"token"         >> => ?STRING,
+        <<"payment_system">> => atom_to_binary(mastercard, utf8),
+        <<"bin"           >> => <<"411111">>,
+        <<"masked_pan"    >> => <<"1111">>
+    }),
     Req2 = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"payer">> => #{
             <<"payerType">> => <<"PaymentResourcePayer">>,
-            <<"paymentSession">> => Session,
-            <<"paymentToolToken">> => Token,
+            <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
+            <<"paymentToolToken">> => PaymentToolToken,
             <<"contactInfo">> => #{
                 <<"email">> => <<"bla@bla.ru">>
             }
@@ -501,29 +465,20 @@ create_first_recurrent_payment_ok_test(Config) ->
         ],
         Config
     ),
-    PaymentResource =  #domain_DisposablePaymentResource{
-        payment_tool = {bank_card, #domain_BankCard{
-            'token'          = ?STRING,
-            'payment_system' = visa,
-            'bin'            = <<"411111">>,
-            'masked_pan'     = <<"1111">>
-        }},
-        payment_session_id = ?STRING,
-        client_info = #domain_ClientInfo{
-            fingerprint = <<"test fingerprint">>
-        }
-    },
-    #{
-        <<"paymentToolToken">> := Token,
-        <<"paymentSession">> := Session
-    } = capi_handler_decoder_party:decode_disposable_payment_resource(PaymentResource),
+    PaymentToolToken = capi_utils:map_to_base64url(#{
+        <<"type"          >> => <<"bank_card">>,
+        <<"token"         >> => ?STRING,
+        <<"payment_system">> => atom_to_binary(visa, utf8),
+        <<"bin"           >> => <<"411111">>,
+        <<"masked_pan"    >> => <<"1111">>
+    }),
     Req2 = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"makeRecurrent">> => true,
         <<"payer">> => #{
             <<"payerType">> => <<"PaymentResourcePayer">>,
-            <<"paymentSession">> => Session,
-            <<"paymentToolToken">> => Token,
+            <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
+            <<"paymentToolToken">> => PaymentToolToken,
             <<"contactInfo">> => #{
                 <<"email">> => <<"bla@bla.ru">>
             }

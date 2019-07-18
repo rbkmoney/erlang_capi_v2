@@ -159,26 +159,17 @@ create_binding_ok_test(Config) ->
         ],
         Config
     ),
-    PaymentResource =  #domain_DisposablePaymentResource{
-        payment_tool = {bank_card, #domain_BankCard{
-            'token'          = ?STRING,
-            'payment_system' = visa,
-            'bin'            = <<"411111">>,
-            'masked_pan'     = <<"1111">>
-        }},
-        payment_session_id = ?STRING,
-        client_info = #domain_ClientInfo{
-            fingerprint = <<"test fingerprint">>
-        }
-    },
-    #{
-        <<"paymentToolToken">> := Token,
-        <<"paymentSession">> := Session
-    } = capi_handler_decoder_party:decode_disposable_payment_resource(PaymentResource),
+    PaymentToolToken = capi_utils:map_to_base64url(#{
+        <<"type"          >> => <<"bank_card">>,
+        <<"token"         >> => ?STRING,
+        <<"payment_system">> => atom_to_binary(visa, utf8),
+        <<"bin"           >> => <<"411111">>,
+        <<"masked_pan"    >> => <<"1111">>
+    }),
     Req2 = #{
         <<"paymentResource">> => #{
-            <<"paymentSession">> => Session,
-            <<"paymentToolToken">> => Token
+            <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
+            <<"paymentToolToken">> => PaymentToolToken
         }
     },
     {ok, _} = capi_client_customers:create_binding(?config(context, Config), ?STRING, Req2).
