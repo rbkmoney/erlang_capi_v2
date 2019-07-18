@@ -159,26 +159,17 @@ create_binding_ok_test(Config) ->
         ],
         Config
     ),
-    Req1 = #{
-        <<"paymentTool">> => #{
-            <<"paymentToolType">> => <<"CardData">>,
-            <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
-            <<"cardNumber">> => <<"4111111111111111">>,
-            <<"expDate">> => <<"08/27">>,
-            <<"cvv">> => <<"232">>
-        },
-        <<"clientInfo">> => #{
-            <<"fingerprint">> => <<"test fingerprint">>
-        }
-    },
-    {ok, #{
-        <<"paymentToolToken">> := Token,
-        <<"paymentSession">> := Session
-    }} = capi_client_tokens:create_payment_resource(?config(context, Config), Req1),
+    PaymentToolToken = capi_utils:map_to_base64url(#{
+        <<"type"          >> => <<"bank_card">>,
+        <<"token"         >> => ?STRING,
+        <<"payment_system">> => atom_to_binary(visa, utf8),
+        <<"bin"           >> => <<"411111">>,
+        <<"masked_pan"    >> => <<"1111">>
+    }),
     Req2 = #{
         <<"paymentResource">> => #{
-            <<"paymentSession">> => Session,
-            <<"paymentToolToken">> => Token
+            <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
+            <<"paymentToolToken">> => PaymentToolToken
         }
     },
     {ok, _} = capi_client_customers:create_binding(?config(context, Config), ?STRING, Req2).
