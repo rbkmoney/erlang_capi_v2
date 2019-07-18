@@ -515,13 +515,21 @@ get_failed_payment_with_invalid_cvv(Config) ->
 -spec create_refund(config()) ->
     _.
 create_refund(Config) ->
-    capi_ct_helper:mock_services([{invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end}], Config),
+    BenderKey = <<"bender_key">>,
     Req = #{<<"reason">> => ?STRING},
+    Ctx = capi_msgp_marshalling:marshal(#{<<"params_hash">> => erlang:phash2(Req)}),
+    capi_ct_helper:mock_services([
+        {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end},
+        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
+    ], Config),
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec create_refund_error(config()) ->
     _.
 create_refund_error(Config) ->
+    BenderKey = <<"bender_key">>,
+    Req = #{<<"reason">> => ?STRING},
+    Ctx = capi_msgp_marshalling:marshal(#{<<"params_hash">> => erlang:phash2(Req)}),
     capi_ct_helper:mock_services([
         {invoicing, fun
             ('RefundPayment', [_, <<"42">> | _]) ->
@@ -532,26 +540,37 @@ create_refund_error(Config) ->
                 throw(#payproc_InvalidContractStatus{
                     status = {expired, #domain_ContractExpired{}}
                 })
-        end}
+        end},
+        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
     ], Config),
-    Req = #{<<"reason">> => ?STRING},
     {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"42">>, ?STRING),
     {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"43">>, ?STRING).
 
 -spec create_partial_refund(config()) ->
     _.
 create_partial_refund(Config) ->
-    capi_ct_helper:mock_services([{invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end}], Config),
+    BenderKey = <<"bender_key">>,
     Req = #{
         <<"reason">> => ?STRING,
         <<"currency">> => ?RUB,
         <<"amount">> => ?INTEGER
     },
+    Ctx = capi_msgp_marshalling:marshal(#{<<"params_hash">> => erlang:phash2(Req)}),
+    capi_ct_helper:mock_services([
+        {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end},
+        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
+    ], Config),
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec create_partial_refund_without_currency(config()) ->
     _.
 create_partial_refund_without_currency(Config) ->
+    BenderKey = <<"bender_key">>,
+    Req = #{
+        <<"reason">> => ?STRING,
+        <<"amount">> => ?INTEGER
+    },
+    Ctx = capi_msgp_marshalling:marshal(#{<<"params_hash">> => erlang:phash2(Req)}),
     capi_ct_helper:mock_services([
         {
             invoicing,
@@ -561,12 +580,9 @@ create_partial_refund_without_currency(Config) ->
                 ('RefundPayment', _) ->
                     {ok, ?REFUND}
             end
-        }
+        },
+        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
     ], Config),
-    Req = #{
-        <<"reason">> => ?STRING,
-        <<"amount">> => ?INTEGER
-    },
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec get_refund_by_id(config()) ->
