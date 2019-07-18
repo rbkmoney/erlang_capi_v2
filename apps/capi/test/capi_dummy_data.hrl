@@ -1007,3 +1007,11 @@
     operation_type = payment,
     count = ?INTEGER
 }).
+
+-define(TEST_PAYMENT_SESSION, capi_utils:map_to_base64url(#{
+    <<"paymentSession">> => ?STRING,
+    <<"clientInfo"    >> => #{
+        <<"fingerprint">> => <<"test fingerprint">>,
+        <<"ip"         >> => <<"::ffff:127.0.0.1">>
+    }
+})).

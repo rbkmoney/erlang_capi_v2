@@ -283,8 +283,8 @@ decode_bank_card_details(BankCard, V) ->
     LastDigits = capi_handler_decoder_utils:decode_last_digits(BankCard#domain_BankCard.masked_pan),
     Bin = BankCard#domain_BankCard.bin,
     capi_handler_utils:merge_and_compact(V, #{
-        <<"lastDigits">>     => LastDigits,
-        <<"bin">>            => Bin,
+        <<"last4">>     => LastDigits,
+        <<"first6">>    => Bin,
         <<"cardNumberMask">> => capi_handler_decoder_utils:decode_masked_pan(Bin, LastDigits),
         <<"paymentSystem" >> => genlib:to_binary(BankCard#domain_BankCard.payment_system),
         <<"tokenProvider" >> => decode_token_provider(BankCard#domain_BankCard.token_provider)

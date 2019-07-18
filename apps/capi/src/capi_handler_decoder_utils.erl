@@ -42,9 +42,11 @@ decode_business_schedule_ref(undefined) ->
 
 -define(PAN_LENGTH, 16).
 
--spec decode_masked_pan(binary(), binary()) ->
+-spec decode_masked_pan(binary() | undefined, binary()) ->
     binary().
 
+decode_masked_pan(undefined, LastDigits) ->
+    decode_masked_pan(<<>>, LastDigits);
 decode_masked_pan(Bin, LastDigits) ->
     Mask = binary:copy(<<"*">>, ?PAN_LENGTH - byte_size(Bin) - byte_size(LastDigits)),
     <<Bin/binary, Mask/binary, LastDigits/binary>>.
