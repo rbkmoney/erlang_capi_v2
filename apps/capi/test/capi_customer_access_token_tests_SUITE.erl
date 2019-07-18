@@ -159,22 +159,22 @@ create_binding_ok_test(Config) ->
         ],
         Config
     ),
-    Req1 = #{
-        <<"paymentTool">> => #{
-            <<"paymentToolType">> => <<"CardData">>,
-            <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
-            <<"cardNumber">> => <<"4111111111111111">>,
-            <<"expDate">> => <<"08/27">>,
-            <<"cvv">> => <<"232">>
-        },
-        <<"clientInfo">> => #{
-            <<"fingerprint">> => <<"test fingerprint">>
+    PaymentResource =  #domain_DisposablePaymentResource{
+        payment_tool = {bank_card, #domain_BankCard{
+            'token'          = ?STRING,
+            'payment_system' = visa,
+            'bin'            = <<"411111">>,
+            'masked_pan'     = <<"1111">>
+        }},
+        payment_session_id = ?STRING,
+        client_info = #domain_ClientInfo{
+            fingerprint = <<"test fingerprint">>
         }
     },
-    {ok, #{
+    #{
         <<"paymentToolToken">> := Token,
         <<"paymentSession">> := Session
-    }} = capi_client_tokens:create_payment_resource(?config(context, Config), Req1),
+    } = capi_handler_decoder_party:decode_disposable_payment_resource(PaymentResource),
     Req2 = #{
         <<"paymentResource">> => #{
             <<"paymentSession">> => Session,
