@@ -241,12 +241,24 @@ decode_payment_terminal(#domain_PaymentTerminal{
 
 decode_digital_wallet(#domain_DigitalWallet{
     provider = Provider,
-    id = ID
+    id = ID,
+    token = undefined
 }) ->
     capi_utils:map_to_base64url(#{
         <<"type"    >> => <<"digital_wallet">>,
         <<"provider">> => atom_to_binary(Provider, utf8),
         <<"id"      >> => ID
+    });
+decode_digital_wallet(#domain_DigitalWallet{
+    provider = Provider,
+    id = ID,
+    token = Token
+}) ->
+    capi_utils:map_to_base64url(#{
+        <<"type"    >> => <<"digital_wallet">>,
+        <<"provider">> => atom_to_binary(Provider, utf8),
+        <<"id"      >> => ID,
+        <<"token"   >> => Token
     }).
 
 decode_crypto_wallet(CryptoCurrency) ->
