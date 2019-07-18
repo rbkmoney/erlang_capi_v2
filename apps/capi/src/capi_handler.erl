@@ -65,7 +65,6 @@ get_handlers() ->
         capi_handler_reports,
         capi_handler_search,
         capi_handler_shops,
-        capi_handler_tokens,
         capi_handler_webhooks
     ].
 
