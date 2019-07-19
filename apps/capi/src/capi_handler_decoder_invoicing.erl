@@ -90,16 +90,20 @@ decode_payment(InvoiceID, Payment, Context) ->
         <<"metadata"     >> => capi_handler_decoder_utils:decode_context(Payment#domain_InvoicePayment.context)
     }, decode_payment_status(Payment#domain_InvoicePayment.status, Context)).
 
-decode_payer({customer, #domain_CustomerPayer{customer_id = ID}}) ->
+decode_payer({customer, #domain_CustomerPayer{payment_tool = PaymentTool, customer_id = ID}}) ->
     #{
         <<"payerType" >> => <<"CustomerPayer">>,
-        <<"customerID">> => ID
+        <<"customerID">> => ID,
+        <<"paymentToolToken"  >> => capi_handler_decoder_party:decode_payment_tool_token(PaymentTool),
+        <<"paymentToolDetails">> => capi_handler_decoder_party:decode_payment_tool_details(PaymentTool)
     };
-decode_payer({recurrent, #domain_RecurrentPayer{recurrent_parent = RecurrentParent, contact_info = ContactInfo}}) ->
+decode_payer({recurrent, #domain_RecurrentPayer{payment_tool = PaymentTool, recurrent_parent = RecurrentParent, contact_info = ContactInfo}}) ->
     #{
         <<"payerType">> => <<"RecurrentPayer">>,
         <<"contactInfo">> => capi_handler_decoder_party:decode_contact_info(ContactInfo),
-        <<"recurrentParentPayment">> => decode_recurrent_parent(RecurrentParent)
+        <<"recurrentParentPayment">> => decode_recurrent_parent(RecurrentParent),
+        <<"paymentToolToken"  >> => capi_handler_decoder_party:decode_payment_tool_token(PaymentTool),
+        <<"paymentToolDetails">> => capi_handler_decoder_party:decode_payment_tool_details(PaymentTool)
     };
 decode_payer({payment_resource, #domain_PaymentResourcePayer{resource = Resource, contact_info = ContactInfo}}) ->
     maps:merge(
