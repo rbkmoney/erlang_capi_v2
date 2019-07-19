@@ -191,7 +191,7 @@ decode_payment_institution_ref(#domain_PaymentInstitutionRef{id = Ref}) ->
     Ref.
 
 -spec decode_payment_tool_token(capi_handler_encoder:encode_data()) ->
-    capi_handler_decoder_utils:decode_data().
+    binary().
 
 decode_payment_tool_token({bank_card, BankCard}) ->
     decode_bank_card(BankCard);
