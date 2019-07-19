@@ -97,7 +97,8 @@ decode_payer({customer, #domain_CustomerPayer{payment_tool = PaymentTool, custom
         <<"paymentToolToken"  >> => capi_handler_decoder_party:decode_payment_tool_token(PaymentTool),
         <<"paymentToolDetails">> => capi_handler_decoder_party:decode_payment_tool_details(PaymentTool)
     };
-decode_payer({recurrent, #domain_RecurrentPayer{payment_tool = PaymentTool, recurrent_parent = RecurrentParent, contact_info = ContactInfo}}) ->
+decode_payer({recurrent, #domain_RecurrentPayer{payment_tool = PaymentTool, recurrent_parent = RecurrentParent,
+    contact_info = ContactInfo}}) ->
     #{
         <<"payerType">> => <<"RecurrentPayer">>,
         <<"contactInfo">> => capi_handler_decoder_party:decode_contact_info(ContactInfo),
