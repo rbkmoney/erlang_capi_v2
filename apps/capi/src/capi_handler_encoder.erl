@@ -63,7 +63,7 @@ encode_bank_card(BankCard) ->
     {bank_card, #domain_BankCard{
         token          = maps:get(<<"token">>, BankCard),
         payment_system = encode_payment_system(maps:get(<<"payment_system">>, BankCard)),
-        bin            = maps:get(<<"bin">>, BankCard),
+        bin            = maps:get(<<"bin">>, BankCard, <<>>),
         masked_pan     = maps:get(<<"masked_pan">>, BankCard),
         token_provider = encode_token_provider(genlib_map:get(<<"token_provider">>, BankCard)),
         issuer_country = encode_residence(genlib_map:get(<<"issuer_country">>, BankCard)),
