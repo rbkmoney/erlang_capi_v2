@@ -92,12 +92,12 @@ decode_payment(InvoiceID, Payment, Context) ->
     decode_payment_status(Payment#domain_InvoicePayment.status, Context)).
 
 decode_payer({customer, #domain_CustomerPayer{
-    payment_tool = PaymentTool
-    % customer_id  = ID
+    payment_tool = PaymentTool,
+    customer_id  = ID
 }}) ->
     genlib_map:compact(#{
         <<"payerType" >> => <<"CustomerPayer">>,
-        % <<"customerID">> => ID,
+        <<"customerID">> => ID,
         <<"paymentToolToken"  >> => capi_handler_decoder_party:decode_payment_tool_token(PaymentTool),
         <<"paymentToolDetails">> => capi_handler_decoder_party:decode_payment_tool_details(PaymentTool)
     });
