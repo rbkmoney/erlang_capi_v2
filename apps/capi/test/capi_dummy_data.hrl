@@ -139,7 +139,7 @@
     contact_info = ?CONTACT_INFO
 }}).
 
--define(CUSTOMER_PAYER, {recurrent, #domain_RecurrentPayer{
+-define(CUSTOMER_PAYER, {customer, #domain_CustomerPayer{
     customer_id         = ?STRING,
     customer_binding_id = ?STRING,
     rec_payment_tool_id = ?STRING,
@@ -180,7 +180,7 @@
     created_at       = ?TIMESTAMP,
     domain_revision  = ?INTEGER,
     status           = {pending, #domain_InvoicePaymentPending{}},
-    payer            = ?RECURRENT_PAYER,
+    payer            = ?CUSTOMER_PAYER,
     cost             = ?CASH,
     flow             = {instant, #domain_InvoicePaymentFlowInstant{}},
     context          = ?CONTENT,
