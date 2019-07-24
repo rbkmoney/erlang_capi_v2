@@ -222,39 +222,45 @@ decode_stat_tx_info(TransactionInfo) ->
     },
     genlib_map:compact(ParsedTransactionInfo).
 
-decode_stat_payer({customer, #merchstat_CustomerPayer{customer_id = ID}}) ->
+decode_stat_payer({customer, #merchstat_CustomerPayer{
+    customer_id  = ID,
+    payment_tool = PaymentTool
+}}) ->
     #{
-        <<"payerType" >> => <<"CustomerPayer">>,
-        <<"customerID">> => ID
+        <<"payerType"         >> => <<"CustomerPayer">>,
+        <<"paymentToolToken"  >> => decode_stat_payment_tool_token(PaymentTool),
+        <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool),
+        <<"customerID"        >> => ID
     };
-decode_stat_payer({recurrent, RecurrentPayer}) ->
-    #merchstat_RecurrentPayer{
-        recurrent_parent = RecurrentParent,
-        phone_number = PhoneNumber,
-        email = Email
-    } = RecurrentPayer,
+decode_stat_payer({recurrent, #merchstat_RecurrentPayer{
+    payment_tool     = PaymentTool,
+    recurrent_parent = RecurrentParent,
+    phone_number     = PhoneNumber,
+    email            = Email
+}}) ->
     #{
-        <<"payerType">> => <<"RecurrentPayer">>,
-        <<"contactInfo">> => genlib_map:compact(#{
+        <<"payerType"         >> => <<"RecurrentPayer">>,
+        <<"paymentToolToken"  >> => decode_stat_payment_tool_token(PaymentTool),
+        <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool),
+        <<"contactInfo"       >> => genlib_map:compact(#{
             <<"phoneNumber">> => PhoneNumber,
             <<"email"      >> => Email
         }),
         <<"recurrentParentPayment">> => capi_handler_decoder_invoicing:decode_recurrent_parent(RecurrentParent)
     };
-decode_stat_payer({payment_resource, PaymentResource}) ->
-    #merchstat_PaymentResourcePayer{
-        payment_tool = PaymentTool,
-        session_id = PaymentSession,
-        fingerprint = Fingerprint,
-        ip_address = IP,
-        phone_number = PhoneNumber,
-        email = Email
-    } = PaymentResource,
+decode_stat_payer({payment_resource, #merchstat_PaymentResourcePayer{
+    payment_tool = PaymentTool,
+    session_id   = PaymentSession,
+    fingerprint  = Fingerprint,
+    ip_address   = IP,
+    phone_number = PhoneNumber,
+    email        = Email
+}}) ->
     genlib_map:compact(#{
         <<"payerType"         >> => <<"PaymentResourcePayer">>,
         <<"paymentToolToken"  >> => decode_stat_payment_tool_token(PaymentTool),
-        <<"paymentSession"    >> => PaymentSession,
         <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool),
+        <<"paymentSession"    >> => PaymentSession,
         <<"clientInfo"        >> => genlib_map:compact(#{
             <<"ip"         >> => IP,
             <<"fingerprint">> => Fingerprint
