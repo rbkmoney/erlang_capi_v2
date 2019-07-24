@@ -597,12 +597,13 @@ create_refund_idemp_fail_test(Config) ->
         end},
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
     ], Config),
+    {ok, Refund} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
+    RefundID = maps:get(<<"id">>, Refund),
     BadExternalID = {error, {409, #{
         <<"externalID">> => ExternalID,
-        <<"id">>         => ?STRING,
+        <<"id">>         => RefundID,
         <<"message">>    => <<"This 'externalID' has been used by another request">>
     }}},
-    {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
     Req1 = Req#{<<"reason">> => <<"because">>},
     BadExternalID = capi_client_payments:create_refund(?config(context, Config), Req1, ?STRING, ?STRING).
 
