@@ -76,33 +76,50 @@ decode_payment(InvoiceID, Payment, Context) ->
         amount   = Amount,
         currency = Currency
     } = Payment#domain_InvoicePayment.cost,
-    capi_handler_utils:merge_and_compact(#{
-        <<"id"           >> => Payment#domain_InvoicePayment.id,
-        <<"externalID"   >> => Payment#domain_InvoicePayment.external_id,
-        <<"invoiceID"    >> => InvoiceID,
-        <<"createdAt"    >> => Payment#domain_InvoicePayment.created_at,
-        % TODO whoops, nothing to get it from yet
-        <<"flow"         >> => decode_flow(Payment#domain_InvoicePayment.flow),
-        <<"amount"       >> => Amount,
-        <<"currency"     >> => capi_handler_decoder_utils:decode_currency(Currency),
-        <<"payer"        >> => decode_payer(Payment#domain_InvoicePayment.payer),
-        <<"makeRecurrent">> => decode_make_recurrent(Payment#domain_InvoicePayment.make_recurrent),
-        <<"metadata"     >> => capi_handler_decoder_utils:decode_context(Payment#domain_InvoicePayment.context)
-    }, decode_payment_status(Payment#domain_InvoicePayment.status, Context)).
+    capi_handler_utils:merge_and_compact(
+        #{
+            <<"id"           >> => Payment#domain_InvoicePayment.id,
+            <<"externalID"   >> => Payment#domain_InvoicePayment.external_id,
+            <<"invoiceID"    >> => InvoiceID,
+            <<"createdAt"    >> => Payment#domain_InvoicePayment.created_at,
+            % TODO whoops, nothing to get it from yet
+            <<"flow"         >> => decode_flow(Payment#domain_InvoicePayment.flow),
+            <<"amount"       >> => Amount,
+            <<"currency"     >> => capi_handler_decoder_utils:decode_currency(Currency),
+            <<"payer"        >> => decode_payer(Payment#domain_InvoicePayment.payer),
+            <<"makeRecurrent">> => decode_make_recurrent(Payment#domain_InvoicePayment.make_recurrent),
+            <<"metadata"     >> => capi_handler_decoder_utils:decode_context(Payment#domain_InvoicePayment.context)
+        },
+        decode_payment_status(Payment#domain_InvoicePayment.status, Context)
+    ).
 
-decode_payer({customer, #domain_CustomerPayer{customer_id = ID}}) ->
+decode_payer({customer, #domain_CustomerPayer{
+    payment_tool = PaymentTool,
+    customer_id  = ID
+}}) ->
     #{
         <<"payerType" >> => <<"CustomerPayer">>,
-        <<"customerID">> => ID
+        <<"customerID">> => ID,
+        <<"paymentToolToken"  >> => capi_handler_decoder_party:decode_payment_tool_token(PaymentTool),
+        <<"paymentToolDetails">> => capi_handler_decoder_party:decode_payment_tool_details(PaymentTool)
     };
-decode_payer({recurrent, #domain_RecurrentPayer{recurrent_parent = RecurrentParent, contact_info = ContactInfo}}) ->
+decode_payer({recurrent, #domain_RecurrentPayer{
+    payment_tool     = PaymentTool,
+    recurrent_parent = RecurrentParent,
+    contact_info     = ContactInfo
+}}) ->
     #{
-        <<"payerType">> => <<"RecurrentPayer">>,
-        <<"contactInfo">> => capi_handler_decoder_party:decode_contact_info(ContactInfo),
+        <<"payerType"             >> => <<"RecurrentPayer">>,
+        <<"paymentToolToken"      >> => capi_handler_decoder_party:decode_payment_tool_token(PaymentTool),
+        <<"paymentToolDetails"    >> => capi_handler_decoder_party:decode_payment_tool_details(PaymentTool),
+        <<"contactInfo"           >> => capi_handler_decoder_party:decode_contact_info(ContactInfo),
         <<"recurrentParentPayment">> => decode_recurrent_parent(RecurrentParent)
     };
-decode_payer({payment_resource, #domain_PaymentResourcePayer{resource = Resource, contact_info = ContactInfo}}) ->
-    maps:merge(
+decode_payer({payment_resource, #domain_PaymentResourcePayer{
+    resource     = Resource,
+    contact_info = ContactInfo
+}}) ->
+  capi_handler_utils:merge_and_compact(
         #{
             <<"payerType"  >> => <<"PaymentResourcePayer">>,
             <<"contactInfo">> => capi_handler_decoder_party:decode_contact_info(ContactInfo)

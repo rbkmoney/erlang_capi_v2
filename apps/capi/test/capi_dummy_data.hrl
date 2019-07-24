@@ -139,6 +139,14 @@
     contact_info = ?CONTACT_INFO
 }}).
 
+-define(CUSTOMER_PAYER, {customer, #domain_CustomerPayer{
+    customer_id         = ?STRING,
+    customer_binding_id = ?STRING,
+    rec_payment_tool_id = ?STRING,
+    payment_tool        = {bank_card, ?BANK_CARD},
+    contact_info        = ?CONTACT_INFO
+}}).
+
 -define(PAYER, {payment_resource, ?PAYMENT_RESOURCE_PAYER}).
 
 -define(PAYMENT(ID, IED, Status), #domain_InvoicePayment{
@@ -152,6 +160,32 @@
     context          = ?CONTENT,
     make_recurrent   = false,
     external_id      = IED
+}).
+
+-define(PAYMENT_WITH_RECURRENT_PAYER, #domain_InvoicePayment{
+    id               = ?STRING,
+    created_at       = ?TIMESTAMP,
+    domain_revision  = ?INTEGER,
+    status           = {pending, #domain_InvoicePaymentPending{}},
+    payer            = ?RECURRENT_PAYER,
+    cost             = ?CASH,
+    flow             = {instant, #domain_InvoicePaymentFlowInstant{}},
+    context          = ?CONTENT,
+    make_recurrent   = false,
+    external_id      = undefined
+}).
+
+-define(PAYMENT_WITH_CUSTOMER_PAYER, #domain_InvoicePayment{
+    id               = ?STRING,
+    created_at       = ?TIMESTAMP,
+    domain_revision  = ?INTEGER,
+    status           = {pending, #domain_InvoicePaymentPending{}},
+    payer            = ?CUSTOMER_PAYER,
+    cost             = ?CASH,
+    flow             = {instant, #domain_InvoicePaymentFlowInstant{}},
+    context          = ?CONTENT,
+    make_recurrent   = false,
+    external_id      = undefined
 }).
 
 -define(PAYMENT, ?PAYMENT(?STRING, undefined, {pending, #domain_InvoicePaymentPending{}})).
@@ -584,6 +618,8 @@
 
 -define(STAT_RESPONSE_PAYMENTS, ?STAT_RESPONSE({payments,
     [
+        ?STAT_PAYMENT(?STAT_CUSTOMER_PAYER({bank_card, ?STAT_BANK_CARD}), ?STAT_PAYMENT_STATUS_PENDING),
+        ?STAT_PAYMENT(?STAT_RECURRENT_PAYER({bank_card, ?STAT_BANK_CARD}), ?STAT_PAYMENT_STATUS_PENDING),
         ?STAT_PAYMENT(?STAT_PAYER({bank_card, ?STAT_BANK_CARD}), ?STAT_PAYMENT_STATUS_CAPTURED),
         ?STAT_PAYMENT(?STAT_PAYER({bank_card, ?STAT_BANK_CARD_WITH_TP}), ?STAT_PAYMENT_STATUS_PENDING)
     ]
@@ -649,6 +685,21 @@
     email = <<"test@test.ru">>,
     session_id = SessionId
 }}).
+
+-define(STAT_CUSTOMER_PAYER(PaymentTool), {customer, #merchstat_CustomerPayer{
+    customer_id  = ?STRING,
+    payment_tool = PaymentTool,
+    email        = <<"test@test.ru">>
+}}).
+
+-define(STAT_RECURRENT_PAYER(PaymentTool), {recurrent, #merchstat_RecurrentPayer{
+    payment_tool     = PaymentTool,
+    recurrent_parent = ?RECURRENT_PARENT,
+    phone_number     = ?STRING
+}}).
+
+-define(RECURRENT_PARENT, #merchstat_RecurrentParentPayment{invoice_id = ?STRING, payment_id = ?STRING}).
+
 
 -define(STAT_PAYMENT_STATUS_PENDING, {pending, #merchstat_InvoicePaymentPending{}}).
 
@@ -730,7 +781,6 @@
     payment_system = visa,
     bin = <<"411111">>,
     masked_pan = <<"411111******1111">>
-
 }).
 
 -define(STAT_BANK_CARD_WITH_TP, #merchstat_BankCard{
