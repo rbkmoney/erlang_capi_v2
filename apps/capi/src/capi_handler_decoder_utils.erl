@@ -46,8 +46,10 @@ decode_business_schedule_ref(undefined) ->
 
 decode_bank_card_bin(<<>>) ->
     undefined;
-decode_bank_card_bin(Bin) when is_binary(Bin) ->
-    binary:part(Bin, {0, 6}). %%backwards compatibility with old data
+decode_bank_card_bin(Bin) when byte_size(Bin) > 6 ->
+    binary:part(Bin, {0, 6}); %%backwards compatibility with old data
+decode_bank_card_bin(Bin) ->
+    Bin.
 
 -define(PAN_LENGTH, 16).
 
