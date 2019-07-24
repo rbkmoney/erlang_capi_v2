@@ -407,13 +407,18 @@ create_payment_with_googlepay_plain_ok_test(Config) ->
 -spec get_payments_ok_test(config()) ->
     _.
 get_payments_ok_test(Config) ->
-    capi_ct_helper:mock_services([{invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}], Config),
+    Payment0 = ?PAYPROC_PAYMENT(?PAYMENT_WITH_CUSTOMER_PAYER, [?REFUND], [?ADJUSTMENT]),
+    Payment1 = ?PAYPROC_PAYMENT(?PAYMENT_WITH_RECURRENT_PAYER, [?REFUND], [?ADJUSTMENT]),
+    Payment2 = ?PAYPROC_PAYMENT(?PAYMENT, [?REFUND], [?ADJUSTMENT]),
+    Result   = ?PAYPROC_INVOICE([Payment0, Payment1, Payment2]),
+    capi_ct_helper:mock_services([{invoicing, fun('Get', _) -> {ok, Result} end}], Config),
     {ok, _} = capi_client_payments:get_payments(?config(context, Config), ?STRING).
 
 -spec get_payment_by_id_ok_test(config()) ->
     _.
 get_payment_by_id_ok_test(Config) ->
-    capi_ct_helper:mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
+    Result = ?PAYPROC_PAYMENT(?PAYMENT_WITH_RECURRENT_PAYER, [?REFUND], [?ADJUSTMENT]),
+    capi_ct_helper:mock_services([{invoicing, fun('GetPayment', _) -> {ok, Result} end}], Config),
     {ok, _} = capi_client_payments:get_payment_by_id(?config(context, Config), ?STRING, ?STRING).
 
 -spec get_client_payment_status_test(config()) ->
