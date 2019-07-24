@@ -226,19 +226,19 @@ decode_stat_payer({customer, #merchstat_CustomerPayer{
     customer_id  = ID,
     payment_tool = PaymentTool
 }}) ->
-    genlib_map:compact(#{
+    #{
         <<"payerType"         >> => <<"CustomerPayer">>,
         <<"paymentToolToken"  >> => decode_stat_payment_tool_token(PaymentTool),
         <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool),
         <<"customerID"        >> => ID
-    });
+    };
 decode_stat_payer({recurrent, #merchstat_RecurrentPayer{
     payment_tool     = PaymentTool,
     recurrent_parent = RecurrentParent,
     phone_number     = PhoneNumber,
     email            = Email
 }}) ->
-    genlib_map:compact(#{
+    #{
         <<"payerType"         >> => <<"RecurrentPayer">>,
         <<"paymentToolToken"  >> => decode_stat_payment_tool_token(PaymentTool),
         <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool),
@@ -247,7 +247,7 @@ decode_stat_payer({recurrent, #merchstat_RecurrentPayer{
             <<"email"      >> => Email
         }),
         <<"recurrentParentPayment">> => capi_handler_decoder_invoicing:decode_recurrent_parent(RecurrentParent)
-    });
+    };
 decode_stat_payer({payment_resource, #merchstat_PaymentResourcePayer{
     payment_tool = PaymentTool,
     session_id   = PaymentSession,
