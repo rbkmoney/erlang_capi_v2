@@ -344,7 +344,7 @@ decode_stat_payment_tool_details({digital_wallet, V}) ->
 
 decode_bank_card_details(BankCard, V) ->
     LastDigits = capi_handler_decoder_utils:decode_last_digits(BankCard#merchstat_BankCard.masked_pan),
-    Bin = decode_bank_card_bin(BankCard#merchstat_BankCard.bin),
+    Bin = capi_handler_decoder_utils:decode_bank_card_bin(BankCard#merchstat_BankCard.bin),
     capi_handler_utils:merge_and_compact(V, #{
         <<"last4">>     => LastDigits,
         <<"first6">>    => Bin,
@@ -357,11 +357,6 @@ decode_token_provider(Provider) when Provider /= undefined ->
     genlib:to_binary(Provider);
 decode_token_provider(undefined) ->
     undefined.
-
-decode_bank_card_bin(<<>>) ->
-    undefined;
-decode_bank_card_bin(Bin) when is_binary(Bin) ->
-    Bin.
 
 decode_payment_terminal_details(#merchstat_PaymentTerminal{terminal_type = Type}, V) ->
     V#{

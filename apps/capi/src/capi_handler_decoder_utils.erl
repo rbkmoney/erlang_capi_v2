@@ -7,6 +7,7 @@
 -export([decode_map/2]).
 -export([decode_currency/1]).
 -export([decode_business_schedule_ref/1]).
+-export([decode_bank_card_bin/1]).
 -export([decode_last_digits/1]).
 -export([decode_masked_pan/2]).
 -export([decode_operation_failure/2]).
@@ -39,6 +40,14 @@ decode_business_schedule_ref(#domain_BusinessScheduleRef{id = ID}) when ID /= un
     ID;
 decode_business_schedule_ref(undefined) ->
     undefined.
+
+-spec decode_bank_card_bin(binary()) ->
+    binary() | undefined.
+
+decode_bank_card_bin(<<>>) ->
+    undefined;
+decode_bank_card_bin(Bin) when is_binary(Bin) ->
+    binary:part(Bin, {0, 6}). %%backwards compatibility with old data
 
 -define(PAN_LENGTH, 16).
 
