@@ -213,11 +213,12 @@ decode_refund(Refund, Context) ->
     #domain_Cash{amount = Amount, currency = Currency} = Refund#domain_InvoicePaymentRefund.cash,
     capi_handler_utils:merge_and_compact(
         #{
-            <<"id"       >> => Refund#domain_InvoicePaymentRefund.id,
-            <<"createdAt">> => Refund#domain_InvoicePaymentRefund.created_at,
-            <<"reason"   >> => Refund#domain_InvoicePaymentRefund.reason,
-            <<"amount"   >> => Amount,
-            <<"currency" >> => capi_handler_decoder_utils:decode_currency(Currency)
+            <<"id"        >> => Refund#domain_InvoicePaymentRefund.id,
+            <<"createdAt" >> => Refund#domain_InvoicePaymentRefund.created_at,
+            <<"reason"    >> => Refund#domain_InvoicePaymentRefund.reason,
+            <<"amount"    >> => Amount,
+            <<"currency"  >> => capi_handler_decoder_utils:decode_currency(Currency),
+            <<"externalID">> => Refund#domain_InvoicePaymentRefund.external_id
         },
         decode_refund_status(Refund#domain_InvoicePaymentRefund.status, Context)
     ).

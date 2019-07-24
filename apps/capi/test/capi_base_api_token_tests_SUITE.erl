@@ -42,7 +42,9 @@
     fulfill_invoice_ok_test/1,
     get_merchant_payment_status_test/1,
     create_refund/1,
+    create_refund_idemp_ok_test/1,
     create_refund_error/1,
+    create_refund_idemp_fail_test/1,
     create_partial_refund/1,
     create_partial_refund_without_currency/1,
     get_refund_by_id/1,
@@ -145,7 +147,9 @@ groups() ->
                 fulfill_invoice_ok_test,
                 get_merchant_payment_status_test,
                 create_refund,
+                create_refund_idemp_ok_test,
                 create_refund_error,
+                create_refund_idemp_fail_test,
                 create_partial_refund,
                 create_partial_refund_without_currency,
                 get_refund_by_id,
@@ -524,6 +528,32 @@ create_refund(Config) ->
     ], Config),
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 
+-spec create_refund_idemp_ok_test(config()) ->
+    _.
+create_refund_idemp_ok_test(Config) ->
+    BenderKey = <<"bender_key">>,
+    ExternalID = <<"merch_id">>,
+    capi_ct_helper:mock_services([
+        {invoicing,
+            fun(
+                'RefundPayment',
+                [_, _, _, #payproc_InvoicePaymentRefundParams{id = ID, external_id = EID}]
+            ) ->
+                {ok, ?REFUND(ID, EID)}
+        end},
+        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
+    ], Config),
+    Req = #{
+        <<"reason">> => ?STRING,
+        <<"externalID">>  => ExternalID,
+        <<"id">> => ?STRING
+    },
+    {ok, Refund} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
+    {ok, Refund2} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
+    ?assertEqual(BenderKey,  maps:get(<<"id">>, Refund)),
+    ?assertEqual(ExternalID, maps:get(<<"externalID">>, Refund)),
+    ?assertEqual(Refund, Refund2).
+
 -spec create_refund_error(config()) ->
     _.
 create_refund_error(Config) ->
@@ -545,6 +575,36 @@ create_refund_error(Config) ->
     ], Config),
     {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"42">>, ?STRING),
     {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"43">>, ?STRING).
+
+-spec create_refund_idemp_fail_test(config()) ->
+    _.
+create_refund_idemp_fail_test(Config) ->
+    BenderKey = <<"bender_key">>,
+    ExternalID = <<"merch_id">>,
+    Req = #{
+        <<"reason">> => ?STRING,
+        <<"externalID">>  => ExternalID,
+        <<"id">> => ?STRING
+    },
+    Ctx = capi_msgp_marshalling:marshal(#{<<"params_hash">> => erlang:phash2(Req)}),
+    capi_ct_helper:mock_services([
+        {invoicing,
+            fun(
+                'RefundPayment',
+                [_, _, _, #payproc_InvoicePaymentRefundParams{id = ID, external_id = EID}]
+            ) ->
+                {ok, ?REFUND(ID, EID)}
+        end},
+        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
+    ], Config),
+    BadExternalID = {error, {409, #{
+        <<"externalID">> => ExternalID,
+        <<"id">>         => ?STRING,
+        <<"message">>    => <<"This 'externalID' has been used by another request">>
+    }}},
+    {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
+    Req1 = Req#{<<"reason">> => <<"because">>},
+    BadExternalID = capi_client_payments:create_refund(?config(context, Config), Req1, ?STRING, ?STRING).
 
 -spec create_partial_refund(config()) ->
     _.
