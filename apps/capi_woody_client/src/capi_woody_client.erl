@@ -4,15 +4,14 @@
 
 -export([get_service_modname/1]).
 
+%%
+
+-type service_name() :: atom().
 -type client_opts() :: #{
     url            := woody:url(),
     %% See hackney:request/5 for available transport options.
     transport_opts => woody_client_thrift_http_transport:transport_options()
 }.
-
-%%
-
--type service_name() :: atom().
 
 -spec call_service(service_name(), woody:func(), [term()], woody_context:ctx()) ->
     woody:result().
@@ -42,7 +41,7 @@ call_service(ServiceName, Function, Args, Context, EventHandler, Retry) ->
             call_service(ServiceName, Function, Args, Context, EventHandler, NextRetry)
     end.
 
--spec get_service_options(atom()) ->
+-spec get_service_options(service_name()) ->
     client_opts().
 
 get_service_options(ServiceName) ->
