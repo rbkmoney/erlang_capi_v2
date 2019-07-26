@@ -167,8 +167,8 @@ stop_mocked_service_sup(SupPid) ->
 mock_services(Services, SupOrConfig) ->
     start_woody_client(mock_services_(Services, SupOrConfig)).
 
-start_woody_client(ServiceURLs) ->
-    start_app(capi_woody_client, [{service_urls, ServiceURLs}]).
+start_woody_client(Services) ->
+    start_app(capi_woody_client, [{services, Services}]).
 
 -spec mock_services_(_, _) ->
     _.
