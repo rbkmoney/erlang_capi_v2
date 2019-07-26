@@ -89,11 +89,15 @@ handle_request(OperationID, Req, SwagContext = #{auth_context := AuthContext}, _
                 {ok, {401, #{}, undefined}}
         end
     catch
+        throw:{bad_deadline, _Deadline} ->
+            {ok, logic_error(invalidDeadline, <<"Invalid data in X-Request-Deadline header">>)};
+        throw:{handler_function_clause, _OperationID} ->
+           _ = logger:error("Operation ~p failed due to missing handler", [OperationID]),
+           {error, {501, #{}, undefined}};
         error:{woody_error, {Source, Class, Details}} ->
             process_woody_error(Source, Class, Details);
-        throw:{bad_deadline, Deadline} ->
-            _ = logger:warning("Operation ~p failed due to invalid deadline ~p", [OperationID, Deadline]),
-            {ok, logic_error(invalidDeadline, <<"Invalid data in X-Request-Deadline header">>)}
+        Class:Reason:Stacktrace ->
+            process_general_error(Class, Reason, Stacktrace, OperationID, Req, SwagContext)
     end.
 
 -spec process_request(
@@ -151,3 +155,15 @@ process_woody_error(_Source, resource_unavailable, _Details) ->
     {error, server_error(503)};
 process_woody_error(_Source, result_unknown      , _Details) ->
     {error, server_error(504)}.
+
+process_general_error(Class, Reason, Stacktrace, OperationID, Req, SwagContext) ->
+    _ = logger:error(
+        "Operation ~p failed due to ~p:~p given req: ~p and context: ~p",
+        [OperationID, Class, Reason, Req, SwagContext],
+        #{error => #{
+            class       => genlib:to_binary(Class),
+            reason      => genlib:format(Reason),
+            stack_trace => genlib_format:format_stacktrace(Stacktrace)
+        }}
+    ),
+    {error, server_error(500)}.
