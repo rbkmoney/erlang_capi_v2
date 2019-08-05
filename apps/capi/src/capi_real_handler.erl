@@ -2497,14 +2497,13 @@ make_access_token(Fun, ID, PartyID, _Context) ->
 encode_bank_card(#{
     <<"token">> := Token,
     <<"payment_system">> := PaymentSystem,
-    <<"bin">> := Bin,
     <<"masked_pan">> := MaskedPan
 } = BankCard) ->
     {bank_card, #domain_BankCard{
         'token'  = Token,
         'payment_system' = encode_payment_system(PaymentSystem),
-        'bin' = Bin,
-        'masked_pan' = MaskedPan,
+        'bin'            = maps:get(<<"bin">>, BankCard, <<>>),
+        'masked_pan'     = MaskedPan,
         'token_provider' = encode_token_provider(genlib_map:get(<<"token_provider">>, BankCard)),
         'issuer_country' = encode_residence(genlib_map:get(<<"issuer_country">>, BankCard)),
         'bank_name'      = genlib_map:get(<<"bank_name">>, BankCard),
@@ -2826,7 +2825,7 @@ decode_payment_tool_details({crypto_currency, CryptoCurrency}) ->
 
 decode_bank_card_details(BankCard, V) ->
     LastDigits = decode_last_digits(BankCard#domain_BankCard.masked_pan),
-    Bin = BankCard#domain_BankCard.bin,
+    Bin = decode_bank_card_bin(BankCard#domain_BankCard.bin),
     merge_and_compact(V, #{
         <<"lastDigits">>     => LastDigits,
         <<"bin">>            => Bin,
@@ -2834,6 +2833,11 @@ decode_bank_card_details(BankCard, V) ->
         <<"paymentSystem" >> => genlib:to_binary(BankCard#domain_BankCard.payment_system),
         <<"tokenProvider" >> => decode_token_provider(BankCard#domain_BankCard.token_provider)
     }).
+
+decode_bank_card_bin(<<>>) ->
+    undefined;
+decode_bank_card_bin(Bin) when is_binary(Bin) ->
+    Bin.
 
 decode_token_provider(Provider) when Provider /= undefined ->
     genlib:to_binary(Provider);
