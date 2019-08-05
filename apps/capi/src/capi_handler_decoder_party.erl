@@ -289,7 +289,7 @@ decode_payment_tool_details({crypto_currency, CryptoCurrency}) ->
 
 decode_bank_card_details(BankCard, V) ->
     LastDigits = capi_handler_decoder_utils:decode_last_digits(BankCard#domain_BankCard.masked_pan),
-    Bin = decode_bank_card_bin(BankCard#domain_BankCard.bin),
+    Bin = capi_handler_decoder_utils:decode_bank_card_bin(BankCard#domain_BankCard.bin),
     capi_handler_utils:merge_and_compact(V, #{
         <<"last4">>     => LastDigits,
         <<"first6">>    => Bin,
@@ -302,11 +302,6 @@ decode_token_provider(Provider) when Provider /= undefined ->
     genlib:to_binary(Provider);
 decode_token_provider(undefined) ->
     undefined.
-
-decode_bank_card_bin(<<>>) ->
-    undefined;
-decode_bank_card_bin(Bin) when is_binary(Bin) ->
-    Bin.
 
 decode_payment_terminal_details(#domain_PaymentTerminal{terminal_type = Type}, V) ->
     V#{
