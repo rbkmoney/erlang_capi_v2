@@ -50,8 +50,7 @@ gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext) ->
 
 gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext, CtxData) ->
     Sequence = {sequence, #bender_SequenceSchema{
-        sequence_id = SequenceID,
-        minimum = 100
+        sequence_id = SequenceID
     }},
     generate_id(IdempotentKey, Sequence, Hash, WoodyContext, CtxData).
 
