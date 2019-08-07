@@ -26,8 +26,7 @@ gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) ->
 
 gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyCtx) ->
     Sequence = {sequence, #bender_SequenceSchema{
-        sequence_id = SequenceID,
-        minimum = 100
+        sequence_id = SequenceID
     }},
     generate_id(IdempotentKey, Sequence, Hash, WoodyCtx).
 
