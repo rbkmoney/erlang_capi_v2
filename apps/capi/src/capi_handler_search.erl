@@ -519,6 +519,6 @@ decode_stat_refund_status({Status, StatusInfo}, Context) ->
 
 construct_exclude(Req) ->
     % can be extended upon need
-    #{
+    genlib_map:compact(#{
         <<"shop_id">> => genlib_map:get('excludedShops', Req)
-    }.
+    }).
