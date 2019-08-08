@@ -1019,7 +1019,7 @@ search_invoices_ok_test(Config) ->
         {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000},
         {continuationToken, <<"come_back_next_time">>},
-        {excludedShops, [<<"shop1">>, <<"shop2">>]}
+        {excludedShops, <<"shop1, shop2">>}
     ],
 
     {ok, _, _} = capi_client_searches:search_invoices(?config(context, Config), Query).
@@ -1055,7 +1055,7 @@ search_payments_ok_test(Config) ->
         {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000},
         {continuationToken, <<"come_back_next_time">>},
-        {excludedShops, [<<"shop1">>, <<"shop2">>]}
+        {excludedShops, <<"shop1, shop2">>}
     ],
 
     {ok, _, _} = capi_client_searches:search_payments(?config(context, Config), Query).
@@ -1075,7 +1075,7 @@ search_refunds_ok_test(Config) ->
         {refundID, <<"testRefundID">>},
         {refundStatus, <<"succeeded">>},
         {continuationToken, <<"come_back_next_time">>},
-        {excludedShops, [<<"shop1">>, <<"shop2">>]}
+        {excludedShops, <<"shop1, shop2">>}
     ],
 
     {ok, _, _} = capi_client_searches:search_refunds(?config(context, Config), Query).
@@ -1093,7 +1093,7 @@ search_payouts_ok_test(Config) ->
         {payoutID, <<"testPayoutID">>},
         {payoutToolType, <<"Wallet">>},
         {continuationToken, <<"come_back_next_time">>},
-        {excludedShops, [<<"shop1">>, <<"shop2">>]}
+        {excludedShops, <<"shop1, shop2">>}
     ],
 
     {ok, _, _} = capi_client_searches:search_payouts(?config(context, Config), Query).
