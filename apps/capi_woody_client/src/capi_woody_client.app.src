@@ -7,6 +7,7 @@
         thrift,
         dmsl,
         bender_proto,
-        genlib
+        genlib,
+        scoper
     ]}
 ]}.
