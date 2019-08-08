@@ -102,7 +102,7 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
                 ok = set_context_meta(Context),
                 process_request(OperationID, Req, Context, get_handlers());
             {error, _} = Error ->
-                _ = logger:info("Authorization failed due to ~p", [OperationID, Error]),
+                _ = logger:info("Authorization failed due to ~p", [Error]),
                 {ok, {401, #{}, undefined}}
         end
     catch
