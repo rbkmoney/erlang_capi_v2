@@ -109,12 +109,12 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
         throw:{bad_deadline, _Deadline} ->
             {ok, logic_error(invalidDeadline, <<"Invalid data in X-Request-Deadline header">>)};
         throw:{handler_function_clause, _OperationID} ->
-            _ = logger:error("Operation failed due to missing handler", [OperationID]),
+            _ = logger:error("Operation ~p failed due to missing handler", [OperationID]),
             {error, {501, #{}, undefined}};
         error:{woody_error, {Source, Class, Details}} ->
             process_woody_error(Source, Class, Details);
         Class:Reason:Stacktrace ->
-            process_general_error(Class, Reason, Stacktrace, OperationID, Req, SwagContext)
+            process_general_error(Class, Reason, Stacktrace, Req, SwagContext)
     after
         ok = clear_rpc_meta()
     end.
@@ -178,10 +178,10 @@ process_woody_error(_Source, resource_unavailable, _Details) ->
 process_woody_error(_Source, result_unknown      , _Details) ->
     {error, server_error(504)}.
 
-process_general_error(Class, Reason, Stacktrace, OperationID, Req, SwagContext) ->
+process_general_error(Class, Reason, Stacktrace, Req, SwagContext) ->
     _ = logger:error(
-        "Operation ~p failed due to ~p:~p given req: ~p and context: ~p",
-        [OperationID, Class, Reason, Req, SwagContext],
+        "Operation failed due to ~p:~p given req: ~p and context: ~p",
+        [Class, Reason, Req, SwagContext],
         #{error => #{
             class       => genlib:to_binary(Class),
             reason      => genlib:format(Reason),
