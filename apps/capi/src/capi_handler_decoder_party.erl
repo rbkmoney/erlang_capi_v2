@@ -18,6 +18,8 @@
 -export([decode_disposable_payment_resource/1]).
 -export([decode_payout_tool_params/2]).
 -export([decode_payout_tool_details/1]).
+-export([decode_payment_tool_token/1]).
+-export([decode_payment_tool_details/1]).
 
 %%
 
@@ -188,6 +190,9 @@ decode_residence(Residence) when is_atom(Residence) ->
 decode_payment_institution_ref(#domain_PaymentInstitutionRef{id = Ref}) ->
     Ref.
 
+-spec decode_payment_tool_token(capi_handler_encoder:encode_data()) ->
+    binary().
+
 decode_payment_tool_token({bank_card, BankCard}) ->
     decode_bank_card(BankCard);
 decode_payment_tool_token({payment_terminal, PaymentTerminal}) ->
@@ -246,6 +251,9 @@ decode_digital_wallet(#domain_DigitalWallet{
         <<"provider">> => atom_to_binary(Provider, utf8),
         <<"id"      >> => ID
     }).
+
+-spec decode_payment_tool_details(capi_handler_encoder:encode_data()) ->
+    capi_handler_decoder_utils:decode_data().
 
 decode_payment_tool_details({bank_card, V}) ->
     decode_bank_card_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsBankCard">>});
