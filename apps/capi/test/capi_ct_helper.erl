@@ -186,7 +186,7 @@ mock_services_(Services, SupPid) when is_pid(SupPid) ->
         #{
             ip => IP,
             port => Port,
-            event_handler => capi_woody_event_handler,
+            event_handler => scoper_woody_event_handler,
             handlers => lists:map(fun mock_service_handler/1, Services)
         }
     ),
