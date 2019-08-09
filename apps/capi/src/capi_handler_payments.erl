@@ -225,11 +225,6 @@ process_request('CreateRefund' = OperationID, Req, Context) ->
             create_refund(InvoiceID, PaymentID, RefundParams, Context, OperationID)
         catch
             {external_id_conflict, _, _} = Error ->
-                {error, Error};
-            throw:Error when
-                Error =:= invalid_token orelse
-                Error =:= invalid_payment_session
-            ->
                 {error, Error}
         end,
     case Result of
