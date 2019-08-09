@@ -147,7 +147,7 @@ create_processing_context(SwaggerContext, WoodyContext) ->
 
 -spec create_rpc_id(request_data()) -> woody:rpc_id().
 create_rpc_id(Req) ->
-    RequestID = maps:get('X-Request-ID', Req, "undefined"),
+    RequestID = maps:get('X-Request-ID', Req),
     woody_context:new_rpc_id(genlib:to_binary(RequestID)).
 
 create_woody_context(RpcID, AuthContext) ->
@@ -213,7 +213,7 @@ set_request_meta(OperationID, Req) ->
     ],
     Meta = #{
         operation_id => OperationID,
-        request_id => genlib_map:get('X-Request-ID', Req),
+        request_id => maps:get('X-Request-ID', Req),
         parameters => maps:with(InterestParams, Req)
     },
     scoper:add_meta(genlib_map:compact(Meta)).
