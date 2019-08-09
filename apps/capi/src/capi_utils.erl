@@ -12,7 +12,6 @@
 -export([unwrap/1]).
 -export([define/2]).
 
--export([get_process_metadata/0]).
 -export([deduplicate_payment_methods/1]).
 
 -define(MAX_DEADLINE_TIME, 1*60*1000). % 1 min
@@ -151,14 +150,6 @@ clamp_max_deadline(Value) when is_integer(Value)->
             MaxDeadline;
         false ->
             Value
-    end.
-
--spec get_process_metadata() -> logger:metadata().
-get_process_metadata() ->
-    % perhaps use scopper:collect()?
-    case logger:get_process_metadata() of
-        undefined -> #{};
-        Metadata  -> Metadata
     end.
 
 -spec deduplicate_payment_methods(list()) -> list().

@@ -20,7 +20,7 @@ call_service(ServiceName, Function, Args, Context0) ->
     Deadline = get_service_deadline(ServiceName),
     Context1 = set_deadline(Deadline, Context0),
     Retry = get_service_retry(ServiceName, Function),
-    EventHandler = capi_woody_event_handler,
+    EventHandler = scoper_woody_event_handler,
     call_service(ServiceName, Function, Args, Context1, EventHandler, Retry).
 
 call_service(ServiceName, Function, Args, Context, EventHandler, Retry) ->
