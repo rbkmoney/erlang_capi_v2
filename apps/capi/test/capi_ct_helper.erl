@@ -167,8 +167,8 @@ stop_mocked_service_sup(SupPid) ->
 mock_services(Services, SupOrConfig) ->
     start_woody_client(mock_services_(Services, SupOrConfig)).
 
-start_woody_client(ServiceURLs) ->
-    start_app(capi_woody_client, [{service_urls, ServiceURLs}]).
+start_woody_client(Services) ->
+    start_app(capi_woody_client, [{services, Services}]).
 
 -spec mock_services_(_, _) ->
     _.
@@ -186,7 +186,7 @@ mock_services_(Services, SupPid) when is_pid(SupPid) ->
         #{
             ip => IP,
             port => Port,
-            event_handler => capi_woody_event_handler,
+            event_handler => scoper_woody_event_handler,
             handlers => lists:map(fun mock_service_handler/1, Services)
         }
     ),
