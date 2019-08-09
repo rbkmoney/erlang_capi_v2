@@ -226,16 +226,19 @@ decode_stat_tx_info(TransactionInfo) ->
     },
     genlib_map:compact(ParsedTransactionInfo).
 
-decode_stat_payer({customer, #merchstat_CustomerPayer{customer_id = ID}}) ->
+decode_stat_payer({customer, #merchstat_CustomerPayer{customer_id = ID, payment_tool = PaymentTool}}) ->
     #{
         <<"payerType" >> => <<"CustomerPayer">>,
-        <<"customerID">> => ID
+        <<"customerID">> => ID,
+        <<"paymentToolToken">> => decode_stat_payment_tool_token(PaymentTool),
+        <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool)
     };
 decode_stat_payer({recurrent, RecurrentPayer}) ->
     #merchstat_RecurrentPayer{
         recurrent_parent = RecurrentParent,
         phone_number = PhoneNumber,
-        email = Email
+        email = Email,
+        payment_tool = PaymentTool
     } = RecurrentPayer,
     #{
         <<"payerType">> => <<"RecurrentPayer">>,
@@ -243,7 +246,9 @@ decode_stat_payer({recurrent, RecurrentPayer}) ->
             <<"phoneNumber">> => PhoneNumber,
             <<"email"      >> => Email
         }),
-        <<"recurrentParentPayment">> => capi_handler_decoder_invoicing:decode_recurrent_parent(RecurrentParent)
+        <<"recurrentParentPayment">> => capi_handler_decoder_invoicing:decode_recurrent_parent(RecurrentParent),
+        <<"paymentToolToken">> => decode_stat_payment_tool_token(PaymentTool),
+        <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool)
     };
 decode_stat_payer({payment_resource, PaymentResource}) ->
     #merchstat_PaymentResourcePayer{
