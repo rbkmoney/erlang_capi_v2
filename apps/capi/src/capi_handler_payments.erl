@@ -442,6 +442,8 @@ encode_deadline(Deadline) ->
     case capi_utils:parse_deadline(Deadline) of
         {ok, undefined} ->
             undefined;
+        {error, bad_deadline} ->
+            undefined;
         {ok, WoodyDeadline} ->
             woody_deadline:to_binary(WoodyDeadline)
     end.
