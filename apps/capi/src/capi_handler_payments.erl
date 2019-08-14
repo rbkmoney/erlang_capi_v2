@@ -339,12 +339,13 @@ create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} =
 encode_invoice_payment_params(ID, ExternalID, PaymentParams) ->
     Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
     #payproc_InvoicePaymentParams{
-        id              = ID,
-        external_id     = ExternalID,
-        payer           = encode_payer_params(genlib_map:get(<<"payer">>, PaymentParams)),
-        flow            = encode_flow(Flow),
-        make_recurrent  = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false),
-        context         = capi_handler_encoder:encode_payment_context(PaymentParams)
+        id               = ID,
+        external_id      = ExternalID,
+        payer            = encode_payer_params(genlib_map:get(<<"payer">>, PaymentParams)),
+        flow             = encode_flow(Flow),
+        make_recurrent   = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false),
+        context          = capi_handler_encoder:encode_payment_context(PaymentParams),
+        payment_deadline = encode_deadline(genlib_map:get(<<"paymentDeadline">>, PaymentParams))
     }.
 
 encode_payer_params(#{
@@ -435,4 +436,12 @@ get_payment(InvoiceID, PaymentID, Context) ->
             {ok, InvoiceID, Payment};
         Error ->
             Error
+    end.
+
+encode_deadline(Deadline) ->
+    case capi_utils:parse_deadline(Deadline) of
+        {ok, undefined} ->
+            undefined;
+        {ok, WoodyDeadline} ->
+            woody_deadline:to_binary(WoodyDeadline)
     end.
