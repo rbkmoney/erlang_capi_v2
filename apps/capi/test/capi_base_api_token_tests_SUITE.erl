@@ -1018,7 +1018,8 @@ search_invoices_ok_test(Config) ->
         {bankCardTokenProvider, <<"applepay">>},
         {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000},
-        {continuationToken, <<"come_back_next_time">>}
+        {continuationToken, <<"come_back_next_time">>},
+        {excludedShops, <<"shop1, shop2">>}
     ],
 
     {ok, _, _} = capi_client_searches:search_invoices(?config(context, Config), Query).
@@ -1053,7 +1054,8 @@ search_payments_ok_test(Config) ->
         {bankCardTokenProvider, <<"applepay">>},
         {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000},
-        {continuationToken, <<"come_back_next_time">>}
+        {continuationToken, <<"come_back_next_time">>},
+        {excludedShops, <<"shop1, shop2">>}
     ],
 
     {ok, _, _} = capi_client_searches:search_payments(?config(context, Config), Query).
@@ -1071,7 +1073,9 @@ search_refunds_ok_test(Config) ->
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
         {refundID, <<"testRefundID">>},
-        {refundStatus, <<"succeeded">>}
+        {refundStatus, <<"succeeded">>},
+        {continuationToken, <<"come_back_next_time">>},
+        {excludedShops, <<"shop1, shop2">>}
     ],
 
     {ok, _, _} = capi_client_searches:search_refunds(?config(context, Config), Query).
@@ -1087,7 +1091,9 @@ search_payouts_ok_test(Config) ->
         {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {shopID, ?STRING},
         {payoutID, <<"testPayoutID">>},
-        {payoutToolType, <<"Wallet">>}
+        {payoutToolType, <<"Wallet">>},
+        {continuationToken, <<"come_back_next_time">>},
+        {excludedShops, <<"shop1, shop2">>}
     ],
 
     {ok, _, _} = capi_client_searches:search_payouts(?config(context, Config), Query).

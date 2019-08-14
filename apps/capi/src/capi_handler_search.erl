@@ -35,7 +35,8 @@ process_request('SearchInvoices', Req, Context) ->
         <<"payment_token_provider"   >> => genlib_map:get('bankCardTokenProvider', Req),
         <<"payment_system"           >> => genlib_map:get('bankCardPaymentSystem', Req),
         <<"payment_first6"           >> => genlib_map:get('first6', Req),
-        <<"payment_last4"            >> => genlib_map:get('last4', Req)
+        <<"payment_last4"            >> => genlib_map:get('last4', Req),
+        <<"exclude"                  >> => construct_exclude(Req)
     },
     Opts = #{
         thrift_fun => 'GetInvoices',
@@ -65,7 +66,8 @@ process_request('SearchPayments', Req, Context) ->
         <<"payment_first6"           >> => genlib_map:get('first6', Req),
         <<"payment_last4"            >> => genlib_map:get('last4', Req),
         <<"payment_rrn"              >> => genlib_map:get('rrn', Req),
-        <<"payment_approval_code"    >> => genlib_map:get('approvalCode', Req)
+        <<"payment_approval_code"    >> => genlib_map:get('approvalCode', Req),
+        <<"exclude"                  >> => construct_exclude(Req)
     },
     Opts = #{
         thrift_fun => 'GetPayments',
@@ -81,7 +83,8 @@ process_request('SearchPayouts', Req, Context) ->
         <<"to_time"        >> => capi_handler_utils:get_time('toTime', Req),
         <<"payout_statuses">> => [<<"confirmed">>, <<"paid">>],
         <<"payout_id"      >> => genlib_map:get('payoutID', Req),
-        <<"payout_type"    >> => encode_payout_type(genlib_map:get('payoutToolType', Req))
+        <<"payout_type"    >> => encode_payout_type(genlib_map:get('payoutToolType', Req)),
+        <<"exclude"        >> => construct_exclude(Req)
     },
     Opts = #{
         thrift_fun => 'GetPayouts',
@@ -98,7 +101,8 @@ process_request('SearchRefunds', Req, Context) ->
         <<"refund_id"                >> => genlib_map:get('refundID', Req),
         <<"from_time"                >> => capi_handler_utils:get_time('fromTime', Req),
         <<"to_time"                  >> => capi_handler_utils:get_time('toTime', Req),
-        <<"refund_status"            >> => genlib_map:get('refundStatus', Req)
+        <<"refund_status"            >> => genlib_map:get('refundStatus', Req),
+        <<"exclude"                  >> => construct_exclude(Req)
     },
     Opts = #{
         %% TODO no special fun for refunds so we can use any
@@ -517,3 +521,9 @@ decode_stat_refund_status({Status, StatusInfo}, Context) ->
         <<"status">> => genlib:to_binary(Status),
         <<"error" >> => Error
     }.
+
+construct_exclude(Req) ->
+    % can be extended upon need
+    genlib_map:compact(#{
+        <<"shop_id">> => genlib_map:get('excludedShops', Req)
+    }).
