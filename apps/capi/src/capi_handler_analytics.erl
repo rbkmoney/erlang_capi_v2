@@ -1,6 +1,6 @@
 -module(capi_handler_analytics).
 
--include_lib("dmsl/include/dmsl_merch_stat_thrift.hrl").
+-include_lib("damsel/include/dmsl_merch_stat_thrift.hrl").
 
 -behaviour(capi_handler).
 -export([process_request/3]).
