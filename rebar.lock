@@ -39,7 +39,7 @@
   1},
  {<<"erl_health">>,
   {git,"https://github.com/rbkmoney/erlang-health.git",
-       {ref,"2575c7b63d82a92de54d2d27e504413675e64811"}},
+       {ref,"c190cb8de0359b933a27cd20ddc74180c0e5f5c4"}},
   0},
  {<<"folsom">>,
   {git,"git@github.com:folsom-project/folsom.git",
