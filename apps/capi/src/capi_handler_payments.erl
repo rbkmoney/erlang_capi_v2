@@ -7,6 +7,8 @@
 -export([process_request/3]).
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
+-define(DEFAULT_PAYMENT_DEADLINE, <<"30m">>).
+
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
@@ -345,7 +347,9 @@ encode_invoice_payment_params(ID, ExternalID, PaymentParams) ->
         flow             = encode_flow(Flow),
         make_recurrent   = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false),
         context          = capi_handler_encoder:encode_payment_context(PaymentParams),
-        payment_deadline = encode_deadline(genlib_map:get(<<"paymentDeadline">>, PaymentParams))
+        payment_deadline = encode_deadline(
+            genlib_map:get(<<"paymentDeadline">>, PaymentParams, ?DEFAULT_PAYMENT_DEADLINE)
+        )
     }.
 
 encode_payer_params(#{
