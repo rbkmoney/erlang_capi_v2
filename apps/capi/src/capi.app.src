@@ -13,7 +13,7 @@
         woody,
         how_are_you,  % must be after ranch and before any woody usage
         capi_woody_client,
-        dmsl,
+        damsel,
         bender_proto,
         binbase_proto,
         dmt_client,
