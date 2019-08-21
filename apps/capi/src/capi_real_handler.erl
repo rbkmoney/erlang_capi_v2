@@ -556,7 +556,7 @@ process_request('GetLocationsNames', Req, _Context, ReqCtx) ->
             {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}}
     end;
 
-process_request('CreateRefund', Req, Context, ReqCtx) ->
+process_request('CreateRefund' = OperationID, Req, Context, ReqCtx) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
     RefundParams = maps:get('RefundParams', Req),
@@ -567,7 +567,12 @@ process_request('CreateRefund', Req, Context, ReqCtx) ->
         invoice_id => InvoiceID,
         payment_id => PaymentID
     },
+    PartyID = get_party_id(Context),
+    IdempotentKey = capi_bender:get_idempotent_key(OperationID, PartyID, undefined),
+    Hash = erlang:phash2(RefundParams),
+    {ok, ID} = capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Hash, ReqCtx),
     Params = #payproc_InvoicePaymentRefundParams{
+        id = ID,
         reason = genlib_map:get(<<"reason">>, RefundParams),
         cash = encode_optional_refund_cash(RefundParams, EncodingContext)
     },
