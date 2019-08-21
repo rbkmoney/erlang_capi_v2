@@ -1099,6 +1099,7 @@ search_invoices_ok_test(Config) ->
         %
         % {first6, <<"424242">>},
         % {last4, <<"2222">>},
+        % {rrn, <<"090909090909">>},
         {bankCardTokenProvider, <<"applepay">>},
         {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000},
