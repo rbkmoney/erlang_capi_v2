@@ -449,7 +449,8 @@ create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} =
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2(RefundParams),
     CtxData = #{<<"invoice_id">> => InvoiceID, <<"payment_id">> => PaymentID},
-    case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Hash, WoodyCtx, CtxData) of
+    SequenceID = <<InvoiceID/binary, PaymentID/binary>>,
+    case capi_bender:gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyCtx, CtxData) of
         {ok, ID} ->
             Params = #payproc_InvoicePaymentRefundParams{
                 id = ID,
