@@ -570,9 +570,10 @@ process_request('CreateRefund' = OperationID, Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
     IdempotentKey = capi_bender:get_idempotent_key(OperationID, PartyID, undefined),
     Hash = erlang:phash2(RefundParams),
-    {ok, ID} = capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Hash, ReqCtx),
+    SeqenceID = <<InvoiceID/binary, PaymentID/binary>>,
+    {ok, RefundID} = capi_bender:gen_by_sequence(IdempotentKey, SeqenceID, Hash, ReqCtx),
     Params = #payproc_InvoicePaymentRefundParams{
-        id = ID,
+        id = RefundID,
         reason = genlib_map:get(<<"reason">>, RefundParams),
         cash = encode_optional_refund_cash(RefundParams, EncodingContext)
     },
