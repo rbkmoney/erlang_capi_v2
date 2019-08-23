@@ -22,15 +22,12 @@ process_request('CreatePayment' = OperationID, Req, Context) ->
         try
             create_payment(InvoiceID, PartyID, PaymentParams, Context, OperationID)
         catch
-            {external_id_conflict, _, _} = Error ->
-                {error, Error};
             throw:Error when
                 Error =:= invalid_token orelse
                 Error =:= invalid_payment_session
             ->
                 {error, Error}
         end,
-
     case Result of
         {ok, Payment} ->
             {ok, {201, #{}, decode_invoice_payment(InvoiceID, Payment, Context)}};
@@ -220,13 +217,7 @@ process_request('CreateRefund' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
     RefundParams = maps:get('RefundParams', Req),
-    Result =
-        try
-            create_refund(InvoiceID, PaymentID, RefundParams, Context, OperationID)
-        catch
-            {external_id_conflict, _, _} = Error ->
-                {error, Error}
-        end,
+    Result = create_refund(InvoiceID, PaymentID, RefundParams, Context, OperationID),
     case Result of
         {ok, Refund} ->
             {ok, {201, #{}, capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
@@ -337,7 +328,7 @@ create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} =
             Call = {invoicing, 'StartPayment', [InvoiceID, Params]},
             capi_handler_utils:service_call_with([user_info], Call, Context);
         {error, {external_id_conflict, ID}} ->
-            throw({external_id_conflict, ID, ExternalID})
+            {error, {external_id_conflict, ID, ExternalID}}
     end.
 
 encode_invoice_payment_params(ID, ExternalID, PaymentParams) ->
@@ -461,7 +452,7 @@ create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} =
             Call = {invoicing, 'RefundPayment', [InvoiceID, PaymentID, Params]},
             capi_handler_utils:service_call_with([user_info], Call, Context);
         {error, {external_id_conflict, ID}} ->
-            throw({external_id_conflict, ID, ExternalID})
+            {error, {external_id_conflict, ID, ExternalID}}
     end.
 
 %%
