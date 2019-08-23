@@ -444,12 +444,12 @@ get_payment(InvoiceID, PaymentID, Context) ->
 %%
 
 create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
-    ExternalID    = maps:get(<<"externalID">>, RefundParams, undefined),
-    PartyID       = capi_handler_utils:get_party_id(Context),
+    PartyID     = capi_handler_utils:get_party_id(Context),
+    ExternalID   = maps:get(<<"externalID">>, RefundParams, undefined),
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
+    SequenceID   = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
+    CtxData     = #{<<"invoice_id">> => InvoiceID, <<"payment_id">> => PaymentID},
     Hash = erlang:phash2(RefundParams),
-    CtxData = #{<<"invoice_id">> => InvoiceID, <<"payment_id">> => PaymentID},
-    SequenceID = <<InvoiceID/binary, PaymentID/binary>>,
     case capi_bender:gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyCtx, CtxData) of
         {ok, ID} ->
             Params = #payproc_InvoicePaymentRefundParams{
@@ -463,3 +463,11 @@ create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} =
         {error, {external_id_conflict, ID}} ->
             throw({external_id_conflict, ID, ExternalID})
     end.
+
+%%
+
+create_sequence_id([Identifier | Rest], BenderPrefix) ->
+    Next = create_sequence_id(Rest, BenderPrefix),
+    <<Identifier/binary, ".", Next/binary>>;
+create_sequence_id([], BenderPrefix) ->
+    genlib:to_binary(BenderPrefix).
