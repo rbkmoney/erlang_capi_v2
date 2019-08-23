@@ -14,11 +14,13 @@
     {ok | error, capi_handler:response() | noimpl}.
 
 process_request('GetAccountByID', Req, Context) ->
-    Call = {party_management, 'GetAccountState', [genlib:to_int(maps:get('accountID', Req))]},
-    case capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context) of
-        {ok, S} ->
-            {ok, {200, #{}, decode_account_state(S)}};
-        {exception, #payproc_AccountNotFound{}} ->
+    try
+        AccountId = genlib:to_int(maps:get('accountID', Req)),
+        AccountState = get_account_state(AccountId, Context),
+        AccountBalance = get_account_balance(AccountId, Context),
+        {ok, {200, #{}, decode_account_state(AccountState, AccountBalance)}}
+    catch
+        throw:account_not_found  ->
             {ok, general_error(404, <<"Account not found">>)}
     end;
 
@@ -27,10 +29,28 @@ process_request('GetAccountByID', Req, Context) ->
 process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
-decode_account_state(AccountState) ->
+decode_account_state(AccountState, AccountBalance) ->
     #{
         <<"id"             >> => AccountState#payproc_AccountState.account_id,
-        <<"ownAmount"      >> => AccountState#payproc_AccountState.own_amount,
-        <<"availableAmount">> => AccountState#payproc_AccountState.available_amount,
+        <<"ownAmount"      >> => AccountBalance#payproc_AccountBalance.own_amount,
+        <<"availableAmount">> => AccountBalance#payproc_AccountBalance.available_amount,
         <<"currency"       >> => capi_handler_decoder_utils:decode_currency(AccountState#payproc_AccountState.currency)
     }.
+
+get_account_state(AccountId, Context) ->
+    AccountStateCall = {party_management, 'GetAccountState', [AccountId]},
+    case capi_handler_utils:service_call_with([user_info, party_id, party_creation], AccountStateCall, Context) of
+        {ok, AccountState} ->
+            AccountState;
+        {exception, #payproc_AccountNotFound{}} ->
+            throw(account_not_found)
+    end.
+
+get_account_balance(AccountId, Context) ->
+    AccountStateCall = {party_management, 'GetAccountBalance', [AccountId]},
+    case capi_handler_utils:service_call_with([user_info, party_id], AccountStateCall, Context) of
+        {ok, AccountBalance} ->
+            AccountBalance;
+        {exception, #payproc_AccountNotFound{}} ->
+            throw(account_not_found)
+    end.
