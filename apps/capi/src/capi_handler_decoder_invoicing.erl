@@ -220,6 +220,8 @@ payment_error_client_maping({authorization_failed, {account_limit_exceeded, _}})
     <<"AccountLimitsExceeded">>;
 payment_error_client_maping({authorization_failed, {insufficient_funds, _}}) ->
     <<"InsufficientFunds">>;
+payment_error_client_maping({authorization_failed, {processing_deadline_reached, _}}) ->
+    <<"ProcessingDeadlineReached">>;
 payment_error_client_maping(_) ->
     <<"PaymentRejected">>.
 

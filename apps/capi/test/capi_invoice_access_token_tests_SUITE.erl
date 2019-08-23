@@ -250,7 +250,7 @@ create_payment_ok_test(Config) ->
             }
         },
         <<"metadata">> => ?JSON,
-        <<"paymentDeadline">> => <<"5m">>
+        <<"processingDeadline">> => <<"5m">>
     },
     {ok, #{
         <<"id">> := BenderKey,
