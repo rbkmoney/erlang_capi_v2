@@ -570,7 +570,7 @@ process_request('CreateRefund' = OperationID, Req, Context, ReqCtx) ->
     PartyID = get_party_id(Context),
     IdempotentKey = capi_bender:get_idempotent_key(OperationID, PartyID, undefined),
     Hash = erlang:phash2(RefundParams),
-    SeqenceID = <<InvoiceID/binary, PaymentID/binary>>,
+    SeqenceID = create_sequence_id([InvoiceID, PaymentID], OperationID),
     {ok, RefundID} = capi_bender:gen_by_sequence(IdempotentKey, SeqenceID, Hash, ReqCtx),
     Params = #payproc_InvoicePaymentRefundParams{
         id = RefundID,
@@ -5221,3 +5221,9 @@ decode_optional(undefined, _) ->
 gen_random_id() ->
     Random = crypto:strong_rand_bytes(16),
     genlib_format:format_int_base(binary:decode_unsigned(Random), 62).
+
+create_sequence_id([Identifier | Rest], BenderPrefix) ->
+    Next = create_sequence_id(Rest, BenderPrefix),
+    <<Identifier/binary, ".", Next/binary>>;
+create_sequence_id([], BenderPrefix) ->
+    genlib:to_binary(BenderPrefix).
