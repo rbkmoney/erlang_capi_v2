@@ -145,8 +145,10 @@
     }
 }).
 
--define(REFUND, #domain_InvoicePaymentRefund{
-    id = ?STRING,
+-define(REFUND, ?REFUND(?STRING)).
+
+-define(REFUND(ID), #domain_InvoicePaymentRefund{
+    id = ID,
     status = {pending, #domain_InvoicePaymentRefundPending{}},
     created_at = ?TIMESTAMP,
     domain_revision = ?INTEGER,
