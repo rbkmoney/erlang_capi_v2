@@ -15,6 +15,7 @@
 -export([gen_by_snowflake/3]).
 -export([gen_by_sequence/4]).
 -export([gen_by_sequence/5]).
+-export([gen_by_sequence/6]).
 -export([gen_by_constant/4]).
 -export([gen_by_constant/5]).
 -export([get_idempotent_key/3]).
