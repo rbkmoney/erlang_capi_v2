@@ -6,6 +6,7 @@
 -type woody_context() :: woody_context:ctx().
 -type context_data() :: #{binary() => term()}.
 -type bender_context() :: #{binary() => term()}.
+-type sequence_params() :: #{minimum => integer()}.
 -export_type([
     bender_context/0,
     context_data/0
@@ -51,6 +52,10 @@ gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext) ->
 
 gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext, CtxData) ->
     gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext, CtxData, #{}).
+
+-spec gen_by_sequence(binary(), binary(), integer(), woody_context(), context_data(), sequence_params()) ->
+    {ok, binary()} |
+    {error, {external_id_conflict, binary()}}.
 
 gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext, CtxData, Params) ->
     Minimum = maps:get(minimum, Params, undefined),
