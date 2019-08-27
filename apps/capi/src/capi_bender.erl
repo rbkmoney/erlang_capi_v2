@@ -5,6 +5,8 @@
 
 -type woody_context() :: woody_context:ctx().
 
+-type sequence_params() :: #{minimum => integer()}.
+
 -export([gen_by_snowflake/3]).
 -export([gen_by_sequence/4]).
 -export([gen_by_sequence/5]).
@@ -27,6 +29,10 @@ gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) ->
 
 gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyCtx) ->
     gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyCtx, #{}).
+
+-spec gen_by_sequence(binary(), binary(), integer(), woody_context(), sequence_params()) ->
+    {ok, binary()} |
+    {error, {external_id_conflict, binary()}}.
 
 gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyCtx, Params) ->
     Minimum = maps:get(minimum, Params, undefined),
