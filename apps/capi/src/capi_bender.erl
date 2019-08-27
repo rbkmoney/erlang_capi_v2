@@ -49,8 +49,13 @@ gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext) ->
     {error, {external_id_conflict, binary()}}.
 
 gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext, CtxData) ->
+    gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext, CtxData, #{}).
+
+gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext, CtxData, Params) ->
+    Minimum = maps:get(minimum, Params, undefined),
     Sequence = {sequence, #bender_SequenceSchema{
-        sequence_id = SequenceID
+        sequence_id = SequenceID,
+        minimum = Minimum
     }},
     generate_id(IdempotentKey, Sequence, Hash, WoodyContext, CtxData).
 
