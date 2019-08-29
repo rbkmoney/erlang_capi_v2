@@ -1,7 +1,7 @@
 -module(capi_handler_reports).
 
--include_lib("dmsl/include/dmsl_domain_thrift.hrl").
--include_lib("dmsl/include/dmsl_reporting_thrift.hrl").
+-include_lib("damsel/include/dmsl_domain_thrift.hrl").
+-include_lib("damsel/include/dmsl_reporting_thrift.hrl").
 
 -behaviour(capi_handler).
 -export([process_request/3]).
