@@ -348,7 +348,7 @@ encode_invoice_payment_params(ID, ExternalID, PaymentParams) ->
         make_recurrent   = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false),
         context          = capi_handler_encoder:encode_payment_context(PaymentParams),
         processing_deadline = encode_deadline(
-            genlib_map:get(<<"processingDeadline">>, PaymentParams, ?DEFAULT_PROCESSING_DEADLINE)
+            genlib_map:get(<<"processingDeadline">>, PaymentParams, default_processing_deadline())
         )
     }.
 
@@ -451,3 +451,6 @@ encode_deadline(Deadline) ->
         {ok, WoodyDeadline} ->
             woody_deadline:to_binary(WoodyDeadline)
     end.
+
+default_processing_deadline() ->
+    genlib_app:env(capi, processing_deadline, ?DEFAULT_PROCESSING_DEADLINE).
