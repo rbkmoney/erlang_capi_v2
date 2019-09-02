@@ -754,7 +754,7 @@
     id = ?STRING,
     rec_payment_tool_id = ?STRING,
     payment_resource = ?DISP_PAYMENT_RESOURCE,
-    status = {succeeded, #payproc_CustomerBindingSucceeded{}}
+    status = {creating, #payproc_CustomerBindingCreating{}}
 }).
 
 -define(PUT_CARD_RESULT, #'PutCardResult'{
