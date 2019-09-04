@@ -30,9 +30,10 @@ init([]) ->
     HealthRoutes = [{'_', [erl_health_handle:get_route(HealthCheck)]}],
     SwaggerHandlerOpts = genlib_app:env(?APP, swagger_handler_opts, #{}),
     SwaggerSpec = capi_swagger_server:child_spec({HealthRoutes, LogicHandler, SwaggerHandlerOpts}),
+    DrainerSpec = capi_drainer:child_spec(#{ranch_ref => capi_swagger_server, shutdown => infinity}),
     {ok, {
         {one_for_all, 0, 1},
-            AuthorizerSpecs ++ LogicHandlerSpecs ++ [SwaggerSpec]
+            AuthorizerSpecs ++ LogicHandlerSpecs ++ [SwaggerSpec] ++ [DrainerSpec]
     }}.
 
 -spec get_authorizer_child_specs() -> [supervisor:child_spec()].

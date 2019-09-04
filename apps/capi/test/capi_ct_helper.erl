@@ -54,7 +54,7 @@ init_suite(Module, Config, CapiEnv) ->
     Apps2 =
         start_app(dmt_client, [{max_cache_size, #{}}, {service_urls, ServiceURLs}, {cache_update_interval, 50000}]) ++
         start_capi(Config, CapiEnv),
-    [{apps, lists:reverse(Apps2 ++ Apps1)}, {suite_test_sup, SupPid} | Config].
+    [{apps, lists:reverse(Apps1 ++ Apps2)}, {suite_test_sup, SupPid} | Config].
 
 -spec start_app(app_name()) ->
     [app_name()].
