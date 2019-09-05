@@ -5,8 +5,6 @@
 -include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_errors_thrift.hrl").
--include_lib("damsel/include/dmsl_payment_tool_provider_thrift.hrl").
--include_lib("binbase_proto/include/binbase_binbase_thrift.hrl").
 -include_lib("damsel/include/dmsl_cds_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 -include_lib("jose/include/jose_jwk.hrl").
@@ -218,15 +216,10 @@ create_payment_ok_test(Config) ->
     ExternalID = <<"merch_id">>,
     capi_ct_helper:mock_services(
         [
-            {cds_storage, fun
-                ('PutSession', _) -> {ok, ok};
-                ('PutCard', _) -> {ok, ?PUT_CARD_RESULT}
-            end},
             {invoicing, fun('StartPayment', [_, _, IPP]) ->
                 #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
                 {ok, ?PAYPROC_PAYMENT(ID, EID)}
             end},
-            {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end},
             {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
         ],
         Config
@@ -261,10 +254,6 @@ create_payment_ok_test(Config) ->
 create_payment_with_empty_cvv_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {cds_storage, fun
-                ('PutSession', _) -> {ok, ok};
-                ('PutCard', _) -> {ok, ?PUT_CARD_RESULT}
-            end},
             {invoicing, fun
                 ('StartPayment', [_UserInfo, _InvoiceID,
                     #payproc_InvoicePaymentParams{
@@ -279,8 +268,7 @@ create_payment_with_empty_cvv_ok_test(Config) ->
                     }
                 ]) -> {ok, ?PAYPROC_PAYMENT}
              end},
-            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end},
-            {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end}
+            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
         ],
         Config
     ),
@@ -346,21 +334,6 @@ create_payment_qiwi_access_token_ok_test(Config) ->
     _.
 create_payment_with_googlepay_plain_ok_test(Config) ->
     capi_ct_helper:mock_services([
-        {payment_tool_provider_google_pay,
-            fun('Unwrap', _) ->
-                {ok, ?UNWRAPPED_PAYMENT_TOOL(
-                    ?GOOGLE_PAY_DETAILS,
-                    {card, #paytoolprv_Card{
-                        pan = <<"1234567890123456">>,
-                        exp_date = #paytoolprv_ExpDate{month = 10, year = 2018}
-                    }}
-                )}
-            end
-        },
-        {cds_storage, fun
-            ('PutSession', _) -> {ok, ok};
-            ('PutCard', _) -> {ok, ?PUT_CARD_RESULT}
-        end},
         {invoicing, fun
                 ('StartPayment', [_UserInfo, _InvoiceID,
                     #payproc_InvoicePaymentParams{
@@ -379,9 +352,6 @@ create_payment_with_googlepay_plain_ok_test(Config) ->
                     }
                 ]) -> {ok, ?PAYPROC_PAYMENT}
             end},
-        {binbase,
-            fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end
-        },
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
     ], Config),
     PaymentToolToken = capi_utils:map_to_base64url(#{
@@ -460,12 +430,7 @@ capture_partial_payment_ok_test(Config) ->
 create_first_recurrent_payment_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {cds_storage, fun
-                ('PutSession', _) -> {ok, ok};
-                ('PutCard', _) -> {ok, ?PUT_CARD_RESULT}
-            end},
             {invoicing, fun('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT} end},
-            {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end},
             {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
         ],
         Config
@@ -496,10 +461,6 @@ create_first_recurrent_payment_ok_test(Config) ->
 create_second_recurrent_payment_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {cds_storage, fun
-                ('PutSession', _) -> {ok, ok};
-                ('PutCard', _) -> {ok, ?PUT_CARD_RESULT}
-            end},
             {invoicing, fun('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT} end},
             {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
         ],
