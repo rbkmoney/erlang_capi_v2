@@ -754,62 +754,13 @@
     id = ?STRING,
     rec_payment_tool_id = ?STRING,
     payment_resource = ?DISP_PAYMENT_RESOURCE,
-    status = {creating, #payproc_CustomerBindingCreating{}}
+    status = {succeeded, #payproc_CustomerBindingSucceeded{}}
 }).
 
--define(PUT_CARD_RESULT, #'PutCardResult'{
-    bank_card = ?BANK_CARD
-}).
-
--define(UNWRAPPED_PAYMENT_TOOL(Details),
-    ?UNWRAPPED_PAYMENT_TOOL(
-        Details,
-        {tokenized_card, #paytoolprv_TokenizedCard{
-            dpan = ?STRING,
-            exp_date = #paytoolprv_ExpDate{
-                month = 10,
-                year = 2018
-            },
-            auth_data = {auth_3ds, #paytoolprv_Auth3DS{
-                cryptogram = ?STRING,
-                eci = ?STRING
-            }}
-        }}
-    )
-).
-
--define(UNWRAPPED_PAYMENT_TOOL(Details, PaymentData), #paytoolprv_UnwrappedPaymentTool{
-    payment_data = PaymentData,
-    card_info = #paytoolprv_CardInfo{
-        display_name = <<"Visa 1234">>,
-        cardholder_name = ?STRING,
-        last_4_digits = <<"1234">>,
-        card_class = debit,
-        payment_system = mastercard
-    },
-    details = Details
-}).
-
--define(APPLE_PAY_DETAILS, {apple, #paytoolprv_ApplePayDetails{
-    transaction_id = ?STRING,
-    amount = ?INTEGER,
-    currency_numeric_code = 643,
-    device_id = ?STRING
-}}).
-
--define(GOOGLE_PAY_DETAILS, {google, #paytoolprv_GooglePayDetails{
-    message_id = ?STRING,
-    message_expiration = ?TIMESTAMP
-}}).
-
--define(BINBASE_LOOKUP_RESULT, ?BINBASE_LOOKUP_RESULT(<<"MASTERCARD">>)).
-
--define(BINBASE_LOOKUP_RESULT(PaymentSystem), #'binbase_ResponseData'{
-    bin_data = #'binbase_BinData' {
-        payment_system = PaymentSystem,
-        bank_name = ?STRING,
-        iso_country_code = <<"KAZ">>,
-        card_type = debit
-    },
-    version = ?INTEGER
-}).
+-define(TEST_PAYMENT_SESSION, capi_utils:map_to_base64url(#{
+    <<"paymentSession">> => ?STRING,
+    <<"clientInfo"    >> => #{
+        <<"fingerprint">> => <<"test fingerprint">>,
+        <<"ip"         >> => <<"::ffff:127.0.0.1">>
+    }
+})).
