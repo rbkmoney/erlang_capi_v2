@@ -34,6 +34,7 @@ process_request('SearchInvoices', Req, Context) ->
         <<"invoice_amount"           >> => genlib_map:get('invoiceAmount', Req),
         <<"payment_token_provider"   >> => genlib_map:get('bankCardTokenProvider', Req),
         <<"payment_system"           >> => genlib_map:get('bankCardPaymentSystem', Req),
+        <<"payment_rrn"              >> => genlib_map:get('rrn', Req),
         <<"payment_first6"           >> => genlib_map:get('first6', Req),
         <<"payment_last4"            >> => genlib_map:get('last4', Req)
     },

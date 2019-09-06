@@ -26,7 +26,8 @@ start_link() ->
 init([]) ->
     AuthorizerSpecs = get_authorizer_child_specs(),
     {LogicHandler, LogicHandlerSpecs} = get_logic_handler_info(),
-    HealthRoutes = [{'_', [erl_health_handle:get_route(genlib_app:env(?APP, health_checkers, []))]}],
+    HealthCheck = enable_health_logging(genlib_app:env(?APP, health_check, #{})),
+    HealthRoutes = [{'_', [erl_health_handle:get_route(HealthCheck)]}],
     SwaggerHandlerOpts = genlib_app:env(?APP, swagger_handler_opts, #{}),
     SwaggerSpec = capi_swagger_server:child_spec({HealthRoutes, LogicHandler, SwaggerHandlerOpts}),
     {ok, {
@@ -56,3 +57,10 @@ get_logic_handler_info() ->
         undefined ->
             exit(undefined_service_type)
     end.
+
+-spec enable_health_logging(erl_health:check()) ->
+    erl_health:check().
+
+enable_health_logging(Check) ->
+    EvHandler = {erl_health_event_handler, []},
+    maps:map(fun (_, V = {_, _, _}) -> #{runner => V, event_handler => EvHandler} end, Check).

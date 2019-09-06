@@ -24,15 +24,12 @@ process_request('CreatePayment' = OperationID, Req, Context) ->
         try
             create_payment(InvoiceID, PartyID, PaymentParams, Context, OperationID)
         catch
-            {external_id_conflict, _, _} = Error ->
-                {error, Error};
             throw:Error when
                 Error =:= invalid_token orelse
                 Error =:= invalid_payment_session
             ->
                 {error, Error}
         end,
-
     case Result of
         {ok, Payment} ->
             {ok, {201, #{}, decode_invoice_payment(InvoiceID, Payment, Context)}};
@@ -218,16 +215,12 @@ process_request('CapturePayment', Req, Context) ->
             end
     end;
 
-process_request('CreateRefund', Req, Context) ->
+process_request('CreateRefund' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
     RefundParams = maps:get('RefundParams', Req),
-    Params = #payproc_InvoicePaymentRefundParams{
-        reason = genlib_map:get(<<"reason">>, RefundParams),
-        cash = encode_optional_cash(RefundParams, InvoiceID, PaymentID, Context)
-    },
-    Call = {invoicing, 'RefundPayment', [InvoiceID, PaymentID, Params]},
-    case capi_handler_utils:service_call_with([user_info], Call, Context) of
+    Result = create_refund(InvoiceID, PaymentID, RefundParams, Context, OperationID),
+    case Result of
         {ok, Refund} ->
             {ok, {201, #{}, capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
         {exception, Exception} ->
@@ -280,7 +273,9 @@ process_request('CreateRefund', Req, Context) ->
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)}
-            end
+            end;
+        {error, {external_id_conflict, RefundID, ExternalID}} ->
+            {ok, logic_error(externalIDConflict, {RefundID, ExternalID})}
     end;
 
 process_request('GetRefunds', Req, Context) ->
@@ -335,7 +330,7 @@ create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} =
             Call = {invoicing, 'StartPayment', [InvoiceID, Params]},
             capi_handler_utils:service_call_with([user_info], Call, Context);
         {error, {external_id_conflict, ID}} ->
-            throw({external_id_conflict, ID, ExternalID})
+            {error, {external_id_conflict, ID, ExternalID}}
     end.
 
 encode_invoice_payment_params(ID, ExternalID, PaymentParams) ->
@@ -454,3 +449,33 @@ encode_deadline(Deadline) ->
 
 default_processing_deadline() ->
     genlib_app:env(capi, processing_deadline, ?DEFAULT_PROCESSING_DEADLINE).
+%%
+
+create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
+    PartyID     = capi_handler_utils:get_party_id(Context),
+    ExternalID   = maps:get(<<"externalID">>, RefundParams, undefined),
+    IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
+    SequenceID   = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
+    CtxData     = #{<<"invoice_id">> => InvoiceID, <<"payment_id">> => PaymentID},
+    Hash = erlang:phash2(RefundParams),
+    case capi_bender:gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyCtx, CtxData, #{minimum => 100}) of
+        {ok, ID} ->
+            Params = #payproc_InvoicePaymentRefundParams{
+                id = ID,
+                external_id = ExternalID,
+                reason = genlib_map:get(<<"reason">>, RefundParams),
+                cash = encode_optional_cash(RefundParams, InvoiceID, PaymentID, Context)
+            },
+            Call = {invoicing, 'RefundPayment', [InvoiceID, PaymentID, Params]},
+            capi_handler_utils:service_call_with([user_info], Call, Context);
+        {error, {external_id_conflict, ID}} ->
+            {error, {external_id_conflict, ID, ExternalID}}
+    end.
+
+%%
+
+create_sequence_id([Identifier | Rest], BenderPrefix) ->
+    Next = create_sequence_id(Rest, BenderPrefix),
+    <<Identifier/binary, ".", Next/binary>>;
+create_sequence_id([], BenderPrefix) ->
+    genlib:to_binary(BenderPrefix).
