@@ -93,14 +93,7 @@ get_context(Token) ->
 get_token() ->
     BasePermissions = [
         {[invoices], write},
-        {[invoices], read},
-        {[party], write},
-        {[party], read},
-        {[invoices, payments], write},
-        {[invoices, payments], read},
-        {[customers], write},
-        {[payouts], write},
-        {[payouts], read}
+        {[invoices], read}
     ],
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
     Token.
