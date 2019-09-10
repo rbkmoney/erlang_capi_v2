@@ -47,9 +47,9 @@ test(Config0) ->
     ok = spawn_workers(Token, self(), ?NUMBER_OF_WORKERS),
     ok = timer:sleep(1000),
     ok = application:stop(capi),
-    ok = receive_loop(fun(Result) -> {ok, _} = Result end, ?NUMBER_OF_WORKERS),
+    ok = receive_loop(fun(Result) -> {ok, _} = Result end, ?NUMBER_OF_WORKERS, timer:seconds(1)),
     ok = spawn_workers(Token, self(), ?NUMBER_OF_WORKERS),
-    ok = receive_loop(fun(Result) -> {error, econnrefused} = Result end, ?NUMBER_OF_WORKERS).
+    ok = receive_loop(fun(Result) -> {error, econnrefused} = Result end, ?NUMBER_OF_WORKERS, timer:seconds(1)).
 
 -spec init([]) -> {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 
@@ -58,14 +58,18 @@ init([]) ->
 
 %%%
 
-receive_loop(_, N) when N =< 0 ->
+receive_loop(_, N, _Timeout) when N =< 0 ->
     ok;
-receive_loop(MatchFun, N) ->
+receive_loop(_, _N, Timeout) when Timeout =< 0->
+    error(timeout);
+receive_loop(MatchFun, N, Timeout) ->
+    Start = erlang:system_time(millisecond),
     receive
         {result, Result} ->
             MatchFun(Result)
     end,
-    receive_loop(MatchFun, N - 1).
+    Diff = Start - erlang:system_time(millisecond),
+    receive_loop(MatchFun, N - 1, Timeout - Diff).
 
 spawn_workers(_, _, N) when N =< 0 ->
     ok;
