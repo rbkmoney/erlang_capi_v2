@@ -26,7 +26,8 @@ process_request('CreatePayment' = OperationID, Req, Context) ->
         catch
             throw:Error when
                 Error =:= invalid_token orelse
-                Error =:= invalid_payment_session
+                Error =:= invalid_payment_session orelse
+                Error =:= bad_deadline
             ->
                 {error, Error}
         end,
@@ -76,6 +77,11 @@ process_request('CreatePayment' = OperationID, Req, Context) ->
             {ok, logic_error(
                 invalidPaymentSession,
                 <<"Specified payment session is invalid">>
+            )};
+        {error, bad_deadline} ->
+            {ok, logic_error(
+                invalidDeadline,
+                <<"Specified processing deadline is invalid">>
             )};
         {error, {external_id_conflict, PaymentID, ExternalID}} ->
             {ok, logic_error(externalIDConflict, {PaymentID, ExternalID})}
@@ -442,7 +448,7 @@ encode_processing_deadline(Deadline) ->
         {ok, undefined} ->
             undefined;
         {error, bad_deadline} ->
-            undefined;
+            throw(bad_deadline);
         {ok, ProcessingDeadline} ->
             woody_deadline:to_binary(ProcessingDeadline)
     end.
