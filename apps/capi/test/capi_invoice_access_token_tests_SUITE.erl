@@ -224,13 +224,7 @@ create_payment_ok_test(Config) ->
         ],
         Config
     ),
-    PaymentToolToken = capi_utils:map_to_base64url(#{
-        <<"type"          >> => <<"bank_card">>,
-        <<"token"         >> => ?STRING,
-        <<"payment_system">> => atom_to_binary(visa, utf8),
-        <<"bin"           >> => <<"411111">>,
-        <<"masked_pan"    >> => <<"1111">>
-    }),
+    PaymentToolToken = ?TEST_PAYMENT_TOKEN,
     Req2 = #{
         <<"externalID">> => ExternalID,
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
@@ -354,13 +348,7 @@ create_payment_with_googlepay_plain_ok_test(Config) ->
             end},
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
     ], Config),
-    PaymentToolToken = capi_utils:map_to_base64url(#{
-        <<"type"          >> => <<"bank_card">>,
-        <<"token"         >> => ?STRING,
-        <<"payment_system">> => atom_to_binary(mastercard, utf8),
-        <<"bin"           >> => <<"411111">>,
-        <<"masked_pan"    >> => <<"1111">>
-    }),
+    PaymentToolToken = ?TEST_PAYMENT_TOKEN(mastercard),
     Req2 = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"payer">> => #{
@@ -435,13 +423,7 @@ create_first_recurrent_payment_ok_test(Config) ->
         ],
         Config
     ),
-    PaymentToolToken = capi_utils:map_to_base64url(#{
-        <<"type"          >> => <<"bank_card">>,
-        <<"token"         >> => ?STRING,
-        <<"payment_system">> => atom_to_binary(visa, utf8),
-        <<"bin"           >> => <<"411111">>,
-        <<"masked_pan"    >> => <<"1111">>
-    }),
+    PaymentToolToken = ?TEST_PAYMENT_TOKEN,
     Req2 = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"makeRecurrent">> => true,
