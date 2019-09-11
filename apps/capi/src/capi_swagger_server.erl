@@ -17,14 +17,15 @@
 child_spec({HealthRoutes, LogicHandler, SwaggerHandlerOpts}) ->
     {Transport, TransportOpts} = get_socket_transport(),
     CowboyOpts = get_cowboy_config(HealthRoutes, LogicHandler, SwaggerHandlerOpts),
+    GsTimeout = genlib_app:env(?APP, gracefull_shutdown_timeout, 5000),
     [#{
         id => ?MODULE,
         type => supervisor,
         start => {genlib_adhoc_supervisor, start_link, [
-            #{strategy => one_for_one},
+            #{strategy => one_for_all},
             [
                 ranch:child_spec(?RANCH_REF, Transport, TransportOpts, cowboy_clear, CowboyOpts),
-                capi_drainer:child_spec(#{ranch_ref => ?RANCH_REF, shutdown => infinity})
+                capi_drainer:child_spec(#{ranch_ref => ?RANCH_REF, shutdown => GsTimeout})
             ]
         ]}
     }].

@@ -15,6 +15,7 @@
 -export([issue_token/4]).
 -export([get_context/1]).
 -export([get_context/2]).
+-export([get_context/3]).
 -export([get_keysource/2]).
 -export([start_mocked_service_sup/1]).
 -export([stop_mocked_service_sup/1]).
@@ -144,6 +145,20 @@ get_context(Token) ->
 
 get_context(Token, ExtraProperties) ->
     capi_client_lib:get_context(?CAPI_URL, Token, 10000, ipv4, ExtraProperties).
+
+-spec get_context(binary(), map(), binary()) ->
+    capi_client_lib:context().
+
+get_context(Token, ExtraProperties, Deadline) ->
+    capi_client_lib:get_context(
+        ?CAPI_URL,
+        Token,
+        10000,
+        ipv4,
+        ExtraProperties,
+        capi_client_lib:default_event_handler(),
+        Deadline
+    ).
 
 % TODO move it to `capi_dummy_service`, looks more appropriate
 

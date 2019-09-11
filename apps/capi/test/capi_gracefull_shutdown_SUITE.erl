@@ -7,8 +7,11 @@
 -export([all/0]).
 -export([init_per_suite/1]).
 -export([end_per_suite/1]).
+-export([init_per_testcase/2]).
+-export([end_per_testcase/2]).
 
--export([test/1]).
+-export([shutdown_test/1]).
+-export([request_interrupt_test/1]).
 
 -behaviour(supervisor).
 -export([init/1]).
@@ -21,7 +24,10 @@
 -spec all() -> [test_case_name()].
 
 all() ->
-    [test].
+    [
+        shutdown_test,
+        request_interrupt_test
+    ].
 
 -spec init_per_suite(config()) -> config().
 
@@ -35,10 +41,21 @@ end_per_suite(C) ->
     _ = [application:stop(App) || App <- ?config(apps, C)],
     ok.
 
--spec test(config()) -> _.
+-spec init_per_testcase(atom(), config()) -> config().
 
-test(Config0) ->
-    Config = [{test_sup, capi_ct_helper:start_mocked_service_sup(?MODULE)} | Config0],
+init_per_testcase(_, Config) ->
+    _ = application:start(capi),
+    [{test_sup, capi_ct_helper:start_mocked_service_sup(?MODULE)} | Config].
+
+-spec end_per_testcase(atom(), config()) -> config().
+
+end_per_testcase(_, Config) ->
+    _ = capi_ct_helper:stop_mocked_service_sup(?config(test_sup, Config)),
+    Config.
+
+-spec shutdown_test(config()) -> _.
+
+shutdown_test(Config) ->
     capi_ct_helper:mock_services([
         {invoicing, fun('Create', _)     -> ok = timer:sleep(2000), {ok, ?PAYPROC_INVOICE} end},
         {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"key">>)} end}
@@ -48,6 +65,22 @@ test(Config0) ->
     ok = timer:sleep(1000),
     ok = application:stop(capi),
     ok = receive_loop(fun(Result) -> {ok, _} = Result end, ?NUMBER_OF_WORKERS, timer:seconds(20)),
+    ok = spawn_workers(Token, self(), ?NUMBER_OF_WORKERS),
+    ok = receive_loop(fun(Result) -> {error, econnrefused} = Result end, ?NUMBER_OF_WORKERS, timer:seconds(20)).
+
+-spec request_interrupt_test(config()) -> _.
+
+request_interrupt_test(Config0) ->
+    Config = [{test_sup, capi_ct_helper:start_mocked_service_sup(?MODULE)} | Config0],
+    capi_ct_helper:mock_services([
+        {invoicing, fun('Create', _)  -> ok = timer:sleep(20000), {ok, ?PAYPROC_INVOICE} end},
+        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"key">>)} end}
+    ], Config),
+    Token = get_token(),
+    ok = spawn_workers(Token, self(), ?NUMBER_OF_WORKERS),
+    ok = timer:sleep(1000),
+    ok = application:stop(capi),
+    ok = receive_loop(fun({error, closed}) -> ok end, ?NUMBER_OF_WORKERS, timer:seconds(20)),
     ok = spawn_workers(Token, self(), ?NUMBER_OF_WORKERS),
     ok = receive_loop(fun(Result) -> {error, econnrefused} = Result end, ?NUMBER_OF_WORKERS, timer:seconds(20)).
 
@@ -90,7 +123,8 @@ worker(Token, ParentPID) ->
     ParentPID ! {result, Result}.
 
 get_context(Token) ->
-    capi_ct_helper:get_context(Token).
+    {ok, Deadline} = build_deadline(genlib_time:now()),
+    capi_ct_helper:get_context(Token, #{}, Deadline).
 
 get_token() ->
     BasePermissions = [
@@ -99,3 +133,10 @@ get_token() ->
     ],
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
     Token.
+
+build_deadline(CurrentSeconds) ->
+    rfc3339:format(
+        genlib_time:unixtime_to_daytime(
+            genlib_time:add_hours(CurrentSeconds, 1)
+        )
+    ).
