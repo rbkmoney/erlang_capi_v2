@@ -17,7 +17,7 @@
 child_spec({HealthRoutes, LogicHandler, SwaggerHandlerOpts}) ->
     {Transport, TransportOpts} = get_socket_transport(),
     CowboyOpts = get_cowboy_config(HealthRoutes, LogicHandler, SwaggerHandlerOpts),
-    GsTimeout = genlib_app:env(?APP, gracefull_shutdown_timeout, 5000),
+    GsTimeout = genlib_app:env(?APP, graceful_shutdown_timeout, 5000),
     #{
         id => ?MODULE,
         type => supervisor,
