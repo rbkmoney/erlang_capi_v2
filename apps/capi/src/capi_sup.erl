@@ -29,10 +29,10 @@ init([]) ->
     HealthCheck = enable_health_logging(genlib_app:env(?APP, health_check, #{})),
     HealthRoutes = [{'_', [erl_health_handle:get_route(HealthCheck)]}],
     SwaggerHandlerOpts = genlib_app:env(?APP, swagger_handler_opts, #{}),
-    SwaggerSpec = capi_swagger_server:child_spec({HealthRoutes, LogicHandler, SwaggerHandlerOpts}),
+    SwaggerSpecs = capi_swagger_server:child_spec({HealthRoutes, LogicHandler, SwaggerHandlerOpts}),
     {ok, {
         {one_for_all, 0, 1},
-            AuthorizerSpecs ++ LogicHandlerSpecs ++ [SwaggerSpec]
+            AuthorizerSpecs ++ LogicHandlerSpecs ++ [SwaggerSpecs]
     }}.
 
 -spec get_authorizer_child_specs() -> [supervisor:child_spec()].
