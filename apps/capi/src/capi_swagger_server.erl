@@ -13,12 +13,12 @@
 -type params() :: {cowboy_router:routes(), module(), swag_server_router:swagger_handler_opts()}.
 
 -spec child_spec(params()) ->
-    [supervisor:child_spec()].
+    supervisor:child_spec().
 child_spec({HealthRoutes, LogicHandler, SwaggerHandlerOpts}) ->
     {Transport, TransportOpts} = get_socket_transport(),
     CowboyOpts = get_cowboy_config(HealthRoutes, LogicHandler, SwaggerHandlerOpts),
     GsTimeout = genlib_app:env(?APP, gracefull_shutdown_timeout, 5000),
-    [#{
+    #{
         id => ?MODULE,
         type => supervisor,
         start => {genlib_adhoc_supervisor, start_link, [
@@ -28,7 +28,7 @@ child_spec({HealthRoutes, LogicHandler, SwaggerHandlerOpts}) ->
                 capi_drainer:child_spec(#{ranch_ref => ?RANCH_REF, shutdown => GsTimeout})
             ]
         ]}
-    }].
+    }.
 
 get_socket_transport() ->
     {ok, IP} = inet:parse_address(genlib_app:env(?APP, ip, ?DEFAULT_IP_ADDR)),

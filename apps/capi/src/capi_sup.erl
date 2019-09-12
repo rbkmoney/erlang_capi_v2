@@ -32,7 +32,7 @@ init([]) ->
     SwaggerSpecs = capi_swagger_server:child_spec({HealthRoutes, LogicHandler, SwaggerHandlerOpts}),
     {ok, {
         {one_for_all, 0, 1},
-            AuthorizerSpecs ++ LogicHandlerSpecs ++ SwaggerSpecs
+            AuthorizerSpecs ++ LogicHandlerSpecs ++ [SwaggerSpecs]
     }}.
 
 -spec get_authorizer_child_specs() -> [supervisor:child_spec()].
