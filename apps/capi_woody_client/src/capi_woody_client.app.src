@@ -6,7 +6,7 @@
         stdlib,
         thrift,
         bender_proto,
-        dmsl,
+        damsel,
         genlib
     ]}
 ]}.

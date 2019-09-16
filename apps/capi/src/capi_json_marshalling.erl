@@ -1,6 +1,6 @@
 -module(capi_json_marshalling).
 
--include_lib("dmsl/include/dmsl_json_thrift.hrl").
+-include_lib("damsel/include/dmsl_json_thrift.hrl").
 
 %% API
 -export([marshal/1]).
