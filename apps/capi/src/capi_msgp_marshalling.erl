@@ -1,6 +1,6 @@
 -module(capi_msgp_marshalling).
 
--include_lib("dmsl/include/dmsl_msgpack_thrift.hrl").
+-include_lib("damsel/include/dmsl_msgpack_thrift.hrl").
 
 %% API
 -export([marshal/1]).
