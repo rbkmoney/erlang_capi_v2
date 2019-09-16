@@ -231,13 +231,16 @@
     }
 }).
 
--define(REFUND, #domain_InvoicePaymentRefund{
-    id = ?STRING,
+-define(REFUND, ?REFUND(?STRING, ?STRING)).
+
+-define(REFUND(ID, EID), #domain_InvoicePaymentRefund{
+    id = ID,
     status = {pending, #domain_InvoicePaymentRefundPending{}},
     created_at = ?TIMESTAMP,
     domain_revision = ?INTEGER,
     reason = ?STRING,
-    cash = ?CASH
+    cash = ?CASH,
+    external_id = EID
 }).
 
 -define(CONTRACT, #domain_Contract{
