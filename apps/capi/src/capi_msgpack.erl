@@ -1,10 +1,10 @@
 %%%
-%%% Msgpack manipulation employed by dmsl interfaces.
+%%% Msgpack manipulation employed by damsel interfaces.
 
 %%% Copy from machinery
 
 -module(capi_msgpack).
--include_lib("dmsl/include/dmsl_msgpack_thrift.hrl").
+-include_lib("damsel/include/dmsl_msgpack_thrift.hrl").
 
 %% API
 

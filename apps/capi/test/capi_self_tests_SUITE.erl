@@ -2,7 +2,7 @@
 
 -include_lib("common_test/include/ct.hrl").
 
--include_lib("dmsl/include/dmsl_domain_config_thrift.hrl").
+-include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 -include_lib("jose/include/jose_jwk.hrl").
 
@@ -114,18 +114,16 @@ end_per_testcase(_Name, C) ->
 oops_body_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, "spanish inquisition"} end}], Config),
     Context = ?config(context, Config),
-    Token = maps:get(token, Context),
+    {Endpoint, PreparedParams, Opts0} = capi_client_lib:make_request(Context, #{}),
+    Url = swag_client_utils:get_url(Endpoint, "/v2/processing/me"),
+    Headers = maps:to_list(maps:get(header, PreparedParams)),
+    Body = <<"{}">>,
+    Opts = Opts0 ++ [with_body],
     {ok, 500, _, OopsBody} = hackney:request(
         get,
-        "localhost:8080/v2/processing/me",
-        [
-            {<<"Authorization">>, <<<<"Bearer ">>/binary, Token/binary>>},
-            {<<"Content-Type">>, <<"application/json; charset=UTF-8">>},
-            {<<"X-Request-ID">>, list_to_binary(integer_to_list(rand:uniform(100000)))}
-        ],
-        <<"{}">>,
-        [
-            with_body
-        ]
+        Url,
+        Headers,
+        Body,
+        Opts
     ),
     {ok, OopsBody} = file:read_file(?OOPS_BODY).

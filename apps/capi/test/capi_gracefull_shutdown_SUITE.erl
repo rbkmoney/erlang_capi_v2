@@ -1,7 +1,7 @@
 -module(capi_gracefull_shutdown_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
--include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
+-include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include("capi_dummy_data.hrl").
 
 -export([all/0]).
