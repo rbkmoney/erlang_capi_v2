@@ -10,7 +10,7 @@
         genlib,
         woody,
         capi_woody_client,
-        dmsl,
+        damsel,
         bender_proto,
         binbase_proto,
         dmt_client,
