@@ -249,7 +249,8 @@ create_payment_ok_test(Config) ->
                 <<"email">> => <<"bla@bla.ru">>
             }
         },
-        <<"metadata">> => ?JSON
+        <<"metadata">> => ?JSON,
+        <<"processingDeadline">> => <<"5m">>
     },
     {ok, #{
         <<"id">> := BenderKey,

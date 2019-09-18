@@ -34,6 +34,7 @@ process_request('SearchInvoices', Req, Context) ->
         <<"invoice_amount"           >> => genlib_map:get('invoiceAmount', Req),
         <<"payment_token_provider"   >> => genlib_map:get('bankCardTokenProvider', Req),
         <<"payment_system"           >> => genlib_map:get('bankCardPaymentSystem', Req),
+        <<"payment_rrn"              >> => genlib_map:get('rrn', Req),
         <<"payment_first6"           >> => genlib_map:get('first6', Req),
         <<"payment_last4"            >> => genlib_map:get('last4', Req)
     },
@@ -63,7 +64,7 @@ process_request('SearchPayments', Req, Context) ->
         <<"payment_token_provider"   >> => genlib_map:get('bankCardTokenProvider', Req),
         <<"payment_system"           >> => genlib_map:get('bankCardPaymentSystem', Req),
         <<"payment_rrn"              >> => genlib_map:get('rrn', Req),
-        <<"payment_approval_code"    >> => genlib_map:get('approval_code', Req),
+        <<"payment_approval_code"    >> => genlib_map:get('approvalCode', Req),
         <<"payment_first6"           >> => genlib_map:get('first6', Req),
         <<"payment_last4"            >> => genlib_map:get('last4', Req)
     },
@@ -96,6 +97,8 @@ process_request('SearchRefunds', Req, Context) ->
         <<"invoice_id"               >> => genlib_map:get('invoiceID', Req),
         <<"payment_id"               >> => genlib_map:get('paymentID', Req),
         <<"refund_id"                >> => genlib_map:get('refundID', Req),
+        <<"payment_rrn"              >> => genlib_map:get('rrn', Req),
+        <<"payment_approval_code"    >> => genlib_map:get('approvalCode', Req),
         <<"from_time"                >> => capi_handler_utils:get_time('fromTime', Req),
         <<"to_time"                  >> => capi_handler_utils:get_time('toTime', Req),
         <<"refund_status"            >> => genlib_map:get('refundStatus', Req)

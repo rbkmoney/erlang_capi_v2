@@ -1,5 +1,5 @@
 %%%
-%%% Msgpack manipulation employed by dmsl interfaces.
+%%% Msgpack manipulation employed by damsel interfaces.
 
 %%% Copy from machinery
 
