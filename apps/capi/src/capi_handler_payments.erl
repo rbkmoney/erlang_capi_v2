@@ -6,6 +6,8 @@
 -export([process_request/3]).
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
+-define(DEFAULT_PROCESSING_DEADLINE, <<"30m">>).
+
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
     Req         :: capi_handler:request_data(),
@@ -23,7 +25,8 @@ process_request('CreatePayment' = OperationID, Req, Context) ->
         catch
             throw:Error when
                 Error =:= invalid_token orelse
-                Error =:= invalid_payment_session
+                Error =:= invalid_payment_session orelse
+                Error =:= invalid_processing_deadline
             ->
                 {error, Error}
         end,
@@ -73,6 +76,11 @@ process_request('CreatePayment' = OperationID, Req, Context) ->
             {ok, logic_error(
                 invalidPaymentSession,
                 <<"Specified payment session is invalid">>
+            )};
+        {error, invalid_processing_deadline} ->
+            {ok, logic_error(
+                invalidProcessingDeadline,
+                <<"Specified processing deadline is invalid">>
             )};
         {error, {external_id_conflict, PaymentID, ExternalID}} ->
             {ok, logic_error(externalIDConflict, {PaymentID, ExternalID})}
@@ -333,12 +341,15 @@ create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} =
 encode_invoice_payment_params(ID, ExternalID, PaymentParams) ->
     Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
     #payproc_InvoicePaymentParams{
-        id              = ID,
-        external_id     = ExternalID,
-        payer           = encode_payer_params(genlib_map:get(<<"payer">>, PaymentParams)),
-        flow            = encode_flow(Flow),
-        make_recurrent  = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false),
-        context         = capi_handler_encoder:encode_payment_context(PaymentParams)
+        id                  = ID,
+        external_id         = ExternalID,
+        payer               = encode_payer_params(genlib_map:get(<<"payer">>, PaymentParams)),
+        flow                = encode_flow(Flow),
+        make_recurrent      = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false),
+        context             = capi_handler_encoder:encode_payment_context(PaymentParams),
+        processing_deadline = encode_processing_deadline(
+            genlib_map:get(<<"processingDeadline">>, PaymentParams, default_processing_deadline())
+        )
     }.
 
 encode_payer_params(#{
@@ -431,6 +442,18 @@ get_payment(InvoiceID, PaymentID, Context) ->
             Error
     end.
 
+encode_processing_deadline(Deadline) ->
+    case capi_utils:parse_deadline(Deadline) of
+        {ok, undefined} ->
+            undefined;
+        {error, bad_deadline} ->
+            throw(invalid_processing_deadline);
+        {ok, ProcessingDeadline} ->
+            woody_deadline:to_binary(ProcessingDeadline)
+    end.
+
+default_processing_deadline() ->
+    genlib_app:env(capi, default_processing_deadline, ?DEFAULT_PROCESSING_DEADLINE).
 %%
 
 create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
