@@ -77,7 +77,7 @@ get_service_modname(cds_storage) ->
 get_service_modname(merchant_stat) ->
     {dmsl_merch_stat_thrift, 'MerchantStatistics'};
 get_service_modname(reporting) ->
-    {dmsl_reporting_thrift, 'Reporting'};
+    {reporter_reports_thrift, 'Reporting'};
 get_service_modname(repository_client) ->
     {dmsl_domain_config_thrift, 'RepositoryClient'};
 get_service_modname(accounter) ->
