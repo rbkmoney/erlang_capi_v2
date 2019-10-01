@@ -10,7 +10,7 @@
 -include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 -include_lib("damsel/include/dmsl_webhooker_thrift.hrl").
 -include_lib("damsel/include/dmsl_merch_stat_thrift.hrl").
--include_lib("damsel/include/dmsl_reporting_thrift.hrl").
+-include_lib("reporter_proto/include/reporter_reports_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_tool_provider_thrift.hrl").
 -include_lib("damsel/include/dmsl_payout_processing_thrift.hrl").
 -include_lib("binbase_proto/include/binbase_binbase_thrift.hrl").
@@ -1275,8 +1275,8 @@ get_report_ok_test(Config) ->
 create_report_ok_test(Config) ->
     capi_ct_helper:mock_services([
         {reporting, fun
-            ('GenerateReport', _)           -> {ok, ?INTEGER};
-            ('GetReport', [_, _, ?INTEGER]) -> {ok, ?REPORT}
+            ('CreateReport', _)       -> {ok, ?INTEGER};
+            ('GetReport', [?INTEGER]) -> {ok, ?REPORT}
         end}
     ], Config),
     {ok, _} = capi_client_reports:create_report(
