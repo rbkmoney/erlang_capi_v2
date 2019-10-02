@@ -1493,7 +1493,7 @@ download_report_file_not_found_test(Config) ->
         ('GetReport', _) -> {ok, ?REPORT};
         ('GeneratePresignedUrl', _) -> {ok, ?STRING} end}
     ], Config),
-    {error, {404, #{message := <<"Report not found">>}}} =
+    {error, {404, #{<<"message">> := <<"Report not found">>}}} =
         capi_client_reports:download_file(?config(context, Config), <<"WRONG_STRING">>, ?INTEGER, ?STRING).
 
 -spec get_categories_ok_test(config()) ->
