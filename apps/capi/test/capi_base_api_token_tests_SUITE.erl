@@ -90,6 +90,7 @@
     get_payment_method_stats_ok_test/1,
     get_reports_ok_test/1,
     get_report_ok_test/1,
+    get_report_unauthorized_test/1,
     create_report_ok_test/1,
     download_report_file_ok_test/1,
     get_categories_ok_test/1,
@@ -195,6 +196,7 @@ groups() ->
                 get_payment_method_stats_ok_test,
                 get_reports_ok_test,
                 get_report_ok_test,
+                get_report_unauthorized_test,
                 create_report_ok_test,
                 download_report_file_ok_test,
                 get_categories_ok_test,
@@ -1269,6 +1271,13 @@ get_reports_ok_test(Config) ->
 get_report_ok_test(Config) ->
     capi_ct_helper:mock_services([{reporting, fun('GetReport', _) -> {ok, ?REPORT} end}], Config),
     {ok, _} = capi_client_reports:get_report(?config(context, Config), ?STRING, ?INTEGER).
+
+-spec get_report_unauthorized_test(config()) ->
+    _.
+get_report_unauthorized_test(Config) ->
+    capi_ct_helper:mock_services([{reporting, fun('GetReport', _) -> {ok, ?REPORT} end}], Config),
+    {error, {404, #{<<"message">> := <<"Report not found">>}}} =
+        capi_client_reports:get_report(?config(context, Config), <<"WRONG_STRING">>, ?INTEGER).
 
 -spec create_report_ok_test(config()) ->
     _.

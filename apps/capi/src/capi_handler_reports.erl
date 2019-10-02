@@ -33,7 +33,7 @@ process_request('GetReports', Req, Context) ->
             {ok, {200, #{}, [decode_report(R) || R <- Reports]}};
         {exception, Exception} ->
             case Exception of
-                #'reporter_base_InvalidRequest'{errors = Errors} ->
+                #reporter_base_InvalidRequest{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)};
                 #reports_DatasetTooBig{limit = Limit} ->
@@ -50,7 +50,7 @@ process_request('GetReport', Req, Context) ->
         {ok, Report = #'reports_Report'{party_id = PartyId, shop_id = ShopId}} ->
             {ok, {200, #{}, decode_report(Report)}};
         {ok, _NonMatchingReport} ->
-            {ok, general_error(403, <<"Unauthorized">>)};
+            {ok, general_error(404, <<"Report not found">>)};
         {exception, #reports_ReportNotFound{}} ->
             {ok, general_error(404, <<"Report not found">>)}
     end;
@@ -78,7 +78,7 @@ process_request('CreateReport', Req, Context) ->
             {ok, {201, #{}, decode_report(Report)}};
         {exception, Exception} ->
             case Exception of
-                #'reporter_base_InvalidRequest'{errors = Errors} ->
+                #reporter_base_InvalidRequest{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)};
                 #reports_ShopNotFound{} ->
@@ -118,7 +118,7 @@ generate_report_presigned_url(FileID, Context) ->
             {ok, {200, #{}, #{<<"url">> => URL}}};
         {exception, Exception} ->
             case Exception of
-                #'reporter_base_InvalidRequest'{errors = Errors} ->
+                #reporter_base_InvalidRequest{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)};
                 #reports_FileNotFound{}->
