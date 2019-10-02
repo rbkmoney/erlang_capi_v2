@@ -7,7 +7,8 @@
 -include_lib("damsel/include/dmsl_webhooker_thrift.hrl").
 -include_lib("damsel/include/dmsl_user_interaction_thrift.hrl").
 -include_lib("damsel/include/dmsl_geo_ip_thrift.hrl").
--include_lib("damsel/include/dmsl_reporting_thrift.hrl").
+-include_lib("reporter_proto/include/reporter_base_thrift.hrl").
+-include_lib("reporter_proto/include/reporter_reports_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_tool_provider_thrift.hrl").
 
 -include_lib("binbase_proto/include/binbase_binbase_thrift.hrl").
@@ -975,7 +976,7 @@ process_request('GetReports', Req, Context, ReqCtx) ->
             {ok, {200, #{}, Resp}};
         {exception, Exception} ->
             case Exception of
-                #'InvalidRequest'{errors = Errors} ->
+                #reporter_base_InvalidRequest{errors = Errors} ->
                     {ok, {400, #{}, logic_error(invalidRequest, format_request_errors(Errors))}};
                 #reports_DatasetTooBig{limit = Limit} ->
                     {ok, {400, #{}, limit_exceeded_error(Limit)}}
@@ -987,15 +988,17 @@ process_request('DownloadFile', Req, Context, ReqCtx) ->
     ShopID = maps:get(shopID, Req),
     ReportID = maps:get(reportID, Req),
     FileID = maps:get(fileID, Req),
-    Result = service_call(reporting, 'GetReport', [PartyID, ShopID, ReportID], ReqCtx),
+    Result = service_call(reporting, 'GetReport', [ReportID], ReqCtx),
     case Result of
-        {ok, #reports_Report{status = created, files = Files}} ->
+        {ok, #reports_Report{status = created, files = Files, party_id = PartyID, shop_id = ShopID}} ->
             case lists:keymember(FileID, #reports_FileMeta.file_id, Files) of
                 true ->
                     generate_report_presigned_url(FileID, ReqCtx);
                 false ->
                     {ok, {404, #{}, general_error(<<"File not found">>)}}
             end;
+        {ok, _WrongReport} ->
+            {ok, {404, #{}, general_error(<<"Report not found">>)}};
         {exception, #reports_ReportNotFound{}} ->
             {ok, {404, #{}, general_error(<<"Report not found">>)}}
     end;
@@ -4151,8 +4154,8 @@ decode_report(#reports_Report{
         <<"files">> => [decode_report_file(F) || F <- Files]
     }.
 
-decode_report_type(provision_of_service) -> <<"provisionOfService">>;
-decode_report_type(payment_registry) -> <<"paymentRegistry">>.
+decode_report_type(<<"provision_of_service">>) -> <<"provisionOfService">>;
+decode_report_type(<<"payment_registry">>) -> <<"paymentRegistry">>.
 
 decode_report_file(#reports_FileMeta{
     file_id = ID,
