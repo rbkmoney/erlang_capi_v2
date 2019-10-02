@@ -49,7 +49,7 @@ process_request('GetReport', Req, Context) ->
     case capi_handler_utils:service_call(Call, Context) of
         {ok, Report = #'reports_Report'{party_id = PartyId, shop_id = ShopId}} ->
             {ok, {200, #{}, decode_report(Report)}};
-        {ok, _NonMatchingReport} ->
+        {ok, _WrongReport} ->
             {ok, general_error(404, <<"Report not found">>)};
         {exception, #reports_ReportNotFound{}} ->
             {ok, general_error(404, <<"Report not found">>)}
@@ -87,13 +87,15 @@ process_request('CreateReport', Req, Context) ->
     end;
 
 process_request('DownloadFile', Req, Context) ->
+    PartyId = capi_handler_utils:get_party_id(Context),
+    ShopId = maps:get(shopID, Req),
     Call = {
         reporting,
         'GetReport',
         [maps:get(reportID, Req)]
     },
     case capi_handler_utils:service_call(Call, Context) of
-        {ok, #reports_Report{status = created, files = Files}} ->
+        {ok, #reports_Report{status = created, files = Files, party_id = PartyId, shop_id = ShopId}} ->
             FileID = maps:get(fileID, Req),
             case lists:keymember(FileID, #reports_FileMeta.file_id, Files) of
                 true ->
@@ -101,6 +103,8 @@ process_request('DownloadFile', Req, Context) ->
                 false ->
                     {ok, general_error(404, <<"File not found">>)}
             end;
+        {ok, _WrongReport} ->
+            {ok, general_error(404, <<"Report not found">>)};
         {exception, #reports_ReportNotFound{}} ->
             {ok, general_error(404, <<"Report not found">>)}
     end;
