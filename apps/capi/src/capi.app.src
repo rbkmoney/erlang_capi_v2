@@ -15,7 +15,6 @@
         capi_woody_client,
         damsel,
         bender_proto,
-        binbase_proto,
         dmt_client,
         swag_server,
         jose,

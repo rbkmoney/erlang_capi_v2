@@ -4,7 +4,6 @@
 
 -include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
--include_lib("binbase_proto/include/binbase_binbase_thrift.hrl").
 -include_lib("damsel/include/dmsl_cds_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 -include_lib("jose/include/jose_jwk.hrl").
@@ -149,23 +148,12 @@ get_customer_ok_test(Config) ->
 create_binding_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {cds_storage, fun
-                ('PutSession', _) -> {ok, ok};
-                ('PutCard', _) -> {ok, ?PUT_CARD_RESULT}
-            end},
             {customer_management, fun('StartBinding', _) -> {ok, ?CUSTOMER_BINDING} end},
-            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end},
-            {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end}
+            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end}
         ],
         Config
     ),
-    PaymentToolToken = capi_utils:map_to_base64url(#{
-        <<"type"          >> => <<"bank_card">>,
-        <<"token"         >> => ?STRING,
-        <<"payment_system">> => atom_to_binary(visa, utf8),
-        <<"bin"           >> => <<"411111">>,
-        <<"masked_pan"    >> => <<"1111">>
-    }),
+    PaymentToolToken = ?TEST_PAYMENT_TOKEN,
     Req2 = #{
         <<"paymentResource">> => #{
             <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
