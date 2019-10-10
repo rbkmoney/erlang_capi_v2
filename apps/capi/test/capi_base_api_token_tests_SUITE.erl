@@ -10,7 +10,7 @@
 -include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 -include_lib("damsel/include/dmsl_webhooker_thrift.hrl").
 -include_lib("damsel/include/dmsl_merch_stat_thrift.hrl").
--include_lib("damsel/include/dmsl_reporting_thrift.hrl").
+-include_lib("reporter_proto/include/reporter_reports_thrift.hrl").
 -include_lib("damsel/include/dmsl_payout_processing_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 -include_lib("jose/include/jose_jwk.hrl").
@@ -88,8 +88,10 @@
     get_payment_method_stats_ok_test/1,
     get_reports_ok_test/1,
     get_report_ok_test/1,
+    get_report_not_found_test/1,
     create_report_ok_test/1,
     download_report_file_ok_test/1,
+    download_report_file_not_found_test/1,
     get_categories_ok_test/1,
     get_category_by_ref_ok_test/1,
     get_schedule_by_ref_ok_test/1,
@@ -193,8 +195,10 @@ groups() ->
                 get_payment_method_stats_ok_test,
                 get_reports_ok_test,
                 get_report_ok_test,
+                get_report_not_found_test,
                 create_report_ok_test,
                 download_report_file_ok_test,
+                download_report_file_not_found_test,
                 get_categories_ok_test,
                 get_category_by_ref_ok_test,
                 get_schedule_by_ref_ok_test,
@@ -1268,13 +1272,20 @@ get_report_ok_test(Config) ->
     capi_ct_helper:mock_services([{reporting, fun('GetReport', _) -> {ok, ?REPORT} end}], Config),
     {ok, _} = capi_client_reports:get_report(?config(context, Config), ?STRING, ?INTEGER).
 
+-spec get_report_not_found_test(config()) ->
+    _.
+get_report_not_found_test(Config) ->
+    capi_ct_helper:mock_services([{reporting, fun('GetReport', _) -> {ok, ?REPORT} end}], Config),
+    {error, {404, #{<<"message">> := <<"Report not found">>}}} =
+        capi_client_reports:get_report(?config(context, Config), <<"WRONG_STRING">>, ?INTEGER).
+
 -spec create_report_ok_test(config()) ->
     _.
 create_report_ok_test(Config) ->
     capi_ct_helper:mock_services([
         {reporting, fun
-            ('GenerateReport', _)           -> {ok, ?INTEGER};
-            ('GetReport', [_, _, ?INTEGER]) -> {ok, ?REPORT}
+            ('CreateReport', _)       -> {ok, ?INTEGER};
+            ('GetReport', [?INTEGER]) -> {ok, ?REPORT}
         end}
     ], Config),
     {ok, _} = capi_client_reports:create_report(
@@ -1292,6 +1303,15 @@ download_report_file_ok_test(Config) ->
         {reporting, fun('GetReport', _) -> {ok, ?REPORT}; ('GeneratePresignedUrl', _) -> {ok, ?STRING} end}
     ], Config),
     {ok, _} = capi_client_reports:download_file(?config(context, Config), ?STRING, ?INTEGER, ?STRING).
+
+-spec download_report_file_not_found_test(_) ->
+    _.
+download_report_file_not_found_test(Config) ->
+    capi_ct_helper:mock_services([
+        {reporting, fun('GetReport', _) -> {ok, ?REPORT}; ('GeneratePresignedUrl', _) -> {ok, ?STRING} end}
+    ], Config),
+    {error, {404, #{<<"message">> := <<"Report not found">>}}} =
+        capi_client_reports:download_file(?config(context, Config), <<"WRONG_STRING">>, ?INTEGER, ?STRING).
 
 -spec get_categories_ok_test(config()) ->
     _.

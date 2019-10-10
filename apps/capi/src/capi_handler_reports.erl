@@ -1,6 +1,7 @@
 -module(capi_handler_reports).
 
--include_lib("damsel/include/dmsl_reporting_thrift.hrl").
+-include_lib("reporter_proto/include/reporter_base_thrift.hrl").
+-include_lib("reporter_proto/include/reporter_reports_thrift.hrl").
 
 -behaviour(capi_handler).
 -export([process_request/3]).
@@ -32,7 +33,7 @@ process_request('GetReports', Req, Context) ->
             {ok, {200, #{}, [decode_report(R) || R <- Reports]}};
         {exception, Exception} ->
             case Exception of
-                #'InvalidRequest'{errors = Errors} ->
+                #reporter_base_InvalidRequest{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)};
                 #reports_DatasetTooBig{limit = Limit} ->
@@ -44,10 +45,12 @@ process_request('GetReport', Req, Context) ->
     PartyId  = capi_handler_utils:get_party_id(Context),
     ShopId   = maps:get(shopID, Req),
     ReportId = maps:get(reportID, Req),
-    Call = {reporting, 'GetReport', [PartyId, ShopId, ReportId]},
+    Call = {reporting, 'GetReport', [ReportId]},
     case capi_handler_utils:service_call(Call, Context) of
-        {ok, Report} ->
+        {ok, Report = #'reports_Report'{party_id = PartyId, shop_id = ShopId}} ->
             {ok, {200, #{}, decode_report(Report)}};
+        {ok, _WrongReport} ->
+            {ok, general_error(404, <<"Report not found">>)};
         {exception, #reports_ReportNotFound{}} ->
             {ok, general_error(404, <<"Report not found">>)}
     end;
@@ -66,16 +69,16 @@ process_request('CreateReport', Req, Context) ->
             }
     },
     ReportType = encode_report_type(maps:get(<<"reportType">>, ReportParams)),
-    case capi_handler_utils:service_call({reporting, 'GenerateReport', [ReportRequest, ReportType]}, Context) of
+    case capi_handler_utils:service_call({reporting, 'CreateReport', [ReportRequest, ReportType]}, Context) of
         {ok, ReportId} ->
             {ok, Report} = capi_handler_utils:service_call(
-                {reporting, 'GetReport', [PartyId, ShopId, ReportId]},
+                {reporting, 'GetReport', [ReportId]},
                 Context
             ),
             {ok, {201, #{}, decode_report(Report)}};
         {exception, Exception} ->
             case Exception of
-                #'InvalidRequest'{errors = Errors} ->
+                #reporter_base_InvalidRequest{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)};
                 #reports_ShopNotFound{} ->
@@ -84,13 +87,15 @@ process_request('CreateReport', Req, Context) ->
     end;
 
 process_request('DownloadFile', Req, Context) ->
+    PartyId = capi_handler_utils:get_party_id(Context),
+    ShopId = maps:get(shopID, Req),
     Call = {
         reporting,
         'GetReport',
-        [capi_handler_utils:get_party_id(Context), maps:get(shopID, Req), maps:get(reportID, Req)]
+        [maps:get(reportID, Req)]
     },
     case capi_handler_utils:service_call(Call, Context) of
-        {ok, #reports_Report{status = created, files = Files}} ->
+        {ok, #reports_Report{status = created, files = Files, party_id = PartyId, shop_id = ShopId}} ->
             FileID = maps:get(fileID, Req),
             case lists:keymember(FileID, #reports_FileMeta.file_id, Files) of
                 true ->
@@ -98,6 +103,8 @@ process_request('DownloadFile', Req, Context) ->
                 false ->
                     {ok, general_error(404, <<"File not found">>)}
             end;
+        {ok, _WrongReport} ->
+            {ok, general_error(404, <<"Report not found">>)};
         {exception, #reports_ReportNotFound{}} ->
             {ok, general_error(404, <<"Report not found">>)}
     end;
@@ -115,7 +122,7 @@ generate_report_presigned_url(FileID, Context) ->
             {ok, {200, #{}, #{<<"url">> => URL}}};
         {exception, Exception} ->
             case Exception of
-                #'InvalidRequest'{errors = Errors} ->
+                #reporter_base_InvalidRequest{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)};
                 #reports_FileNotFound{}->
@@ -130,8 +137,8 @@ get_default_url_lifetime() ->
 
 %%
 
-encode_report_type(<<"provisionOfService">>) -> provision_of_service;
-encode_report_type(<<"paymentRegistry">>) -> payment_registry.
+encode_report_type(<<"provisionOfService">>) -> <<"provision_of_service">>;
+encode_report_type(<<"paymentRegistry">>) -> <<"payment_registry">>.
 
 %%
 
@@ -150,8 +157,8 @@ decode_report(Report) ->
 decode_report_status(pending) -> <<"pending">>;
 decode_report_status(created) -> <<"created">>.
 
-decode_report_type(provision_of_service) -> <<"provisionOfService">>;
-decode_report_type(payment_registry) -> <<"paymentRegistry">>.
+decode_report_type(<<"provision_of_service">>) -> <<"provisionOfService">>;
+decode_report_type(<<"payment_registry">>) -> <<"paymentRegistry">>.
 
 decode_report_file(#reports_FileMeta{file_id = ID, filename = Filename, signature = Signature}) ->
     #{
