@@ -972,59 +972,6 @@
     bank_card = ?BANK_CARD
 }).
 
--define(UNWRAPPED_PAYMENT_TOOL(Details),
-    ?UNWRAPPED_PAYMENT_TOOL(
-        Details,
-        {tokenized_card, #paytoolprv_TokenizedCard{
-            dpan = ?STRING,
-            exp_date = #paytoolprv_ExpDate{
-                month = 10,
-                year = 2018
-            },
-            auth_data = {auth_3ds, #paytoolprv_Auth3DS{
-                cryptogram = ?STRING,
-                eci = ?STRING
-            }}
-        }}
-    )
-).
-
--define(UNWRAPPED_PAYMENT_TOOL(Details, PaymentData), #paytoolprv_UnwrappedPaymentTool{
-    payment_data = PaymentData,
-    card_info = #paytoolprv_CardInfo{
-        display_name = <<"Visa 1234">>,
-        cardholder_name = ?STRING,
-        last_4_digits = <<"1234">>,
-        card_class = debit,
-        payment_system = mastercard
-    },
-    details = Details
-}).
-
--define(APPLE_PAY_DETAILS, {apple, #paytoolprv_ApplePayDetails{
-    transaction_id = ?STRING,
-    amount = ?INTEGER,
-    currency_numeric_code = 643,
-    device_id = ?STRING
-}}).
-
--define(GOOGLE_PAY_DETAILS, {google, #paytoolprv_GooglePayDetails{
-    message_id = ?STRING,
-    message_expiration = ?TIMESTAMP
-}}).
-
--define(BINBASE_LOOKUP_RESULT, ?BINBASE_LOOKUP_RESULT(<<"MASTERCARD">>)).
-
--define(BINBASE_LOOKUP_RESULT(PaymentSystem), #'binbase_ResponseData'{
-    bin_data = #'binbase_BinData' {
-        payment_system = PaymentSystem,
-        bank_name = ?STRING,
-        iso_country_code = <<"KAZ">>,
-        card_type = debit
-    },
-    version = ?INTEGER
-}).
-
 -define(PAYOUT(Type, PayoutSummary), #'payout_processing_Payout'{
     id = ?STRING,
     party_id = ?STRING,
@@ -1062,6 +1009,16 @@
     operation_type = payment,
     count = ?INTEGER
 }).
+
+-define(TEST_PAYMENT_TOKEN, ?TEST_PAYMENT_TOKEN(visa)).
+
+-define(TEST_PAYMENT_TOKEN(PaymentSystem), capi_utils:map_to_base64url(#{
+    <<"type"          >> => <<"bank_card">>,
+    <<"token"         >> => ?STRING,
+    <<"payment_system">> => atom_to_binary(PaymentSystem, utf8),
+    <<"bin"           >> => <<"411111">>,
+    <<"masked_pan"    >> => <<"1111">>
+})).
 
 -define(TEST_PAYMENT_SESSION, capi_utils:map_to_base64url(#{
     <<"paymentSession">> => ?STRING,

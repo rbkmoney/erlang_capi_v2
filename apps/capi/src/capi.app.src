@@ -16,7 +16,6 @@
         damsel,
         reporter_proto,
         bender_proto,
-        binbase_proto,
         dmt_client,
         swag_server,
         jose,

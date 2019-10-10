@@ -1,7 +1,6 @@
 -module(capi_handler_encoder).
 
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
--include_lib("damsel/include/dmsl_domain_thrift.hrl").
 -include_lib("damsel/include/dmsl_merch_stat_thrift.hrl").
 
 -export([encode_contact_info/1]).
