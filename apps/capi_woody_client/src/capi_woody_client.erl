@@ -72,8 +72,6 @@ get_service_modname(invoicing) ->
     {dmsl_payment_processing_thrift, 'Invoicing'};
 get_service_modname(invoice_templating) ->
     {dmsl_payment_processing_thrift, 'InvoiceTemplating'};
-get_service_modname(cds_storage) ->
-    {dmsl_cds_thrift, 'Storage'};
 get_service_modname(merchant_stat) ->
     {dmsl_merch_stat_thrift, 'MerchantStatistics'};
 get_service_modname(reporting) ->
@@ -90,14 +88,6 @@ get_service_modname(customer_management) ->
     {dmsl_payment_processing_thrift, 'CustomerManagement'};
 get_service_modname(party_management) ->
     {dmsl_payment_processing_thrift, 'PartyManagement'};
-get_service_modname(payment_tool_provider_apple_pay) ->
-    {dmsl_payment_tool_provider_thrift, 'PaymentToolProvider'};
-get_service_modname(payment_tool_provider_google_pay) ->
-    {dmsl_payment_tool_provider_thrift, 'PaymentToolProvider'};
-get_service_modname(payment_tool_provider_samsung_pay) ->
-    {dmsl_payment_tool_provider_thrift, 'PaymentToolProvider'};
-get_service_modname(binbase) ->
-    {binbase_binbase_thrift, 'Binbase'};
 get_service_modname(bender) ->
     {bender_thrift, 'Bender'}.
 

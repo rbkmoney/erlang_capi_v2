@@ -12,7 +12,6 @@
         capi_woody_client,
         damsel,
         reporter_proto,
-        binbase_proto,
         dmt_client,
         swag_server,
         jose,
