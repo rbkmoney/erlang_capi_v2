@@ -196,7 +196,7 @@ construct_final_claims({{Subject, ACL}, Claims}, Expiration) ->
             <<"sub">> => Subject,
             <<"exp">> => get_expires_at(Expiration)
         },
-        encode_roles(capi_acl:encode(ACL))
+        encode_roles(ACL)
     ).
 
 get_expires_at({lifetime, Lt}) ->
@@ -332,14 +332,25 @@ check_expiration(C, V) ->
 
 %%
 
-encode_roles(Roles) ->
-    #{
-        <<"resource_access">> => #{
-            <<"common-api">> => #{
-                <<"roles">> => Roles
-            }
-        }
-    }.
+encode_roles(ACL) ->
+    AddRole = fun(Role, Access) ->
+        Service = get_acl_service(Role),
+        Roles = case maps:get(Service, Access, undefined) of
+            undefined ->
+                [Role];
+            Roles0 ->
+               [Role | Roles0]
+        end,
+        Access#{Service => Roles}
+    end,
+    ServiceRoles = lists:foldl(AddRole, #{<<"common-api">> => []}, ACL),
+    #{<<"resource_access">> =>
+        maps:map(fun(_, Roles) -> #{<<"roles">> => capi_acl:encode(Roles)} end, ServiceRoles)}.
+
+get_acl_service({{_, [card_bins]}, _}) ->
+    <<"bin-api">>;
+get_acl_service(_) ->
+    <<"common-api">>.
 
 decode_roles(Claims = #{
     <<"resource_access">> := #{

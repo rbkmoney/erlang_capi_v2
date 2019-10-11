@@ -133,7 +133,8 @@ resolve_token_spec({invoice, InvoiceID}) ->
         {[{invoices, InvoiceID}]           , read },
         {[{invoices, InvoiceID}, payments] , read },
         {[{invoices, InvoiceID}, payments] , write},
-        {[payment_resources              ] , write}
+        {[payment_resources              ] , write},
+        {[card_bins                      ] , read}
     ],
     Expiration = {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME},
     {Claims, ACL, Expiration};
@@ -343,7 +344,8 @@ get_resource_hierarchy() ->
         customers           => #{bindings => #{}},
         invoices            => #{payments => #{}},
         payment_resources   => #{},
-        payouts             => #{}
+        payouts             => #{},
+        card_bins           => #{}
     }.
 
 -spec get_consumer(claims()) ->
