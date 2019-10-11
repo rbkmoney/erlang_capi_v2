@@ -1093,8 +1093,8 @@ search_invoices_ok_test(Config) ->
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
         {payerFingerprint, <<"blablablalbalbal">>},
-        % {lastDigits, <<"2222">>}, %%@FIXME cannot be used until getting the newest api client
-        % {bin, <<"424242">>},
+        {lastDigits, <<"2222">>},
+        {bin, <<"424242">>},
         {bankCardTokenProvider, <<"applepay">>},
         {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000}
