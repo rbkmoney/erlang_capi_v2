@@ -335,15 +335,13 @@ check_expiration(C, V) ->
 encode_roles(ACL) ->
     AddRole = fun(Role, Access) ->
         Service = get_acl_service(Role),
-        Roles = case maps:get(Service, Access, undefined) of
-            undefined ->
-                [Role];
-            Roles0 ->
-               [Role | Roles0]
-        end,
-        Access#{Service => Roles}
+        Roles = maps:get(Service, Access, []),
+        Access#{Service => [Role | Roles]}
     end,
-    ServiceRoles = lists:foldl(AddRole, #{<<"common-api">> => []}, ACL),
+    InitialRoles = #{<<"common-api">> => []},
+    ServiceRoles = lists:foldl(AddRole, InitialRoles, ACL),
+    %% To keep code above simpler, we flatten structure by omiting roles map
+    %% Now it's time to insert it and encode roles
     #{<<"resource_access">> =>
         maps:map(fun(_, Roles) -> #{<<"roles">> => capi_acl:encode(Roles)} end, ServiceRoles)}.
 
