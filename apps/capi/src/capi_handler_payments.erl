@@ -129,6 +129,8 @@ process_request('GetRefundByExternalID', Req, Context) ->
             {ok, general_error(404, <<"Invoice not found">>)};
         {exception, Exception} ->
             case Exception of
+                #payproc_InvoicePaymentRefundNotFound{} ->
+                    {ok, general_error(404, <<"Refund not found">>)};
                 #payproc_InvoicePaymentNotFound{} ->
                     {ok, general_error(404, <<"Payment not found">>)};
                 #payproc_InvalidUser{} ->
