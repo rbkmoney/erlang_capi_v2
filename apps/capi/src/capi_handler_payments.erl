@@ -116,6 +116,44 @@ process_request('GetPaymentByID', Req, Context) ->
             end
     end;
 
+process_request('GetRefundByExternalID', Req, Context) ->
+    ExternalID = maps:get(externalID, Req),
+    case get_refund_by_external_id(ExternalID, Context) of
+        {ok, Refund} ->
+            {ok, {200, #{}, capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
+        {error, internal_id_not_found} ->
+             {ok, general_error(404, <<"Refund not found">>)};
+        {error, payment_not_found} ->
+            {ok, general_error(404, <<"Payment not found">>)};
+        {error, invoice_not_found} ->
+            {ok, general_error(404, <<"Invoice not found">>)};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvoicePaymentNotFound{} ->
+                    {ok, general_error(404, <<"Payment not found">>)};
+                #payproc_InvalidUser{} ->
+                    {ok, general_error(404, <<"Invoice not found">>)};
+                #payproc_InvoiceNotFound{} ->
+                    {ok, general_error(404, <<"Invoice not found">>)}
+            end
+    end;
+
+process_request('GetRefundsByExternalID', Req, Context) ->
+    ExternalID = maps:get(externalID, Req),
+    case get_refunds_by_external_id(ExternalID, Context) of
+        {ok, #payproc_InvoicePayment{refunds = Refunds}} ->
+            {ok, {200, #{}, [capi_handler_decoder_invoicing:decode_refund(R, Context) || R <- Refunds]}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, general_error(404, <<"Invoice not found">>)};
+                #payproc_InvoicePaymentNotFound{} ->
+                    {ok, general_error(404, <<"Payment not found">>)};
+                #payproc_InvoiceNotFound{} ->
+                    {ok, general_error(404, <<"Invoice not found">>)}
+        end
+    end;
+
 process_request('GetPaymentByExternalID', Req, Context) ->
     ExternalID = maps:get(externalID, Req),
     case get_payment_by_external_id(ExternalID, Context) of
@@ -299,9 +337,7 @@ process_request('GetRefunds', Req, Context) ->
     end;
 
 process_request('GetRefundByID', Req, Context) ->
-    Call =
-        {invoicing, 'GetPaymentRefund', [maps:get(invoiceID, Req), maps:get(paymentID, Req), maps:get(refundID, Req)]},
-    case capi_handler_utils:service_call_with([user_info], Call, Context) of
+    case capi_handler_utils:get_refund_by_id(maps:get(invoiceID, Req), maps:get(paymentID, Req), maps:get(refundID, Req), Context) of
         {ok, Refund} ->
             {ok, {200, #{}, capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
         {exception, Exception} ->
@@ -417,6 +453,37 @@ encode_optional_cash(_, _, _, _) ->
 
 decode_invoice_payment(InvoiceID, #payproc_InvoicePayment{payment = Payment}, Context) ->
     capi_handler_decoder_invoicing:decode_payment(InvoiceID, Payment, Context).
+
+get_refund_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
+    PartyID    = capi_handler_utils:get_party_id(Context),
+    RefundKey = capi_bender:get_idempotent_key('CreateRefund', PartyID, ExternalID),
+    case capi_bender:get_internal_id(RefundKey, WoodyContext) of
+        {ok, RefundID, CtxData} ->
+            InvoiceID = maps:get(<<"invoice_id">>, CtxData, undefined),
+            PaymentID = maps:get(<<"payment_id">>, CtxData, undefined),
+            get_refund(InvoiceID, PaymentID, RefundID, Context);
+        Error ->
+            Error
+    end.
+
+get_refund(undefined, _, _, _) ->
+    {error, invoice_not_found};
+get_refund(_, undefined, _, _) ->
+    {error, payment_not_found};
+get_refund(InvoiceID, PaymentID, RefundID, Context) ->
+    capi_handler_utils:get_refund_by_id(InvoiceID, PaymentID, RefundID, Context).
+
+get_refunds_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
+    PartyID    = capi_handler_utils:get_party_id(Context),
+    PaymentKey = capi_bender:get_idempotent_key('CreatePayment', PartyID, ExternalID),
+    case capi_bender:get_internal_id(PaymentKey, WoodyContext) of
+        {ok, PaymentID, CtxData} ->
+            InvoiceID = maps:get(<<"invoice_id">>, CtxData, undefined),
+            capi_handler_utils:get_payment_by_id(InvoiceID, PaymentID, Context);
+        Error ->
+            Error
+    end.
+    
 
 -spec get_payment_by_external_id(binary(), capi_handler:processing_context()) ->
     woody:result().
