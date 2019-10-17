@@ -337,7 +337,12 @@ process_request('GetRefunds', Req, Context) ->
     end;
 
 process_request('GetRefundByID', Req, Context) ->
-    case capi_handler_utils:get_refund_by_id(maps:get(invoiceID, Req), maps:get(paymentID, Req), maps:get(refundID, Req), Context) of
+    case capi_handler_utils:get_refund_by_id(
+        maps:get(invoiceID, Req),
+        maps:get(paymentID, Req),
+        maps:get(refundID, Req),
+        Context
+    ) of
         {ok, Refund} ->
             {ok, {200, #{}, capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
         {exception, Exception} ->
@@ -455,7 +460,7 @@ decode_invoice_payment(InvoiceID, #payproc_InvoicePayment{payment = Payment}, Co
     capi_handler_decoder_invoicing:decode_payment(InvoiceID, Payment, Context).
 
 get_refund_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
-    PartyID    = capi_handler_utils:get_party_id(Context),
+    PartyID   = capi_handler_utils:get_party_id(Context),
     RefundKey = capi_bender:get_idempotent_key('CreateRefund', PartyID, ExternalID),
     case capi_bender:get_internal_id(RefundKey, WoodyContext) of
         {ok, RefundID, CtxData} ->
@@ -483,7 +488,7 @@ get_refunds_by_external_id(ExternalID, #{woody_context := WoodyContext} = Contex
         Error ->
             Error
     end.
-    
+
 
 -spec get_payment_by_external_id(binary(), capi_handler:processing_context()) ->
     woody:result().
