@@ -208,7 +208,11 @@ get_operation_access('CreateRefund'              , _) ->
     [{[invoices, payments], write}];
 get_operation_access('GetRefunds'                , _) ->
     [{[invoices, payments], read}];
+get_operation_access('GetRefundsByExternalID'    , _) ->
+    [{[invoices, payments], read}];
 get_operation_access('GetRefundByID'             , _) ->
+    [{[invoices, payments], read}];
+get_operation_access('GetRefundByExternalID'     , _) ->
     [{[invoices, payments], read}];
 get_operation_access('SearchInvoices'            , _) ->
     [{[invoices], read}];

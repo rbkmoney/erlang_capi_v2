@@ -47,6 +47,8 @@
     create_partial_refund_without_currency/1,
     get_refund_by_id/1,
     get_refunds/1,
+    get_refund_by_external_id/1,
+    get_refunds_by_external_id/1,
     update_invoice_template_ok_test/1,
     delete_invoice_template_ok_test/1,
     get_account_by_id_ok_test/1,
@@ -154,6 +156,8 @@ groups() ->
                 create_partial_refund_without_currency,
                 get_refund_by_id,
                 get_refunds,
+                get_refund_by_external_id,
+                get_refunds_by_external_id,
                 update_invoice_template_ok_test,
                 delete_invoice_template_ok_test,
                 get_account_by_id_ok_test,
@@ -659,6 +663,38 @@ get_refund_by_id(Config) ->
 get_refunds(Config) ->
     capi_ct_helper:mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
     {ok, _} = capi_client_payments:get_refunds(?config(context, Config), ?STRING, ?STRING).
+
+-spec get_refund_by_external_id(config()) ->
+    _.
+get_refund_by_external_id(Config) ->
+    ExternalID = <<"merch_id">>,
+    BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{
+        <<"invoice_id">> => ?STRING,
+        <<"payment_id">> => ?STRING,
+        <<"refund_id" >> => ?STRING
+    }}),
+    capi_ct_helper:mock_services([
+        {invoicing, fun('GetPaymentRefund', _) -> {ok, ?REFUND} end},
+        {bender,  fun('GetInternalID', _) ->
+            InternalKey = capi_ct_helper:unique_id(),
+            {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)} end}
+    ], Config),
+    {ok, _} = capi_client_payments:get_refund_by_external_id(?config(context, Config), ExternalID).
+
+-spec get_refunds_by_external_id(config()) ->
+    _.
+get_refunds_by_external_id(Config) ->
+    ExternalID = <<"merch_id">>,
+    BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{
+        <<"invoice_id">> => ?STRING
+    }}),
+    capi_ct_helper:mock_services([
+        {invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end},
+        {bender,  fun('GetInternalID', _) ->
+            InternalKey = capi_ct_helper:unique_id(),
+            {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)} end}
+    ], Config),
+    {ok, _} = capi_client_payments:get_refunds_by_external_id(?config(context, Config), ExternalID).
 
 -spec update_invoice_template_ok_test(config()) ->
     _.

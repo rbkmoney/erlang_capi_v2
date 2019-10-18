@@ -27,6 +27,7 @@
 -export([wrap_payment_session/2]).
 -export([get_invoice_by_id/2]).
 -export([get_payment_by_id/3]).
+-export([get_refund_by_id/4]).
 -export([get_contract_by_id/2]).
 
 -export([create_dsl/3]).
@@ -309,6 +310,12 @@ get_invoice_by_id(InvoiceID, Context) ->
 
 get_payment_by_id(InvoiceID, PaymentID, Context) ->
     service_call_with([user_info], {invoicing, 'GetPayment', [InvoiceID, PaymentID]}, Context).
+
+-spec get_refund_by_id(binary(), binary(), binary(), processing_context()) ->
+    woody:result().
+
+get_refund_by_id(InvoiceID, PaymentID, RefundID, Context) ->
+    service_call_with([user_info], {invoicing, 'GetPaymentRefund', [InvoiceID, PaymentID, RefundID]}, Context).
 
 -spec get_contract_by_id(binary(), processing_context()) ->
     woody:result().
