@@ -8,7 +8,6 @@
 -export([capture_payment/4]).
 -export([get_refunds/3]).
 -export([get_refund_by_id/4]).
--export([get_refunds_by_external_id/2]).
 -export([get_refund_by_external_id/2]).
 -export([create_refund/4]).
 
@@ -103,17 +102,6 @@ get_refunds(Context, InvoiceID, PaymentID) ->
     },
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
     Response = swag_client_payments_api:get_refunds(Url, PreparedParams, Opts),
-    capi_client_lib:handle_response(Response).
-
--spec get_refunds_by_external_id(context(), binary()) -> {ok, term()} | {error, term()}.
-get_refunds_by_external_id(Context, ExternalID) ->
-    Params = #{
-        binding => #{
-            <<"externalID">> => ExternalID
-        }
-    },
-    {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
-    Response = swag_client_payments_api:get_refunds_by_external_id(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 
 -spec get_refund_by_id(context(), binary(), binary(), binary()) -> {ok, term()} | {error, term()}.

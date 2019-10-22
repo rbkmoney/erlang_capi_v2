@@ -140,22 +140,6 @@ process_request('GetRefundByExternalID', Req, Context) ->
             end
     end;
 
-process_request('GetRefundsByExternalID', Req, Context) ->
-    ExternalID = maps:get(externalID, Req),
-    case get_refunds_by_external_id(ExternalID, Context) of
-        {ok, #payproc_InvoicePayment{refunds = Refunds}} ->
-            {ok, {200, #{}, [capi_handler_decoder_invoicing:decode_refund(R, Context) || R <- Refunds]}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Invoice not found">>)};
-                #payproc_InvoicePaymentNotFound{} ->
-                    {ok, general_error(404, <<"Payment not found">>)};
-                #payproc_InvoiceNotFound{} ->
-                    {ok, general_error(404, <<"Invoice not found">>)}
-        end
-    end;
-
 process_request('GetPaymentByExternalID', Req, Context) ->
     ExternalID = maps:get(externalID, Req),
     case get_payment_by_external_id(ExternalID, Context) of
@@ -479,18 +463,6 @@ get_refund(_, undefined, _, _) ->
     {error, payment_not_found};
 get_refund(InvoiceID, PaymentID, RefundID, Context) ->
     capi_handler_utils:get_refund_by_id(InvoiceID, PaymentID, RefundID, Context).
-
-get_refunds_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
-    PartyID    = capi_handler_utils:get_party_id(Context),
-    PaymentKey = capi_bender:get_idempotent_key('CreatePayment', PartyID, ExternalID),
-    case capi_bender:get_internal_id(PaymentKey, WoodyContext) of
-        {ok, PaymentID, CtxData} ->
-            InvoiceID = maps:get(<<"invoice_id">>, CtxData, undefined),
-            capi_handler_utils:get_payment_by_id(InvoiceID, PaymentID, Context);
-        Error ->
-            Error
-    end.
-
 
 -spec get_payment_by_external_id(binary(), capi_handler:processing_context()) ->
     woody:result().
