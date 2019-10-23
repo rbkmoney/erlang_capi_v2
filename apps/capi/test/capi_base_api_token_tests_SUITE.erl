@@ -360,8 +360,8 @@ get_invoice_by_external_id(Config) ->
     ExternalID = <<"merch_id">>,
     BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{}}),
     capi_ct_helper:mock_services([
-        {invoicing, fun('GetInvoice', _) -> {ok, ?INVOICE} end},
-        {bender,  fun('GetInternalID', [<<"merch_id">>]) ->
+        {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end},
+        {bender,  fun('GetInternalID', _) ->
             InternalKey = capi_ct_helper:unique_id(),
             {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)} end}
     ], Config),

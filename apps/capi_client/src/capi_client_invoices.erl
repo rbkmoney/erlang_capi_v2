@@ -59,7 +59,7 @@ get_invoice_by_id(Context, InvoiceID) ->
 
 -spec get_invoice_by_external_id(context(), binary()) -> {ok, term()} | {error, term()}.
 get_invoice_by_external_id(Context, ExternalID) ->
-    Params = #{binding => #{<<"externalID">> => ExternalID}},
+    Params = #{qs_val => #{<<"externalID">> => ExternalID}},
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
     Response = swag_client_invoices_api:get_invoice_by_external_id(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
