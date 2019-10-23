@@ -182,6 +182,8 @@ get_operation_access('CreateInvoice'             , _) ->
     [{[invoices], write}];
 get_operation_access('GetInvoiceByID'            , #{'invoiceID' := ID}) ->
     [{[{invoices, ID}], read}];
+get_operation_access('GetInvoiceByExternalID'    , _) ->
+    [{[invoices], read}];
 get_operation_access('GetInvoiceEvents'          , #{'invoiceID' := ID}) ->
     [{[{invoices, ID}], read}];
 get_operation_access('GetInvoicePaymentMethods'  , #{'invoiceID' := ID}) ->
