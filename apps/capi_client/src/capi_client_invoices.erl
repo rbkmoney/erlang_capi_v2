@@ -5,6 +5,7 @@
 -export([get_invoice_events/3]).
 -export([get_invoice_events/4]).
 -export([get_invoice_by_id/2]).
+-export([get_invoice_by_external_id/2]).
 -export([fulfill_invoice/3]).
 -export([rescind_invoice/3]).
 -export([get_invoice_payment_methods/2]).
@@ -54,6 +55,13 @@ get_invoice_by_id(Context, InvoiceID) ->
     Params = #{binding => #{<<"invoiceID">> => InvoiceID}},
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
     Response = swag_client_invoices_api:get_invoice_by_id(Url, PreparedParams, Opts),
+    capi_client_lib:handle_response(Response).
+
+-spec get_invoice_by_external_id(context(), binary()) -> {ok, term()} | {error, term()}.
+get_invoice_by_external_id(Context, ExternalID) ->
+    Params = #{binding => #{<<"externalID">> => ExternalID}},
+    {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
+    Response = swag_client_invoices_api:get_invoice_by_external_id(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 
 -spec fulfill_invoice(context(), binary(), string()) -> ok | {error, term()}.

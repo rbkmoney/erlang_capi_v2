@@ -30,6 +30,7 @@
     create_invoice_ok_test/1,
     create_invoice_idemp_ok_test/1,
     create_invoice_idemp_fail_test/1,
+    get_invoice_by_external_id/1,
     create_invoice_access_token_ok_test/1,
     create_invoice_template_ok_test/1,
     create_invoice_with_template_test/1,
@@ -140,6 +141,7 @@ groups() ->
                 create_invoice_ok_test,
                 create_invoice_idemp_ok_test,
                 create_invoice_idemp_fail_test,
+                get_invoice_by_external_id,
                 create_invoice_access_token_ok_test,
                 create_invoice_template_ok_test,
                 create_invoice_with_template_test,
@@ -353,6 +355,20 @@ create_invoice_idemp_fail_test(Config) ->
         Req#{<<"product">> => <<"test_product2">>}
     ),
     ?assertEqual(BadExternalID, Response).
+
+-spec get_invoice_by_external_id(config()) ->
+    _.
+get_invoice_by_external_id(Config) ->
+    ExternalID = <<"merch_id">>,
+    BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{}}),
+    capi_ct_helper:mock_services([
+        {invoicing, fun('GetInvoice', _) -> {ok, ?INVOICE} end},
+        {bender,  fun('GetInternalID', [<<"merch_id">>]) ->
+            InternalKey = capi_ct_helper:unique_id(),
+            {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)} end}
+    ], Config),
+    {ok, _} = capi_client_invoices:get_invoice_by_external_id(?config(context, Config), ExternalID).
+
 
 -spec create_invoice_access_token_ok_test(config()) ->
     _.
