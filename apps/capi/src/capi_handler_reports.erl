@@ -26,10 +26,12 @@ process_request('GetReports', Req, Context) ->
                 to_time   = capi_handler_utils:get_time('toTime'  , Req)
             }
     },
-    ReportTypes = [],
-    Call = {reporting, 'GetReports', [ReportRequest, ReportTypes]},
+    StatReportRequest = #reports_StatReportRequest{
+        request = ReportRequest
+    },
+    Call = {reporting, 'GetReports', [StatReportRequest]},
     case capi_handler_utils:service_call(Call, Context) of
-        {ok, Reports} ->
+        {ok, #reports_StatReportResponse{reports = Reports}} ->
             {ok, {200, #{}, [decode_report(R) || R <- Reports]}};
         {exception, Exception} ->
             case Exception of
