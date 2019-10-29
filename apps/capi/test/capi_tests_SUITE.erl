@@ -1218,7 +1218,7 @@ get_payment_method_stats_ok_test(Config) ->
 -spec get_reports_ok_test(config()) ->
     _.
 get_reports_ok_test(Config) ->
-    mock_services([{reporting, fun('GetReports', _) -> {ok, [?REPORT]} end}], Config),
+    mock_services([{reporting, fun('GetReports', _) -> {ok, ?FOUND_REPORTS} end}], Config),
     {ok, _} = capi_client_reports:get_reports(?config(context, Config), ?STRING, ?TIMESTAMP, ?TIMESTAMP).
 
 -spec download_report_file_ok_test(_) ->
