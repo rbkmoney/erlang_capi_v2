@@ -937,10 +937,12 @@ process_request('GetReports', Req, Context, ReqCtx) ->
             to_time = get_time('toTime', Req)
         }
     },
-    ReportTypes = [],
-    Result = service_call(reporting, 'GetReports', [ReportRequest, ReportTypes], ReqCtx),
+    StatReportRequest = #reports_StatReportRequest{
+        request = ReportRequest
+    },
+    Result = service_call(reporting, 'GetReports', [StatReportRequest], ReqCtx),
     case Result of
-        {ok, Reports} ->
+        {ok, #reports_StatReportResponse{reports = Reports}} ->
             Resp = [decode_report(R) || #reports_Report{status = created} = R <- Reports],
             {ok, {200, #{}, Resp}};
         {exception, Exception} ->

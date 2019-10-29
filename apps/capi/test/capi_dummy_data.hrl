@@ -613,6 +613,10 @@
     party_id = ?STRING
 }).
 
+-define(FOUND_REPORTS, #'reports_StatReportResponse'{
+    reports = [?REPORT]
+}).
+
 -define(GLOBALS,
     {globals, #domain_GlobalsObject{
         ref = #domain_GlobalsRef{},
