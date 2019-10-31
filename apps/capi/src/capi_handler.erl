@@ -29,8 +29,15 @@
 -spec authorize_api_key(swag_server:operation_id(), swag_server:api_key(), handler_opts()) ->
     Result :: false | {true, capi_auth:context()}.
 
-authorize_api_key(OperationID, ApiKey, _HandlerOpts) ->
-    capi_auth:authorize_api_key(OperationID, ApiKey).
+authorize_api_key(_OperationID, ApiKey, _HandlerOpts) ->
+    case uac:authorize_api_key(ApiKey, #{}) of
+        {ok, Context} ->
+            _ = logger:debug("Api key authorization successful"),
+            {true, Context};
+        {error, Error} ->
+            _ = logger:info("Api key authorization failed due to ~p", [Error]),
+            false
+    end.
 
 -type request_data()        :: #{atom() | binary() => term()}.
 
@@ -91,7 +98,8 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
         ok = set_rpc_meta(RpcID),
         ok = set_request_meta(OperationID, Req),
         _ = logger:info("Processing request ~p", [OperationID]),
-        case capi_auth:authorize_operation(OperationID, Req, AuthContext) of
+        OperationACL = capi_auth:get_operation_access(OperationID, Req),
+        case uac:authorize_operation(OperationACL, AuthContext) of
             ok ->
                 WoodyContext = attach_deadline(Req, create_woody_context(RpcID, AuthContext)),
                 Context = create_processing_context(SwagContext, WoodyContext),

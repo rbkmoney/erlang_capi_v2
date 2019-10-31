@@ -88,12 +88,21 @@ start_capi(Config, ExtraEnv) ->
         {ip, ?CAPI_IP},
         {port, ?CAPI_PORT},
         {service_type, real},
-        {authorizers, #{
+        {access_conf, #{
             jwt => #{
                 signee => capi,
                 keyset => #{
-                    % TODO use crypto:generate_key here when move on 21 Erlang
                     capi => {pem_file, get_keysource("keys/local/private.pem", Config)}
+                }
+            },
+            access => #{
+                domain_name => <<"common-api">>,
+                resource_hierarchy => #{
+                    party               => #{invoice_templates => #{invoice_template_invoices => #{}}},
+                    customers           => #{bindings => #{}},
+                    invoices            => #{payments => #{}},
+                    payment_resources   => #{},
+                    payouts             => #{}
                 }
             }
         }}
@@ -132,7 +141,22 @@ issue_token(ACL, LifeTime, ExtraProperties) ->
 
 issue_token(PartyID, ACL, LifeTime, ExtraProperties) ->
     Claims = maps:merge(#{?STRING => ?STRING}, ExtraProperties),
-    capi_authorizer_jwt:issue({{PartyID, capi_acl:from_list(ACL)}, Claims}, LifeTime).
+    DomainRoles = #{
+        <<"common-api">> => uac_acl:from_list(ACL)
+    },
+    UniqueId = get_unique_id(),
+    uac_authorizer_jwt:issue(
+        UniqueId,
+        LifeTime,
+        PartyID,
+        DomainRoles,
+        Claims,
+        capi
+    ).
+
+get_unique_id() ->
+    <<ID:64>> = snowflake:new(),
+    genlib_format:format_int_base(ID, 62).
 
 -spec get_context(binary()) ->
     capi_client_lib:context().

@@ -25,7 +25,8 @@
         base64url,
         woody_user_identity,
         payproc_errors,
-        erl_health
+        erl_health,
+        uac
     ]},
     {env, []}
 ]}.

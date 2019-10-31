@@ -171,7 +171,7 @@ issue_dummy_token(ACL, Config) ->
         <<"exp">> => 0,
         <<"resource_access">> => #{
             <<"common-api">> => #{
-                <<"roles">> => capi_acl:encode(capi_acl:from_list(ACL))
+                <<"roles">> => uac_acl:encode(uac_acl:from_list(ACL))
             }
         }
     },
