@@ -32,7 +32,6 @@
 authorize_api_key(_OperationID, ApiKey, _HandlerOpts) ->
     case uac:authorize_api_key(ApiKey, #{}) of
         {ok, Context} ->
-            _ = logger:debug("Api key authorization successful"),
             {true, Context};
         {error, Error} ->
             _ = logger:info("Api key authorization failed due to ~p", [Error]),
