@@ -50,19 +50,14 @@ issue_access_token(PartyID, TokenSpec) ->
 issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
     {Claims0, DomainRoles, LifeTime} = resolve_token_spec(TokenSpec),
     Claims = maps:merge(ExtraProperties, Claims0),
-    UniqueId = get_unique_id(),
     capi_utils:unwrap(uac_authorizer_jwt:issue(
-            UniqueId,
+            capi_utils:get_unique_id(),
             LifeTime,
             PartyID,
             DomainRoles,
             Claims,
             capi
     )).
-
-get_unique_id() ->
-    <<ID:64>> = snowflake:new(),
-    genlib_format:format_int_base(ID, 62).
 
 -spec resolve_token_spec(token_spec()) ->
     {claims(), uac_authorizer_jwt:domains(), uac_authorizer_jwt:expiration()}.

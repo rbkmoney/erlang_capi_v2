@@ -144,19 +144,14 @@ issue_token(PartyID, ACL, LifeTime, ExtraProperties) ->
     DomainRoles = #{
         <<"common-api">> => uac_acl:from_list(ACL)
     },
-    UniqueId = get_unique_id(),
     uac_authorizer_jwt:issue(
-        UniqueId,
+        capi_utils:get_unique_id(),
         LifeTime,
         PartyID,
         DomainRoles,
         Claims,
         capi
     ).
-
-get_unique_id() ->
-    <<ID:64>> = snowflake:new(),
-    genlib_format:format_int_base(ID, 62).
 
 -spec get_context(binary()) ->
     capi_client_lib:context().
