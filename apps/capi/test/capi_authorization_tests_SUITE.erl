@@ -166,7 +166,7 @@ authorization_bad_token_error_test(Config) ->
 
 issue_dummy_token(ACL, Config) ->
     Claims = #{
-        <<"jti">> => unique_id(),
+        <<"jti">> => capi_utils:get_unique_id(),
         <<"sub">> => ?STRING,
         <<"exp">> => 0,
         <<"resource_access">> => #{
@@ -186,8 +186,3 @@ issue_dummy_token(ACL, Config) ->
     JWT = jose_jwt:sign(BadJWK, #{<<"alg">> => <<"RS256">>, <<"kid">> => KID}, Claims),
     {_Modules, Token} = jose_jws:compact(JWT),
     {ok, Token}.
-
-unique_id() ->
-    <<ID:64>> = snowflake:new(),
-    genlib_format:format_int_base(ID, 62).
-
