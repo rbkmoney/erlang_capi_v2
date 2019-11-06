@@ -13,8 +13,8 @@
 
 -export([get_resource_hierarchy/0]).
 
--type context () :: uac_authorizer_jwt:t().
--type claims  () :: uac_authorizer_jwt:claims().
+-type context () :: uac:context().
+-type claims  () :: uac:claims().
 -type consumer() :: client | merchant | provider.
 
 -export_type([context /0]).
@@ -96,22 +96,22 @@ resolve_token_spec({customer, CustomerID}) ->
     Expiration = {lifetime, ?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME},
     {#{}, DomainRoles, Expiration}.
 
--spec get_subject_id(uac:context()) -> binary().
+-spec get_subject_id(context()) -> binary().
 
 get_subject_id({_Id, {SubjectID, _ACL}, _Claims}) ->
     SubjectID.
 
--spec get_claims(uac:context()) -> uac:claims().
+-spec get_claims(context()) -> claims().
 
 get_claims({_Id, _Subject, Claims}) ->
     Claims.
 
--spec get_claim(binary(), uac:context()) -> term().
+-spec get_claim(binary(), context()) -> term().
 
 get_claim(ClaimName, {_Id, _Subject, Claims}) ->
     maps:get(ClaimName, Claims).
 
--spec get_claim(binary(), uac:context(), term()) -> term().
+-spec get_claim(binary(), context(), term()) -> term().
 
 get_claim(ClaimName, {_Id, _Subject, Claims}, Default) ->
     maps:get(ClaimName, Claims, Default).
