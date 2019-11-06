@@ -21,6 +21,8 @@
 -export_type([claims  /0]).
 -export_type([consumer/0]).
 
+-define(SIGNEE, capi).
+
 %%
 
 % TODO
@@ -56,7 +58,7 @@ issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
             PartyID,
             DomainRoles,
             Claims,
-            capi
+            ?SIGNEE
     )).
 
 -spec resolve_token_spec(token_spec()) ->
