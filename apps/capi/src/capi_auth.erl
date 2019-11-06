@@ -11,7 +11,7 @@
 
 -export([get_operation_access/2]).
 
--export([get_uac_config/0]).
+-export([get_access_config/0]).
 
 -type context () :: uac:context().
 -type claims  () :: uac:claims().
@@ -284,12 +284,7 @@ get_operation_access('CreatePayout'              , _) ->
 get_operation_access('GetPayout'                 , _) ->
     [{[payouts], read}].
 
--spec get_uac_config() -> map().
-get_uac_config() ->
-    maps:merge(
-        genlib_app:env(capi, access_conf),
-        #{access => get_access_config()}
-    ).
+-spec get_access_config() -> map().
 
 get_access_config() ->
     #{
