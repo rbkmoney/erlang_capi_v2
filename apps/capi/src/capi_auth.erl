@@ -53,12 +53,12 @@ issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
     {Claims0, DomainRoles, LifeTime} = resolve_token_spec(TokenSpec),
     Claims = maps:merge(ExtraProperties, Claims0),
     capi_utils:unwrap(uac_authorizer_jwt:issue(
-            capi_utils:get_unique_id(),
-            LifeTime,
-            PartyID,
-            DomainRoles,
-            Claims,
-            ?SIGNEE
+        capi_utils:get_unique_id(),
+        LifeTime,
+        PartyID,
+        DomainRoles,
+        Claims,
+        ?SIGNEE
     )).
 
 -spec resolve_token_spec(token_spec()) ->
