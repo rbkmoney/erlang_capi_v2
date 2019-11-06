@@ -29,12 +29,12 @@
 -spec authorize_api_key(swag_server:operation_id(), swag_server:api_key(), handler_opts()) ->
     Result :: false | {true, capi_auth:context()}.
 
-authorize_api_key(_OperationID, ApiKey, _HandlerOpts) ->
+authorize_api_key(OperationID, ApiKey, _HandlerOpts) ->
     case uac:authorize_api_key(ApiKey, #{}) of
         {ok, Context} ->
             {true, Context};
         {error, Error} ->
-            _ = logger:info("Api key authorization failed due to ~p", [Error]),
+            _ = logger:info("API Key authorization failed for ~p due to ~p", [OperationID, Error]),
             false
     end.
 
