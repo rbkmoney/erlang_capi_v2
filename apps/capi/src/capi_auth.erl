@@ -74,6 +74,9 @@ resolve_token_spec({invoice, InvoiceID}) ->
             {[{invoices, InvoiceID}, payments] , read },
             {[{invoices, InvoiceID}, payments] , write},
             {[payment_resources              ] , write}
+        ]),
+        <<"bin-api">> => uac_acl:from_list([
+            {[card_bins], read}
         ])
     },
     Expiration = {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME},
@@ -300,7 +303,8 @@ get_resource_hierarchy() ->
         customers           => #{bindings => #{}},
         invoices            => #{payments => #{}},
         payment_resources   => #{},
-        payouts             => #{}
+        payouts             => #{},
+        card_bins           => #{}
     }.
 
 -spec get_consumer(claims()) ->
