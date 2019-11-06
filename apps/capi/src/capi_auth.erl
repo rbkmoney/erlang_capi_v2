@@ -11,7 +11,7 @@
 
 -export([get_operation_access/2]).
 
--export([get_resource_hierarchy/0]).
+-export([get_uac_config/0]).
 
 -type context () :: uac:context().
 -type claims  () :: uac:claims().
@@ -283,6 +283,19 @@ get_operation_access('CreatePayout'              , _) ->
     [{[payouts], write}];
 get_operation_access('GetPayout'                 , _) ->
     [{[payouts], read}].
+
+-spec get_uac_config() -> map().
+get_uac_config() ->
+    maps:merge(
+        genlib_app:env(capi, access_conf),
+        #{access => get_access_config()}
+    ).
+
+get_access_config() ->
+    #{
+        domain_name => <<"common-api">>,
+        resource_hierarchy => get_resource_hierarchy()
+    }.
 
 -spec get_resource_hierarchy() -> #{atom() => map()}.
 

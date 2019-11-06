@@ -29,7 +29,7 @@ init([]) ->
     HealthRoutes = [{'_', [erl_health_handle:get_route(HealthCheck)]}],
     SwaggerHandlerOpts = genlib_app:env(?APP, swagger_handler_opts, #{}),
     SwaggerSpecs = capi_swagger_server:child_spec({HealthRoutes, LogicHandler, SwaggerHandlerOpts}),
-    UacConf = genlib_app:env(capi, access_conf),
+    UacConf = capi_auth:get_uac_config(),
     ok = uac:configure(UacConf),
     {ok, {
         {one_for_all, 0, 1},

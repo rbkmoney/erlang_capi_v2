@@ -22,7 +22,6 @@
 -export([mock_services/2]).
 -export([mock_services_/2]).
 -export([get_lifetime/0]).
--export([unique_id/0]).
 
 -define(CAPI_IP                     , "::").
 -define(CAPI_PORT                   , 8080).
@@ -93,16 +92,6 @@ start_capi(Config, ExtraEnv) ->
                 signee => capi,
                 keyset => #{
                     capi => {pem_file, get_keysource("keys/local/private.pem", Config)}
-                }
-            },
-            access => #{
-                domain_name => <<"common-api">>,
-                resource_hierarchy => #{
-                    party               => #{invoice_templates => #{invoice_template_invoices => #{}}},
-                    customers           => #{bindings => #{}},
-                    invoices            => #{payments => #{}},
-                    payment_resources   => #{},
-                    payouts             => #{}
                 }
             }
         }}
@@ -269,9 +258,3 @@ get_lifetime(YY, MM, DD) ->
        <<"months">> => MM,
        <<"days">>   => DD
     }.
-
--spec unique_id() -> binary().
-
-unique_id() ->
-    <<ID:64>> = snowflake:new(),
-    genlib_format:format_int_base(ID, 62).
