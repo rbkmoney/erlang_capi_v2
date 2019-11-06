@@ -14,6 +14,8 @@
 
 -export([deduplicate_payment_methods/1]).
 
+-export([get_unique_id/0]).
+
 -define(MAX_DEADLINE_TIME, 1*60*1000). % 1 min
 
 -spec base64url_to_map(binary()) -> map() | no_return().
@@ -185,6 +187,10 @@ payment_methods_equivalent(#{<<"method">> := M} = M1, #{<<"method">> := M} = M2)
 payment_methods_equivalent(_, _) ->
     false.
 
+-spec get_unique_id() -> binary().
+get_unique_id() ->
+    <<ID:64>> = snowflake:new(),
+    genlib_format:format_int_base(ID, 62).
 %%
 
 -ifdef(TEST).

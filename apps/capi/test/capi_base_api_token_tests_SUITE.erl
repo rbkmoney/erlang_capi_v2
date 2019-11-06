@@ -362,7 +362,7 @@ get_invoice_by_external_id(Config) ->
     capi_ct_helper:mock_services([
         {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end},
         {bender,  fun('GetInternalID', _) ->
-            InternalKey = capi_ct_helper:unique_id(),
+            InternalKey = capi_utils:get_unique_id(),
             {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)} end}
     ], Config),
     {ok, _} = capi_client_invoices:get_invoice_by_external_id(?config(context, Config), ExternalID).
@@ -690,7 +690,7 @@ get_refund_by_external_id(Config) ->
     capi_ct_helper:mock_services([
         {invoicing, fun('GetPaymentRefund', _) -> {ok, ?REFUND} end},
         {bender,  fun('GetInternalID', _) ->
-            InternalKey = capi_ct_helper:unique_id(),
+            InternalKey = capi_utils:get_unique_id(),
             {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)} end}
     ], Config),
     {ok, _} = capi_client_payments:get_refund_by_external_id(?config(context, Config), ExternalID).
@@ -1354,12 +1354,12 @@ get_schedule_by_ref_ok_test(Config) ->
 -spec check_no_payment_by_external_id_test(config()) ->
     _.
 check_no_payment_by_external_id_test(Config) ->
-    ExternalID = capi_ct_helper:unique_id(),
+    ExternalID = capi_utils:get_unique_id(),
     BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{<<"invoice_id">> => <<"123">>}}),
     capi_ct_helper:mock_services([
         {invoicing, fun('GetPayment', _)  -> throw(#payproc_InvoicePaymentNotFound{}) end},
         {bender,  fun('GetInternalID', _) ->
-            InternalKey = capi_ct_helper:unique_id(),
+            InternalKey = capi_utils:get_unique_id(),
             {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)} end}
     ], Config),
 
@@ -1371,11 +1371,11 @@ check_no_payment_by_external_id_test(Config) ->
 -spec check_no_invoice_by_external_id_test(config()) ->
     _.
 check_no_invoice_by_external_id_test(Config) ->
-    ExternalID = capi_ct_helper:unique_id(),
+    ExternalID = capi_utils:get_unique_id(),
     BenderContext = capi_msgp_marshalling:marshal(#{}),
     capi_ct_helper:mock_services([
         {bender,  fun('GetInternalID', _) ->
-            InternalKey = capi_ct_helper:unique_id(),
+            InternalKey = capi_utils:get_unique_id(),
             {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)} end}
     ], Config),
 
@@ -1387,7 +1387,7 @@ check_no_invoice_by_external_id_test(Config) ->
 -spec check_no_internal_id_for_external_id_test(config()) ->
     _.
 check_no_internal_id_for_external_id_test(Config) ->
-    ExternalID = capi_ct_helper:unique_id(),
+    ExternalID = capi_utils:get_unique_id(),
     capi_ct_helper:mock_services([
         {bender,  fun('GetInternalID', _) -> throw(capi_ct_helper_bender:no_internal_id()) end}
     ], Config),
@@ -1400,13 +1400,13 @@ check_no_internal_id_for_external_id_test(Config) ->
 -spec retrieve_payment_by_external_id_test(config()) ->
     _.
 retrieve_payment_by_external_id_test(Config) ->
-    PaymentID = capi_ct_helper:unique_id(),
-    ExternalID = capi_ct_helper:unique_id(),
+    PaymentID = capi_utils:get_unique_id(),
+    ExternalID = capi_utils:get_unique_id(),
     BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{<<"invoice_id">> => <<"123">>}}),
     capi_ct_helper:mock_services([
         {invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT(PaymentID, ExternalID)} end},
         {bender,  fun('GetInternalID', _) ->
-            InternalKey = capi_ct_helper:unique_id(),
+            InternalKey = capi_utils:get_unique_id(),
             {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)} end}
     ], Config),
     {ok, #{

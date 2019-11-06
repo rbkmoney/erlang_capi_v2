@@ -22,7 +22,6 @@
 -export([mock_services/2]).
 -export([mock_services_/2]).
 -export([get_lifetime/0]).
--export([unique_id/0]).
 
 -define(CAPI_IP                     , "::").
 -define(CAPI_PORT                   , 8080).
@@ -88,11 +87,10 @@ start_capi(Config, ExtraEnv) ->
         {ip, ?CAPI_IP},
         {port, ?CAPI_PORT},
         {service_type, real},
-        {authorizers, #{
+        {access_conf, #{
             jwt => #{
                 signee => capi,
                 keyset => #{
-                    % TODO use crypto:generate_key here when move on 21 Erlang
                     capi => {pem_file, get_keysource("keys/local/private.pem", Config)}
                 }
             }
@@ -132,7 +130,17 @@ issue_token(ACL, LifeTime, ExtraProperties) ->
 
 issue_token(PartyID, ACL, LifeTime, ExtraProperties) ->
     Claims = maps:merge(#{?STRING => ?STRING}, ExtraProperties),
-    capi_authorizer_jwt:issue({{PartyID, capi_acl:from_list(ACL)}, Claims}, LifeTime).
+    DomainRoles = #{
+        <<"common-api">> => uac_acl:from_list(ACL)
+    },
+    uac_authorizer_jwt:issue(
+        capi_utils:get_unique_id(),
+        LifeTime,
+        PartyID,
+        DomainRoles,
+        Claims,
+        capi
+    ).
 
 -spec get_context(binary()) ->
     capi_client_lib:context().
@@ -250,9 +258,3 @@ get_lifetime(YY, MM, DD) ->
        <<"months">> => MM,
        <<"days">>   => DD
     }.
-
--spec unique_id() -> binary().
-
-unique_id() ->
-    <<ID:64>> = snowflake:new(),
-    genlib_format:format_int_base(ID, 62).
