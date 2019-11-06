@@ -829,6 +829,10 @@
     party_id = ?STRING
 }).
 
+-define(FOUND_REPORTS, #'reports_StatReportResponse'{
+    reports = [?REPORT]
+}).
+
 -define(SNAPSHOT, #'Snapshot'{
     version = ?INTEGER,
     domain = #{
