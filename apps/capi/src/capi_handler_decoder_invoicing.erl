@@ -37,6 +37,18 @@ decode_user_interaction({redirect, BrowserRequest}) ->
     #{
         <<"interactionType">> => <<"Redirect">>,
         <<"request">> => decode_browser_request(BrowserRequest)
+    };
+decode_user_interaction({qr_code_display_request, QrCodeDisplayRequest}) ->
+    #{
+        <<"interactionType">> => <<"QrCodeDisplayRequest">>,
+        <<"qrCode">> => decode_qr_code(QrCodeDisplayRequest)
+    };
+decode_user_interaction({crypto_currency_transfer_request, CryptoCurrencyTransferRequest}) ->
+    #{
+        <<"interactionType">> => <<"CryptoCurrencyTransferRequest">>,
+        <<"cryptoAddress">> => CryptoCurrencyTransferRequest#'CryptoCurrencyTransferRequest'.crypto_address,
+        <<"symbolicCode">> => decode_crypto_symcode(CryptoCurrencyTransferRequest),
+        <<"cryptoAmount">> => decode_crypto_amount(CryptoCurrencyTransferRequest)
     }.
 
 decode_browser_request({get_request, #'BrowserGetRequest'{uri = UriTemplate}}) ->
@@ -50,6 +62,16 @@ decode_browser_request({post_request, #'BrowserPostRequest'{uri = UriTemplate, f
         <<"uriTemplate">> => UriTemplate,
         <<"form">> => decode_user_interaction_form(UserInteractionForm)
     }.
+
+decode_qr_code(#'QrCodeDisplayRequest'{qr_code = QrCode}) ->
+    QrCode#'QrCode'.payload.
+
+decode_crypto_symcode(#'CryptoCurrencyTransferRequest'{crypto_cash = Cash}) ->
+    Cash#'CryptoCash'.crypto_symbolic_code.
+
+decode_crypto_amount(#'CryptoCurrencyTransferRequest'{crypto_cash = Cash}) ->
+    #'Rational'{p = P, q = Q} = Cash#'CryptoCash'.crypto_amount,
+    genlib:to_binary(P/Q).
 
 -spec decode_user_interaction_form(map()) ->
     capi_handler_decoder_utils:decode_data().
