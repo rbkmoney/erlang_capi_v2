@@ -388,7 +388,7 @@ decode_payment_method(crypto_wallet, CryptoCurrencies) ->
             lists:map(fun capi_handler_decoder_utils:convert_crypto_currency_to_swag/1, CryptoCurrencies)
     }];
 decode_payment_method(mobile, MobileOperators) ->
-    [#{<<"method">> => <<"Mobile">>, <<"mobileOperators">> => lists:map(fun genlib:to_binary/1, MobileOperators)}].
+    [#{<<"method">> => <<"MobileCommerce">>, <<"operators">> => lists:map(fun genlib:to_binary/1, MobileOperators)}].
 
 decode_tokenized_bank_cards(TokenizedBankCards) ->
     PropTokenizedBankCards = [
