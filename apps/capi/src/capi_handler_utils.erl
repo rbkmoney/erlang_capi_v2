@@ -303,7 +303,9 @@ wrap_payment_session(ClientInfo, PaymentSession) ->
     woody:result().
 
 get_invoice_by_id(InvoiceID, Context) ->
-    service_call_with([user_info], {invoicing, 'Get', [InvoiceID]}, Context).
+    EventRange = #payproc_EventRange{},
+    Args = [InvoiceID, EventRange],
+    service_call_with([user_info], {invoicing, 'Get', Args}, Context).
 
 -spec get_payment_by_id(binary(), binary(), processing_context()) ->
     woody:result().
