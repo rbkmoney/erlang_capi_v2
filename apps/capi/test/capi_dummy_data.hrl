@@ -1,8 +1,3 @@
--include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
--include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
--include_lib("damsel/include/dmsl_payment_processing_errors_thrift.hrl").
--include_lib("damsel/include/dmsl_cds_thrift.hrl").
-
 -define(STRING, <<"TEST">>).
 -define(RUB, <<"RUB">>).
 -define(USD, <<"USD">>).
