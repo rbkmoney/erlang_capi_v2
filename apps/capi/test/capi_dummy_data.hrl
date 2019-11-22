@@ -1,3 +1,8 @@
+-include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
+-include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
+-include_lib("damsel/include/dmsl_payment_processing_errors_thrift.hrl").
+-include_lib("damsel/include/dmsl_cds_thrift.hrl").
+
 -define(STRING, <<"TEST">>).
 -define(RUB, <<"RUB">>).
 -define(USD, <<"USD">>).
@@ -207,8 +212,7 @@
 
 -define(PAYPROC_PAYMENT(Payment, Refunds, Adjustments), #payproc_InvoicePayment{
     payment        = Payment,
-    % FIXME: an empty list does not look like the best idea, but at least it should work for now
-    refunds        = [],
+    refunds        = [#payproc_InvoicePaymentRefund{refund = R, sessions = []} || R <- Refunds],
     sessions       = [],
     legacy_refunds = Refunds,
     adjustments    = Adjustments
