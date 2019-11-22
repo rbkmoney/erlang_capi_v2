@@ -310,7 +310,10 @@ process_request('CreateRefund' = OperationID, Req, Context) ->
 process_request('GetRefunds', Req, Context) ->
     case capi_handler_utils:get_payment_by_id(maps:get(invoiceID, Req), maps:get(paymentID, Req), Context) of
         {ok, #payproc_InvoicePayment{refunds = Refunds}} ->
-            {ok, {200, #{}, [capi_handler_decoder_invoicing:decode_refund(R, Context) || R <- Refunds]}};
+            {ok, {200, #{}, [
+                capi_handler_decoder_invoicing:decode_refund(R, Context)
+                || #payproc_InvoicePaymentRefund{refund =  R} <- Refunds
+            ]}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->

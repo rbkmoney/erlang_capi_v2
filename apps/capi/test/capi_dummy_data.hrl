@@ -207,8 +207,7 @@
 
 -define(PAYPROC_PAYMENT(Payment, Refunds, Adjustments), #payproc_InvoicePayment{
     payment        = Payment,
-    % FIXME: an empty list does not look like the best idea, but at least it should work for now
-    refunds        = [],
+    refunds        = [#payproc_InvoicePaymentRefund{refund = R, sessions = []} || R <- Refunds],
     sessions       = [],
     legacy_refunds = Refunds,
     adjustments    = Adjustments
