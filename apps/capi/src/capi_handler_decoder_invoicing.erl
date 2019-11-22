@@ -71,7 +71,7 @@ decode_crypto_symcode(#'CryptoCurrencyTransferRequest'{crypto_cash = Cash}) ->
 
 decode_crypto_amount(#'CryptoCurrencyTransferRequest'{crypto_cash = Cash}) ->
     #'Rational'{p = P, q = Q} = Cash#'CryptoCash'.crypto_amount,
-    genlib:to_binary(P/Q).
+    erlang:float_to_binary(P/Q, [{decimals, 10}]).
 
 -spec decode_user_interaction_form(map()) ->
     capi_handler_decoder_utils:decode_data().
