@@ -311,7 +311,7 @@ process_request('CreateRefund' = OperationID, Req, Context) ->
         {error, {external_id_conflict, RefundID, ExternalID}} ->
             {ok, logic_error(externalIDConflict, {RefundID, ExternalID})}
     catch
-        invoice_cart_empty ->
+        throw:invoice_cart_empty ->
             {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)}
     end;
 
