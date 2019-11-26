@@ -254,8 +254,7 @@ process_request('CreateRefund' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
     RefundParams = maps:get('RefundParams', Req),
-    Result = create_refund(InvoiceID, PaymentID, RefundParams, Context, OperationID),
-    case Result of
+    try create_refund(InvoiceID, PaymentID, RefundParams, Context, OperationID) of
         {ok, Refund} ->
             {ok, {201, #{}, capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
         {exception, Exception} ->
@@ -311,6 +310,9 @@ process_request('CreateRefund' = OperationID, Req, Context) ->
             end;
         {error, {external_id_conflict, RefundID, ExternalID}} ->
             {ok, logic_error(externalIDConflict, {RefundID, ExternalID})}
+    catch
+        invoice_cart_empty ->
+            {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)}
     end;
 
 process_request('GetRefunds', Req, Context) ->
