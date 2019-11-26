@@ -1,6 +1,6 @@
 -module(capi_handler_shops).
 
--include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
+-include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 
 -behaviour(capi_handler).
 -export([process_request/3]).
@@ -17,13 +17,13 @@ process_request('ActivateShop', Req, Context) ->
     Call = {party_management, 'ActivateShop', [maps:get(shopID, Req)]},
     case capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context) of
         {ok, _R} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_ShopNotFound{} ->
                     {ok, general_error(404, <<"Shop not found">>)};
                 #payproc_InvalidShopStatus{status = {suspension, {active, _}}} ->
-                    {ok, {204, [], undefined}}
+                    {ok, {204, #{}, undefined}}
             end
     end;
 
@@ -31,25 +31,25 @@ process_request('SuspendShop', Req, Context) ->
     Call = {party_management, 'SuspendShop', [maps:get(shopID, Req)]},
     case capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context) of
         {ok, _R} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_ShopNotFound{} ->
                     {ok, general_error(404, <<"Shop not found">>)};
                 #payproc_InvalidShopStatus{status = {suspension, {suspended, _}}} ->
-                    {ok, {204, [], undefined}}
+                    {ok, {204, #{}, undefined}}
             end
     end;
 
 process_request('GetShops', _Req, Context) ->
     Party = capi_utils:unwrap(capi_handler_utils:get_my_party(Context)),
-    {ok, {200, [], decode_shops_map(Party#domain_Party.shops)}};
+    {ok, {200, #{}, decode_shops_map(Party#domain_Party.shops)}};
 
 process_request('GetShopByID', Req, Context) ->
     Call = {party_management, 'GetShop', [maps:get(shopID, Req)]},
     case capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context) of
         {ok, Shop} ->
-            {ok, {200, [], decode_shop(Shop)}};
+            {ok, {200, #{}, decode_shop(Shop)}};
         {exception, #payproc_ShopNotFound{}} ->
             {ok, general_error(404, <<"Shop not found">>)}
     end;

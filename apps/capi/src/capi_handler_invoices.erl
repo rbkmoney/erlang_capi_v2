@@ -1,7 +1,6 @@
 -module(capi_handler_invoices).
 
--include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
--include_lib("dmsl/include/dmsl_domain_thrift.hrl").
+-include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 
 -behaviour(capi_handler).
 -export([process_request/3]).
@@ -14,13 +13,13 @@
 ) ->
     {ok | error, capi_handler:response() | noimpl}.
 
-process_request('CreateInvoice', Req, Context) ->
+process_request('CreateInvoice' = OperationID, Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     InvoiceParams = maps:get('InvoiceParams', Req),
-    try create_invoice(PartyID, InvoiceParams, Context) of
+    try create_invoice(PartyID, InvoiceParams, Context, OperationID) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {201, [], capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, PartyID, ExtraProperties)}};
+            {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, PartyID, ExtraProperties)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
@@ -50,7 +49,7 @@ process_request('CreateInvoiceAccessToken', Req, Context) ->
                 capi_handler_utils:get_party_id(Context),
                 {invoice, InvoiceID}
             ),
-            {ok, {201, [], Response}};
+            {ok, {201, #{}, Response}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -63,7 +62,22 @@ process_request('CreateInvoiceAccessToken', Req, Context) ->
 process_request('GetInvoiceByID', Req, Context) ->
     case capi_handler_utils:get_invoice_by_id(maps:get(invoiceID, Req), Context) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {200, [], capi_handler_decoder_invoicing:decode_invoice(Invoice)}};
+            {ok, {200, #{}, capi_handler_decoder_invoicing:decode_invoice(Invoice)}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, general_error(404, <<"Invoice not found">>)};
+                #payproc_InvoiceNotFound{} ->
+                    {ok, general_error(404, <<"Invoice not found">>)}
+            end
+    end;
+
+process_request('GetInvoiceByExternalID', Req, Context) ->
+    case get_invoice_by_external_id(maps:get(externalID, Req), Context) of
+        {ok, #'payproc_Invoice'{invoice = Invoice}} ->
+            {ok, {200, #{}, capi_handler_decoder_invoicing:decode_invoice(Invoice)}};
+        {error, internal_id_not_found} ->
+             {ok, general_error(404, <<"Invoice not found">>)};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -77,7 +91,7 @@ process_request('FulfillInvoice', Req, Context) ->
     Call = {invoicing, 'Fulfill', [maps:get(invoiceID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))]},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidInvoiceStatus{} ->
@@ -97,7 +111,7 @@ process_request('RescindInvoice', Req, Context) ->
     Call = {invoicing, 'Rescind', [maps:get(invoiceID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))]},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidInvoiceStatus{} ->
@@ -133,7 +147,7 @@ process_request('GetInvoiceEvents', Req, Context) ->
         ),
     case Result of
         {ok, Events} when is_list(Events) ->
-            {ok, {200, [], Events}};
+            {ok, {200, #{}, Events}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -150,8 +164,9 @@ process_request('GetInvoiceEvents', Req, Context) ->
 
 process_request('GetInvoicePaymentMethods', Req, Context) ->
     case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, [maps:get(invoiceID, Req)], Context) of
-        {ok, PaymentMethods} when is_list(PaymentMethods) ->
-            {ok, {200, [], PaymentMethods}};
+        {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
+            PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
+            {ok, {200, #{}, PaymentMethods}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -166,9 +181,9 @@ process_request('GetInvoicePaymentMethods', Req, Context) ->
 process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
-create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context) ->
+create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
     ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
-    IdempotentKey = capi_bender:get_idempotent_key(<<"invoice">>, PartyID, ExternalID),
+    IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2(InvoiceParams),
     case capi_bender:gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) of
         {ok, ID} ->
@@ -336,3 +351,13 @@ decode_refund_for_event(#domain_InvoicePaymentRefund{cash = undefined} = Refund,
     {ok, #payproc_InvoicePayment{payment = #domain_InvoicePayment{cost = Cash}}} =
         capi_handler_utils:get_payment_by_id(InvoiceID, PaymentID, Context),
     capi_handler_decoder_invoicing:decode_refund(Refund#domain_InvoicePaymentRefund{cash = Cash}, Context).
+
+get_invoice_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
+    PartyID    = capi_handler_utils:get_party_id(Context),
+    InvoiceKey = capi_bender:get_idempotent_key('CreateInvoice', PartyID, ExternalID),
+    case capi_bender:get_internal_id(InvoiceKey, WoodyContext) of
+        {ok, InvoiceID, _CtxData} ->
+            capi_handler_utils:get_invoice_by_id(InvoiceID, Context);
+        Error ->
+            Error
+    end.

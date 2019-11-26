@@ -1,6 +1,6 @@
 -module(capi_handler_analytics).
 
--include_lib("dmsl/include/dmsl_merch_stat_thrift.hrl").
+-include_lib("damsel/include/dmsl_merch_stat_thrift.hrl").
 
 -behaviour(capi_handler).
 -export([process_request/3]).
@@ -70,13 +70,13 @@ process_merchant_stat_result(customers_rate_stat = StatType, {ok, #merchstat_Sta
             [            ] -> #{<<"uniqueCount">> => 0};
             [StatResponse] -> decode_stat_info(StatType, StatResponse)
         end,
-    {ok, {200, [], Resp}};
+    {ok, {200, #{}, Resp}};
 
 process_merchant_stat_result(StatType, Result) ->
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
             Resp = [decode_stat_info(StatType, S) || S <- Stats],
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
             FormattedErrors = capi_handler_utils:format_request_errors(Errors),
             {ok, logic_error(invalidRequest, FormattedErrors)};

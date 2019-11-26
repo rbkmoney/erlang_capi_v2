@@ -1,6 +1,6 @@
 -module(capi_handler_geo).
 
--include_lib("dmsl/include/dmsl_domain_thrift.hrl").
+-include_lib("damsel/include/dmsl_domain_thrift.hrl").
 
 -behaviour(capi_handler).
 -export([process_request/3]).
@@ -24,7 +24,7 @@ process_request('GetLocationsNames', Req, Context) ->
                     [],
                     LocationNames
                 ),
-            {ok, {200, [], PreparedLocationNames}};
+            {ok, {200, #{}, PreparedLocationNames}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
             FormattedErrors = capi_handler_utils:format_request_errors(Errors),
             {ok, logic_error(invalidRequest, FormattedErrors)}

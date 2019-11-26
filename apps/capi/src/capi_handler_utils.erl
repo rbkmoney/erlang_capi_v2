@@ -1,7 +1,6 @@
 -module(capi_handler_utils).
 
--include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
--include_lib("dmsl/include/dmsl_domain_thrift.hrl").
+-include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 
 -export([general_error/2]).
 -export([logic_error/2]).
@@ -28,6 +27,7 @@
 -export([wrap_payment_session/2]).
 -export([get_invoice_by_id/2]).
 -export([get_payment_by_id/3]).
+-export([get_refund_by_id/4]).
 -export([get_contract_by_id/2]).
 
 -export([create_dsl/3]).
@@ -35,11 +35,11 @@
 -type processing_context() :: capi_handler:processing_context().
 -type response()           :: capi_handler:response().
 
--spec general_error(integer(), binary()) ->
+-spec general_error(cowboy:http_status(), binary()) ->
     response().
 
 general_error(Code, Message) ->
-    create_erorr_resp(Code, #{<<"message">> => genlib:to_binary(Message)}).
+    create_error_resp(Code, #{<<"message">> => genlib:to_binary(Message)}).
 
 -spec logic_error
     (term(), io_lib:chars() | binary()) -> response();
@@ -52,26 +52,26 @@ logic_error(externalIDConflict, {ID, ExternalID}) ->
         <<"externalID">> => ExternalID,
         <<"id">> => ID,
         <<"message">> => <<"This 'externalID' has been used by another request">>},
-    create_erorr_resp(409, Data);
+    create_error_resp(409, Data);
 logic_error(externalIDConflict, ExternalID) ->
     Data = #{
         <<"externalID">> => ExternalID,
         <<"message">> => <<"This 'externalID' has been used by another request">>},
-    create_erorr_resp(409, Data);
+    create_error_resp(409, Data);
 logic_error(Code, Message) ->
     Data = #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)},
-    create_erorr_resp(400, Data).
+    create_error_resp(400, Data).
 
-create_erorr_resp(Code, Data) ->
-    create_erorr_resp(Code, [], Data).
-create_erorr_resp(Code, Headers, Data) ->
+create_error_resp(Code, Data) ->
+    create_error_resp(Code, #{}, Data).
+create_error_resp(Code, Headers, Data) ->
     {Code, Headers, Data}.
 
 -spec server_error(integer()) ->
-    {integer(), [], <<>>}.
+    {integer(), #{}, <<>>}.
 
 server_error(Code) when Code >= 500 andalso Code < 600 ->
-    {Code, [], <<>>}.
+    {Code, #{}, <<>>}.
 
 -spec format_request_errors(list()) ->
     binary().
@@ -98,7 +98,7 @@ service_call_with_([party_id|T], {ServiceName, Function, Args}, Context) ->
 service_call_with_([party_creation|T], Call, Context) ->
     case service_call_with_(T, Call, Context) of
         {exception, #payproc_PartyNotFound{}} ->
-            _ = lager:info("Attempting to create a missing party"),
+            _ = logger:info("Attempting to create a missing party"),
             CreateCall = {party_management, 'Create', [get_party_params(Context)]},
             case service_call_with([user_info, party_id], CreateCall, Context) of
                 {ok       , _                     } -> service_call_with_(T, Call, Context);
@@ -310,6 +310,12 @@ get_invoice_by_id(InvoiceID, Context) ->
 
 get_payment_by_id(InvoiceID, PaymentID, Context) ->
     service_call_with([user_info], {invoicing, 'GetPayment', [InvoiceID, PaymentID]}, Context).
+
+-spec get_refund_by_id(binary(), binary(), binary(), processing_context()) ->
+    woody:result().
+
+get_refund_by_id(InvoiceID, PaymentID, RefundID, Context) ->
+    service_call_with([user_info], {invoicing, 'GetPaymentRefund', [InvoiceID, PaymentID, RefundID]}, Context).
 
 -spec get_contract_by_id(binary(), processing_context()) ->
     woody:result().

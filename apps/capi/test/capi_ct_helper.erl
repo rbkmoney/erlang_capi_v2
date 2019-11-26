@@ -2,17 +2,20 @@
 
 -include_lib("common_test/include/ct.hrl").
 -include_lib("capi_dummy_data.hrl").
--include_lib("dmsl/include/dmsl_domain_config_thrift.hrl").
+-include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 
 -export([init_suite/2]).
+-export([init_suite/3]).
 -export([start_app/1]).
 -export([start_app/2]).
 -export([start_capi/1]).
+-export([start_capi/2]).
 -export([issue_token/2]).
 -export([issue_token/3]).
 -export([issue_token/4]).
 -export([get_context/1]).
 -export([get_context/2]).
+-export([get_context/3]).
 -export([get_keysource/2]).
 -export([start_mocked_service_sup/1]).
 -export([stop_mocked_service_sup/1]).
@@ -31,10 +34,15 @@
 
 -spec init_suite(module(), config()) ->
     config().
+
 init_suite(Module, Config) ->
+    init_suite(Module, Config, []).
+
+-spec init_suite(module(), config(), any()) ->
+    config().
+init_suite(Module, Config, CapiEnv) ->
     SupPid = start_mocked_service_sup(Module),
     Apps1 =
-        start_app(lager) ++
         start_app(woody),
     ServiceURLs = mock_services_([
         {
@@ -45,22 +53,11 @@ init_suite(Module, Config) ->
     ], SupPid),
     Apps2 =
         start_app(dmt_client, [{max_cache_size, #{}}, {service_urls, ServiceURLs}, {cache_update_interval, 50000}]) ++
-        start_capi(Config),
-    [{apps, lists:reverse(Apps2 ++ Apps1)}, {suite_test_sup, SupPid} | Config].
+        start_capi(Config, CapiEnv),
+    [{apps, lists:reverse(Apps1 ++ Apps2)}, {suite_test_sup, SupPid} | Config].
 
 -spec start_app(app_name()) ->
     [app_name()].
-
-start_app(lager = AppName) ->
-    start_app(AppName, [
-        {async_threshold, 1},
-        {async_threshold_window, 0},
-        {error_logger_hwm, 600},
-        {suppress_application_start_stop, true},
-        {handlers, [
-            {lager_common_test_backend, [warning, {lager_logstash_formatter, []}]}
-        ]}
-    ]);
 
 start_app(woody = AppName) ->
     start_app(AppName, [
@@ -80,15 +77,20 @@ start_app(AppName, Env) ->
     [app_name()].
 
 start_capi(Config) ->
-    CapiEnv = [
+    start_capi(Config, []).
+
+-spec start_capi(config(), list()) ->
+    [app_name()].
+
+start_capi(Config, ExtraEnv) ->
+    CapiEnv = ExtraEnv ++ [
         {ip, ?CAPI_IP},
         {port, ?CAPI_PORT},
         {service_type, real},
-        {authorizers, #{
+        {access_conf, #{
             jwt => #{
                 signee => capi,
                 keyset => #{
-                    % TODO use crypto:generate_key here when move on 21 Erlang
                     capi => {pem_file, get_keysource("keys/local/private.pem", Config)}
                 }
             }
@@ -128,7 +130,17 @@ issue_token(ACL, LifeTime, ExtraProperties) ->
 
 issue_token(PartyID, ACL, LifeTime, ExtraProperties) ->
     Claims = maps:merge(#{?STRING => ?STRING}, ExtraProperties),
-    capi_authorizer_jwt:issue({{PartyID, capi_acl:from_list(ACL)}, Claims}, LifeTime).
+    DomainRoles = #{
+        <<"common-api">> => uac_acl:from_list(ACL)
+    },
+    uac_authorizer_jwt:issue(
+        capi_utils:get_unique_id(),
+        LifeTime,
+        PartyID,
+        DomainRoles,
+        Claims,
+        capi
+    ).
 
 -spec get_context(binary()) ->
     capi_client_lib:context().
@@ -141,6 +153,20 @@ get_context(Token) ->
 
 get_context(Token, ExtraProperties) ->
     capi_client_lib:get_context(?CAPI_URL, Token, 10000, ipv4, ExtraProperties).
+
+-spec get_context(binary(), map(), binary()) ->
+    capi_client_lib:context().
+
+get_context(Token, ExtraProperties, Deadline) ->
+    capi_client_lib:get_context(
+        ?CAPI_URL,
+        Token,
+        10000,
+        ipv4,
+        ExtraProperties,
+        capi_client_lib:default_event_handler(),
+        Deadline
+    ).
 
 % TODO move it to `capi_dummy_service`, looks more appropriate
 
@@ -164,8 +190,8 @@ stop_mocked_service_sup(SupPid) ->
 mock_services(Services, SupOrConfig) ->
     start_woody_client(mock_services_(Services, SupOrConfig)).
 
-start_woody_client(ServiceURLs) ->
-    start_app(capi_woody_client, [{service_urls, ServiceURLs}]).
+start_woody_client(Services) ->
+    start_app(capi_woody_client, [{services, Services}]).
 
 -spec mock_services_(_, _) ->
     _.
@@ -183,7 +209,7 @@ mock_services_(Services, SupPid) when is_pid(SupPid) ->
         #{
             ip => IP,
             port => Port,
-            event_handler => capi_woody_event_handler,
+            event_handler => scoper_woody_event_handler,
             handlers => lists:map(fun mock_service_handler/1, Services)
         }
     ),

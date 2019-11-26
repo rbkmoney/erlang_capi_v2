@@ -1,4 +1,4 @@
--module(capi_woody_tests_SUITE).
+-module(capi_self_tests_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
 
@@ -18,19 +18,16 @@
 -export([init/1]).
 
 -export([
-    woody_unexpected_test/1,
-    woody_unavailable_test/1,
-    woody_retry_test/1,
-    woody_unknown_test/1
+    oops_body_test/1
 ]).
-
--define(badresp(Code), {error, {invalid_response_code, Code}}).
 
 -type test_case_name()  :: atom().
 -type config()          :: [{atom(), any()}].
 -type group_name()      :: atom().
 
 -behaviour(supervisor).
+
+-define(OOPS_BODY, filename:join(?config(data_dir, Config), "cutest_cat_alive")).
 
 -spec init([]) ->
     {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
@@ -41,19 +38,16 @@ init([]) ->
     [test_case_name()].
 all() ->
     [
-        {group, woody_errors}
+        {group, stream_handler_tests}
     ].
 
 -spec groups() ->
     [{group_name(), list(), [test_case_name()]}].
 groups() ->
     [
-        {woody_errors, [],
+        {stream_handler_tests, [],
             [
-                woody_unexpected_test,
-                woody_unavailable_test,
-                woody_retry_test,
-                woody_unknown_test
+                oops_body_test
             ]
         }
     ].
@@ -64,7 +58,9 @@ groups() ->
 -spec init_per_suite(config()) ->
     config().
 init_per_suite(Config) ->
-    capi_ct_helper:init_suite(?MODULE, Config).
+    capi_ct_helper:init_suite(?MODULE, Config, [{oops_bodies, #{
+        500 => ?OOPS_BODY
+    }}]).
 
 -spec end_per_suite(config()) ->
     _.
@@ -75,7 +71,7 @@ end_per_suite(C) ->
 
 -spec init_per_group(group_name(), config()) ->
     config().
-init_per_group(woody_errors, Config) ->
+init_per_group(stream_handler_tests, Config) ->
     BasePermissions = [
         {[invoices], write},
         {[invoices], read},
@@ -112,46 +108,22 @@ end_per_testcase(_Name, C) ->
 
 %%% Tests
 
--spec woody_unexpected_test(config()) ->
+-spec oops_body_test(config()) ->
     _.
 
-woody_unexpected_test(Config) ->
+oops_body_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, "spanish inquisition"} end}], Config),
-    ?badresp(500) = capi_client_parties:get_my_party(?config(context, Config)).
-
--spec woody_unavailable_test(config()) ->
-    _.
-
-woody_unavailable_test(Config) ->
-    _ = capi_ct_helper:start_app(capi_woody_client, [{services, #{
-        party_management => #{url => <<"http://spanish.inquision/v1/partymgmt">>}
-    }}]),
-    ?badresp(503) = capi_client_parties:get_my_party(?config(context, Config)).
-
--spec woody_retry_test(config()) ->
-    _.
-
-woody_retry_test(Config) ->
-    _ = capi_ct_helper:start_app(capi_woody_client, [
-        {services, #{
-            party_management => #{url => <<"http://spanish.inquision/v1/partymgmt">>}
-        }},
-        {service_retries, #{
-            party_management    => #{
-                'Get'   => {linear, 30, 1000},
-                '_'     => finish
-            }
-        }},
-        {service_deadlines, #{
-            party_management => 5000
-        }}
-    ]),
-    {Time, ?badresp(503)} = timer:tc(capi_client_parties, get_my_party, [?config(context, Config)]),
-    true = (Time > 3000000) and (Time < 10000000).
-
--spec woody_unknown_test(config()) ->
-    _.
-
-woody_unknown_test(Config) ->
-    _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> timer:sleep(60000) end}], Config),
-    ?badresp(504) = capi_client_parties:get_my_party(?config(context, Config)).
+    Context = ?config(context, Config),
+    {Endpoint, PreparedParams, Opts0} = capi_client_lib:make_request(Context, #{}),
+    Url = swag_client_utils:get_url(Endpoint, "/v2/processing/me"),
+    Headers = maps:to_list(maps:get(header, PreparedParams)),
+    Body = <<"{}">>,
+    Opts = Opts0 ++ [with_body],
+    {ok, 500, _, OopsBody} = hackney:request(
+        get,
+        Url,
+        Headers,
+        Body,
+        Opts
+    ),
+    {ok, OopsBody} = file:read_file(?OOPS_BODY).

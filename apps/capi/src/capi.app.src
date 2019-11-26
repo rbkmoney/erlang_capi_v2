@@ -7,14 +7,15 @@
         kernel,
         stdlib,
         public_key,
-        lager,
-        lager_logstash_formatter,
+        logger_logstash_formatter,
+        snowflake,
         genlib,
         woody,
+        how_are_you,  % must be after ranch and before any woody usage
         capi_woody_client,
-        dmsl,
+        damsel,
+        reporter_proto,
         bender_proto,
-        binbase_proto,
         dmt_client,
         swag_server,
         jose,
@@ -22,11 +23,10 @@
         cowboy_access_log,
         rfc3339,
         base64url,
-        snowflake,
         woody_user_identity,
         payproc_errors,
-        how_are_you,
-        erl_health
+        erl_health,
+        uac
     ]},
     {env, []}
 ]}.

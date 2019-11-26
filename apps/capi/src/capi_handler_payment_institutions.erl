@@ -1,7 +1,6 @@
 -module(capi_handler_payment_institutions).
 
--include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
--include_lib("dmsl/include/dmsl_domain_thrift.hrl").
+-include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 
 -behaviour(capi_handler).
 -export([process_request/3]).
@@ -34,7 +33,7 @@ process_request('GetPaymentInstitutions', Req, #{woody_context := WoodyContext})
                 end,
                 PaymentInstObjects
             ),
-        {ok, {200, [], Resp}}
+        {ok, {200, #{}, Resp}}
     catch
         throw:{encode_residence, invalid_residence} ->
             {ok, logic_error(invalidRequest, <<"Invalid residence">>)}
@@ -44,7 +43,7 @@ process_request('GetPaymentInstitutionByRef', Req, #{woody_context := WoodyConte
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
     case capi_domain:get({payment_institution, ?payment_institution_ref(PaymentInstitutionID)}, WoodyContext) of
         {ok, PaymentInstitution} ->
-            {ok, {200, [], decode_payment_institution_obj(PaymentInstitution)}};
+            {ok, {200, #{}, decode_payment_institution_obj(PaymentInstitution)}};
         {error, not_found} ->
             {ok, general_error(404, <<"Payment institution not found">>)}
     end;
@@ -53,7 +52,7 @@ process_request('GetPaymentInstitutionPaymentTerms', Req, Context) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
     case compute_payment_institution_terms(PaymentInstitutionID, #payproc_Varset{}, Context) of
         {ok, #domain_TermSet{payments = PaymentTerms}} ->
-            {ok, {200, [], decode_payment_terms(PaymentTerms)}};
+            {ok, {200, #{}, decode_payment_terms(PaymentTerms)}};
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
             {ok, general_error(404, <<"Payment institution not found">>)}
     end;
@@ -62,7 +61,7 @@ process_request('GetPaymentInstitutionPayoutMethods', Req, Context) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
     case compute_payment_institution_terms(PaymentInstitutionID, prepare_varset(Req), Context) of
         {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{payout_methods = PayoutMethods}}} ->
-            {ok, {200, [], decode_payout_methods_selector(PayoutMethods)}};
+            {ok, {200, #{}, decode_payout_methods_selector(PayoutMethods)}};
         {ok, #domain_TermSet{payouts = undefined}} ->
             {ok, general_error(404, <<"Automatic payouts not allowed">>)};
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
@@ -73,7 +72,7 @@ process_request('GetPaymentInstitutionPayoutSchedules', Req, Context) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
     case compute_payment_institution_terms(PaymentInstitutionID, prepare_varset(Req), Context) of
         {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{payout_schedules = Schedules}}} ->
-            {ok, {200, [], decode_business_schedules_selector(Schedules)}};
+            {ok, {200, #{}, decode_business_schedules_selector(Schedules)}};
         {ok, #domain_TermSet{payouts = undefined}} ->
             {ok, general_error(404, <<"Automatic payouts not allowed">>)};
         {exception, #payproc_PaymentInstitutionNotFound{}} ->

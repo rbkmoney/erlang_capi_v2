@@ -1,6 +1,6 @@
 -module(capi_handler_customers).
 
--include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
+-include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 
 -behaviour(capi_handler).
 -export([process_request/3]).
@@ -18,7 +18,7 @@ process_request('CreateCustomer', Req, Context) ->
     Call = {customer_management, 'Create', [encode_customer_params(PartyID, maps:get('Customer', Req))]},
     case capi_handler_utils:service_call_with([party_creation], Call, Context) of
         {ok, Customer} ->
-            {ok, {201, [], make_customer_and_token(Customer, PartyID)}};
+            {ok, {201, #{}, make_customer_and_token(Customer, PartyID)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
@@ -42,7 +42,7 @@ process_request('CreateCustomer', Req, Context) ->
 process_request('GetCustomerById', Req, Context) ->
     case get_customer_by_id(maps:get('customerID', Req), Context) of
         {ok, Customer} ->
-            {ok, {200, [], decode_customer(Customer)}};
+            {ok, {200, #{}, decode_customer(Customer)}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -55,7 +55,7 @@ process_request('GetCustomerById', Req, Context) ->
 process_request('DeleteCustomer', Req, Context) ->
     case capi_handler_utils:service_call({customer_management, 'Delete', [maps:get(customerID, Req)]}, Context) of
         {ok, _} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -77,7 +77,7 @@ process_request('CreateCustomerAccessToken', Req, Context) ->
                 capi_handler_utils:get_party_id(Context),
                 {customer, CustomerID}
             ),
-            {ok, {201, [], Response}};
+            {ok, {201, #{}, Response}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -99,7 +99,7 @@ process_request('CreateBinding', Req, Context) ->
 
     case Result of
         {ok, CustomerBinding} ->
-            {ok, {201, [], decode_customer_binding(CustomerBinding, Context)}};
+            {ok, {201, #{}, decode_customer_binding(CustomerBinding, Context)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
@@ -137,7 +137,7 @@ process_request('CreateBinding', Req, Context) ->
 process_request('GetBindings', Req, Context) ->
     case get_customer_by_id(maps:get(customerID, Req), Context) of
         {ok, #payproc_Customer{bindings = Bindings}} ->
-            {ok, {200, [], [decode_customer_binding(B, Context) || B <- Bindings]}};
+            {ok, {200, #{}, [decode_customer_binding(B, Context) || B <- Bindings]}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -152,7 +152,7 @@ process_request('GetBinding', Req, Context) ->
         {ok, #payproc_Customer{bindings = Bindings}} ->
             case lists:keyfind(maps:get(customerBindingID, Req), #payproc_CustomerBinding.id, Bindings) of
                 #payproc_CustomerBinding{} = B ->
-                    {ok, {200, [], decode_customer_binding(B, Context)}};
+                    {ok, {200, #{}, decode_customer_binding(B, Context)}};
                 false ->
                     {ok, general_error(404, <<"Customer binding not found">>)}
             end;
@@ -183,7 +183,7 @@ process_request('GetCustomerEvents', Req, Context) ->
         ),
     case Result of
         {ok, Events} when is_list(Events) ->
-            {ok, {200, [], Events}};
+            {ok, {200, #{}, Events}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->

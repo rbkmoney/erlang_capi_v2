@@ -2,10 +2,9 @@
 
 -include_lib("common_test/include/ct.hrl").
 
--include_lib("dmsl/include/dmsl_domain_config_thrift.hrl").
--include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
--include_lib("binbase_proto/include/binbase_binbase_thrift.hrl").
--include_lib("dmsl/include/dmsl_cds_thrift.hrl").
+-include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
+-include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
+-include_lib("damsel/include/dmsl_cds_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 -include_lib("jose/include/jose_jwk.hrl").
 
@@ -149,36 +148,16 @@ get_customer_ok_test(Config) ->
 create_binding_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {cds_storage, fun
-                ('PutSession', _) -> {ok, ok};
-                ('PutCard', _) -> {ok, ?PUT_CARD_RESULT}
-            end},
             {customer_management, fun('StartBinding', _) -> {ok, ?CUSTOMER_BINDING} end},
-            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end},
-            {binbase, fun('Lookup', _) -> {ok, ?BINBASE_LOOKUP_RESULT} end}
+            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end}
         ],
         Config
     ),
-    Req1 = #{
-        <<"paymentTool">> => #{
-            <<"paymentToolType">> => <<"CardData">>,
-            <<"cardHolder">> => <<"Alexander Weinerschnitzel">>,
-            <<"cardNumber">> => <<"4111111111111111">>,
-            <<"expDate">> => <<"08/27">>,
-            <<"cvv">> => <<"232">>
-        },
-        <<"clientInfo">> => #{
-            <<"fingerprint">> => <<"test fingerprint">>
-        }
-    },
-    {ok, #{
-        <<"paymentToolToken">> := Token,
-        <<"paymentSession">> := Session
-    }} = capi_client_tokens:create_payment_resource(?config(context, Config), Req1),
+    PaymentToolToken = ?TEST_PAYMENT_TOKEN,
     Req2 = #{
         <<"paymentResource">> => #{
-            <<"paymentSession">> => Session,
-            <<"paymentToolToken">> => Token
+            <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
+            <<"paymentToolToken">> => PaymentToolToken
         }
     },
     {ok, _} = capi_client_customers:create_binding(?config(context, Config), ?STRING, Req2).

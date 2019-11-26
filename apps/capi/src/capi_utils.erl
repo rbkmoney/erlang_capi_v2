@@ -1,6 +1,5 @@
 -module(capi_utils).
 
--export([logtag_process/2]).
 -export([base64url_to_map/1]).
 -export([map_to_base64url/1]).
 
@@ -13,20 +12,18 @@
 -export([unwrap/1]).
 -export([define/2]).
 
+-export([deduplicate_payment_methods/1]).
+
+-export([get_unique_id/0]).
+
 -define(MAX_DEADLINE_TIME, 1*60*1000). % 1 min
-
--spec logtag_process(atom(), any()) -> ok.
-
-logtag_process(Key, Value) when is_atom(Key) ->
-    % TODO preformat into binary?
-    lager:md(orddict:store(Key, Value, lager:md())).
 
 -spec base64url_to_map(binary()) -> map() | no_return().
 base64url_to_map(Base64) when is_binary(Base64) ->
     try jsx:decode(base64url:decode(Base64), [return_maps])
     catch
         Class:Reason ->
-            _ = lager:debug("decoding base64 ~p to map failed with ~p:~p", [Base64, Class, Reason]),
+            _ = logger:debug("decoding base64 ~p to map failed with ~p:~p", [Base64, Class, Reason]),
             erlang:error(badarg)
     end.
 
@@ -35,7 +32,7 @@ map_to_base64url(Map) when is_map(Map) ->
     try base64url:encode(jsx:encode(Map))
     catch
         Class:Reason ->
-            _ = lager:debug("encoding map ~p to base64 failed with ~p:~p", [Map, Class, Reason]),
+            _ = logger:debug("encoding map ~p to base64 failed with ~p:~p", [Map, Class, Reason]),
             erlang:error(badarg)
     end.
 
@@ -157,6 +154,43 @@ clamp_max_deadline(Value) when is_integer(Value)->
             Value
     end.
 
+-spec deduplicate_payment_methods(list()) -> list().
+
+deduplicate_payment_methods(Methods) ->
+    F = fun(Value, AccIn) ->
+        EqFun = fun(V) ->
+            payment_methods_equivalent(V, Value)
+        end,
+        case lists:partition(EqFun, AccIn) of
+            {[Alike], NotAlike} ->
+                Merged = lists:umerge(maps:get(<<"paymentSystems">>, Value), maps:get(<<"paymentSystems">>, Alike)),
+                [Value#{<<"paymentSystems">> => Merged} | NotAlike];
+            {[], _} ->
+                [Value | AccIn]
+        end
+    end,
+    lists:foldr(F, [], Methods).
+
+% payment methods are considered equivalent if they have the same method and token provider
+% in case there no token provider method equality is enough
+payment_methods_equivalent(#{
+        <<"method">> := M,
+        <<"tokenProviders">> := P
+    },
+    #{
+        <<"method">> := M,
+        <<"tokenProviders">> := P
+    }) ->
+    true;
+payment_methods_equivalent(#{<<"method">> := M} = M1, #{<<"method">> := M} = M2) ->
+    maps:get(<<"tokenProviders">>, M1, undefined) =:= maps:get(<<"tokenProviders">>, M2, undefined);
+payment_methods_equivalent(_, _) ->
+    false.
+
+-spec get_unique_id() -> binary().
+get_unique_id() ->
+    <<ID:64>> = snowflake:new(),
+    genlib_format:format_int_base(ID, 62).
 %%
 
 -ifdef(TEST).
@@ -186,5 +220,110 @@ parse_deadline_test() ->
     {ok, {_, _}} = parse_deadline(<<"15s">>),
     {ok, {_, _}} = parse_deadline(<<"15m">>),
     {error, bad_deadline} = parse_deadline(<<"15h">>).
+
+-spec no_deduplication_test() -> _.
+no_deduplication_test() ->
+    Methods = [
+        #{
+            <<"method">> =>"BankCard",
+            <<"paymentSystems">> => [
+                <<"mastercard">>,
+                <<"visa">>
+            ],
+            <<"tokenProviders">> => [<<"applepay">>]
+        },
+        #{
+            <<"method">> => <<"BankCard">>,
+            <<"paymentSystems">> => [
+                <<"mastercard">>,
+                <<"visa">>
+            ],
+            <<"tokenProviders">> => [<<"googlepay">>]
+        },
+        #{
+            <<"method">> => <<"BankCard">>,
+            <<"paymentSystems">> => [
+                <<"mastercard">>,
+                <<"visa">>
+            ],
+            <<"tokenProviders">> => [<<"samsungpay">>]
+        },
+        #{
+            <<"method">> => <<"BankCard">>,
+            <<"paymentSystems">> => [
+                <<"mastercard">>,
+                <<"visa">>,
+                <<"visaelectron">>
+            ]
+        }
+    ],
+    Methods = deduplicate_payment_methods(Methods).
+
+-spec merge_deduplication_test() -> _.
+merge_deduplication_test() ->
+    Systems1 = [
+        <<"mastercard">>,
+        <<"visa">>,
+        <<"visaelectron">>
+    ],
+    Systems2 = [
+        <<"maestro">>,
+        <<"mastercard">>,
+        <<"nspkmir">>,
+        <<"visa">>
+    ],
+    SamsungPayMethod = #{
+        <<"method">> => <<"BankCard">>,
+        <<"PaymentSystems">> => Systems1,
+        <<"tokenProviders">> => [<<"samsungpay">>]
+    },
+    Methods = [
+        SamsungPayMethod,
+        #{
+            <<"method">> => <<"BankCard">>,
+            <<"paymentSystems">> => Systems1
+        },
+        #{
+            <<"method">> => <<"BankCard">>,
+            <<"paymentSystems">> => Systems2
+        }
+    ],
+    Merged = lists:umerge(Systems1, Systems2),
+    [SamsungPayMethod, #{<<"paymentSystems">> := Merged}] = deduplicate_payment_methods(Methods).
+
+-spec complicated_merge_test() -> _.
+complicated_merge_test() ->
+    Systems1 = [
+        <<"mastercard">>,
+        <<"visa">>,
+        <<"visaelectron">>
+    ],
+    Systems2 = [
+        <<"maestro">>,
+        <<"mastercard">>,
+        <<"nspkmir">>,
+        <<"visa">>
+    ],
+    Systems3 = [
+        <<"nonexistent">>,
+        <<"fictional">>,
+        <<"fake">>
+    ],
+    Methods = [
+        #{
+            <<"method">> => <<"BankCard">>,
+            <<"paymentSystems">> => Systems1
+        },
+        #{
+            <<"method">> => <<"BankCard">>,
+            <<"paymentSystems">> => Systems2
+        },
+        #{
+            <<"method">> => <<"BankCard">>,
+            <<"paymentSystems">> => Systems3
+        }
+    ],
+    Merged = lists:umerge(Systems1, lists:umerge(Systems2, Systems3)),
+    [#{<<"paymentSystems">> := Merged}] = deduplicate_payment_methods(Methods).
 
 -endif.

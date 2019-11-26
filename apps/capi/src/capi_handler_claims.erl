@@ -1,6 +1,6 @@
 -module(capi_handler_claims).
 
--include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
+-include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 
 -behaviour(capi_handler).
 -export([process_request/3]).
@@ -18,7 +18,7 @@ process_request('GetClaims', Req, Context) ->
     Claims = capi_utils:unwrap(
         capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context)
     ),
-    {ok, {200, [], decode_claims(filter_claims(maps:get('claimStatus', Req), Claims))}};
+    {ok, {200, #{}, decode_claims(filter_claims(maps:get('claimStatus', Req), Claims))}};
 
 process_request('GetClaimByID', Req, Context) ->
     Call = {
@@ -33,7 +33,7 @@ process_request('GetClaimByID', Req, Context) ->
                     %% filter this out
                     {ok, general_error(404, <<"Claim not found">>)};
                 false ->
-                    {ok, {200, [], decode_claim(Claim)}}
+                    {ok, {200, #{}, decode_claim(Claim)}}
             end;
         {exception, #payproc_ClaimNotFound{}} ->
             {ok, general_error(404, <<"Claim not found">>)}
@@ -45,7 +45,7 @@ process_request('CreateClaim', Req, Context) ->
         Call = {party_management, 'CreateClaim', [capi_handler_utils:get_party_id(Context), Changeset]},
         case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
             {ok, Claim} ->
-                {ok, {201, [], decode_claim(Claim)}};
+                {ok, {201, #{}, decode_claim(Claim)}};
             {exception, Exception} ->
                 case Exception of
                     #payproc_InvalidPartyStatus{} ->
@@ -81,7 +81,7 @@ process_request('CreateClaim', Req, Context) ->
 %     Party = capi_utils:unwrap(
 %         capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context)
 %     ),
-%     {ok, {200, [], capi_handler_utils:capi_handler_decoder_party:decode_party(Party)}};
+%     {ok, {200, #{}, capi_handler_utils:capi_handler_decoder_party:decode_party(Party)}};
 
 process_request('RevokeClaimByID', Req, Context) ->
     Call =
@@ -92,7 +92,7 @@ process_request('RevokeClaimByID', Req, Context) ->
         ]},
     case capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context) of
         {ok, _} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidPartyStatus{} ->

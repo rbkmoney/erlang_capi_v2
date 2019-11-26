@@ -1,6 +1,6 @@
 -module(capi_handler_search).
 
--include_lib("dmsl/include/dmsl_merch_stat_thrift.hrl").
+-include_lib("damsel/include/dmsl_merch_stat_thrift.hrl").
 
 -behaviour(capi_handler).
 -export([process_request/3]).
@@ -30,12 +30,13 @@ process_request('SearchInvoices', Req, Context) ->
         <<"payment_email"            >> => genlib_map:get('payerEmail', Req),
         <<"payment_ip"               >> => genlib_map:get('payerIP', Req),
         <<"payment_fingerprint"      >> => genlib_map:get('payerFingerprint', Req),
-        <<"payment_last_digits"      >> => genlib_map:get('lastDigits', Req),
         <<"payment_amount"           >> => genlib_map:get('paymentAmount', Req),
         <<"invoice_amount"           >> => genlib_map:get('invoiceAmount', Req),
         <<"payment_token_provider"   >> => genlib_map:get('bankCardTokenProvider', Req),
         <<"payment_system"           >> => genlib_map:get('bankCardPaymentSystem', Req),
-        <<"payment_bin"              >> => genlib_map:get('bin', Req)
+        <<"payment_rrn"              >> => genlib_map:get('rrn', Req),
+        <<"payment_first6"           >> => genlib_map:get('first6', Req),
+        <<"payment_last4"            >> => genlib_map:get('last4', Req)
     },
     Opts = #{
         thrift_fun => 'GetInvoices',
@@ -59,11 +60,13 @@ process_request('SearchPayments', Req, Context) ->
         <<"payment_email"            >> => genlib_map:get('payerEmail', Req),
         <<"payment_ip"               >> => genlib_map:get('payerIP', Req),
         <<"payment_fingerprint"      >> => genlib_map:get('payerFingerprint', Req),
-        <<"payment_last_digits"      >> => genlib_map:get('lastDigits', Req),
         <<"payment_amount"           >> => genlib_map:get('paymentAmount', Req),
         <<"payment_token_provider"   >> => genlib_map:get('bankCardTokenProvider', Req),
         <<"payment_system"           >> => genlib_map:get('bankCardPaymentSystem', Req),
-        <<"payment_bin"              >> => genlib_map:get('bin', Req)
+        <<"payment_rrn"              >> => genlib_map:get('rrn', Req),
+        <<"payment_approval_code"    >> => genlib_map:get('approvalCode', Req),
+        <<"payment_first6"           >> => genlib_map:get('first6', Req),
+        <<"payment_last4"            >> => genlib_map:get('last4', Req)
     },
     Opts = #{
         thrift_fun => 'GetPayments',
@@ -94,6 +97,8 @@ process_request('SearchRefunds', Req, Context) ->
         <<"invoice_id"               >> => genlib_map:get('invoiceID', Req),
         <<"payment_id"               >> => genlib_map:get('paymentID', Req),
         <<"refund_id"                >> => genlib_map:get('refundID', Req),
+        <<"payment_rrn"              >> => genlib_map:get('rrn', Req),
+        <<"payment_approval_code"    >> => genlib_map:get('approvalCode', Req),
         <<"from_time"                >> => capi_handler_utils:get_time('fromTime', Req),
         <<"to_time"                  >> => capi_handler_utils:get_time('toTime', Req),
         <<"refund_status"            >> => genlib_map:get('refundStatus', Req)
@@ -142,7 +147,7 @@ process_search_request_result(QueryType, Result, Context, #{decode_fun := Decode
                 <<"totalCount">> => TotalCount,
                 <<"continuationToken">> => ContinuationToken
             }),
-            {ok, {200, [], Resp}};
+            {ok, {200, #{}, Resp}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
             FormattedErrors = capi_handler_utils:format_request_errors(Errors),
             {ok, logic_error(invalidRequest, FormattedErrors)};
@@ -202,6 +207,7 @@ decode_stat_payment(Stat, Context) ->
         <<"payer"          >> => decode_stat_payer(Stat#merchstat_StatPayment.payer),
         <<"geoLocationInfo">> => decode_geo_location_info(Stat#merchstat_StatPayment.location_info),
         <<"metadata"       >> => capi_handler_decoder_utils:decode_context(Stat#merchstat_StatPayment.context),
+        <<"transactionInfo">> => decode_stat_tx_info(Stat#merchstat_StatPayment.additional_transaction_info),
         <<"makeRecurrent"  >> => capi_handler_decoder_invoicing:decode_make_recurrent(
             Stat#merchstat_StatPayment.make_recurrent
         ),
@@ -210,39 +216,56 @@ decode_stat_payment(Stat, Context) ->
 
     }, decode_stat_payment_status(Stat#merchstat_StatPayment.status, Context)).
 
-decode_stat_payer({customer, #merchstat_CustomerPayer{customer_id = ID}}) ->
+decode_stat_tx_info(undefined) ->
+    undefined;
+decode_stat_tx_info(TransactionInfo) ->
+    RRN = TransactionInfo#domain_AdditionalTransactionInfo.rrn,
+    AAC = TransactionInfo#domain_AdditionalTransactionInfo.approval_code,
+    ParsedTransactionInfo = #{
+        <<"rrn"         >> => RRN,
+        <<"approvalCode">> => AAC
+    },
+    genlib_map:compact(ParsedTransactionInfo).
+
+decode_stat_payer({customer, #merchstat_CustomerPayer{
+    customer_id  = ID,
+    payment_tool = PaymentTool
+}}) ->
     #{
-        <<"payerType" >> => <<"CustomerPayer">>,
-        <<"customerID">> => ID
+        <<"payerType"         >> => <<"CustomerPayer">>,
+        <<"paymentToolToken"  >> => decode_stat_payment_tool_token(PaymentTool),
+        <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool),
+        <<"customerID"        >> => ID
     };
-decode_stat_payer({recurrent, RecurrentPayer}) ->
-    #merchstat_RecurrentPayer{
-        recurrent_parent = RecurrentParent,
-        phone_number = PhoneNumber,
-        email = Email
-    } = RecurrentPayer,
+decode_stat_payer({recurrent, #merchstat_RecurrentPayer{
+    payment_tool     = PaymentTool,
+    recurrent_parent = RecurrentParent,
+    phone_number     = PhoneNumber,
+    email            = Email
+}}) ->
     #{
-        <<"payerType">> => <<"RecurrentPayer">>,
-        <<"contactInfo">> => genlib_map:compact(#{
+        <<"payerType"         >> => <<"RecurrentPayer">>,
+        <<"paymentToolToken"  >> => decode_stat_payment_tool_token(PaymentTool),
+        <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool),
+        <<"contactInfo"       >> => genlib_map:compact(#{
             <<"phoneNumber">> => PhoneNumber,
             <<"email"      >> => Email
         }),
         <<"recurrentParentPayment">> => capi_handler_decoder_invoicing:decode_recurrent_parent(RecurrentParent)
     };
-decode_stat_payer({payment_resource, PaymentResource}) ->
-    #merchstat_PaymentResourcePayer{
-        payment_tool = PaymentTool,
-        session_id = PaymentSession,
-        fingerprint = Fingerprint,
-        ip_address = IP,
-        phone_number = PhoneNumber,
-        email = Email
-    } = PaymentResource,
+decode_stat_payer({payment_resource, #merchstat_PaymentResourcePayer{
+    payment_tool = PaymentTool,
+    session_id   = PaymentSession,
+    fingerprint  = Fingerprint,
+    ip_address   = IP,
+    phone_number = PhoneNumber,
+    email        = Email
+}}) ->
     genlib_map:compact(#{
         <<"payerType"         >> => <<"PaymentResourcePayer">>,
         <<"paymentToolToken"  >> => decode_stat_payment_tool_token(PaymentTool),
-        <<"paymentSession"    >> => PaymentSession,
         <<"paymentToolDetails">> => decode_stat_payment_tool_details(PaymentTool),
+        <<"paymentSession"    >> => PaymentSession,
         <<"clientInfo"        >> => genlib_map:compact(#{
             <<"ip"         >> => IP,
             <<"fingerprint">> => Fingerprint
@@ -332,10 +355,10 @@ decode_stat_payment_tool_details({digital_wallet, V}) ->
 
 decode_bank_card_details(BankCard, V) ->
     LastDigits = capi_handler_decoder_utils:decode_last_digits(BankCard#merchstat_BankCard.masked_pan),
-    Bin = BankCard#merchstat_BankCard.bin,
+    Bin = capi_handler_decoder_utils:decode_bank_card_bin(BankCard#merchstat_BankCard.bin),
     capi_handler_utils:merge_and_compact(V, #{
-        <<"lastDigits">>     => LastDigits,
-        <<"bin">>            => Bin,
+        <<"last4">>     => LastDigits,
+        <<"first6">>    => Bin,
         <<"cardNumberMask">> => capi_handler_decoder_utils:decode_masked_pan(Bin, LastDigits),
         <<"paymentSystem" >> => genlib:to_binary(BankCard#merchstat_BankCard.payment_system),
         <<"tokenProvider" >> => decode_token_provider(BankCard#merchstat_BankCard.token_provider)

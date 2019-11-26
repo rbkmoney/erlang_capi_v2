@@ -1,7 +1,6 @@
 -module(capi_handler_invoice_templates).
 
--include_lib("dmsl/include/dmsl_payment_processing_thrift.hrl").
--include_lib("dmsl/include/dmsl_domain_thrift.hrl").
+-include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 
 -behaviour(capi_handler).
 -export([process_request/3]).
@@ -26,7 +25,7 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
         )
     of
         {ok, InvoiceTpl} ->
-            {ok, {201, [], make_invoice_tpl_and_token(InvoiceTpl, PartyID, ExtraProperties)}};
+            {ok, {201, #{}, make_invoice_tpl_and_token(InvoiceTpl, PartyID, ExtraProperties)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
@@ -50,7 +49,7 @@ process_request('GetInvoiceTemplateByID', Req, Context) ->
     Call = {invoice_templating, 'Get', [maps:get('invoiceTemplateID', Req)]},
     case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
         {ok, InvoiceTpl} ->
-            {ok, {200, [], decode_invoice_tpl(InvoiceTpl)}};
+            {ok, {200, #{}, decode_invoice_tpl(InvoiceTpl)}};
         {exception, E} when
             E == #payproc_InvalidUser{};
             E == #payproc_InvoiceTemplateNotFound{};
@@ -66,7 +65,7 @@ process_request('UpdateInvoiceTemplate', Req, Context) ->
         capi_handler_utils:service_call_with([user_info, party_creation], Call, Context)
     of
         {ok, InvoiceTpl} ->
-            {ok, {200, [], decode_invoice_tpl(InvoiceTpl)}};
+            {ok, {200, #{}, decode_invoice_tpl(InvoiceTpl)}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -100,7 +99,7 @@ process_request('DeleteInvoiceTemplate', Req, Context) ->
     Call = {invoice_templating, 'Delete', [maps:get('invoiceTemplateID', Req)]},
     case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
         {ok, _R} ->
-            {ok, {204, [], undefined}};
+            {ok, {204, #{}, undefined}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -116,14 +115,14 @@ process_request('DeleteInvoiceTemplate', Req, Context) ->
             end
     end;
 
-process_request('CreateInvoiceWithTemplate', Req, Context) ->
+process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
     InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
-    try create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context) of
+    try create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, OperationID) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {201, [], capi_handler_decoder_invoicing:make_invoice_and_token(
+            {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(
                 Invoice, capi_handler_utils:get_party_id(Context), ExtraProperties)
             }};
         {exception, Exception} ->
@@ -159,8 +158,9 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
             Context
         ),
     case Result of
-        {ok, PaymentMethods} when is_list(PaymentMethods) ->
-            {ok, {200, [], PaymentMethods}};
+        {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
+            PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
+            {ok, {200, #{}, PaymentMethods}};
         {exception, E} when
             E == #payproc_InvalidUser{};
             E == #payproc_InvoiceTemplateNotFound{};
@@ -174,9 +174,11 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
 process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
-create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx} = Context) ->
+create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
     ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
-    IdempotentKey = capi_bender:get_idempotent_key(<<"invoice_template">>, PartyID, ExternalID),
+    % CAPI#344: Since the prefixes are different, it's possible to create 2 copies of the same Invoice with the same
+    % externalId by using `CreateInvoice` and `CreateInvoiceWithTemplate` together
+    IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2({InvoiceTplID, InvoiceParams}),
     case capi_bender:gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) of
         {ok, ID} ->

@@ -5,9 +5,9 @@
         kernel,
         stdlib,
         thrift,
-        dmsl,
+        damsel,
         bender_proto,
         genlib,
-        lager
+        scoper
     ]}
 ]}.
