@@ -70,8 +70,31 @@ decode_crypto_symcode(#'CryptoCurrencyTransferRequest'{crypto_cash = Cash}) ->
     Cash#'CryptoCash'.crypto_symbolic_code.
 
 decode_crypto_amount(#'CryptoCurrencyTransferRequest'{crypto_cash = Cash}) ->
-    #'Rational'{p = P, q = Q} = Cash#'CryptoCash'.crypto_amount,
-    erlang:float_to_binary(P/Q, [{decimals, 10}]).
+    % apparently Q is always a power of ten
+    Amount     = Cash#'CryptoCash'.crypto_amount,
+    Integral   = decode_integral_part(Amount),
+    Fractional = decode_fractional_part(Amount),
+    <<Integral/binary,".",Fractional/binary>>.
+
+decode_integral_part(#'Rational'{p = P, q = Q}) ->
+    Integral = integer_to_binary(P div Q).
+
+decode_fractional_part(#'Rational'{p = P, q = Q}) ->
+    FractionalAmount = integer_to_binary(P rem Q).
+    DecimalPoints = get_decimal_points(Q, 0),
+    build_fractional(FractionalAmount, DecimalPoints, <<>>).
+
+get_decimal_points(1, Power) ->
+    Power;
+get_decimal_points(Q, Power) ->
+    get_decimal_points(Q div 10, Power + 1).
+
+build_fractional(_FractionalAmount, 0, Acc) ->
+    Acc;
+build_fractional(FractionalAmount, Order, Acc) ->
+    Digit  = integer_to_binary(FractionalAmount rem 10),
+    NewAcc = <<Digit/binary, Acc/binary>>,
+    build_fractional(FractionalAmount div 10, Order - 1, NewAcc).
 
 -spec decode_user_interaction_form(map()) ->
     capi_handler_decoder_utils:decode_data().
