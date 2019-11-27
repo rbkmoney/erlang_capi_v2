@@ -77,12 +77,11 @@ decode_crypto_amount(#'CryptoCurrencyTransferRequest'{crypto_cash = Cash}) ->
     <<Integral/binary,".",Fractional/binary>>.
 
 decode_integral_part(#'Rational'{p = P, q = Q}) ->
-    Integral = integer_to_binary(P div Q).
+    integer_to_binary(P div Q).
 
 decode_fractional_part(#'Rational'{p = P, q = Q}) ->
-    FractionalAmount = integer_to_binary(P rem Q).
     DecimalPoints = get_decimal_points(Q, 0),
-    build_fractional(FractionalAmount, DecimalPoints, <<>>).
+    build_fractional(P rem Q, DecimalPoints, <<>>).
 
 get_decimal_points(1, Power) ->
     Power;
@@ -453,3 +452,20 @@ make_invoice_and_token(Invoice, PartyID, ExtraProperties) ->
             ExtraProperties
         )
     }.
+
+%%
+
+-ifdef(EUNIT).
+
+-include_lib("eunit/include/eunit.hrl").
+
+-spec test() -> _.
+
+-spec crypto_amount_decoder_test() -> _.
+crypto_amount_decoder_test() ->
+    Amount = #'Rational'{p = 1100000007, q = 100000000},
+    Cash = #'CryptoCash'{crypto_amount = Amount, crypto_symbolic_code = <<>>},
+    Request = #'CryptoCurrencyTransferRequest'{crypto_address = <<>>, crypto_cash = Cash},
+    ?assertEqual(<<"11.00000007">>, decode_crypto_amount(Request)).
+
+-endif.
