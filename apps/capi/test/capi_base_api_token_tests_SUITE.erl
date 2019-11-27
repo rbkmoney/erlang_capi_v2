@@ -630,11 +630,18 @@ create_refund_idemp_fail_test(Config) ->
 -spec create_partial_refund(config()) ->
     _.
 create_partial_refund(Config) ->
+    capi_ct_helper:mock_services([{invoicing, fun('RefundPayment', [_, _, _,
+        #payproc_InvoicePaymentRefundParams{
+            cash = ?CASH,
+            cart = ?THRIFT_INVOICE_CART
+        }
+    ]) -> {ok, ?REFUND} end}], Config),
     BenderKey = <<"bender_key">>,
     Req = #{
         <<"reason">> => ?STRING,
         <<"currency">> => ?RUB,
-        <<"amount">> => ?INTEGER
+        <<"amount">> => ?INTEGER,
+        <<"cart">> => ?INVOICE_CART
     },
     Ctx = capi_msgp_marshalling:marshal(#{<<"params_hash">> => erlang:phash2(Req)}),
     capi_ct_helper:mock_services([
