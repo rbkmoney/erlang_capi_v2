@@ -20,7 +20,6 @@ allowed_origins(Req, State) ->
 
 allowed_headers(Req, State) ->
     {[
-        <<"access-control-allow-headers">>,
         <<"origin">>,
         <<"x-requested-with">>,
         <<"content-type">>,
