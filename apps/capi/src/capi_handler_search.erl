@@ -211,7 +211,9 @@ decode_stat_payment(Stat, Context) ->
         <<"makeRecurrent"  >> => capi_handler_decoder_invoicing:decode_make_recurrent(
             Stat#merchstat_StatPayment.make_recurrent
         ),
-        <<"statusChangedAt">> => decode_status_changed_at(Stat#merchstat_StatPayment.status)
+        <<"statusChangedAt">> => decode_status_changed_at(Stat#merchstat_StatPayment.status),
+        <<"cart"           >> => capi_handler_decoder_invoicing:decode_invoice_cart(Stat#merchstat_StatPayment.cart)
+
     }, decode_stat_payment_status(Stat#merchstat_StatPayment.status, Context)).
 
 decode_stat_tx_info(undefined) ->
@@ -504,7 +506,9 @@ decode_stat_refund(Refund, Context) ->
             <<"createdAt">> => Refund#merchstat_StatRefund.created_at,
             <<"amount">>    => Refund#merchstat_StatRefund.amount,
             <<"currency">>  => Refund#merchstat_StatRefund.currency_symbolic_code,
-            <<"reason">>    => Refund#merchstat_StatRefund.reason
+            <<"reason">>    => Refund#merchstat_StatRefund.reason,
+            <<"cart">>      => capi_handler_decoder_invoicing:decode_invoice_cart(
+                Refund#merchstat_StatRefund.cart)
         },
         decode_stat_refund_status(Refund#merchstat_StatRefund.status, Context)
     ).
