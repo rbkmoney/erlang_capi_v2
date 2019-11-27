@@ -67,6 +67,18 @@
     external_id = EID
 }).
 
+-define(INVOICE_CART, [
+    #{
+        <<"taxMode">>  => #{
+            <<"type">> => <<"InvoiceLineTaxVAT">>,
+            <<"rate">> => <<"10%">>
+        },
+        <<"product">>  => ?STRING,
+        <<"price">>    => ?INTEGER,
+        <<"quantity">> => ?INTEGER
+    }
+]).
+
 -define(PAYPROC_INVOICE(Payments), #payproc_Invoice{
     invoice = ?INVOICE,
     payments = Payments
@@ -87,7 +99,18 @@
     product = ?STRING,
     quantity = ?INTEGER,
     price = ?CASH,
-    metadata = #{?STRING => {obj, #{}}}
+    metadata = #{?STRING := {obj, #{}}}
+}).
+
+-define(THRIFT_INVOICE_CART, #domain_InvoiceCart{
+    lines = [
+        #domain_InvoiceLine{
+            product = ?STRING,
+            quantity = ?INTEGER,
+            price = ?CASH,
+            metadata = #{<<"TaxMode">> := {str, <<"10%">>}}
+        }
+    ]
 }).
 
 -define(INVOICE_TPL, #domain_InvoiceTemplate{
