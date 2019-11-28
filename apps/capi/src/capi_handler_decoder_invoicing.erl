@@ -74,7 +74,7 @@ decode_crypto_amount(#'CryptoCurrencyTransferRequest'{crypto_cash = Cash}) ->
     Amount     = Cash#'CryptoCash'.crypto_amount,
     Integral   = decode_integral_part(Amount),
     Fractional = decode_fractional_part(Amount),
-    <<Integral/binary,".",Fractional/binary>>.
+    build_decoded_crypto_amount(Integral, Fractional).
 
 decode_integral_part(#'Rational'{p = P, q = Q}) ->
     integer_to_binary(P div Q).
@@ -89,11 +89,24 @@ get_decimal_points(Q, Power) ->
     get_decimal_points(Q div 10, Power + 1).
 
 build_fractional(_FractionalAmount, 0, Acc) ->
-    Acc;
+    strip_trailing_zeroes(Acc);
 build_fractional(FractionalAmount, Order, Acc) ->
     Digit  = integer_to_binary(FractionalAmount rem 10),
     NewAcc = <<Digit/binary, Acc/binary>>,
     build_fractional(FractionalAmount div 10, Order - 1, NewAcc).
+
+strip_trailing_zeroes(Fractional) ->
+    ByteSize = byte_size(Fractional) - 1,
+    case Fractional of
+        <<Prefix:ByteSize/bytes, "0">> -> strip_trailing_zeroes(Prefix);
+        Fractional -> Fractional
+    end.
+
+build_decoded_crypto_amount(Integral, <<>>) ->
+    Integral;
+build_decoded_crypto_amount(Integral, Fractional) ->
+    <<Integral/binary, ".", Fractional/binary>>.
+
 
 -spec decode_user_interaction_form(map()) ->
     capi_handler_decoder_utils:decode_data().
@@ -463,9 +476,14 @@ make_invoice_and_token(Invoice, PartyID, ExtraProperties) ->
 
 -spec crypto_amount_decoder_test() -> _.
 crypto_amount_decoder_test() ->
-    Amount = #'Rational'{p = 1100000007, q = 100000000},
+    ?assertEqual(<<"1100000007" >>, decode_crypto_amount(build_request(1100000007, 1        ))),
+    ?assertEqual(<<"11.00000007">>, decode_crypto_amount(build_request(1100000007, 100000000))),
+    ?assertEqual(<< "0.11000007">>, decode_crypto_amount(build_request(11000007  , 100000000))),
+    ?assertEqual(<< "0.110007"  >>, decode_crypto_amount(build_request(11000700  , 100000000))).
+
+build_request(P, Q) ->
+    Amount = #'Rational'{p = P, q = Q},
     Cash = #'CryptoCash'{crypto_amount = Amount, crypto_symbolic_code = <<>>},
-    Request = #'CryptoCurrencyTransferRequest'{crypto_address = <<>>, crypto_cash = Cash},
-    ?assertEqual(<<"11.00000007">>, decode_crypto_amount(Request)).
+    #'CryptoCurrencyTransferRequest'{crypto_address = <<>>, crypto_cash = Cash}.
 
 -endif.
