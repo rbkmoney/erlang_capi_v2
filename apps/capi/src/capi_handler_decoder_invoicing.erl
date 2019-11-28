@@ -107,7 +107,6 @@ build_decoded_crypto_amount(Integral, <<>>) ->
 build_decoded_crypto_amount(Integral, Fractional) ->
     <<Integral/binary, ".", Fractional/binary>>.
 
-
 -spec decode_user_interaction_form(map()) ->
     capi_handler_decoder_utils:decode_data().
 
@@ -477,6 +476,8 @@ make_invoice_and_token(Invoice, PartyID, ExtraProperties) ->
 -spec crypto_amount_decoder_test() -> _.
 crypto_amount_decoder_test() ->
     ?assertEqual(<<"1100000007" >>, decode_crypto_amount(build_request(1100000007, 1        ))),
+    ?assertEqual(<< "1"         >>, decode_crypto_amount(build_request(100000000 , 100000000))),
+    ?assertEqual(<< "1.1"       >>, decode_crypto_amount(build_request(110000000 , 100000000))),
     ?assertEqual(<<"11.00000007">>, decode_crypto_amount(build_request(1100000007, 100000000))),
     ?assertEqual(<< "0.11000007">>, decode_crypto_amount(build_request(11000007  , 100000000))),
     ?assertEqual(<< "0.110007"  >>, decode_crypto_amount(build_request(11000700  , 100000000))).
