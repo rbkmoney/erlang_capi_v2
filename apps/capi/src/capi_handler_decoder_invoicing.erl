@@ -72,28 +72,33 @@ decode_crypto_symcode(#'CryptoCurrencyTransferRequest'{crypto_cash = Cash}) ->
 decode_crypto_amount(#'CryptoCurrencyTransferRequest'{crypto_cash = Cash}) ->
     % apparently Q is always a power of ten
     Amount     = Cash#'CryptoCash'.crypto_amount,
+    ok         = ensure_correct_exponent(Amount),
     Integral   = decode_integral_part(Amount),
     Fractional = decode_fractional_part(Amount),
     build_decoded_crypto_amount(Integral, Fractional).
 
+ensure_correct_exponent(#'Rational'{q = Q}) ->
+    Log = math:log10(Q),
+    case Log - trunc(Log) of
+        0.0 -> ok;
+        _   -> error('expected a power of 10 demoninator')
+    end.
+
 decode_integral_part(#'Rational'{p = P, q = Q}) ->
-    integer_to_binary(P div Q).
+    erlang:integer_to_binary(P div Q).
 
 decode_fractional_part(#'Rational'{p = P, q = Q}) ->
-    DecimalPoints = get_decimal_points(Q, 0),
-    build_fractional(P rem Q, DecimalPoints, <<>>).
+    Exponent = get_exponent(Q),
+    build_fractional(P rem Q, Exponent).
 
-get_decimal_points(1, Power) ->
-    Power;
-get_decimal_points(Q, Power) ->
-    get_decimal_points(Q div 10, Power + 1).
+get_exponent(Q) ->
+    erlang:trunc(math:log10(Q)).
 
-build_fractional(_FractionalAmount, 0, Acc) ->
-    strip_trailing_zeroes(Acc);
-build_fractional(FractionalAmount, Order, Acc) ->
-    Digit  = integer_to_binary(FractionalAmount rem 10),
-    NewAcc = <<Digit/binary, Acc/binary>>,
-    build_fractional(FractionalAmount div 10, Order - 1, NewAcc).
+build_fractional(_Fractional, _Exponent = 0) ->
+    <<>>;
+build_fractional(Fractional, Exponent) ->
+    BinaryFractional = erlang:integer_to_binary(Fractional),
+    strip_trailing_zeroes(genlib_string:pad_numeric(BinaryFractional, Exponent)).
 
 strip_trailing_zeroes(Fractional) ->
     ByteSize = byte_size(Fractional) - 1,
@@ -475,6 +480,7 @@ make_invoice_and_token(Invoice, PartyID, ExtraProperties) ->
 
 -spec crypto_amount_decoder_test() -> _.
 crypto_amount_decoder_test() ->
+    ?assertError('expected a power of 10 demoninator', decode_crypto_amount(build_request(1100000007, 11))),
     ?assertEqual(<<"1100000007" >>, decode_crypto_amount(build_request(1100000007, 1        ))),
     ?assertEqual(<< "1"         >>, decode_crypto_amount(build_request(100000000 , 100000000))),
     ?assertEqual(<< "1.1"       >>, decode_crypto_amount(build_request(110000000 , 100000000))),
