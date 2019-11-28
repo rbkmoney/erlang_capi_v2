@@ -20,7 +20,6 @@ allowed_origins(_, State) ->
 
 allowed_headers(_, State) ->
     {[
-        <<"access-control-allow-headers">>,
         <<"x-requested-with">>,
         <<"content-type">>,
         <<"accept">>,
