@@ -480,7 +480,7 @@ make_invoice_and_token(Invoice, PartyID, ExtraProperties) ->
 
 -spec crypto_amount_decoder_test() -> _.
 crypto_amount_decoder_test() ->
-    ?assertError('expected a power of 10 demoninator', decode_crypto_amount(build_request(1100000007, 11))),
+    ?assertError('expected a power of 10 demoninator', decode_crypto_amount(build_request(1, 2))),
     ?assertEqual(<<"1100000007" >>, decode_crypto_amount(build_request(1100000007, 1        ))),
     ?assertEqual(<< "1"         >>, decode_crypto_amount(build_request(100000000 , 100000000))),
     ?assertEqual(<< "1.1"       >>, decode_crypto_amount(build_request(110000000 , 100000000))),
