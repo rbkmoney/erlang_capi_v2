@@ -81,7 +81,7 @@ ensure_correct_exponent(#'Rational'{q = Q}) ->
     Log = math:log10(Q),
     case Log - trunc(Log) of
         0.0 -> ok;
-        _   -> error('expected a power of 10 demoninator')
+        _   -> error('expected a power of 10 denominator')
     end.
 
 decode_integral_part(#'Rational'{p = P, q = Q}) ->
@@ -480,7 +480,7 @@ make_invoice_and_token(Invoice, PartyID, ExtraProperties) ->
 
 -spec crypto_amount_decoder_test() -> _.
 crypto_amount_decoder_test() ->
-    ?assertError('expected a power of 10 demoninator', decode_crypto_amount(build_request(1, 2))),
+    ?assertError('expected a power of 10 denominator', decode_crypto_amount(build_request(1, 2))),
     ?assertEqual(<<"1100000007" >>, decode_crypto_amount(build_request(1100000007, 1        ))),
     ?assertEqual(<< "1"         >>, decode_crypto_amount(build_request(100000000 , 100000000))),
     ?assertEqual(<< "1.1"       >>, decode_crypto_amount(build_request(110000000 , 100000000))),
