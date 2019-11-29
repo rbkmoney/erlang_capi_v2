@@ -1,5 +1,6 @@
 -module(capi_handler_invoice_templates).
 
+-include_lib("damsel/include/dmsl_domain_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 
 -behaviour(capi_handler).
@@ -151,13 +152,12 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
     end;
 
 process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
-    Result =
-        capi_handler_decoder_invoicing:construct_payment_methods(
-            invoice_templating,
-            [maps:get('invoiceTemplateID', Req), capi_utils:unwrap(rfc3339:format(erlang:system_time()))],
-            Context
-        ),
-    case Result of
+    InvoiceTemplateID = maps:get('invoiceTemplateID', Req),
+    Timestamp = capi_utils:unwrap(rfc3339:format(erlang:system_time())),
+    {ok, Party} = capi_handler_utils:get_my_party(Context),
+    Revision = Party#domain_Party.revision,
+    Args = [InvoiceTemplateID, Timestamp, {revision, Revision}],
+    case capi_handler_decoder_invoicing:construct_payment_methods(invoice_templating, Args, Context) of
         {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
             PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
             {ok, {200, #{}, PaymentMethods}};

@@ -229,9 +229,11 @@
 -define(RECURRENT_PAYMENT, ?RECURRENT_PAYMENT({pending, #domain_InvoicePaymentPending{}})).
 
 -define(PAYPROC_PAYMENT(Payment, Refunds, Adjustments), #payproc_InvoicePayment{
-    payment     = Payment,
-    refunds     = Refunds,
-    adjustments = Adjustments
+    payment        = Payment,
+    refunds        = [#payproc_InvoicePaymentRefund{refund = R, sessions = []} || R <- Refunds],
+    sessions       = [],
+    legacy_refunds = Refunds,
+    adjustments    = Adjustments
 }).
 
 -define(PAYPROC_PAYMENT, ?PAYPROC_PAYMENT(?PAYMENT, [?REFUND], [?ADJUSTMENT])).

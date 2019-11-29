@@ -163,7 +163,11 @@ process_request('GetInvoiceEvents', Req, Context) ->
     end;
 
 process_request('GetInvoicePaymentMethods', Req, Context) ->
-    case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, [maps:get(invoiceID, Req)], Context) of
+    InvoiceID = maps:get(invoiceID, Req),
+    Party = capi_utils:unwrap(capi_handler_utils:get_my_party(Context)),
+    Revision = Party#domain_Party.revision,
+    Args = [InvoiceID, {revision, Revision}],
+    case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, Args, Context) of
         {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
             PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
             {ok, {200, #{}, PaymentMethods}};

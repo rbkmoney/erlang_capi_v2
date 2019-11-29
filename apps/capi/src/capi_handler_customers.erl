@@ -204,7 +204,8 @@ process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 get_customer_by_id(CustomerID, Context) ->
-    capi_handler_utils:service_call({customer_management, 'Get', [CustomerID]}, Context).
+    EventRange = #payproc_EventRange{},
+    capi_handler_utils:service_call({customer_management, 'Get', [CustomerID, EventRange]}, Context).
 
 encode_customer_params(PartyID, Params) ->
     #payproc_CustomerParams{

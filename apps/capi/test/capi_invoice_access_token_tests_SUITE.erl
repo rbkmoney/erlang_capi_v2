@@ -206,7 +206,8 @@ get_invoice_events_ok_test(Config) ->
 -spec get_invoice_payment_methods_ok_test(config()) ->
     _.
 get_invoice_payment_methods_ok_test(Config) ->
-    capi_ct_helper:mock_services([{invoicing, fun('ComputeTerms', _) -> {ok, ?TERM_SET} end}], Config),
+    capi_ct_helper:mock_services([{invoicing,        fun('ComputeTerms', _) -> {ok, ?TERM_SET} end},
+                                  {party_management, fun('Get', _)          -> {ok, ?PARTY}    end}], Config),
     {ok, _} = capi_client_invoices:get_invoice_payment_methods(?config(context, Config), ?STRING).
 
 -spec create_payment_ok_test(config()) ->
