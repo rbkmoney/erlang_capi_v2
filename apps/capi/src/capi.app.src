@@ -11,6 +11,7 @@
         woody,
         capi_woody_client,
         damsel,
+        lechiffre,
         reporter_proto,
         dmt_client,
         swag_server,

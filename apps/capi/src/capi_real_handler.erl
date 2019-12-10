@@ -10,6 +10,7 @@
 -include_lib("reporter_proto/include/reporter_base_thrift.hrl").
 -include_lib("reporter_proto/include/reporter_reports_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_tool_provider_thrift.hrl").
+-include_lib("damsel/include/dmsl_payment_tool_token_thrift.hrl").
 
 -behaviour(swag_server_logic_handler).
 
@@ -1960,6 +1961,17 @@ encode_payer_params(#{
 
 encode_payment_tool_token(Token) ->
     try capi_utils:base64url_to_map(Token) of
+        <<"v1", PaymentToolToken/binary>> ->
+            encode_payment_tool_token(v1, PaymentToolToken);
+        PaymentToolTokenOld ->
+            encode_payment_tool_token(depricated, PaymentToolTokenOld)
+    catch
+        error:badarg ->
+            erlang:throw(invalid_token)
+    end.
+
+encode_payment_tool_token(depricated, PaymentToolToken) ->
+    case PaymentToolToken of
         #{<<"type">> := <<"bank_card">>} = Encoded ->
             encode_bank_card(Encoded);
         #{<<"type">> := <<"payment_terminal">>} = Encoded ->
@@ -1968,9 +1980,19 @@ encode_payment_tool_token(Token) ->
             encode_digital_wallet(Encoded);
         #{<<"type">> := <<"crypto_wallet">>} = Encoded ->
             encode_crypto_wallet(Encoded)
-    catch
-        error:badarg ->
-            erlang:throw(invalid_token)
+    end;
+encode_payment_tool_token(v1, EncryptedToken) ->
+    ThriftType = {struct, union, {dmsl_payment_tool_token_thrift, 'PaymentToolToken'}},
+    {ok, PaymentToolToken} = lechiffre:decode(ThriftType, EncryptedToken),
+    case PaymentToolToken of
+        {bank_card_payload, #ptt_BankCardPayload{bank_card = BankCard}} ->
+            {bank_card, BankCard};
+        {payment_terminal_payload, #ptt_PaymentTerminalPayload{payment_terminal = PaymentTerminal}} ->
+            {payment_terminal, PaymentTerminal};
+        {digital_wallet_payload, #ptt_DigitalWalletPayload{digital_wallet = DigitalWallet}} ->
+            {digital_wallet, DigitalWallet};
+        {crypto_currency_payload, #ptt_CryptoCurrencyPayload{crypto_currency = CryptoCurrency}} ->
+            {crypto_wallet, CryptoCurrency}
     end.
 
 decode_bank_card(#domain_BankCard{
