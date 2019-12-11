@@ -596,7 +596,7 @@ process_request('GetRefunds', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     Result = get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
     case Result of
-        {ok, #payproc_InvoicePayment{refunds = Refunds}} ->
+        {ok, #payproc_InvoicePayment{legacy_refunds = Refunds}} ->
             Resp = [decode_refund(R) || R <- Refunds],
             {ok, {200, #{}, Resp}};
         {exception, Exception} ->
@@ -1960,18 +1960,18 @@ encode_payer_params(#{
     }}.
 
 encode_payment_tool_token(Token) ->
-    try capi_utils:base64url_to_map(Token) of
+    try base64url:decode(Token) of
         <<"v1", PaymentToolToken/binary>> ->
             encode_payment_tool_token(v1, PaymentToolToken);
-        PaymentToolTokenOld ->
-            encode_payment_tool_token(depricated, PaymentToolTokenOld)
+        _ ->
+            encode_payment_tool_token(deprecated, Token)
     catch
         error:badarg ->
             erlang:throw(invalid_token)
     end.
 
-encode_payment_tool_token(depricated, PaymentToolToken) ->
-    case PaymentToolToken of
+encode_payment_tool_token(deprecated, Token) ->
+    case capi_utils:base64url_to_map(Token) of
         #{<<"type">> := <<"bank_card">>} = Encoded ->
             encode_bank_card(Encoded);
         #{<<"type">> := <<"payment_terminal">>} = Encoded ->
@@ -1981,7 +1981,7 @@ encode_payment_tool_token(depricated, PaymentToolToken) ->
         #{<<"type">> := <<"crypto_wallet">>} = Encoded ->
             encode_crypto_wallet(Encoded)
     end;
-encode_payment_tool_token(v1, EncryptedToken) ->
+encode_payment_tool_token(v1, EncryptedToken) when is_binary(EncryptedToken)->
     ThriftType = {struct, union, {dmsl_payment_tool_token_thrift, 'PaymentToolToken'}},
     {ok, PaymentToolToken} = lechiffre:decode(ThriftType, EncryptedToken),
     case PaymentToolToken of
