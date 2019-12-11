@@ -130,7 +130,11 @@
 -define(PAYPROC_PAYMENT, #payproc_InvoicePayment{
     payment = ?PAYMENT,
     refunds = [?REFUND],
-    adjustments = [?ADJUSTMENT]
+    legacy_refunds = [?REFUND_DOMAIN],
+    adjustments = [?ADJUSTMENT],
+    sessions = [#payproc_InvoicePaymentSession{
+        target_status = {processed, #domain_InvoicePaymentProcessed{}}
+    }]
 }).
 
 -define(ACCOUNT_STATE, #payproc_AccountState{
@@ -145,9 +149,14 @@
     }
 }).
 
--define(REFUND, ?REFUND(?STRING)).
+-define(REFUND, #payproc_InvoicePaymentRefund{
+    refund = ?REFUND_DOMAIN,
+    sessions = [#payproc_InvoiceRefundSession{}]
+}).
 
--define(REFUND(ID), #domain_InvoicePaymentRefund{
+-define(REFUND_DOMAIN, ?REFUND_DOMAIN(?STRING)).
+
+-define(REFUND_DOMAIN(ID), #domain_InvoicePaymentRefund{
     id = ID,
     status = {pending, #domain_InvoicePaymentRefundPending{}},
     created_at = ?TIMESTAMP,
