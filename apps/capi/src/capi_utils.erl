@@ -186,26 +186,23 @@ payment_methods_equivalent(#{<<"method">> := M} = M1, #{<<"method">> := M} = M2)
 payment_methods_equivalent(_, _) ->
     false.
 
-merge_payment_methods(#{<<"method">> := M} = Method, #{<<"method">> := M} = Alike) when M =:= <<"BankCard">> ->
-    VariantsFileld = <<"paymentSystems">>,
-    Merged = lists:umerge(maps:get(VariantsFileld, Method), maps:get(VariantsFileld, Alike)),
-    Method#{VariantsFileld => Merged};
-merge_payment_methods(#{<<"method">> := M} = Method, #{<<"method">> := M} = Alike) when M =:= <<"PaymentTerminal">> ->
-    VariantsFileld = <<"providers">>,
-    Merged = lists:umerge(maps:get(VariantsFileld, Method), maps:get(VariantsFileld, Alike)),
-    Method#{VariantsFileld => Merged};
-merge_payment_methods(#{<<"method">> := M} = Method, #{<<"method">> := M} = Alike) when M =:= <<"DigitalWallet">> ->
-    VariantsFileld = <<"providers">>,
-    Merged = lists:umerge(maps:get(VariantsFileld, Method), maps:get(VariantsFileld, Alike)),
-    Method#{VariantsFileld => Merged};
-merge_payment_methods(#{<<"method">> := M} = Method, #{<<"method">> := M} = Alike) when M =:= <<"CryptoWallet">> ->
-    VariantsFileld = <<"cryptoCurrencies">>,
-    Merged = lists:umerge(maps:get(VariantsFileld, Method), maps:get(VariantsFileld, Alike)),
-    Method#{VariantsFileld => Merged};
-merge_payment_methods(#{<<"method">> := M} = Method, #{<<"method">> := M} = Alike) when M =:= <<"MobileCommerce">> ->
-    VariantsFileld = <<"operators">>,
-    Merged = lists:umerge(maps:get(VariantsFileld, Method), maps:get(VariantsFileld, Alike)),
-    Method#{VariantsFileld => Merged}.
+merge_payment_methods(#{<<"method">> := M1} = Method, #{<<"method">> := M2} = Alike) when M1 =:= M2 ->
+    do_merge_payment_methods(method_mergable_field(M1), Method, Alike).
+
+method_mergable_field(<<"BankCard">>) ->
+    <<"paymentSystems">>;
+method_mergable_field(<<"PaymentTerminal">>) ->
+    <<"providers">>;
+method_mergable_field(<<"DigitalWallet">>) ->
+    <<"providers">>;
+method_mergable_field(<<"CryptoWallet">>) ->
+    <<"cryptoCurrencies">>;
+method_mergable_field(<<"MobileCommerce">>) ->
+    <<"operators">>.
+
+do_merge_payment_methods(MergableField, Method1, Method2) ->
+    Merged = lists:umerge(maps:get(MergableField, Method1), maps:get(MergableField, Method2)),
+    Method1#{MergableField => Merged}.
 
 -spec get_unique_id() -> binary().
 get_unique_id() ->
