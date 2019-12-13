@@ -421,12 +421,11 @@ decode_payment_method(digital_wallet, Providers) ->
 decode_payment_method(tokenized_bank_card, TokenizedBankCards) ->
     decode_tokenized_bank_cards(TokenizedBankCards);
 decode_payment_method(crypto_currency, CryptoCurrencies) ->
-    [
-        #{
-            <<"method">> => <<"CryptoWallet">>,
-            <<"cryptoCurrency">> => capi_handler_decoder_utils:convert_crypto_currency_to_swag(C)
-        } || C <- CryptoCurrencies
-    ];
+    Decoder = fun capi_handler_decoder_utils:convert_crypto_currency_to_swag/1,
+    [#{
+        <<"method">> => <<"CryptoWallet">>,
+        <<"cryptoCurrencies">> => lists:map(Decoder, CryptoCurrencies)
+    }];
 decode_payment_method(mobile, MobileOperators) ->
     [#{<<"method">> => <<"MobileCommerce">>, <<"operators">> => lists:map(fun genlib:to_binary/1, MobileOperators)}].
 
