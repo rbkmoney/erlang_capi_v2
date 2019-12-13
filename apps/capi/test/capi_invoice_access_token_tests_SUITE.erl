@@ -5,6 +5,7 @@
 -include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_errors_thrift.hrl").
+-include_lib("damsel/include/dmsl_payment_tool_token_thrift.hrl").
 -include_lib("damsel/include/dmsl_cds_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 -include_lib("jose/include/jose_jwk.hrl").
@@ -28,6 +29,7 @@
     create_payment_qiwi_access_token_ok_test/1,
     create_payment_with_empty_cvv_ok_test/1,
     create_payment_with_googlepay_plain_ok_test/1,
+    create_payment_with_googlepay_encrypt_ok_test/1,
     get_payments_ok_test/1,
     get_payment_by_id_ok_test/1,
     get_client_payment_status_test/1,
@@ -73,6 +75,7 @@ invoice_access_token_tests() ->
         create_payment_qiwi_access_token_ok_test,
         create_payment_with_empty_cvv_ok_test,
         create_payment_with_googlepay_plain_ok_test,
+        create_payment_with_googlepay_encrypt_ok_test,
         get_payments_ok_test,
         get_client_payment_status_test,
         get_payment_by_id_ok_test,
@@ -363,6 +366,70 @@ create_payment_with_googlepay_plain_ok_test(Config) ->
         }
     },
     {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
+
+-spec create_payment_with_googlepay_encrypt_ok_test(_) ->
+    _.
+create_payment_with_googlepay_encrypt_ok_test(Config) ->
+    capi_ct_helper:mock_services([
+        {invoicing, fun
+                ('StartPayment', [_UserInfo, _InvoiceID,
+                    #payproc_InvoicePaymentParams{
+                        payer = {payment_resource, #payproc_PaymentResourcePayerParams{
+                            resource = #domain_DisposablePaymentResource{
+                                payment_tool = {
+                                    bank_card,
+                                    #domain_BankCard{
+                                        is_cvv_empty = undefined,
+                                        token_provider = undefined,
+                                        payment_system = mastercard,
+                                        cardholder_name = <<"Degus Degusovich">>
+                                    }
+                                }
+                            }
+                        }}
+                    }
+                ]) -> {ok, ?PAYPROC_PAYMENT}
+            end},
+        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
+    ], Config),
+
+    Path = filename:join(?config(data_dir, Config), <<"keys/local/secret.key">>),
+    PaymentToolToken = get_encrypt_token(Path),
+    Req2 = #{
+        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
+        <<"payer">> => #{
+            <<"payerType">> => <<"PaymentResourcePayer">>,
+            <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
+            <<"paymentToolToken">> => PaymentToolToken,
+            <<"contactInfo">> => #{
+                <<"email">> => <<"bla@bla.ru">>
+            }
+        }
+    },
+    {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
+
+get_encrypt_token(Path) ->
+    Key = get_secret_key(Path),
+    SecretKey = #{
+        encryption_key => {1, Key},
+        decryption_key => #{1 => Key}
+    },
+    PaymentToolToken = {bank_card_payload, #ptt_BankCardPayload{
+        bank_card = #domain_BankCard{
+            token = <<"4111111111111111">>,
+            payment_system = mastercard,
+            bin = <<>>,
+            masked_pan = <<"1111">>,
+            cardholder_name = <<"Degus Degusovich">>
+        }
+    }},
+    ThriftType = {struct, union, {dmsl_payment_tool_token_thrift, 'PaymentToolToken'}},
+    {ok, EncryptedToken} = lechiffre:encode(ThriftType, PaymentToolToken, SecretKey),
+    base64url:encode(<<"v1", EncryptedToken/binary>>).
+
+get_secret_key(SecretPath) ->
+    {ok, Secret} = file:read_file(SecretPath),
+    genlib_string:trim(Secret).
 
 -spec get_payments_ok_test(config()) ->
     _.

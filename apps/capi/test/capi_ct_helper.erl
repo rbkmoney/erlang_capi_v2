@@ -83,6 +83,7 @@ start_capi(Config) ->
     [app_name()].
 
 start_capi(Config, ExtraEnv) ->
+    Path = get_keysource("keys/local/secret.key", Config),
     CapiEnv = ExtraEnv ++ [
         {ip, ?CAPI_IP},
         {port, ?CAPI_PORT},
@@ -93,6 +94,12 @@ start_capi(Config, ExtraEnv) ->
                 keyset => #{
                     capi => {pem_file, get_keysource("keys/local/private.pem", Config)}
                 }
+            }
+        }},
+        {lechiffre_opts,  #{
+            encryption_key_path => {1, Path},
+            decryption_key_path => #{
+                1 => Path
             }
         }}
     ],

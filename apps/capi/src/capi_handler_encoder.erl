@@ -1,6 +1,7 @@
 -module(capi_handler_encoder).
 
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
+-include_lib("damsel/include/dmsl_payment_tool_token_thrift.hrl").
 -include_lib("damsel/include/dmsl_merch_stat_thrift.hrl").
 
 -export([encode_contact_info/1]).
@@ -44,6 +45,26 @@ encode_client_info(ClientInfo) ->
     encode_data().
 
 encode_payment_tool_token(Token) ->
+    case base64url:decode(Token) of
+        <<"v1", EncryptedToken/binary>> ->
+            ThriftType = {struct, union, {dmsl_payment_tool_token_thrift, 'PaymentToolToken'}},
+            case lechiffre:decode(ThriftType, EncryptedToken) of
+                {ok, {bank_card_payload, Payload}} ->
+                   {bank_card, Payload#ptt_BankCardPayload.bank_card};
+                {ok, {payment_terminal_payload, Payload}} ->
+                   {payment_terminal, Payload#ptt_PaymentTerminalPayload.payment_terminal};
+                {ok, {digital_wallet_payload, Payload}} ->
+                   {digital_wallet, Payload#ptt_DigitalWalletPayload.digital_wallet};
+                {ok, {crypto_currency_payload, Payload}} ->
+                   {crypto_currency, Payload#ptt_CryptoCurrencyPayload.crypto_currency};
+                {ok, {mobile_commerce_payload, Payload}} ->
+                   {mobile_commerce, Payload#ptt_MobileCommercePayload.mobile_commerce}
+            end;
+        _ ->
+            encode_deprecated_token(Token)
+    end.
+
+encode_deprecated_token(Token) ->
     try capi_utils:base64url_to_map(Token) of
         #{<<"type">> := <<"bank_card">>} = Encoded ->
             encode_bank_card(Encoded);
