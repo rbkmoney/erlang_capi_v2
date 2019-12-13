@@ -964,6 +964,12 @@
                 id = {bank_card, visa}
             },
             #domain_PaymentMethodRef{
+                id = {crypto_currency, bitcoin}
+            },
+            #domain_PaymentMethodRef{
+                id = {crypto_currency, bitcoin_cash}
+            },
+            #domain_PaymentMethodRef{
                 id = {tokenized_bank_card, #domain_TokenizedBankCard{
                     payment_system = mastercard,
                     token_provider = applepay
