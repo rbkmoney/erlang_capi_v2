@@ -2497,7 +2497,7 @@ encode_digital_wallet(#{<<"provider">> := Provider, <<"id">> := ID}) ->
     }}.
 
 encode_crypto_wallet(#{<<"crypto_currency">> := CryptoCurrency}) ->
-    {crypto_wallet, convert_crypto_currency_from_swag(CryptoCurrency)}.
+    {crypto_currency, convert_crypto_currency_from_swag(CryptoCurrency)}.
 
 encode_token_provider(TokenProvider) when TokenProvider /= undefined ->
     binary_to_existing_atom(TokenProvider, utf8);
