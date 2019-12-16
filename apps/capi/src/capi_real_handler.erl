@@ -2018,9 +2018,9 @@ decode_digital_wallet(#domain_DigitalWallet{
         <<"id">> => ID
     }).
 
-decode_crypto_wallet(CryptoCurrency) ->
+decode_crypto_currency(CryptoCurrency) ->
     capi_utils:map_to_base64url(#{
-        <<"type"           >> => <<"crypto_wallet">>,
+        <<"type"           >> => <<"crypto_currency">>,
         <<"crypto_currency">> => convert_crypto_currency_to_swag(CryptoCurrency)
     }).
 
@@ -2776,7 +2776,7 @@ decode_payment_tool_token({payment_terminal, PaymentTerminal}) ->
 decode_payment_tool_token({digital_wallet, DigitalWallet}) ->
     decode_digital_wallet(DigitalWallet);
 decode_payment_tool_token({crypto_currency, CryptoCurrency}) ->
-    decode_crypto_wallet(CryptoCurrency).
+    decode_crypto_currency(CryptoCurrency).
 
 decode_payment_tool_details({bank_card, V}) ->
     decode_bank_card_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsBankCard">>});
