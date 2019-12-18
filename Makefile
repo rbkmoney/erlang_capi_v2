@@ -23,7 +23,7 @@ BUILD_IMAGE_TAG := 4536c31941b9c27c134e8daf0fd18848809219c9
 
 CALL_ANYWHERE := \
 	submodules \
-	all compile xref lint dialyze test cover \
+	all compile xref lint dialyze update_plt test cover \
 	start devrel release clean distclean \
 	generate regenerate swag_server.regenerate swag_client.regenerate
 
@@ -57,6 +57,9 @@ lint: generate
 
 dialyze:
 	$(REBAR) dialyzer
+
+update_plt:
+	$(REBAR) dialyzer -u true -s false
 
 start: submodules
 	$(REBAR) run
