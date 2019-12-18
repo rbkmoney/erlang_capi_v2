@@ -357,9 +357,9 @@ decode_crypto_wallet(CryptoCurrency) ->
     }).
 
 decode_mobile_commerce(MobileCommerce) ->
-    #domain_MobileCommerce{
+    #merchstat_MobileCommerce{
         operator = Operator,
-        phone = #domain_MobilePhone{
+        phone = #merchstat_MobilePhone{
             cc = Cc,
             ctn = Ctn
         }
@@ -383,7 +383,7 @@ decode_stat_payment_tool_details({crypto_currency, CryptoCurrency}) ->
         <<"cryptoCurrency">> => capi_handler_decoder_utils:convert_crypto_currency_to_swag(CryptoCurrency)
     };
 decode_stat_payment_tool_details({mobile_commerce, MobileCommerce}) ->
-    #domain_MobileCommerce{
+    #merchstat_MobileCommerce{
         phone = Phone
     } = MobileCommerce,
     PhoneNumber = gen_phone_number(decode_mobile_phone(Phone)),
@@ -565,7 +565,7 @@ decode_stat_refund_status({Status, StatusInfo}, Context) ->
         <<"error" >> => Error
     }.
 
-decode_mobile_phone(#domain_MobilePhone{cc = Cc, ctn = Ctn}) ->
+decode_mobile_phone(#merchstat_MobilePhone{cc = Cc, ctn = Ctn}) ->
     #{<<"cc">> => Cc, <<"ctn">> => Ctn}.
 
 gen_phone_number(#{<<"cc">> := Cc, <<"ctn">> := Ctn}) ->
