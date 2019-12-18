@@ -21,13 +21,6 @@ build('capi', 'docker-host', finalHook) {
 
   pipeDefault() {
     if (!env.BRANCH_NAME.matches('^v\\d+')) {
-
-      echo "===> BRANCH_NAME = $env.BRANCH_NAME"
-      echo "===> JOB_NAME = $env.JOB_NAME"
-      echo "===> BUILD_TAG = $env.BUILD_TAG"
-      echo "===> WORKSPACE = $env.WORKSPACE"
-      echo "===> PROMOTED_JOB_NAME = $env.PROMOTED_JOB_NAME"
-
       runStage('compile') {
         withGithubPrivkey {
           sh 'make wc_compile'
