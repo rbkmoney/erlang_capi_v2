@@ -21,6 +21,9 @@ build('capi', 'docker-host', finalHook) {
 
   pipeDefault() {
     if (!env.BRANCH_NAME.matches('^v\\d+')) {
+
+      echo "===> $env"
+
       runStage('compile') {
         withGithubPrivkey {
           sh 'make wc_compile'
