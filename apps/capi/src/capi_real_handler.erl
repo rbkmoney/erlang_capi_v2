@@ -1971,8 +1971,8 @@ encode_payment_tool_token(Token) ->
             encode_payment_terminal(Encoded);
         #{<<"type">> := <<"digital_wallet">>} = Encoded ->
             encode_digital_wallet(Encoded);
-        #{<<"type">> := <<"crypto_currency">>} = Encoded ->
-            encode_crypto_currency(Encoded)
+        #{<<"type">> := <<"crypto_wallet">>} = Encoded ->
+            encode_crypto_wallet(Encoded)
     catch
         error:badarg ->
             erlang:throw(invalid_token)
@@ -2023,9 +2023,9 @@ decode_digital_wallet(#domain_DigitalWallet{
         <<"id">> => ID
     }).
 
-decode_crypto_currency(CryptoCurrency) ->
+decode_crypto_wallet(CryptoCurrency) ->
     capi_utils:map_to_base64url(#{
-        <<"type"           >> => <<"crypto_currency">>,
+        <<"type"           >> => <<"crypto_wallet">>,
         <<"crypto_currency">> => convert_crypto_currency_to_swag(CryptoCurrency)
     }).
 
@@ -2501,7 +2501,7 @@ encode_digital_wallet(#{<<"provider">> := Provider, <<"id">> := ID}) ->
         id = ID
     }}.
 
-encode_crypto_currency(#{<<"crypto_currency">> := CryptoCurrency}) ->
+encode_crypto_wallet(#{<<"crypto_currency">> := CryptoCurrency}) ->
     {crypto_currency, convert_crypto_currency_from_swag(CryptoCurrency)}.
 
 encode_token_provider(TokenProvider) when TokenProvider /= undefined ->
@@ -2781,7 +2781,7 @@ decode_payment_tool_token({payment_terminal, PaymentTerminal}) ->
 decode_payment_tool_token({digital_wallet, DigitalWallet}) ->
     decode_digital_wallet(DigitalWallet);
 decode_payment_tool_token({crypto_currency, CryptoCurrency}) ->
-    decode_crypto_currency(CryptoCurrency).
+    decode_crypto_wallet(CryptoCurrency).
 
 decode_payment_tool_details({bank_card, V}) ->
     decode_bank_card_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsBankCard">>});
