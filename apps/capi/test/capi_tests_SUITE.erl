@@ -619,7 +619,10 @@ get_invoice_events_ok_test(Config) ->
 -spec get_invoice_payment_methods_ok_test(config()) ->
     _.
 get_invoice_payment_methods_ok_test(Config) ->
-    mock_services([{invoicing, fun('ComputeTerms', _) -> {ok, ?TERM_SET} end}], Config),
+    mock_services([
+        {party_management, fun('Get', _) -> {ok, ?PARTY} end},
+        {invoicing, fun('ComputeTerms', _) -> {ok, ?TERM_SET} end}
+    ], Config),
     {ok, _} = capi_client_invoices:get_invoice_payment_methods(?config(context, Config), ?STRING).
 
 -spec create_invoice_access_token_ok_test(config()) ->
@@ -690,7 +693,10 @@ delete_invoice_template_ok_test(Config) ->
 -spec get_invoice_payment_methods_by_tpl_id_ok_test(config()) ->
     _.
 get_invoice_payment_methods_by_tpl_id_ok_test(Config) ->
-    mock_services([{'invoice_templating', fun('ComputeTerms', _) -> {ok, ?TERM_SET} end}], Config),
+    mock_services([
+          {party_management, fun('Get', _) -> {ok, ?PARTY} end},
+        {'invoice_templating', fun('ComputeTerms', _) -> {ok, ?TERM_SET} end}
+    ], Config),
     {ok, _} = capi_client_invoice_templates:get_invoice_payment_methods(?config(context, Config), ?STRING).
 
 -spec get_account_by_id_ok_test(config()) ->
@@ -748,7 +754,7 @@ get_payment_by_id_ok_test(Config) ->
 create_refund(Config) ->
     mock_services([
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end},
-        {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end}
+        {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND_DOMAIN} end}
     ], Config),
     Req = #{<<"reason">> => ?STRING},
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
@@ -763,7 +769,7 @@ create_refund_idemp_ok_test(Config) ->
                 'RefundPayment',
                 [_, _, _, #payproc_InvoicePaymentRefundParams{id = ID}]
             ) ->
-                {ok, ?REFUND(ID)}
+                {ok, ?REFUND_DOMAIN(ID)}
         end},
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
     ], Config),
@@ -781,7 +787,7 @@ create_refund_idemp_ok_test(Config) ->
 create_partial_refund(Config) ->
     mock_services([
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end},
-        {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end}
+        {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND_DOMAIN} end}
     ], Config),
     Req = #{
         <<"reason">> => ?STRING,
@@ -801,7 +807,7 @@ create_partial_refund_without_currency(Config) ->
                 ('GetPayment', _) ->
                     {ok, ?PAYPROC_PAYMENT};
                 ('RefundPayment', _) ->
-                    {ok, ?REFUND}
+                    {ok, ?REFUND_DOMAIN}
             end
         }
     ], Config),
@@ -814,7 +820,7 @@ create_partial_refund_without_currency(Config) ->
 -spec get_refund_by_id(config()) ->
     _.
 get_refund_by_id(Config) ->
-    mock_services([{invoicing, fun('GetPaymentRefund', _) -> {ok, ?REFUND} end}], Config),
+    mock_services([{invoicing, fun('GetPaymentRefund', _) -> {ok, ?REFUND_DOMAIN} end}], Config),
     {ok, _} = capi_client_payments:get_refund_by_id(?config(context, Config), ?STRING, ?STRING, ?STRING).
 
 -spec get_refunds(config()) ->

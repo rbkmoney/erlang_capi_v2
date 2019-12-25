@@ -284,6 +284,7 @@ process_request('GetInvoicePaymentMethods', Req, Context, ReqCtx) ->
             get_user_info(Context),
             maps:get(invoiceID, Req)
         ],
+        Context,
         ReqCtx
     ),
     case Result of
@@ -595,7 +596,7 @@ process_request('GetRefunds', Req, Context, ReqCtx) ->
     UserInfo = get_user_info(Context),
     Result = get_payment_by_id(ReqCtx, UserInfo, InvoiceID, PaymentID),
     case Result of
-        {ok, #payproc_InvoicePayment{refunds = Refunds}} ->
+        {ok, #payproc_InvoicePayment{legacy_refunds = Refunds}} ->
             Resp = [decode_refund(R) || R <- Refunds],
             {ok, {200, #{}, Resp}};
         {exception, Exception} ->
@@ -818,6 +819,7 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context, ReqCtx) ->
             maps:get('invoiceTemplateID', Req),
             Timestamp
         ],
+        Context,
         ReqCtx
     ),
     case Result of
@@ -1821,6 +1823,9 @@ get_user_info(Context) ->
         id = get_party_id(Context),
         type = {external_user, #payproc_ExternalUser{}}
     }.
+
+get_event_range() ->
+    #payproc_EventRange{}.
 
 get_auth_context(#{auth_context := AuthContext}) ->
     AuthContext.
@@ -4619,18 +4624,20 @@ create_party(Context, ReqCtx) ->
     end.
 
 get_invoice_by_id(ReqCtx, UserInfo, InvoiceID) ->
+    EventRange = get_event_range(),
     service_call(
         invoicing,
         'Get',
-        [UserInfo, InvoiceID],
+        [UserInfo, InvoiceID, EventRange],
         ReqCtx
     ).
 
 get_customer_by_id(ReqCtx, CustomerID) ->
+    EventRange = get_event_range(),
     service_call(
         customer_management,
         'Get',
-        [CustomerID],
+        [CustomerID, EventRange],
         ReqCtx
     ).
 
@@ -4764,8 +4771,13 @@ get_events(Limit, After, GetterFun) ->
     },
     GetterFun(EventRange).
 
-construct_payment_methods(ServiceName, Args, Context) ->
-    case compute_terms(ServiceName, Args, Context) of
+construct_payment_methods(ServiceName, Args, Context, ReqCtx) ->
+    UserInfo = get_user_info(Context),
+    PartyID = get_party_id(Context),
+    {ok, Party} = get_my_party(Context, ReqCtx, UserInfo, PartyID),
+    Revision = Party#domain_Party.revision,
+    PartyRevisionParams = {revision, Revision},
+    case compute_terms(ServiceName, Args ++ [PartyRevisionParams], ReqCtx) of
         {ok, #domain_TermSet{payments = undefined}} ->
             {ok, []};
         {ok, #domain_TermSet{
