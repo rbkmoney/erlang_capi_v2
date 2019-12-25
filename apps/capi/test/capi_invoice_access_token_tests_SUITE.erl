@@ -62,7 +62,7 @@ init([]) ->
     [test_case_name()].
 all() ->
     [
-        {group, operations_by_invoice_access_token_after_invoice_creation},
+        % {group, operations_by_invoice_access_token_after_invoice_creation},
         {group, operations_by_invoice_access_token_after_token_creation}
     ].
 
@@ -414,6 +414,7 @@ get_encrypt_token(Path) ->
         encryption_key => {1, Key},
         decryption_key => #{1 => Key}
     },
+    EncryptionParams = #{iv => lechiffre_crypto:iv_random()},
     PaymentToolToken = {bank_card_payload, #ptt_BankCardPayload{
         bank_card = #domain_BankCard{
             token = <<"4111111111111111">>,
@@ -424,7 +425,7 @@ get_encrypt_token(Path) ->
         }
     }},
     ThriftType = {struct, union, {dmsl_payment_tool_token_thrift, 'PaymentToolToken'}},
-    {ok, EncryptedToken} = lechiffre:encode(ThriftType, PaymentToolToken, SecretKey),
+    {ok, EncryptedToken} = lechiffre:encode(ThriftType, PaymentToolToken, EncryptionParams, SecretKey),
     base64url:encode(<<"v1", EncryptedToken/binary>>).
 
 get_secret_key(SecretPath) ->
