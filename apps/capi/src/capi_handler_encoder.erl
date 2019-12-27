@@ -45,8 +45,8 @@ encode_client_info(ClientInfo) ->
     encode_data().
 
 encode_payment_tool_token(Token) ->
-    case base64url:decode(Token) of
-        <<"v1", EncryptedToken/binary>> ->
+    case Token of
+        <<"v1/", EncryptedToken/binary>> ->
             ThriftType = {struct, union, {dmsl_payment_tool_token_thrift, 'PaymentToolToken'}},
             case lechiffre:decode(ThriftType, EncryptedToken) of
                 {ok, {bank_card_payload, Payload}} ->
