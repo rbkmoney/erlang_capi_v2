@@ -1,6 +1,7 @@
 -module(capi_crypto).
 
 -include_lib("damsel/include/dmsl_payment_tool_token_thrift.hrl").
+
 -type encrypted_token()     :: binary().
 -type payment_tool()        :: dmsl_domain_thrift:'PaymentTool'().
 -type payment_tool_token()  :: dmsl_payment_tool_token_thrift:'PaymentToolToken'().

@@ -220,7 +220,8 @@ encode_customer_metadata(Meta) ->
 
 
 encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
-    PaymentTool = capi_handler_encoder:encode_payment_tool_token(maps:get(<<"paymentToolToken">>, PaymentResource)),
+    PaymentToolToken = maps:get(<<"paymentToolToken">>, PaymentResource),
+    PaymentTool = capi_crypto:decrypt_payment_tool_token(PaymentToolToken),
     {ClientInfo, PaymentSession} =
         capi_handler_utils:unwrap_payment_session(maps:get(<<"paymentSession">>, PaymentResource)),
     #payproc_CustomerBindingParams{
