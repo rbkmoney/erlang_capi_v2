@@ -393,8 +393,7 @@ create_payment_with_googlepay_encrypt_ok_test(Config) ->
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
     ], Config),
 
-    Path = filename:join(?config(data_dir, Config), <<"keys/local/secret.key">>),
-    PaymentToolToken = get_encrypt_token(Path),
+    PaymentToolToken = get_encrypt_token(),
     Req2 = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"payer">> => #{
@@ -408,29 +407,15 @@ create_payment_with_googlepay_encrypt_ok_test(Config) ->
     },
     {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
 
-get_encrypt_token(Path) ->
-    Key = get_secret_key(Path),
-    SecretKey = #{
-        encryption_key => {1, Key},
-        decryption_key => #{1 => Key}
-    },
-    EncryptionParams = #{iv => lechiffre_crypto:iv_random()},
-    PaymentToolToken = {bank_card_payload, #ptt_BankCardPayload{
-        bank_card = #domain_BankCard{
-            token = <<"4111111111111111">>,
-            payment_system = mastercard,
-            bin = <<>>,
-            masked_pan = <<"1111">>,
-            cardholder_name = <<"Degus Degusovich">>
-        }
+get_encrypt_token() ->
+    PaymentTool = {bank_card, #domain_BankCard{
+        token = <<"4111111111111111">>,
+        payment_system = mastercard,
+        bin = <<>>,
+        masked_pan = <<"1111">>,
+        cardholder_name = <<"Degus Degusovich">>
     }},
-    ThriftType = {struct, union, {dmsl_payment_tool_token_thrift, 'PaymentToolToken'}},
-    {ok, EncryptedToken} = lechiffre:encode(ThriftType, PaymentToolToken, EncryptionParams, SecretKey),
-    base64url:encode(<<"v1", EncryptedToken/binary>>).
-
-get_secret_key(SecretPath) ->
-    {ok, Secret} = file:read_file(SecretPath),
-    genlib_string:trim(Secret).
+    capi_crypto:create_encrypted_payment_tool_token(<<"idemp key">>, PaymentTool).
 
 -spec get_payments_ok_test(config()) ->
     _.

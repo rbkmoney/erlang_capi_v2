@@ -402,7 +402,7 @@ encode_payer_params(#{
     <<"paymentSession"  >> := EncodedSession,
     <<"contactInfo"     >> := ContactInfo
 }) ->
-    PaymentTool = capi_handler_encoder:encode_payment_tool_token(Token),
+    PaymentTool = capi_crypto:decrypt_payment_tool_token(Token),
     {ClientInfo, PaymentSession} = capi_handler_utils:unwrap_payment_session(EncodedSession),
     {payment_resource, #payproc_PaymentResourcePayerParams{
         resource = #domain_DisposablePaymentResource{
