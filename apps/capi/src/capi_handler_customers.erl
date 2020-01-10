@@ -88,9 +88,9 @@ process_request('CreateCustomerAccessToken', Req, Context) ->
     end;
 
 process_request('CreateBinding', Req, Context) ->
-    CallArgs = [maps:get(customerID, Req), encode_customer_binding_params(maps:get('CustomerBindingParams', Req))],
     Result =
         try
+            CallArgs = [maps:get(customerID, Req), encode_customer_binding_params(maps:get('CustomerBindingParams', Req))],
             capi_handler_utils:service_call({customer_management, 'StartBinding', CallArgs}, Context)
         catch
             throw:Error when Error =:= invalid_token orelse Error =:= invalid_payment_session ->
@@ -218,14 +218,17 @@ encode_customer_params(PartyID, Params) ->
 encode_customer_metadata(Meta) ->
     capi_json_marshalling:marshal(Meta).
 
-
 encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
     PaymentToolToken = maps:get(<<"paymentToolToken">>, PaymentResource),
     PaymentTool = case capi_crypto:decrypt_payment_tool_token(PaymentToolToken) of
-        {ok, token_version_unknown} ->
+        unrecognized ->
             encode_payment_tool_token(PaymentToolToken);
         {ok, Result} ->
-            Result
+            Result;
+        {error, {decryption_failed, {bad_jwe_header_format, _Reason}}} ->
+            erlang:throw(invalid_token);
+        {error, {decryption_failed, {bad_jwe_format, _JweCompact}}} ->
+            erlang:throw(invalid_token)
     end,
     {ClientInfo, PaymentSession} =
         capi_handler_utils:unwrap_payment_session(maps:get(<<"paymentSession">>, PaymentResource)),

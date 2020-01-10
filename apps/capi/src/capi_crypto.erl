@@ -21,7 +21,8 @@ create_encrypted_payment_tool_token(IdempotentKey, PaymentTool) ->
     <<TokenVersion/binary, "/", EncodedToken/binary>>.
 
 -spec decrypt_payment_tool_token(encrypted_token()) ->
-    {ok, payment_tool() | token_version_unknown} |
+    unrecognized |
+    {ok, payment_tool()} |
     {error, lechiffre:decoding_error()}.
 
 decrypt_payment_tool_token(Token) ->
@@ -31,7 +32,7 @@ decrypt_payment_tool_token(Token) ->
         <<Ver:Size/binary, "/", EncryptedPaymentToolToken/binary>> ->
             decrypt_token(EncryptedPaymentToolToken);
         _ ->
-            {ok, token_version_unknown}
+            unrecognized
     end.
 
 %% Internal

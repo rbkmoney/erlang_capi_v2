@@ -403,10 +403,14 @@ encode_payer_params(#{
     <<"contactInfo"     >> := ContactInfo
 }) ->
     PaymentTool = case capi_crypto:decrypt_payment_tool_token(Token) of
-        {ok, token_version_unknown} ->
+        unrecognized ->
             encode_payment_tool_token(Token);
         {ok, Result} ->
-            Result
+            Result;
+        {error, {decryption_failed, {bad_jwe_header_format, _Reason}}} ->
+            erlang:throw(invalid_token);
+        {error, {decryption_failed, {bad_jwe_format, _JweCompact}}} ->
+            erlang:throw(invalid_token)
     end,
     {ClientInfo, PaymentSession} = capi_handler_utils:unwrap_payment_session(EncodedSession),
     {payment_resource, #payproc_PaymentResourcePayerParams{
