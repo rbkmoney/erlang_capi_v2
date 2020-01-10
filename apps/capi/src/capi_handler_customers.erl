@@ -90,7 +90,10 @@ process_request('CreateCustomerAccessToken', Req, Context) ->
 process_request('CreateBinding', Req, Context) ->
     Result =
         try
-            CallArgs = [maps:get(customerID, Req), encode_customer_binding_params(maps:get('CustomerBindingParams', Req))],
+            CallArgs = [
+                maps:get(customerID, Req),
+                encode_customer_binding_params(maps:get('CustomerBindingParams', Req))
+            ],
             capi_handler_utils:service_call({customer_management, 'StartBinding', CallArgs}, Context)
         catch
             throw:Error when Error =:= invalid_token orelse Error =:= invalid_payment_session ->
