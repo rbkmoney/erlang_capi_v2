@@ -221,7 +221,12 @@ encode_customer_metadata(Meta) ->
 
 encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
     PaymentToolToken = maps:get(<<"paymentToolToken">>, PaymentResource),
-    PaymentTool = capi_crypto:decrypt_payment_tool_token(PaymentToolToken),
+    PaymentTool = case capi_crypto:decrypt_payment_tool_token(PaymentToolToken) of
+        {ok, token_version_unknown} ->
+            decrypt_deprecated_token(PaymentToolToken);
+        {ok, Result} ->
+            Result
+    end,
     {ClientInfo, PaymentSession} =
         capi_handler_utils:unwrap_payment_session(maps:get(<<"paymentSession">>, PaymentResource)),
     #payproc_CustomerBindingParams{
@@ -232,6 +237,14 @@ encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
                 client_info        = capi_handler_encoder:encode_client_info(ClientInfo)
             }
     }.
+
+decrypt_deprecated_token(Token) ->
+    try
+        capi_handler_encoder:encode_payment_tool(capi_utils:base64url_to_map(Token))
+    catch
+        error:badarg ->
+            erlang:throw(invalid_token)
+    end.
 
 make_customer_and_token(Customer, PartyID) ->
     #{

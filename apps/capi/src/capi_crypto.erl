@@ -20,46 +20,36 @@ create_encrypted_payment_tool_token(IdempotentKey, PaymentTool) ->
     TokenVersion = payment_tool_token_version(),
     <<TokenVersion/binary, "/", EncodedToken/binary>>.
 
--spec decrypt_payment_tool_token(binary()) ->
-    capi_handler_encoder:encode_data().
+-spec decrypt_payment_tool_token(encrypted_token()) ->
+    {ok, payment_tool() | token_version_unknown} |
+    {error, lechiffre:decoding_error()}.
 
 decrypt_payment_tool_token(Token) ->
     Ver = payment_tool_token_version(),
     Size = byte_size(Ver),
     case Token of
-        <<Ver:Size/binary, "/", EncryptedToken/binary>> ->
-            ThriftType = {struct, union, {dmsl_payment_tool_token_thrift, 'PaymentToolToken'}},
-            case lechiffre:decode(ThriftType, EncryptedToken) of
-                {ok, {bank_card_payload, Payload}} ->
-                   {bank_card, Payload#ptt_BankCardPayload.bank_card};
-                {ok, {payment_terminal_payload, Payload}} ->
-                   {payment_terminal, Payload#ptt_PaymentTerminalPayload.payment_terminal};
-                {ok, {digital_wallet_payload, Payload}} ->
-                   {digital_wallet, Payload#ptt_DigitalWalletPayload.digital_wallet};
-                {ok, {crypto_currency_payload, Payload}} ->
-                   {crypto_currency, Payload#ptt_CryptoCurrencyPayload.crypto_currency};
-                {ok, {mobile_commerce_payload, Payload}} ->
-                   {mobile_commerce, Payload#ptt_MobileCommercePayload.mobile_commerce}
-            end;
+        <<Ver:Size/binary, "/", EncryptedPaymentToolToken/binary>> ->
+            decrypt_token(EncryptedPaymentToolToken);
         _ ->
-            decrypt_deprecated_token(Token)
+            {ok, token_version_unknown}
     end.
 
 %% Internal
-
-decrypt_deprecated_token(Token) ->
-    try
-        capi_handler_encoder:encode_payment_tool(capi_utils:base64url_to_map(Token))
-    catch
-        error:badarg ->
-            erlang:throw(invalid_token)
-    end.
 
 payment_tool_token_version() ->
     <<"v1">>.
 
 create_encryption_params(IdempotentKey) ->
     #{iv => lechiffre:compute_iv(IdempotentKey)}.
+
+decrypt_token(EncryptedPaymentToolToken) ->
+    ThriftType = {struct, union, {dmsl_payment_tool_token_thrift, 'PaymentToolToken'}},
+    case lechiffre:decode(ThriftType, EncryptedPaymentToolToken) of
+        {ok, PaymentToolToken} ->
+            {ok, decode_payment_tool_token(PaymentToolToken)};
+        {error, _} = Error ->
+            Error
+    end.
 
 -spec encode_payment_tool_token(payment_tool()) ->
     payment_tool_token().
@@ -84,3 +74,20 @@ encode_payment_tool_token({mobile_commerce, MobileCommerce}) ->
     {mobile_commerce_payload, #ptt_MobileCommercePayload {
         mobile_commerce = MobileCommerce
     }}.
+
+-spec decode_payment_tool_token(payment_tool_token()) ->
+    payment_tool().
+
+decode_payment_tool_token(PaymentToolToken) ->
+    case PaymentToolToken of
+        {bank_card_payload, Payload} ->
+            {bank_card, Payload#ptt_BankCardPayload.bank_card};
+        {payment_terminal_payload, Payload} ->
+            {payment_terminal, Payload#ptt_PaymentTerminalPayload.payment_terminal};
+        {digital_wallet_payload, Payload} ->
+            {digital_wallet, Payload#ptt_DigitalWalletPayload.digital_wallet};
+        {crypto_currency_payload, Payload} ->
+            {crypto_currency, Payload#ptt_CryptoCurrencyPayload.crypto_currency};
+        {mobile_commerce_payload, Payload} ->
+            {mobile_commerce, Payload#ptt_MobileCommercePayload.mobile_commerce}
+    end.
