@@ -223,7 +223,7 @@ encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
     PaymentToolToken = maps:get(<<"paymentToolToken">>, PaymentResource),
     PaymentTool = case capi_crypto:decrypt_payment_tool_token(PaymentToolToken) of
         {ok, token_version_unknown} ->
-            decrypt_deprecated_token(PaymentToolToken);
+            encode_payment_tool_token(PaymentToolToken);
         {ok, Result} ->
             Result
     end,
@@ -238,7 +238,7 @@ encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
             }
     }.
 
-decrypt_deprecated_token(Token) ->
+encode_payment_tool_token(Token) ->
     try
         capi_handler_encoder:encode_payment_tool(capi_utils:base64url_to_map(Token))
     catch

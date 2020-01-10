@@ -404,7 +404,7 @@ encode_payer_params(#{
 }) ->
     PaymentTool = case capi_crypto:decrypt_payment_tool_token(Token) of
         {ok, token_version_unknown} ->
-            decrypt_deprecated_token(Token);
+            encode_payment_tool_token(Token);
         {ok, Result} ->
             Result
     end,
@@ -458,7 +458,7 @@ encode_optional_cash(_, _, _, _) ->
 
 %%
 
-decrypt_deprecated_token(Token) ->
+encode_payment_tool_token(Token) ->
     try
         capi_handler_encoder:encode_payment_tool(capi_utils:base64url_to_map(Token))
     catch
