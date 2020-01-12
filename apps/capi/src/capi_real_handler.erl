@@ -1952,7 +1952,7 @@ encode_payer_params(#{
     <<"paymentSession">> := EncodedSession,
     <<"contactInfo">> := ContactInfo
 }) ->
-    PaymentTool = encode_payment_tool_token(Token),
+    PaymentTool = encode_legacy_payment_tool_token(Token),
     {ClientInfo, PaymentSession} = unwrap_payment_session(EncodedSession),
     {payment_resource, #payproc_PaymentResourcePayerParams{
         resource = #domain_DisposablePaymentResource{
@@ -1963,7 +1963,7 @@ encode_payer_params(#{
         contact_info = encode_contact_info(ContactInfo)
     }}.
 
-encode_payment_tool_token(Token) ->
+encode_legacy_payment_tool_token(Token) ->
     try capi_utils:base64url_to_map(Token) of
         #{<<"type">> := <<"bank_card">>} = Encoded ->
             encode_bank_card(Encoded);
