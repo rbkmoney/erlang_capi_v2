@@ -1952,7 +1952,18 @@ encode_payer_params(#{
     <<"paymentSession">> := EncodedSession,
     <<"contactInfo">> := ContactInfo
 }) ->
-    PaymentTool = encode_legacy_payment_tool_token(Token),
+    PaymentTool = case capi_crypto:decrypt_payment_tool_token(Token) of
+        unrecognized ->
+            encode_legacy_payment_tool_token(Token);
+        {ok, Result} ->
+            Result;
+        {error, {decryption_failed, {bad_jwe_header_format, _} = Error}} ->
+            logger:log(error, "Invalid payment tool token", [], #{decryption_failed => Error}),
+            erlang:throw(invalid_token);
+        {error, {decryption_failed, {bad_jwe_format, _JweCompact} = Error}} ->
+            logger:log(error, "Invalid payment tool token", [], #{decryption_failed => Error}),
+            erlang:throw(invalid_token)
+    end,
     {ClientInfo, PaymentSession} = unwrap_payment_session(EncodedSession),
     {payment_resource, #payproc_PaymentResourcePayerParams{
         resource = #domain_DisposablePaymentResource{
@@ -2532,7 +2543,18 @@ encode_customer_binding_params(#{
         <<"paymentSession">> := EncodedSession
     }
 }) ->
-    PaymentTool = encode_payment_tool_token(Token),
+    PaymentTool = case capi_crypto:decrypt_payment_tool_token(Token) of
+        unrecognized ->
+            encode_legacy_payment_tool_token(Token);
+        {ok, Result} ->
+            Result;
+        {error, {decryption_failed, {bad_jwe_header_format, _} = Error}} ->
+            logger:log(error, "Invalid payment tool token", [], #{decryption_failed => Error}),
+            erlang:throw(invalid_token);
+        {error, {decryption_failed, {bad_jwe_format, _JweCompact} = Error}} ->
+            logger:log(error, "Invalid payment tool token", [], #{decryption_failed => Error}),
+            erlang:throw(invalid_token)
+    end,
     {ClientInfo, PaymentSession} = unwrap_payment_session(EncodedSession),
     #payproc_CustomerBindingParams{
         payment_resource = #domain_DisposablePaymentResource{
