@@ -393,7 +393,7 @@ create_payment_with_googlepay_encrypt_ok_test(Config) ->
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
     ], Config),
 
-    PaymentToolToken = get_encryption_token(),
+    PaymentToolToken = get_encrypted_token(),
     Req2 = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"payer">> => #{
@@ -407,7 +407,7 @@ create_payment_with_googlepay_encrypt_ok_test(Config) ->
     },
     {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
 
-get_encryption_token() ->
+get_encrypted_token() ->
     PaymentTool = {bank_card, #domain_BankCard{
         token = ?TEST_PAYMENT_TOKEN(mastercard),
         payment_system = mastercard,
