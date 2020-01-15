@@ -229,7 +229,8 @@ encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
         {ok, Result} ->
             Result;
         {error, {decryption_failed, Error}} ->
-            logger:log(error, "Invalid payment tool token", [], #{decryption_failed => Error}),
+            Details = genlib:to_binary(io_lib:format("~p", [Error])),
+            logger:log(warning, "Invalid payment tool token", [], #{decryption_failed => Details}),
             erlang:throw(invalid_token)
     end,
     {ClientInfo, PaymentSession} =
