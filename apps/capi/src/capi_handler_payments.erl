@@ -407,10 +407,7 @@ encode_payer_params(#{
             encode_legacy_payment_tool_token(Token);
         {ok, Result} ->
             Result;
-        {error, {decryption_failed, {bad_jwe_header_format, _} = Error}} ->
-            logger:log(error, "Invalid payment tool token", [], #{decryption_failed => Error}),
-            erlang:throw(invalid_token);
-        {error, {decryption_failed, {bad_jwe_format, _JweCompact} = Error}} ->
+        {error, {decryption_failed, Error}} ->
             logger:log(error, "Invalid payment tool token", [], #{decryption_failed => Error}),
             erlang:throw(invalid_token)
     end,
