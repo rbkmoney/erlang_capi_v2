@@ -757,7 +757,7 @@ create_payment_with_encrypt_token_ok_test(Config) ->
         ],
         Config
     ),
-    PaymentToolToken = get_encrypt_token(),
+    PaymentToolToken = get_encrypted_token(),
     Req2 = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"payer">> => #{
@@ -771,7 +771,7 @@ create_payment_with_encrypt_token_ok_test(Config) ->
     },
     {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
 
-get_encrypt_token() ->
+get_encrypted_token() ->
     PaymentTool = {bank_card, #domain_BankCard{
         token = <<"4111111111111111">>,
         payment_system = mastercard,
