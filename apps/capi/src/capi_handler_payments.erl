@@ -408,7 +408,7 @@ encode_payer_params(#{
         {ok, Result} ->
             Result;
         {error, {decryption_failed, _} = Error} ->
-            logger:warning("Invalid payment tool token: ~p", [Error]),
+            logger:warning("Payment tool token decryption failed: ~p", [Error]),
             erlang:throw(invalid_token)
     end,
     {ClientInfo, PaymentSession} = capi_handler_utils:unwrap_payment_session(EncodedSession),

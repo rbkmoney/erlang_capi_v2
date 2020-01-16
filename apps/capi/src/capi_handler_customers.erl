@@ -229,7 +229,7 @@ encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
         {ok, Result} ->
             Result;
         {error, {decryption_failed, _} = Error} ->
-            logger:warning("Invalid payment tool token: ~p", [Error]),
+            logger:warning("Payment tool token decryption failed: ~p", [Error]),
             erlang:throw(invalid_token)
     end,
     {ClientInfo, PaymentSession} =
