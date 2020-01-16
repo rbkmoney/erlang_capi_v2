@@ -1957,11 +1957,8 @@ encode_payer_params(#{
             encode_legacy_payment_tool_token(Token);
         {ok, Result} ->
             Result;
-        {error, {decryption_failed, {bad_jwe_header_format, _} = Error}} ->
-            logger:log(error, "Invalid payment tool token", [], #{decryption_failed => Error}),
-            erlang:throw(invalid_token);
-        {error, {decryption_failed, {bad_jwe_format, _JweCompact} = Error}} ->
-            logger:log(error, "Invalid payment tool token", [], #{decryption_failed => Error}),
+        {error, {decryption_failed, _} = Error} ->
+            logger:warning("Payment tool token decryption failed: ~p", [Error]),
             erlang:throw(invalid_token)
     end,
     {ClientInfo, PaymentSession} = unwrap_payment_session(EncodedSession),
@@ -2548,11 +2545,8 @@ encode_customer_binding_params(#{
             encode_legacy_payment_tool_token(Token);
         {ok, Result} ->
             Result;
-        {error, {decryption_failed, {bad_jwe_header_format, _} = Error}} ->
-            logger:log(error, "Invalid payment tool token", [], #{decryption_failed => Error}),
-            erlang:throw(invalid_token);
-        {error, {decryption_failed, {bad_jwe_format, _JweCompact} = Error}} ->
-            logger:log(error, "Invalid payment tool token", [], #{decryption_failed => Error}),
+        {error, {decryption_failed, _} = Error} ->
+            logger:warning("Payment tool token decryption failed: ~p", [Error]),
             erlang:throw(invalid_token)
     end,
     {ClientInfo, PaymentSession} = unwrap_payment_session(EncodedSession),
