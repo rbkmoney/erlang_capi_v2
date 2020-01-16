@@ -307,7 +307,11 @@ decode_stat_payment_tool_token({bank_card, BankCard}) ->
 decode_stat_payment_tool_token({payment_terminal, PaymentTerminal}) ->
     decode_payment_terminal(PaymentTerminal);
 decode_stat_payment_tool_token({digital_wallet, DigitalWallet}) ->
-    decode_digital_wallet(DigitalWallet).
+    decode_digital_wallet(DigitalWallet);
+decode_stat_payment_tool_token({crypto_currency, CryptoCurrency}) ->
+    decode_crypto_wallet(CryptoCurrency);
+decode_stat_payment_tool_token({mobile_commerce, MobileCommerce}) ->
+    decode_mobile_commerce(MobileCommerce).
 
 decode_bank_card(#merchstat_BankCard{
     'token'          = Token,
@@ -346,12 +350,47 @@ decode_digital_wallet(#merchstat_DigitalWallet{
         <<"id"      >> => ID
     }).
 
+decode_crypto_wallet(CryptoCurrency) ->
+    capi_utils:map_to_base64url(#{
+        <<"type"           >> => <<"crypto_wallet">>,
+        <<"crypto_currency">> => capi_handler_decoder_utils:convert_crypto_currency_to_swag(CryptoCurrency)
+    }).
+
+decode_mobile_commerce(MobileCommerce) ->
+    #merchstat_MobileCommerce{
+        operator = Operator,
+        phone = #merchstat_MobilePhone{
+            cc = Cc,
+            ctn = Ctn
+        }
+    } = MobileCommerce,
+    Phone = #{<<"cc">> => Cc, <<"ctn">> => Ctn},
+    capi_utils:map_to_base64url(#{
+        <<"type">> => <<"mobile_commerce">>,
+        <<"phone">> => Phone,
+        <<"operator">> => atom_to_binary(Operator, utf8)
+    }).
+
 decode_stat_payment_tool_details({bank_card, V}) ->
     decode_bank_card_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsBankCard">>});
 decode_stat_payment_tool_details({payment_terminal, V}) ->
     decode_payment_terminal_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsPaymentTerminal">>});
 decode_stat_payment_tool_details({digital_wallet, V}) ->
-    decode_digital_wallet_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsDigitalWallet">>}).
+    decode_digital_wallet_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsDigitalWallet">>});
+decode_stat_payment_tool_details({crypto_currency, CryptoCurrency}) ->
+    #{
+        <<"detailsType">> => <<"PaymentToolDetailsCryptoWallet">>,
+        <<"cryptoCurrency">> => capi_handler_decoder_utils:convert_crypto_currency_to_swag(CryptoCurrency)
+    };
+decode_stat_payment_tool_details({mobile_commerce, MobileCommerce}) ->
+    #merchstat_MobileCommerce{
+        phone = Phone
+    } = MobileCommerce,
+    PhoneNumber = gen_phone_number(decode_mobile_phone(Phone)),
+    #{
+        <<"detailsType">> => <<"PaymentToolDetailsMobileCommerce">>,
+        <<"phoneNumber">> => mask_phone_number(PhoneNumber)
+    }.
 
 decode_bank_card_details(BankCard, V) ->
     LastDigits = capi_handler_decoder_utils:decode_last_digits(BankCard#merchstat_BankCard.masked_pan),
@@ -525,3 +564,9 @@ decode_stat_refund_status({Status, StatusInfo}, Context) ->
         <<"status">> => genlib:to_binary(Status),
         <<"error" >> => Error
     }.
+
+decode_mobile_phone(#merchstat_MobilePhone{cc = Cc, ctn = Ctn}) ->
+    #{<<"cc">> => Cc, <<"ctn">> => Ctn}.
+
+gen_phone_number(#{<<"cc">> := Cc, <<"ctn">> := Ctn}) ->
+    <<"+", Cc/binary, Ctn/binary>>.
