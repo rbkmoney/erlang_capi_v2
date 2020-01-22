@@ -1450,8 +1450,7 @@ issue_dummy_token(ACL, Config) ->
     {ok, Token}.
 
 start_capi(Config) ->
-    Key = get_keysource("keys/local/jwk.json", Config),
-    Passwd = get_keysource("keys/local/secret.password", Config),
+    JwkPath = get_keysource("keys/local/jwk.json", Config),
     CapiEnv = [
         {ip, ?CAPI_IP},
         {port, ?CAPI_PORT},
@@ -1465,8 +1464,8 @@ start_capi(Config) ->
             }
         }},
         {lechiffre_opts,  #{
-            encryption_key_path => {Key, Passwd},
-            decryption_key_paths => [{Key, Passwd}]
+            encryption_key_path => JwkPath,
+            decryption_key_paths => [JwkPath]
         }}
     ],
     capi_ct_helper:start_app(capi, CapiEnv).
