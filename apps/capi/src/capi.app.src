@@ -9,6 +9,7 @@
         public_key,
         genlib,
         woody,
+        lechiffre,
         capi_woody_client,
         damsel,
         reporter_proto,
