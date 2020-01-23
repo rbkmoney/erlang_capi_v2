@@ -402,7 +402,15 @@ encode_payer_params(#{
     <<"paymentSession"  >> := EncodedSession,
     <<"contactInfo"     >> := ContactInfo
 }) ->
-    PaymentTool = capi_handler_encoder:encode_payment_tool_token(Token),
+    PaymentTool = case capi_crypto:decrypt_payment_tool_token(Token) of
+        unrecognized ->
+            encode_legacy_payment_tool_token(Token);
+        {ok, Result} ->
+            Result;
+        {error, {decryption_failed, _} = Error} ->
+            logger:warning("Payment tool token decryption failed: ~p", [Error]),
+            erlang:throw(invalid_token)
+    end,
     {ClientInfo, PaymentSession} = capi_handler_utils:unwrap_payment_session(EncodedSession),
     {payment_resource, #payproc_PaymentResourcePayerParams{
         resource = #domain_DisposablePaymentResource{
@@ -452,6 +460,14 @@ encode_optional_cash(_, _, _, _) ->
     undefined.
 
 %%
+
+encode_legacy_payment_tool_token(Token) ->
+    try
+        capi_handler_encoder:encode_payment_tool(capi_utils:base64url_to_map(Token))
+    catch
+        error:badarg ->
+            erlang:throw(invalid_token)
+    end.
 
 decode_invoice_payment(InvoiceID, #payproc_InvoicePayment{payment = Payment}, Context) ->
     capi_handler_decoder_invoicing:decode_payment(InvoiceID, Payment, Context).

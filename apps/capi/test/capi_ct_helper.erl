@@ -83,6 +83,8 @@ start_capi(Config) ->
     [app_name()].
 
 start_capi(Config, ExtraEnv) ->
+    Key = get_keysource("keys/local/jwk.json", Config),
+    Passwd = get_keysource("keys/local/secret.password", Config),
     CapiEnv = ExtraEnv ++ [
         {ip, ?CAPI_IP},
         {port, ?CAPI_PORT},
@@ -94,6 +96,10 @@ start_capi(Config, ExtraEnv) ->
                     capi => {pem_file, get_keysource("keys/local/private.pem", Config)}
                 }
             }
+        }},
+        {lechiffre_opts,  #{
+            encryption_key_path => {Key, Passwd},
+            decryption_key_paths => [{Key, Passwd}]
         }}
     ],
     start_app(capi, CapiEnv).

@@ -88,9 +88,12 @@ process_request('CreateCustomerAccessToken', Req, Context) ->
     end;
 
 process_request('CreateBinding', Req, Context) ->
-    CallArgs = [maps:get(customerID, Req), encode_customer_binding_params(maps:get('CustomerBindingParams', Req))],
     Result =
         try
+            CallArgs = [
+                maps:get(customerID, Req),
+                encode_customer_binding_params(maps:get('CustomerBindingParams', Req))
+            ],
             capi_handler_utils:service_call({customer_management, 'StartBinding', CallArgs}, Context)
         catch
             throw:Error when Error =:= invalid_token orelse Error =:= invalid_payment_session ->
@@ -218,9 +221,17 @@ encode_customer_params(PartyID, Params) ->
 encode_customer_metadata(Meta) ->
     capi_json_marshalling:marshal(Meta).
 
-
 encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
-    PaymentTool = capi_handler_encoder:encode_payment_tool_token(maps:get(<<"paymentToolToken">>, PaymentResource)),
+    PaymentToolToken = maps:get(<<"paymentToolToken">>, PaymentResource),
+    PaymentTool = case capi_crypto:decrypt_payment_tool_token(PaymentToolToken) of
+        unrecognized ->
+            encode_legacy_payment_tool_token(PaymentToolToken);
+        {ok, Result} ->
+            Result;
+        {error, {decryption_failed, _} = Error} ->
+            logger:warning("Payment tool token decryption failed: ~p", [Error]),
+            erlang:throw(invalid_token)
+    end,
     {ClientInfo, PaymentSession} =
         capi_handler_utils:unwrap_payment_session(maps:get(<<"paymentSession">>, PaymentResource)),
     #payproc_CustomerBindingParams{
@@ -231,6 +242,14 @@ encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
                 client_info        = capi_handler_encoder:encode_client_info(ClientInfo)
             }
     }.
+
+encode_legacy_payment_tool_token(Token) ->
+    try
+        capi_handler_encoder:encode_payment_tool(capi_utils:base64url_to_map(Token))
+    catch
+        error:badarg ->
+            erlang:throw(invalid_token)
+    end.
 
 make_customer_and_token(Customer, PartyID) ->
     #{

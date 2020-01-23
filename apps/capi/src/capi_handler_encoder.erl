@@ -5,7 +5,7 @@
 
 -export([encode_contact_info/1]).
 -export([encode_client_info/1]).
--export([encode_payment_tool_token/1]).
+-export([encode_payment_tool/1]).
 -export([encode_cash/1]).
 -export([encode_cash/2]).
 -export([encode_currency/1]).
@@ -40,11 +40,11 @@ encode_client_info(ClientInfo) ->
         ip_address  = maps:get(<<"ip"         >>, ClientInfo)
     }.
 
--spec encode_payment_tool_token(_) ->
+-spec encode_payment_tool(request_data()) ->
     encode_data().
 
-encode_payment_tool_token(Token) ->
-    try capi_utils:base64url_to_map(Token) of
+encode_payment_tool(PaymentTool) ->
+    case PaymentTool of
         #{<<"type">> := <<"bank_card">>} = Encoded ->
             encode_bank_card(Encoded);
         #{<<"type">> := <<"payment_terminal">>} = Encoded ->
@@ -55,9 +55,6 @@ encode_payment_tool_token(Token) ->
             encode_crypto_wallet(Encoded);
         #{<<"type">> := <<"mobile_commerce">>} = Encoded ->
             encode_mobile_commerce(Encoded)
-    catch
-        error:badarg ->
-            erlang:throw(invalid_token)
     end.
 
 encode_bank_card(BankCard) ->

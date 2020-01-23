@@ -14,6 +14,7 @@
         how_are_you,  % must be after ranch and before any woody usage
         capi_woody_client,
         damsel,
+        lechiffre,
         reporter_proto,
         bender_proto,
         dmt_client,
