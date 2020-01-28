@@ -13,7 +13,7 @@
     woody:result().
 
 call_service(ServiceName, Function, Args, Context) ->
-    call_service(ServiceName, Function, Args, Context, capi_woody_event_handler).
+    call_service(ServiceName, Function, Args, Context, scoper_woody_event_handler).
 
 -spec call_service(service_name(), woody:func(), [term()], woody_context:ctx(), woody:ev_handler()) ->
     woody:result().
