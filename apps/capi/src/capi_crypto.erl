@@ -18,7 +18,7 @@ create_encrypted_payment_tool_token(IdempotentKey, PaymentTool) ->
     ThriftType = {struct, union, {dmsl_payment_tool_token_thrift, 'PaymentToolToken'}},
     {ok, EncodedToken} = lechiffre:encode(ThriftType, PaymentToolToken, EncryptionParams),
     TokenVersion = payment_tool_token_version(),
-    <<TokenVersion/binary, "/", EncodedToken/binary>>.
+    <<TokenVersion/binary, ".", EncodedToken/binary>>.
 
 -spec decrypt_payment_tool_token(encrypted_token()) ->
     unrecognized |
@@ -29,7 +29,7 @@ decrypt_payment_tool_token(Token) ->
     Ver = payment_tool_token_version(),
     Size = byte_size(Ver),
     case Token of
-        <<Ver:Size/binary, "/", EncryptedPaymentToolToken/binary>> ->
+        <<Ver:Size/binary, ".", EncryptedPaymentToolToken/binary>> ->
             decrypt_token(EncryptedPaymentToolToken);
         _ ->
             unrecognized
