@@ -26,6 +26,7 @@
     get_invoice_events_ok_test/1,
     get_invoice_payment_methods_ok_test/1,
     create_payment_ok_test/1,
+    create_payment_ok_idemp_test/1,
     create_payment_qiwi_access_token_ok_test/1,
     create_payment_with_empty_cvv_ok_test/1,
     create_payment_with_googlepay_plain_ok_test/1,
@@ -62,29 +63,30 @@ init([]) ->
     [test_case_name()].
 all() ->
     [
-        {group, operations_by_invoice_access_token_after_invoice_creation},
-        {group, operations_by_invoice_access_token_after_token_creation}
+        {group, operations_by_invoice_access_token_after_invoice_creation}
+        % {group, operations_by_invoice_access_token_after_token_creation}
     ].
 
 invoice_access_token_tests() ->
     [
-        get_invoice_ok_test,
-        get_invoice_events_ok_test,
-        get_invoice_payment_methods_ok_test,
-        create_payment_ok_test,
-        create_payment_qiwi_access_token_ok_test,
-        create_payment_with_empty_cvv_ok_test,
-        create_payment_with_googlepay_plain_ok_test,
-        create_payment_with_googlepay_encrypt_ok_test,
-        get_payments_ok_test,
-        get_client_payment_status_test,
-        get_payment_by_id_ok_test,
-        cancel_payment_ok_test,
-        capture_payment_ok_test,
-        capture_partial_payment_ok_test,
-        create_first_recurrent_payment_ok_test,
-        create_second_recurrent_payment_ok_test,
-        get_recurrent_payments_ok_test
+        % get_invoice_ok_test,
+        % get_invoice_events_ok_test,
+        % get_invoice_payment_methods_ok_test,
+        % create_payment_ok_test,
+        create_payment_ok_idemp_test
+        % create_payment_qiwi_access_token_ok_test,
+        % create_payment_with_empty_cvv_ok_test,
+        % create_payment_with_googlepay_plain_ok_test,
+        % create_payment_with_googlepay_encrypt_ok_test,
+        % get_payments_ok_test,
+        % get_client_payment_status_test,
+        % get_payment_by_id_ok_test,
+        % cancel_payment_ok_test,
+        % capture_payment_ok_test,
+        % capture_partial_payment_ok_test,
+        % create_first_recurrent_payment_ok_test,
+        % create_second_recurrent_payment_ok_test,
+        % get_recurrent_payments_ok_test
     ].
 
 -spec groups() ->
@@ -247,6 +249,62 @@ create_payment_ok_test(Config) ->
         <<"id">> := BenderKey,
         <<"externalID">> := ExternalID
     }} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
+
+-spec create_payment_ok_idemp_test(config()) ->
+    _.
+
+create_payment_ok_idemp_test(Config) ->
+    BenderKey = <<"bender_key">>,
+    ExternalID = <<"merch_id">>,
+    capi_ct_helper:mock_services(
+        [
+            {invoicing, fun('StartPayment', [_, _, IPP]) ->
+                #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
+                {ok, ?PAYPROC_PAYMENT(ID, EID)}
+            end},
+            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
+        ],
+        Config
+    ),
+    PaymentToolToken = get_payment_tool_token(),
+    % PaymentToolToken = ?TEST_PAYMENT_TOKEN,
+    Req2 = #{
+        <<"externalID">> => ExternalID,
+        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
+        <<"payer">> => #{
+            <<"payerType">> => <<"PaymentResourcePayer">>,
+            <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
+            <<"paymentToolToken">> => PaymentToolToken,
+            <<"contactInfo">> => #{
+                <<"email">> => <<"bla@bla.ru">>
+            }
+        },
+        <<"metadata">> => ?JSON,
+        <<"processingDeadline">> => <<"5m">>
+    },
+    {ok, #{
+        <<"id">> := BenderKey,
+        <<"externalID">> := ExternalID
+    }} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING),
+    ok.
+
+get_payment_tool_token() ->
+    ExpDate = #domain_BankCardExpDate{
+        month = 2,
+        year = 2020
+    },
+    ThriftType = {struct, union, {dmsl_payment_tool_token_thift, ptt_PaymentToolToken}},
+    PaymentToolToken = {bank_card_payload, #ptt_BankCardPayload{
+        bank_card = #domain_BankCard{
+            token = <<"cds token">>,
+            payment_system = visa,
+            bin = <<"2202">>,
+            last_digits = <<"8454">>,
+            exp_date = ExpDate,
+            cardholder_name = <<"Degus Degusovich">>
+        }
+    }},
+    {ThriftType, PaymentToolToken}.
 
 -spec create_payment_with_empty_cvv_ok_test(config()) ->
     _.
