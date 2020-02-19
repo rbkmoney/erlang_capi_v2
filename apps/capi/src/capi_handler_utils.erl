@@ -120,7 +120,7 @@ service_call({ServiceName, Function, Args}, #{woody_context := WoodyContext}) ->
 get_party_params(Context) ->
     #payproc_PartyParams{
         contact_info = #domain_PartyContactInfo{
-            email = capi_auth:get_claim(<<"email">>, get_auth_context(Context))
+            email = uac_authorizer_jwt:get_claim(<<"email">>, get_auth_context(Context))
         }
     }.
 
@@ -140,13 +140,13 @@ get_user_info(Context) ->
     binary().
 
 get_party_id(Context) ->
-    capi_auth:get_subject_id(get_auth_context(Context)).
+    uac_authorizer_jwt:get_subject_id(get_auth_context(Context)).
 
 -spec get_extra_properties(processing_context()) ->
     map().
 
 get_extra_properties(Context) ->
-    capi_auth:get_claims(get_auth_context(Context)).
+    uac_authorizer_jwt:get_claims(get_auth_context(Context)).
 %% Common functions
 
 -spec get_my_party(processing_context()) ->
