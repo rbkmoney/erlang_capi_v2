@@ -365,7 +365,7 @@ process_request(_OperationID, _Req, _Context) ->
 create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
     ExternalID    = maps:get(<<"externalID">>, PaymentParams, undefined),
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
-    Hash = erlang:phash2(PaymentParams),
+    Hash = count_payment_params_hash(PaymentParams),
     CtxData = #{<<"invoice_id">> => InvoiceID},
     case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Hash, WoodyCtx, CtxData) of
         {ok, ID} ->
@@ -375,6 +375,19 @@ create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} =
         {error, {external_id_conflict, ID}} ->
             {error, {external_id_conflict, ID, ExternalID}}
     end.
+
+count_payment_params_hash(PaymentParams) ->
+    Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
+    Params = #payproc_InvoicePaymentParams{
+        payer               = encode_payer_params(genlib_map:get(<<"payer">>, PaymentParams)),
+        flow                = encode_flow(Flow),
+        make_recurrent      = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false),
+        context             = capi_handler_encoder:encode_payment_context(PaymentParams),
+        %% When changed default deadline in config, we wouldn't create second payment
+        processing_deadline =
+            genlib_map:get(<<"processingDeadline">>, PaymentParams, undefined)
+    },
+    erlang:phash2(Params).
 
 encode_invoice_payment_params(ID, ExternalID, PaymentParams) ->
     Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),

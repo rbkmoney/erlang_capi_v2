@@ -64,7 +64,7 @@
  {<<"jsx">>,{pkg,<<"jsx">>,<<"2.8.2">>},0},
  {<<"lechiffre">>,
   {git,"git@github.com:rbkmoney/lechiffre.git",
-       {ref,"da3ca720b1f226a0e4811d4b205a6085ff31b150"}},
+       {ref,"7c23eb911c5e0a0884c8f25b5cf216bb0a78d0e1"}},
   0},
  {<<"logger_logstash_formatter">>,
   {git,"git@github.com:rbkmoney/logger_logstash_formatter.git",

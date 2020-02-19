@@ -83,7 +83,7 @@ start_capi(Config) ->
     [app_name()].
 
 start_capi(Config, ExtraEnv) ->
-    JwkPath = get_keysource("keys/local/jwk.json", Config),
+    JwkPath = {json_file, get_keysource("keys/local/jwk.json", Config)},
     CapiEnv = ExtraEnv ++ [
         {ip, ?CAPI_IP},
         {port, ?CAPI_PORT},

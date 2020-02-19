@@ -131,12 +131,17 @@
     token = ?STRING,
     payment_system = visa,
     bin = <<"411111">>,
-    masked_pan = <<"411111******1111">>
+    last_digits = <<"1111">>
 }).
 
 -define(CONTACT_INFO, #domain_ContactInfo{
         phone_number = ?STRING,
         email = <<"test@test.ru">>
+    }).
+
+-define(EXP_DATE, #domain_BankCardExpDate{
+        month = 2,
+        year = 2020
     }).
 
 -define(DISP_PAYMENT_RESOURCE, #domain_DisposablePaymentResource{

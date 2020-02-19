@@ -27,6 +27,7 @@
     get_invoice_payment_methods_ok_test/1,
     create_payment_ok_test/1,
     create_payment_ok_idemp_test/1,
+    create_payment_fail_idemp_test/1,
     create_payment_qiwi_access_token_ok_test/1,
     create_payment_with_empty_cvv_ok_test/1,
     create_payment_with_googlepay_plain_ok_test/1,
@@ -63,30 +64,31 @@ init([]) ->
     [test_case_name()].
 all() ->
     [
-        {group, operations_by_invoice_access_token_after_invoice_creation}
-        % {group, operations_by_invoice_access_token_after_token_creation}
+        {group, operations_by_invoice_access_token_after_invoice_creation},
+        {group, operations_by_invoice_access_token_after_token_creation}
     ].
 
 invoice_access_token_tests() ->
     [
-        % get_invoice_ok_test,
-        % get_invoice_events_ok_test,
-        % get_invoice_payment_methods_ok_test,
-        % create_payment_ok_test,
-        create_payment_ok_idemp_test
-        % create_payment_qiwi_access_token_ok_test,
-        % create_payment_with_empty_cvv_ok_test,
-        % create_payment_with_googlepay_plain_ok_test,
-        % create_payment_with_googlepay_encrypt_ok_test,
-        % get_payments_ok_test,
-        % get_client_payment_status_test,
-        % get_payment_by_id_ok_test,
-        % cancel_payment_ok_test,
-        % capture_payment_ok_test,
-        % capture_partial_payment_ok_test,
-        % create_first_recurrent_payment_ok_test,
-        % create_second_recurrent_payment_ok_test,
-        % get_recurrent_payments_ok_test
+        get_invoice_ok_test,
+        get_invoice_events_ok_test,
+        get_invoice_payment_methods_ok_test,
+        create_payment_ok_test,
+        create_payment_ok_idemp_test,
+        create_payment_fail_idemp_test,
+        create_payment_qiwi_access_token_ok_test,
+        create_payment_with_empty_cvv_ok_test,
+        create_payment_with_googlepay_plain_ok_test,
+        create_payment_with_googlepay_encrypt_ok_test,
+        get_payments_ok_test,
+        get_client_payment_status_test,
+        get_payment_by_id_ok_test,
+        cancel_payment_ok_test,
+        capture_payment_ok_test,
+        capture_partial_payment_ok_test,
+        create_first_recurrent_payment_ok_test,
+        create_second_recurrent_payment_ok_test,
+        get_recurrent_payments_ok_test
     ].
 
 -spec groups() ->
@@ -256,55 +258,80 @@ create_payment_ok_test(Config) ->
 create_payment_ok_idemp_test(Config) ->
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
+    ets:new(storage, [named_table, set, public]),
     capi_ct_helper:mock_services(
         [
             {invoicing, fun('StartPayment', [_, _, IPP]) ->
                 #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
                 {ok, ?PAYPROC_PAYMENT(ID, EID)}
             end},
-            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
+            {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
+                Ctx = capi_msgp_marshalling:unmarshal(CtxMsgPack),
+                Hash = maps:get(<<"params_hash">>, Ctx),
+                case ets:lookup(storage, key) of
+                    [] ->
+                        ets:insert(storage, {key, #{
+                            hash => Hash,
+                            ctx => CtxMsgPack
+                        }}),
+                        {ok, capi_ct_helper_bender:get_result(BenderKey)};
+                    [{key, #{hash := Hash, ctx := Ctx}}] ->
+                        {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)};
+                    [{key, #{ctx := OtherCtx}}] ->
+                        {ok, capi_ct_helper_bender:get_result(BenderKey, OtherCtx)}
+                end
+            end}
         ],
         Config
     ),
-    PaymentToolToken = get_payment_tool_token(),
-    % PaymentToolToken = ?TEST_PAYMENT_TOKEN,
-    Req2 = #{
-        <<"externalID">> => ExternalID,
-        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
-        <<"payer">> => #{
-            <<"payerType">> => <<"PaymentResourcePayer">>,
-            <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
-            <<"paymentToolToken">> => PaymentToolToken,
-            <<"contactInfo">> => #{
-                <<"email">> => <<"bla@bla.ru">>
-            }
-        },
-        <<"metadata">> => ?JSON,
-        <<"processingDeadline">> => <<"5m">>
-    },
-    {ok, #{
-        <<"id">> := BenderKey,
-        <<"externalID">> := ExternalID
-    }} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING),
-    ok.
+    Jwe1 = get_encrypted_token(visa, ?EXP_DATE),
+    Jwe2 = get_encrypted_token(visa, ?EXP_DATE),
+    Req1 = get_req_create_payment(ExternalID, Jwe1),
+    Req2 = get_req_create_payment(ExternalID, Jwe2),
+    Req3 = Req2#{<<"makeRecurrent">> => false},
+    {ok, Response} = capi_client_payments:create_payment(?config(context, Config), Req1, ?STRING),
+    {ok, Response} = capi_client_payments:create_payment(?config(context, Config), Req3, ?STRING),
+    ets:delete(storage).
 
-get_payment_tool_token() ->
-    ExpDate = #domain_BankCardExpDate{
-        month = 2,
-        year = 2020
-    },
-    ThriftType = {struct, union, {dmsl_payment_tool_token_thift, ptt_PaymentToolToken}},
-    PaymentToolToken = {bank_card_payload, #ptt_BankCardPayload{
-        bank_card = #domain_BankCard{
-            token = <<"cds token">>,
-            payment_system = visa,
-            bin = <<"2202">>,
-            last_digits = <<"8454">>,
-            exp_date = ExpDate,
-            cardholder_name = <<"Degus Degusovich">>
-        }
-    }},
-    {ThriftType, PaymentToolToken}.
+-spec create_payment_fail_idemp_test(config()) ->
+    _.
+
+create_payment_fail_idemp_test(Config) ->
+    BenderKey = <<"bender_key">>,
+    ExternalID = <<"merch_id">>,
+    Jwe1 = get_encrypted_token(visa, ?EXP_DATE),
+    Jwe2 = get_encrypted_token(visa, ?EXP_DATE),
+    Req1 = get_req_create_payment(ExternalID, Jwe1),
+    Req2 = get_req_create_payment(ExternalID, Jwe2, #{<<"email">> => <<"degus@kek.com">>}),
+    ets:new(storage, [named_table, set, public]),
+    capi_ct_helper:mock_services(
+        [
+            {invoicing, fun('StartPayment', [_, _, IPP]) ->
+                #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
+                {ok, ?PAYPROC_PAYMENT(ID, EID)}
+            end},
+            {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
+                Ctx = capi_msgp_marshalling:unmarshal(CtxMsgPack),
+                Hash = maps:get(<<"params_hash">>, Ctx),
+                case ets:lookup(storage, key) of
+                    [] ->
+                        ets:insert(storage, {key, #{
+                            hash => Hash,
+                            ctx => CtxMsgPack
+                        }}),
+                        {ok, capi_ct_helper_bender:get_result(BenderKey)};
+                    [{key, #{hash := Hash, ctx := Ctx}}] ->
+                        {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)};
+                    [{key, #{ctx := OtherCtx}}] ->
+                        {ok, capi_ct_helper_bender:get_result(BenderKey, OtherCtx)}
+                end
+            end}
+        ],
+        Config
+    ),
+    {ok, _Response1} = capi_client_payments:create_payment(?config(context, Config), Req1, ?STRING),
+    {error, {409, _}} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING),
+    ets:delete(storage).
 
 -spec create_payment_with_empty_cvv_ok_test(config()) ->
     _.
@@ -451,7 +478,7 @@ create_payment_with_googlepay_encrypt_ok_test(Config) ->
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
     ], Config),
 
-    PaymentToolToken = get_encrypted_token(),
+    PaymentToolToken = get_encrypted_token(mastercard),
     Req2 = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"payer">> => #{
@@ -464,16 +491,6 @@ create_payment_with_googlepay_encrypt_ok_test(Config) ->
         }
     },
     {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
-
-get_encrypted_token() ->
-    PaymentTool = {bank_card, #domain_BankCard{
-        token = ?TEST_PAYMENT_TOKEN(mastercard),
-        payment_system = mastercard,
-        bin = <<>>,
-        masked_pan = <<"1111">>,
-        cardholder_name = <<"Degus Degusovich">>
-    }},
-    capi_crypto:create_encrypted_payment_tool_token(<<"idemp key">>, PaymentTool).
 
 -spec get_payments_ok_test(config()) ->
     _.
@@ -609,3 +626,35 @@ get_failed_payment_with_invalid_cvv(Config) ->
     ),
     % mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
     capi_client_payments:get_payment_by_id(?config(context, Config), ?STRING, ?STRING).
+
+
+get_req_create_payment(ExternalID, Jwe) ->
+    get_req_create_payment(ExternalID, Jwe, #{}).
+
+get_req_create_payment(ExternalID, Jwe, ContactInfo) ->
+    #{
+        <<"externalID">> => ExternalID,
+        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
+        <<"payer">> => #{
+            <<"payerType">> => <<"PaymentResourcePayer">>,
+            <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
+            <<"paymentToolToken">> => Jwe,
+            <<"contactInfo">> => ContactInfo
+        },
+        <<"metadata">> => ?JSON,
+        <<"processingDeadline">> => <<"5m">>
+    }.
+
+get_encrypted_token(PS) ->
+    get_encrypted_token(PS, undefined).
+
+get_encrypted_token(PS, ExpDate) ->
+    PaymentTool = {bank_card, #domain_BankCard{
+        token = ?TEST_PAYMENT_TOKEN(PS),
+        payment_system = PS,
+        bin = <<"411111">>,
+        last_digits = <<"1111">>,
+        exp_date = ExpDate,
+        cardholder_name = <<"Degus Degusovich">>
+    }},
+    capi_crypto:create_encrypted_payment_tool_token(PaymentTool).
