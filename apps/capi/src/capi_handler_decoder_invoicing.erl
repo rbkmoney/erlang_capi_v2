@@ -209,7 +209,7 @@ decode_payment_status({Status, StatusInfo}, Context) ->
 decode_payment_operation_failure({operation_timeout, _}, _) ->
     payment_error(<<"timeout">>);
 decode_payment_operation_failure({failure, Failure}, Context) ->
-    case capi_auth:get_consumer(capi_auth:get_claims(capi_handler_utils:get_auth_context(Context))) of
+    case capi_auth:get_consumer(uac_authorizer_jwt:get_claims(capi_handler_utils:get_auth_context(Context))) of
         client ->
             payment_error(payproc_errors:match('PaymentFailure', Failure, fun payment_error_client_maping/1));
         merchant ->

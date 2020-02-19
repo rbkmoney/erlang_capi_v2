@@ -3,10 +3,6 @@
 -export([issue_access_token/2]).
 -export([issue_access_token/3]).
 
--export([get_subject_id/1]).
--export([get_claims/1]).
--export([get_claim/2]).
--export([get_claim/3]).
 -export([get_consumer/1]).
 
 -export([get_operation_access/2]).
@@ -74,9 +70,6 @@ resolve_token_spec({invoice, InvoiceID}) ->
             {[{invoices, InvoiceID}, payments] , read },
             {[{invoices, InvoiceID}, payments] , write},
             {[payment_resources              ] , write}
-        ]),
-        <<"bin-api">> => uac_acl:from_list([
-            {[card_bins], read}
         ])
     },
     Expiration = {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME},
@@ -100,26 +93,6 @@ resolve_token_spec({customer, CustomerID}) ->
     },
     Expiration = {lifetime, ?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME},
     {#{}, DomainRoles, Expiration}.
-
--spec get_subject_id(context()) -> binary().
-
-get_subject_id({_Id, {SubjectID, _ACL}, _Claims}) ->
-    SubjectID.
-
--spec get_claims(context()) -> claims().
-
-get_claims({_Id, _Subject, Claims}) ->
-    Claims.
-
--spec get_claim(binary(), context()) -> term().
-
-get_claim(ClaimName, {_Id, _Subject, Claims}) ->
-    maps:get(ClaimName, Claims).
-
--spec get_claim(binary(), context(), term()) -> term().
-
-get_claim(ClaimName, {_Id, _Subject, Claims}, Default) ->
-    maps:get(ClaimName, Claims, Default).
 
 %%
 
