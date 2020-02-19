@@ -74,9 +74,6 @@ resolve_token_spec({invoice, InvoiceID}) ->
             {[{invoices, InvoiceID}, payments] , read },
             {[{invoices, InvoiceID}, payments] , write},
             {[payment_resources              ] , write}
-        ]),
-        <<"bin-api">> => uac_acl:from_list([
-            {[card_bins], read}
         ])
     },
     Expiration = {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME},
