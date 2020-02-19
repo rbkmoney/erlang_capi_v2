@@ -43,11 +43,13 @@ process_request('CreateInvoice' = OperationID, Req, Context) ->
 
 process_request('CreateInvoiceAccessToken', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
+    ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
         {ok, #'payproc_Invoice'{}} ->
             Response =  capi_handler_utils:issue_access_token(
                 capi_handler_utils:get_party_id(Context),
-                {invoice, InvoiceID}
+                {invoice, InvoiceID},
+                ExtraProperties
             ),
             {ok, {201, #{}, Response}};
         {exception, Exception} ->
