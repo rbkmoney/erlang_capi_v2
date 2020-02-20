@@ -9,6 +9,8 @@
 
 -export([get_access_config/0]).
 
+-export([get_extra_properties/0]).
+
 -type context () :: uac:context().
 -type claims  () :: uac:claims().
 -type consumer() :: client | merchant | provider.
@@ -279,6 +281,14 @@ get_resource_hierarchy() ->
         payouts             => #{},
         card_bins           => #{}
     }.
+
+-spec get_extra_properties() -> [binary()].
+
+% Which claims are gonna make it to InvoiceAccessTokens
+get_extra_properties() ->
+    [
+        <<"ip_replacement_allowed">>
+    ].
 
 -spec get_consumer(claims()) ->
     consumer().

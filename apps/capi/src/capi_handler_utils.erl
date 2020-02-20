@@ -146,7 +146,9 @@ get_party_id(Context) ->
     map().
 
 get_extra_properties(Context) ->
-    uac_authorizer_jwt:get_claims(get_auth_context(Context)).
+    Claims = uac_authorizer_jwt:get_claims(get_auth_context(Context)),
+    maps:with(capi_utils:extra_properties(), Claims).
+
 %% Common functions
 
 -spec get_my_party(processing_context()) ->
