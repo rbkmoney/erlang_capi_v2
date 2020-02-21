@@ -378,7 +378,6 @@ create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} =
     end.
 
 count_payment_params_hash(InvoicePaymentParams, PaymentParams) ->
-    %% When changed default deadline in config, we wouldn't create second payment
     ProcessingDeadline = genlib_map:get(<<"processingDeadline">>, PaymentParams, undefined),
     erlang:phash2(InvoicePaymentParams#payproc_InvoicePaymentParams{
         processing_deadline = ProcessingDeadline
