@@ -284,13 +284,13 @@ create_payment_ok_idemp_test(Config) ->
         ],
         Config
     ),
+    ContactInfo = #{},
     Jwe1 = get_encrypted_token(visa, ?EXP_DATE),
     Jwe2 = get_encrypted_token(visa, ?EXP_DATE),
-    Req1 = get_req_create_payment(ExternalID, Jwe1),
-    Req2 = get_req_create_payment(ExternalID, Jwe2),
-    Req3 = Req2#{<<"makeRecurrent">> => false},
+    Req1 = get_req_create_payment(ExternalID, Jwe1, ContactInfo, undefined),
+    Req2 = get_req_create_payment(ExternalID, Jwe2, ContactInfo, false),
     {ok, Response} = capi_client_payments:create_payment(?config(context, Config), Req1, ?STRING),
-    {ok, Response} = capi_client_payments:create_payment(?config(context, Config), Req3, ?STRING),
+    {ok, Response} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING),
     ets:delete(storage).
 
 -spec create_payment_fail_idemp_test(config()) ->
@@ -303,7 +303,8 @@ create_payment_fail_idemp_test(Config) ->
     Jwe2 = get_encrypted_token(visa, ?EXP_DATE),
     Req1 = get_req_create_payment(ExternalID, Jwe1),
     Req2 = get_req_create_payment(ExternalID, Jwe2, #{<<"email">> => <<"degus@kek.com">>}),
-    ets:new(storage, [named_table, set, public]),
+    StorageName = list_to_atom(erlang:pid_to_list(self())),
+    ets:new(StorageName, [named_table, set, public]),
     capi_ct_helper:mock_services(
         [
             {invoicing, fun('StartPayment', [_, _, IPP]) ->
@@ -313,9 +314,9 @@ create_payment_fail_idemp_test(Config) ->
             {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
                 Ctx = capi_msgp_marshalling:unmarshal(CtxMsgPack),
                 Hash = maps:get(<<"params_hash">>, Ctx),
-                case ets:lookup(storage, key) of
+                case ets:lookup(StorageName, key) of
                     [] ->
-                        ets:insert(storage, {key, #{
+                        ets:insert(StorageName, {key, #{
                             hash => Hash,
                             ctx => CtxMsgPack
                         }}),
@@ -330,8 +331,12 @@ create_payment_fail_idemp_test(Config) ->
         Config
     ),
     {ok, _Response1} = capi_client_payments:create_payment(?config(context, Config), Req1, ?STRING),
-    {error, {409, _}} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING),
-    ets:delete(storage).
+    {error, {409, #{
+        <<"externalID">> := ExternalID,
+        <<"id">> := BenderKey,
+        <<"message">> := <<"This 'externalID' has been used by another request">>
+    }}} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING),
+    ets:delete(StorageName).
 
 -spec create_payment_with_empty_cvv_ok_test(config()) ->
     _.
@@ -630,9 +635,10 @@ get_failed_payment_with_invalid_cvv(Config) ->
 
 get_req_create_payment(ExternalID, Jwe) ->
     get_req_create_payment(ExternalID, Jwe, #{}).
-
 get_req_create_payment(ExternalID, Jwe, ContactInfo) ->
-    #{
+    get_req_create_payment(ExternalID, Jwe, ContactInfo, undefined).
+get_req_create_payment(ExternalID, Jwe, ContactInfo, MakeRecurrent) ->
+    genlib_map:compact(#{
         <<"externalID">> => ExternalID,
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"payer">> => #{
@@ -641,9 +647,10 @@ get_req_create_payment(ExternalID, Jwe, ContactInfo) ->
             <<"paymentToolToken">> => Jwe,
             <<"contactInfo">> => ContactInfo
         },
+        <<"makeRecurrent">> => MakeRecurrent,
         <<"metadata">> => ?JSON,
         <<"processingDeadline">> => <<"5m">>
-    }.
+    }).
 
 get_encrypted_token(PS) ->
     get_encrypted_token(PS, undefined).
