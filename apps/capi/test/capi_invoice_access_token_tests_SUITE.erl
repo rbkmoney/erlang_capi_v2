@@ -258,7 +258,7 @@ create_payment_ok_test(Config) ->
 create_payment_ok_idemp_test(Config) ->
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
-    ets:new(storage, [named_table, set, public]),
+    Tid = capi_ct_helper_bender:create_storage(),
     capi_ct_helper:mock_services(
         [
             {invoicing, fun('StartPayment', [_, _, IPP]) ->
@@ -266,20 +266,7 @@ create_payment_ok_idemp_test(Config) ->
                 {ok, ?PAYPROC_PAYMENT(ID, EID)}
             end},
             {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-                Ctx = capi_msgp_marshalling:unmarshal(CtxMsgPack),
-                Hash = maps:get(<<"params_hash">>, Ctx),
-                case ets:lookup(storage, key) of
-                    [] ->
-                        ets:insert(storage, {key, #{
-                            hash => Hash,
-                            ctx => CtxMsgPack
-                        }}),
-                        {ok, capi_ct_helper_bender:get_result(BenderKey)};
-                    [{key, #{hash := Hash, ctx := Ctx}}] ->
-                        {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)};
-                    [{key, #{ctx := OtherCtx}}] ->
-                        {ok, capi_ct_helper_bender:get_result(BenderKey, OtherCtx)}
-                end
+                capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
             end}
         ],
         Config
@@ -291,7 +278,7 @@ create_payment_ok_idemp_test(Config) ->
     Req2 = get_req_create_payment(ExternalID, Jwe2, ContactInfo, false),
     {ok, Response} = capi_client_payments:create_payment(?config(context, Config), Req1, ?STRING),
     {ok, Response} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING),
-    ets:delete(storage).
+    capi_ct_helper_bender:del_storage(Tid).
 
 -spec create_payment_fail_idemp_test(config()) ->
     _.
@@ -303,8 +290,7 @@ create_payment_fail_idemp_test(Config) ->
     Jwe2 = get_encrypted_token(visa, ?EXP_DATE),
     Req1 = get_req_create_payment(ExternalID, Jwe1),
     Req2 = get_req_create_payment(ExternalID, Jwe2, #{<<"email">> => <<"degus@kek.com">>}),
-    StorageName = list_to_atom(erlang:pid_to_list(self())),
-    ets:new(StorageName, [named_table, set, public]),
+    Tid = capi_ct_helper_bender:create_storage(),
     capi_ct_helper:mock_services(
         [
             {invoicing, fun('StartPayment', [_, _, IPP]) ->
@@ -312,20 +298,7 @@ create_payment_fail_idemp_test(Config) ->
                 {ok, ?PAYPROC_PAYMENT(ID, EID)}
             end},
             {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-                Ctx = capi_msgp_marshalling:unmarshal(CtxMsgPack),
-                Hash = maps:get(<<"params_hash">>, Ctx),
-                case ets:lookup(StorageName, key) of
-                    [] ->
-                        ets:insert(StorageName, {key, #{
-                            hash => Hash,
-                            ctx => CtxMsgPack
-                        }}),
-                        {ok, capi_ct_helper_bender:get_result(BenderKey)};
-                    [{key, #{hash := Hash, ctx := Ctx}}] ->
-                        {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)};
-                    [{key, #{ctx := OtherCtx}}] ->
-                        {ok, capi_ct_helper_bender:get_result(BenderKey, OtherCtx)}
-                end
+                capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
             end}
         ],
         Config
@@ -336,7 +309,7 @@ create_payment_fail_idemp_test(Config) ->
         <<"id">> := BenderKey,
         <<"message">> := <<"This 'externalID' has been used by another request">>
     }}} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING),
-    ets:delete(StorageName).
+    capi_ct_helper_bender:del_storage(Tid).
 
 -spec create_payment_with_empty_cvv_ok_test(config()) ->
     _.
