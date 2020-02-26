@@ -365,8 +365,9 @@ process_request(_OperationID, _Req, _Context) ->
 create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
     ExternalID    = maps:get(<<"externalID">>, PaymentParams, undefined),
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
-    InvoicePaymentParams = encode_invoice_payment_params(ExternalID, PaymentParams),
-    Hash = count_payment_params_hash(InvoicePaymentParams, PaymentParams),
+    PaymentParams2 = decode_payment_params(PaymentParams),
+    Hash = count_payment_params_hash(PaymentParams2),
+    InvoicePaymentParams = encode_invoice_payment_params(ExternalID, PaymentParams2),
     CtxData = #{<<"invoice_id">> => InvoiceID},
     case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Hash, WoodyCtx, CtxData) of
         {ok, ID} ->
@@ -377,11 +378,35 @@ create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} =
             {error, {external_id_conflict, ID, ExternalID}}
     end.
 
-count_payment_params_hash(InvoicePaymentParams, PaymentParams) ->
+count_payment_params_hash(PaymentParams) ->
+    erlang:phash2(PaymentParams).
+
+decode_payment_params(PaymentParams) ->
+    Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
+    MakeRecurrent = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false),
     ProcessingDeadline = genlib_map:get(<<"processingDeadline">>, PaymentParams, undefined),
-    erlang:phash2(InvoicePaymentParams#payproc_InvoicePaymentParams{
-        processing_deadline = ProcessingDeadline
-    }).
+    Payer = decrypt_payer_token(maps:get(<<"payer">>, PaymentParams)),
+
+    PaymentParams#{
+        <<"payer">> => Payer,
+        <<"flow">> => Flow,
+        <<"makeRecurrent">> => MakeRecurrent,
+        <<"processingDeadline">> => ProcessingDeadline
+    }.
+
+decrypt_payer_token(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer) ->
+    #{<<"paymentToolToken">> := Token} = Payer,
+    case capi_crypto:decrypt(Token) of
+        unrecognized ->
+            Payer#{<<"paymentToolToken">> := {unrecognized, Token}};
+        {ok, ThiftBinary} ->
+            Payer#{<<"paymentToolToken">> := {thrift_bin, ThiftBinary}};
+        {error, {decryption_failed, Error}} ->
+            logger:warning("Payment tool token decryption failed: ~p", [Error]),
+            erlang:throw(invalid_token)
+    end;
+decrypt_payer_token(Payer) ->
+    Payer.
 
 encode_invoice_payment_params(ExternalID, PaymentParams) ->
     Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
@@ -408,14 +433,17 @@ encode_payer_params(#{
     <<"paymentSession"  >> := EncodedSession,
     <<"contactInfo"     >> := ContactInfo
 }) ->
-    PaymentTool = case capi_crypto:decrypt_payment_tool_token(Token) of
-        unrecognized ->
-            encode_legacy_payment_tool_token(Token);
-        {ok, Result} ->
-            Result;
-        {error, {decryption_failed, _} = Error} ->
-            logger:warning("Payment tool token decryption failed: ~p", [Error]),
-            erlang:throw(invalid_token)
+    PaymentTool = case Token of
+        {unrecognized, PaymentToolToken} ->
+            encode_legacy_payment_tool_token(PaymentToolToken);
+        {thrift_bin, ThriftBinary} ->
+            case capi_crypto:deserialize(ThriftBinary) of
+                {ok, Result} ->
+                    Result;
+                {error, {deserialization_failed, _} = Error} ->
+                    logger:warning("Payment tool token deserialization failed: ~p", [Error]),
+                    erlang:throw(invalid_token)
+            end
     end,
     {ClientInfo, PaymentSession} = capi_handler_utils:unwrap_payment_session(EncodedSession),
     {payment_resource, #payproc_PaymentResourcePayerParams{

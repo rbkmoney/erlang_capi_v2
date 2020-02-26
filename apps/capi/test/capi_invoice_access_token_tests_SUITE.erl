@@ -64,7 +64,7 @@ init([]) ->
     [test_case_name()].
 all() ->
     [
-        {group, operations_by_invoice_access_token_after_invoice_creation},
+        % {group, operations_by_invoice_access_token_after_invoice_creation},
         {group, operations_by_invoice_access_token_after_token_creation}
     ].
 

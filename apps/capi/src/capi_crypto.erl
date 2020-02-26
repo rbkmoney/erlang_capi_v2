@@ -8,6 +8,8 @@
 
 -export([create_encrypted_payment_tool_token/1]).
 -export([decrypt_payment_tool_token/1]).
+-export([decrypt/1]).
+-export([deserialize/1]).
 
 -spec create_encrypted_payment_tool_token(payment_tool()) ->
     encrypted_token().
@@ -32,6 +34,34 @@ decrypt_payment_tool_token(Token) ->
             decrypt_token(EncryptedPaymentToolToken);
         _ ->
             unrecognized
+    end.
+
+-spec decrypt(encrypted_token()) ->
+    unrecognized |
+    {ok, binary()} |
+    {error, lechiffre:decryption_error()}.
+
+decrypt(EncryptedToken) ->
+    Ver = payment_tool_token_version(),
+    Size = byte_size(Ver),
+    case EncryptedToken of
+        <<Ver:Size/binary, ".", EncryptedPaymentToolToken/binary>> ->
+            lechiffre:decrypt(EncryptedPaymentToolToken);
+        _ ->
+            unrecognized
+    end.
+
+-spec deserialize(binary()) ->
+    {ok, payment_tool()} |
+    {error, lechiffre:deserialization_error()}.
+
+deserialize(ThriftBin) ->
+    ThriftType = {struct, union, {dmsl_payment_tool_token_thrift, 'PaymentToolToken'}},
+    case lechiffre:deserialize(ThriftType, ThriftBin) of
+        {ok, PaymentToolToken} ->
+            {ok, decode_payment_tool_token(PaymentToolToken)};
+        {error, _} = Error ->
+            Error
     end.
 
 %% Internal
