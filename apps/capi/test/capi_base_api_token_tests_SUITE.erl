@@ -1155,7 +1155,7 @@ search_payments_ok_test(Config) ->
         {from_time, {{2015, 08, 11}, {19, 42, 35}}},
         {to_time, {{2020, 08, 11}, {19, 42, 35}}},
         {payerEmail, <<"test@test.ru">>},
-        {payerIP, <<"192.168.0.0.1">>},
+        {payerIP, <<"192.168.0.1">>},
         {paymentStatus, <<"processed">>},
         {paymentFlow, <<"instant">>},
         {paymentMethod, <<"bankCard">>},

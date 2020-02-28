@@ -3,6 +3,8 @@
 -include_lib("common_test/include/ct.hrl").
 
 -include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
+-include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
+-include_lib("damsel/include/dmsl_merch_stat_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 -include_lib("jose/include/jose_jwk.hrl").
 
@@ -18,7 +20,9 @@
 -export([init/1]).
 
 -export([
-    oops_body_test/1
+    oops_body_test/1,
+    schema_param_validation/1,
+    query_param_validation/1
 ]).
 
 -type test_case_name()  :: atom().
@@ -38,7 +42,8 @@ init([]) ->
     [test_case_name()].
 all() ->
     [
-        {group, stream_handler_tests}
+        {group, stream_handler_tests},
+        {group, validation_tests}
     ].
 
 -spec groups() ->
@@ -48,6 +53,12 @@ groups() ->
         {stream_handler_tests, [],
             [
                 oops_body_test
+            ]
+        },
+        {validation_tests, [],
+            [
+                schema_param_validation,
+                query_param_validation
             ]
         }
     ].
@@ -71,7 +82,10 @@ end_per_suite(C) ->
 
 -spec init_per_group(group_name(), config()) ->
     config().
-init_per_group(stream_handler_tests, Config) ->
+init_per_group(GroupName, Config) when
+    stream_handler_tests =:= GroupName;
+    validation_tests =:= GroupName
+->
     BasePermissions = [
         {[invoices], write},
         {[invoices], read},
@@ -127,3 +141,38 @@ oops_body_test(Config) ->
         Opts
     ),
     {ok, OopsBody} = file:read_file(?OOPS_BODY).
+
+-spec schema_param_validation(config()) ->
+    _.
+schema_param_validation(Config) ->
+    capi_ct_helper:mock_services([
+        {invoicing, fun('Create', _)     -> {ok, ?PAYPROC_INVOICE} end},
+        {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"key">>)} end}
+    ], Config),
+    Req0 = #{
+        <<"shopID">> => ?STRING,
+        <<"amount">> => ?STRING,
+        <<"currency">> => ?STRING,
+        <<"metadata">> => #{<<"invoice_dummy_metadata">> => <<"test_value">>},
+        <<"dueDate">> => ?STRING,
+        <<"product">> => <<"test_product">>,
+        <<"description">> => <<"test_invoice_description">>
+    },
+    {error, {request_validation_failed, _}} = capi_client_invoices:create_invoice(?config(context, Config), Req0).
+
+-spec query_param_validation(config()) ->
+    _.
+query_param_validation(Config) ->
+    capi_ct_helper:mock_services([
+        {merchant_stat, fun('GetInvoices', _) -> {ok, ?STAT_RESPONSE_INVOICES} end},
+        {geo_ip_service, fun('GetLocationName', _) -> {ok, #{123 => ?STRING}} end}
+    ], Config),
+    Query0 = [
+        {payerEmail, <<"testtest.ru">>}
+    ],
+    {error, {request_validation_failed, _}} = capi_client_searches:search_invoices(?config(context, Config), ?STRING, Query0),
+    Query1 = #{
+        <<"geoIDs">> => <<"no,also no">>,
+        <<"language">> => <<"ru">>
+    },
+    {error, {request_validation_failed, _}} = capi_client_geo:get_location_names(?config(context, Config), Query1).
