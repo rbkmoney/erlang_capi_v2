@@ -158,7 +158,8 @@ schema_param_validation(Config) ->
         <<"product">> => <<"test_product">>,
         <<"description">> => <<"test_invoice_description">>
     },
-    {error, {request_validation_failed, _}} = capi_client_invoices:create_invoice(?config(context, Config), Req0).
+    {error, {request_validation_failed, _}} =
+        capi_client_invoices:create_invoice(?config(context, Config), Req0).
 
 -spec query_param_validation(config()) ->
     _.
@@ -168,11 +169,13 @@ query_param_validation(Config) ->
         {geo_ip_service, fun('GetLocationName', _) -> {ok, #{123 => ?STRING}} end}
     ], Config),
     Query0 = [
-        {payerEmail, <<"testtest.ru">>}
+        {payerEmail, <<"te%^st@test.ru">>}
     ],
-    {error, {request_validation_failed, _}} = capi_client_searches:search_invoices(?config(context, Config), ?STRING, Query0),
+    {error, {request_validation_failed, _}} =
+        capi_client_searches:search_invoices(?config(context, Config), ?STRING, Query0),
     Query1 = #{
         <<"geoIDs">> => <<"no,also no">>,
         <<"language">> => <<"ru">>
     },
-    {error, {request_validation_failed, _}} = capi_client_geo:get_location_names(?config(context, Config), Query1).
+    {error, {request_validation_failed, _}} =
+        capi_client_geo:get_location_names(?config(context, Config), Query1).
