@@ -151,10 +151,10 @@ schema_param_validation(Config) ->
     ], Config),
     Req0 = #{
         <<"shopID">> => ?STRING,
-        <<"amount">> => ?STRING,
-        <<"currency">> => ?STRING,
+        <<"amount">> => <<"vry much">>,
+        <<"currency">> => <<"green paper">>,
         <<"metadata">> => #{<<"invoice_dummy_metadata">> => <<"test_value">>},
-        <<"dueDate">> => ?STRING,
+        <<"dueDate">> => <<"asap">>,
         <<"product">> => <<"test_product">>,
         <<"description">> => <<"test_invoice_description">>
     },
