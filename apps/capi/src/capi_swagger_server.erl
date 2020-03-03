@@ -87,6 +87,5 @@ mk_operation_id_getter(#{env := Env}) ->
                 #{}
         end;
         (_Req) ->
-            logger:warning("Partial request detected (no host or path in request), skip getting operation_id"),
             #{}
     end.
