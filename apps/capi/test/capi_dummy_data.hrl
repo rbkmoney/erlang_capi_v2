@@ -131,7 +131,7 @@
     token = ?STRING,
     payment_system = visa,
     bin = <<"411111">>,
-    masked_pan = <<"411111******1111">>
+    last_digits = <<"411111******1111">>
 }).
 
 -define(CONTACT_INFO, #domain_ContactInfo{
