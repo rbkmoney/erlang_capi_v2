@@ -207,7 +207,7 @@ decode_bank_card(#domain_BankCard{
     'token'          = Token,
     'payment_system' = PaymentSystem,
     'bin'            = Bin,
-    'masked_pan'     = MaskedPan,
+    'last_digits'    = LastDigits,
     'token_provider' = TokenProvider,
     'issuer_country' = IssuerCountry,
     'bank_name'      = BankName,
@@ -219,7 +219,7 @@ decode_bank_card(#domain_BankCard{
         <<"token"         >> => Token,
         <<"payment_system">> => PaymentSystem,
         <<"bin"           >> => Bin,
-        <<"masked_pan"    >> => MaskedPan,
+        <<"masked_pan"    >> => LastDigits,
         <<"token_provider">> => TokenProvider,
         <<"issuer_country">> => IssuerCountry,
         <<"bank_name"     >> => BankName,
@@ -313,7 +313,7 @@ decode_payment_tool_details({mobile_commerce, MobileCommerce}) ->
     }.
 
 decode_bank_card_details(BankCard, V) ->
-    LastDigits = capi_handler_decoder_utils:decode_last_digits(BankCard#domain_BankCard.masked_pan),
+    LastDigits = capi_handler_decoder_utils:decode_last_digits(BankCard#domain_BankCard.last_digits),
     Bin = capi_handler_decoder_utils:decode_bank_card_bin(BankCard#domain_BankCard.bin),
     capi_handler_utils:merge_and_compact(V, #{
         <<"last4">>     => LastDigits,
