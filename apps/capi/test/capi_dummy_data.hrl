@@ -279,7 +279,7 @@
     domain_revision = ?INTEGER,
     reason = ?CHARGEBACK_REASON,
     body = ?CASH,
-    levy = ?CASH,
+    levy = ?CASH
 }).
 
 -define(CHARGEBACK_REASON, #domain_InvoicePaymentChargebackReason{
