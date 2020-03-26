@@ -6,6 +6,7 @@
 -export([decode_user_interaction_form/1]).
 -export([decode_user_interaction/1]).
 -export([decode_payment/3]).
+-export([decode_chargeback/2]).
 -export([decode_refund/2]).
 -export([decode_invoice/1]).
 -export([decode_invoice_cart/1]).
@@ -314,6 +315,34 @@ decode_refund_status({Status, StatusInfo}, Context) ->
     #{
         <<"status">> => genlib:to_binary(Status),
         <<"error" >> => Error
+    }.
+
+-spec decode_chargeback(capi_handler_encoder:encode_data(), processing_context()) ->
+    capi_handler_decoder_utils:decode_data().
+
+decode_chargeback(Chargeback, Context) ->
+    #domain_Cash{amount = Body, currency = Currency} = Chargeback#domain_InvoicePaymentChargeback.body,
+    #domain_Cash{amount = Levy, currency = Currency} = Chargeback#domain_InvoicePaymentChargeback.levy,
+    capi_handler_utils:merge_and_compact(
+        #{
+            <<"id"         >> => Chargeback#domain_InvoicePaymentChargeback.id,
+            <<"createdAt"  >> => Chargeback#domain_InvoicePaymentChargeback.created_at,
+            <<"status"     >> => decode_chargeback_status(Chargeback#domain_InvoicePaymentChargeback.status, Context),
+            <<"stage"      >> => decode_chargeback_stage(Chargeback#domain_InvoicePaymentChargeback.stage, Context),
+            <<"body"       >> => Body,
+            <<"levy"       >> => Levy,
+            <<"currency"   >> => capi_handler_decoder_utils:decode_currency(Currency)
+        },
+        decode_chargeback_reason_code(Chargeback#domain_InvoicePaymentChargeback.reason, Context)
+    ).
+
+decode_chargeback_status({Status, _StatusDetails}, _Context) -> genlib:to_binary(Status).
+
+decode_chargeback_stage({Stage, _StageDetails}, _Context) -> genlib:to_binary(Stage).
+
+decode_chargeback_reason_code(#domain_InvoicePaymentChargebackReason{code = Code}, _Context) ->
+    #{
+        <<"reasonCode">> => Code
     }.
 
 -spec decode_invoice(capi_handler_encoder:encode_data()) ->
