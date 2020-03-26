@@ -10,7 +10,7 @@
 -export([get_refund_by_id/4]).
 -export([get_refund_by_external_id/2]).
 -export([get_chargebacks/3]).
--export([get_chargebacks_by_id/4]).
+-export([get_chargeback_by_id/4]).
 -export([create_refund/4]).
 
 -type context() :: capi_client_lib:context().
