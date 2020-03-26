@@ -228,17 +228,18 @@
 }).
 -define(RECURRENT_PAYMENT, ?RECURRENT_PAYMENT({pending, #domain_InvoicePaymentPending{}})).
 
--define(PAYPROC_PAYMENT(Payment, Refunds, Adjustments), #payproc_InvoicePayment{
+-define(PAYPROC_PAYMENT(Payment, Refunds, Adjustments, Chargebacks), #payproc_InvoicePayment{
     payment        = Payment,
     refunds        = [#payproc_InvoicePaymentRefund{refund = R, sessions = []} || R <- Refunds],
+    chargebacks    = Chargebacks,
     sessions       = [],
     legacy_refunds = Refunds,
     adjustments    = Adjustments
 }).
 
--define(PAYPROC_PAYMENT, ?PAYPROC_PAYMENT(?PAYMENT, [?REFUND], [?ADJUSTMENT])).
+-define(PAYPROC_PAYMENT, ?PAYPROC_PAYMENT(?PAYMENT, [?REFUND], [?ADJUSTMENT], [?CHARGEBACK])).
 
--define(PAYPROC_PAYMENT(ID, IED), ?PAYPROC_PAYMENT(?PAYMENT(ID, IED), [?REFUND], [?ADJUSTMENT])).
+-define(PAYPROC_PAYMENT(ID, IED), ?PAYPROC_PAYMENT(?PAYMENT(ID, IED), [?REFUND], [?ADJUSTMENT], [?CHARGEBACK])).
 
 -define(FAILED_PAYMENT(Failure), ?PAYMENT(?STRING, ?STRING, {failed, #domain_InvoicePaymentFailed{failure = Failure}})).
 
@@ -266,6 +267,24 @@
     reason = ?STRING,
     cash = ?CASH,
     external_id = EID
+}).
+
+-define(CHARGEBACK, ?CHARGEBACK(?STRING)).
+
+-define(CHARGEBACK(ID), #domain_InvoicePaymentChargeback{
+    id = ID,
+    status = {pending, #domain_InvoicePaymentChargebackPending{}},
+    stage = {chargeback, #domain_InvoicePaymentChargebackStageChargeback{}},
+    created_at = ?TIMESTAMP,
+    domain_revision = ?INTEGER,
+    reason = ?CHARGEBACK_REASON,
+    body = ?CASH,
+    levy = ?CASH,
+}).
+
+-define(CHARGEBACK_REASON, #domain_InvoicePaymentChargebackReason{
+    code = <<"C0D3">>,
+    category = {dispute, #'domain_InvoicePaymentChargebackCategoryDispute'{}}
 }).
 
 -define(CONTRACT, #domain_Contract{
