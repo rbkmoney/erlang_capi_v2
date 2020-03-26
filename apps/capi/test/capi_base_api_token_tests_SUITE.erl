@@ -49,7 +49,7 @@
     get_refund_by_id/1,
     get_refunds/1,
     get_refund_by_id/1,
-    get_chargebackss/1,
+    get_chargebacks/1,
     get_refund_by_external_id/1,
     update_invoice_template_ok_test/1,
     delete_invoice_template_ok_test/1,
