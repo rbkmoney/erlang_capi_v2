@@ -327,23 +327,34 @@ decode_chargeback(Chargeback, Context) ->
         #{
             <<"id"         >> => Chargeback#domain_InvoicePaymentChargeback.id,
             <<"createdAt"  >> => Chargeback#domain_InvoicePaymentChargeback.created_at,
-            <<"status"     >> => decode_chargeback_status(Chargeback#domain_InvoicePaymentChargeback.status, Context),
-            <<"stage"      >> => decode_chargeback_stage(Chargeback#domain_InvoicePaymentChargeback.stage, Context),
+            <<"status"     >> => decode_chargeback_status(Chargeback#domain_InvoicePaymentChargeback.status),
+            <<"stage"      >> => decode_chargeback_stage(Chargeback#domain_InvoicePaymentChargeback.stage),
             <<"body"       >> => Body,
             <<"levy"       >> => Levy,
             <<"currency"   >> => capi_handler_decoder_utils:decode_currency(Currency)
         },
-        decode_chargeback_reason_code(Chargeback#domain_InvoicePaymentChargeback.reason, Context)
+        #{}
+        % decode_chargeback_reason_code(Chargeback#domain_InvoicePaymentChargeback.reason)
     ).
 
-decode_chargeback_status({Status, _StatusDetails}, _Context) -> genlib:to_binary(Status).
+decode_chargeback_status({pending, _StatusDetails}) ->
+    <<"pending">>;
+decode_chargeback_status({rejected, _StatusDetails}) ->
+    <<"rejected">>;
+decode_chargeback_status({accepted, _StatusDetails}) ->
+    <<"accepted">>;
+decode_chargeback_status({cancelled, _StatusDetails}) ->
+    <<"cancelled">>.
 
-decode_chargeback_stage({Stage, _StageDetails}, _Context) -> genlib:to_binary(Stage).
+decode_chargeback_stage({chargeback, _StageDetails}) ->
+    <<"chargeback">>;
+decode_chargeback_stage({pre_arbitration, _StageDetails}) ->
+    <<"pre-arbitration">>;
+decode_chargeback_stage({arbitration, _StageDetails}) ->
+    <<"arbitration">>.
 
-decode_chargeback_reason_code(#domain_InvoicePaymentChargebackReason{code = Code}, _Context) ->
-    #{
-        <<"reasonCode">> => Code
-    }.
+% decode_chargeback_reason_code(#domain_InvoicePaymentChargebackReason{code = Code}) ->
+%     Code.
 
 -spec decode_invoice(capi_handler_encoder:encode_data()) ->
     capi_handler_decoder_utils:decode_data().
