@@ -48,6 +48,8 @@
     create_partial_refund_without_currency/1,
     get_refund_by_id/1,
     get_refunds/1,
+    get_chargeback_by_id/1,
+    get_chargebacks/1,
     get_refund_by_external_id/1,
     update_invoice_template_ok_test/1,
     delete_invoice_template_ok_test/1,
@@ -155,6 +157,8 @@ groups() ->
                 create_refund_idemp_fail_test,
                 create_partial_refund,
                 create_partial_refund_without_currency,
+                get_chargeback_by_id,
+                get_chargebacks,
                 get_refund_by_id,
                 get_refunds,
                 get_refund_by_external_id,
@@ -701,6 +705,22 @@ get_refund_by_external_id(Config) ->
             {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)} end}
     ], Config),
     {ok, _} = capi_client_payments:get_refund_by_external_id(?config(context, Config), ExternalID).
+
+%
+
+-spec get_chargeback_by_id(config()) ->
+    _.
+get_chargeback_by_id(Config) ->
+    capi_ct_helper:mock_services([{invoicing, fun('GetPaymentChargeback', _) -> {ok, ?CHARGEBACK} end}], Config),
+    {ok, _} = capi_client_payments:get_chargeback_by_id(?config(context, Config), ?STRING, ?STRING, ?STRING).
+
+-spec get_chargebacks(config()) ->
+    _.
+get_chargebacks(Config) ->
+    capi_ct_helper:mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
+    {ok, _} = capi_client_payments:get_chargebacks(?config(context, Config), ?STRING, ?STRING).
+
+%
 
 -spec update_invoice_template_ok_test(config()) ->
     _.

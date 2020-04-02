@@ -137,6 +137,10 @@ get_operation_access('GetRefundByID'             , _) ->
     [{[invoices, payments], read}];
 get_operation_access('GetRefundByExternalID'     , _) ->
     [{[invoices, payments], read}];
+get_operation_access('GetChargebacks'            , _) ->
+    [{[invoices, payments], read}];
+get_operation_access('GetChargebackByID'         , _) ->
+    [{[invoices, payments], read}];
 get_operation_access('SearchInvoices'            , _) ->
     [{[invoices], read}];
 get_operation_access('SearchPayments'            , _) ->
