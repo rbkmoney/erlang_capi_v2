@@ -22,7 +22,8 @@
 -export([get_idempotent_key/3]).
 -export([get_internal_id/2]).
 
--define(SCHEMA_VER1, 1).
+-define(SCHEMA_VER1, 1). %% deprecated
+-define(SCHEMA_VER2, 2).
 
 -spec gen_by_snowflake(binary(), integer(), woody_context()) ->
     {ok, binary()} |
@@ -39,31 +40,31 @@ gen_by_snowflake(IdempotentKey, Hash, WoodyContext, CtxData) ->
     Snowflake = {snowflake, #bender_SnowflakeSchema{}},
     generate_id(IdempotentKey, Snowflake, Hash, WoodyContext, CtxData).
 
--spec gen_by_sequence(binary(), binary(), integer(), woody_context()) ->
+-spec gen_by_sequence(binary(), binary(), binary(), woody_context()) ->
     {ok, binary()} |
     {error, {external_id_conflict, binary()}}.
 
-gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext) ->
-    gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext, #{}).
+gen_by_sequence(IdempotentKey, SequenceID, Bin, WoodyContext) ->
+    gen_by_sequence(IdempotentKey, SequenceID, Bin, WoodyContext, #{}).
 
--spec gen_by_sequence(binary(), binary(), integer(), woody_context(), context_data()) ->
+-spec gen_by_sequence(binary(), binary(), binary(), woody_context(), context_data()) ->
     {ok, binary()} |
-    {error, {external_id_conflict, binary()}}.
+    {error, {external_id_conflict, binary()}}. %% TODO[0x42] maybe delete?
 
-gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext, CtxData) ->
-    gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext, CtxData, #{}).
+gen_by_sequence(IdempotentKey, SequenceID, Bin, WoodyContext, CtxData) ->
+    gen_by_sequence(IdempotentKey, SequenceID, Bin, WoodyContext, CtxData, #{}).
 
 -spec gen_by_sequence(binary(), binary(), integer(), woody_context(), context_data(), sequence_params()) ->
     {ok, binary()} |
-    {error, {external_id_conflict, binary()}}.
+    {conflict, binary(), binary()}.
 
-gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyContext, CtxData, Params) ->
+gen_by_sequence(IdempotentKey, SequenceID, Bin, WoodyContext, CtxData, Params) ->
     Minimum = maps:get(minimum, Params, undefined),
     Sequence = {sequence, #bender_SequenceSchema{
         sequence_id = SequenceID,
         minimum = Minimum
     }},
-    generate_id(IdempotentKey, Sequence, Hash, WoodyContext, CtxData).
+    generate_id(IdempotentKey, Sequence, Bin, WoodyContext, CtxData).
 
 
 -spec gen_by_constant(binary(), binary(), integer(), woody_context()) ->
@@ -111,23 +112,27 @@ get_internal_id(ExternalID, WoodyContext) ->
 gen_external_id() ->
     genlib:unique().
 
-generate_id(Key, BenderSchema, Hash, WoodyContext, CtxData) ->
+generate_id(Key, BenderSchema, Bin, WoodyContext, CtxData) ->
     Context = capi_msgp_marshalling:marshal(#{
-        <<"version">>     => ?SCHEMA_VER1,
-        <<"params_hash">> => Hash,
+        % <<"version">>     => ?SCHEMA_VER1,
+        <<"version">>       => ?SCHEMA_VER2,
+        <<"params_bin">>    => Bin,
         <<"context_data">>  => CtxData
     }),
     Args = [Key, BenderSchema, Context],
     Result = case capi_woody_client:call_service(bender, 'GenerateID', Args, WoodyContext) of
         {ok, #bender_GenerationResult{internal_id = InternalID, context = undefined}} -> {ok, InternalID};
         {ok, #bender_GenerationResult{internal_id = InternalID, context = Ctx}}       ->
-            #{<<"params_hash">> := BenderHash} = capi_msgp_marshalling:unmarshal(Ctx),
-            {ok, InternalID, BenderHash}
+            % #{<<"params_hash">> := BenderHash} = capi_msgp_marshalling:unmarshal(Ctx),
+            {ok, InternalID, capi_msgp_marshalling:unmarshal(Ctx)}
     end,
+    %% TODO[0x42] error external_id_conflict?
     case Result of
-        {ok, ID}         -> {ok, ID};
-        {ok, ID, Hash}   -> {ok, ID};
-        {ok, ID, _Other} -> {error, {external_id_conflict, ID}}
+        {ok, ID} ->
+            {ok, ID};
+        {ok, ID, #{<<"params_bin">> := ParamsBin}} ->
+            {external_id_busy, ID, ParamsBin}
+            % {error, {external_id_conflict, ID, ParamsOther}}
     end.
 
 -spec get_context_data(bender_context()) -> undefined | context_data().

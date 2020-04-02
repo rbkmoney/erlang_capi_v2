@@ -179,7 +179,7 @@ decode_payer({payment_resource, #domain_PaymentResourcePayer{
     resource     = Resource,
     contact_info = ContactInfo
 }}) ->
-  capi_handler_utils:merge_and_compact(
+    capi_handler_utils:merge_and_compact(
         #{
             <<"payerType"  >> => <<"PaymentResourcePayer">>,
             <<"contactInfo">> => capi_handler_decoder_party:decode_contact_info(ContactInfo)

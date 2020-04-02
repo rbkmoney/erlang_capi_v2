@@ -360,26 +360,64 @@ process_request('GetRefundByID', Req, Context) ->
 process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
-%%
-
 create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
+    %% WARNING!!! finish all -> 'TODO[0x42]:'
     ExternalID    = maps:get(<<"externalID">>, PaymentParams, undefined),
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
-    Hash = erlang:phash2(PaymentParams),
+    Payer = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
+    PaymentParamsDecrypted = PaymentParams#{<<"payer">> => Payer},
+    IdempotentSigns = capi_idempotent:payment_signs(PaymentParamsDecrypted),
+    ParamsBin = to_params_bin(IdempotentSigns),
     CtxData = #{<<"invoice_id">> => InvoiceID},
-    case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Hash, WoodyCtx, CtxData) of
+
+    case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, ParamsBin, WoodyCtx, CtxData) of
         {ok, ID} ->
-            Params = encode_invoice_payment_params(ID, ExternalID, PaymentParams),
-            Call = {invoicing, 'StartPayment', [InvoiceID, Params]},
-            capi_handler_utils:service_call_with([user_info], Call, Context);
-        {error, {external_id_conflict, ID}} ->
-            {error, {external_id_conflict, ID, ExternalID}}
+            start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context);
+        {external_id_busy, ID, ParamsOther} ->
+            SavedSigns = from_params_bin(ParamsOther),
+            case capi_idempotent:compare_payment_signs(IdempotentSigns, SavedSigns) of
+                true ->
+                    start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context);
+                {false, _} = Result ->
+                    ct:print("conflict RESULT > ~p", [Result]),
+                    {error, {external_id_conflict, ID, ExternalID}}
+            end
     end.
 
-encode_invoice_payment_params(ID, ExternalID, PaymentParams) ->
+start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context) ->
+    InvoicePaymentParams = encode_invoice_payment_params(ExternalID, PaymentParamsDecrypted),
+    InvoicePaymentParamsWithID = InvoicePaymentParams#payproc_InvoicePaymentParams{id = ID},
+    Call = {invoicing, 'StartPayment', [InvoiceID, InvoicePaymentParamsWithID]},
+    capi_handler_utils:service_call_with([user_info], Call, Context).
+
+to_params_bin(Terms) ->
+    erlang:term_to_binary(Terms).
+
+from_params_bin(Bin) ->
+    erlang:binary_to_term(Bin).
+
+decrypt_payer(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer) ->
+    #{<<"paymentToolToken">> := Token} = Payer,
+    case capi_crypto:decrypt_payment_tool_token(Token) of
+        {ok, PaymentToolThrift} ->
+            PaymentTool = capi_handler_decoder_party:decode_payment_tool(PaymentToolThrift),
+            Payer#{
+                <<"paymentToolThrift">> => PaymentToolThrift,
+                <<"paymentTool">> => PaymentTool
+            };
+        unrecognized ->
+            logger:warning("Payment tool token unrecognized: ~p", [Token]),
+            erlang:throw(invalid_token);
+        {error, {decryption_failed, Error}} ->
+            logger:warning("Payment tool token decryption failed: ~p", [Error]),
+            erlang:throw(invalid_token)
+    end;
+decrypt_payer(CustomerOrRecurrentPayer) ->
+    CustomerOrRecurrentPayer.
+
+encode_invoice_payment_params(ExternalID, PaymentParams) ->
     Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
     #payproc_InvoicePaymentParams{
-        id                  = ID,
         external_id         = ExternalID,
         payer               = encode_payer_params(genlib_map:get(<<"payer">>, PaymentParams)),
         flow                = encode_flow(Flow),
@@ -397,20 +435,11 @@ encode_payer_params(#{
     {customer, #payproc_CustomerPayerParams{customer_id = ID}};
 
 encode_payer_params(#{
-    <<"payerType"       >> := <<"PaymentResourcePayer">>,
-    <<"paymentToolToken">> := Token,
-    <<"paymentSession"  >> := EncodedSession,
-    <<"contactInfo"     >> := ContactInfo
+    <<"payerType"       >>  := <<"PaymentResourcePayer">>,
+    <<"paymentToolThrift">> := PaymentTool,
+    <<"paymentSession"  >>  := EncodedSession,
+    <<"contactInfo"     >>  := ContactInfo
 }) ->
-    PaymentTool = case capi_crypto:decrypt_payment_tool_token(Token) of
-        unrecognized ->
-            encode_legacy_payment_tool_token(Token);
-        {ok, Result} ->
-            Result;
-        {error, {decryption_failed, _} = Error} ->
-            logger:warning("Payment tool token decryption failed: ~p", [Error]),
-            erlang:throw(invalid_token)
-    end,
     {ClientInfo, PaymentSession} = capi_handler_utils:unwrap_payment_session(EncodedSession),
     {payment_resource, #payproc_PaymentResourcePayerParams{
         resource = #domain_DisposablePaymentResource{
@@ -460,14 +489,6 @@ encode_optional_cash(_, _, _, _) ->
     undefined.
 
 %%
-
-encode_legacy_payment_tool_token(Token) ->
-    try
-        capi_handler_encoder:encode_payment_tool(capi_utils:base64url_to_map(Token))
-    catch
-        error:badarg ->
-            erlang:throw(invalid_token)
-    end.
 
 decode_invoice_payment(InvoiceID, #payproc_InvoicePayment{payment = Payment}, Context) ->
     capi_handler_decoder_invoicing:decode_payment(InvoiceID, Payment, Context).

@@ -17,6 +17,7 @@
 -export([decode_disposable_payment_resource/1]).
 -export([decode_payout_tool_params/2]).
 -export([decode_payout_tool_details/1]).
+-export([decode_payment_tool/1]).
 -export([decode_payment_tool_token/1]).
 -export([decode_payment_tool_details/1]).
 
@@ -189,11 +190,27 @@ decode_residence(Residence) when is_atom(Residence) ->
 decode_payment_institution_ref(#domain_PaymentInstitutionRef{id = Ref}) ->
     Ref.
 
+-spec decode_payment_tool(capi_handler_encoder:encode_data()) ->
+    any(). %% TODO[0x42] ---> add type payment_tool()
+
+decode_payment_tool({bank_card, BankCard}) ->
+    decode_bank_card(BankCard);
+decode_payment_tool({payment_terminal, PaymentTerminal}) ->
+    decode_payment_terminal(PaymentTerminal);
+decode_payment_tool({digital_wallet, DigitalWallet}) ->
+    decode_digital_wallet(DigitalWallet);
+decode_payment_tool({crypto_currency, CryptoCurrency}) ->
+    decode_crypto_wallet(CryptoCurrency);
+decode_payment_tool({mobile_commerce, MobileCommerce}) ->
+    decode_mobile_commerce(MobileCommerce).
+
 -spec decode_payment_tool_token(capi_handler_encoder:encode_data()) ->
     binary().
 
-decode_payment_tool_token({bank_card, BankCard}) ->
-    decode_bank_card(BankCard);
+decode_payment_tool_token(#{<<"type">> := <<"bank_card">>} = BankCard) ->
+    BankCard1 = maps:remove(<<"exp_date">>, BankCard),
+    capi_utils:map_to_base64url(maps:remove(<<"cardholder_name">>, BankCard1));
+    % decode_bank_card(BankCard);
 decode_payment_tool_token({payment_terminal, PaymentTerminal}) ->
     decode_payment_terminal(PaymentTerminal);
 decode_payment_tool_token({digital_wallet, DigitalWallet}) ->
@@ -212,9 +229,11 @@ decode_bank_card(#domain_BankCard{
     'issuer_country' = IssuerCountry,
     'bank_name'      = BankName,
     'metadata'       = Metadata,
-    'is_cvv_empty'   = IsCVVEmpty
+    'is_cvv_empty'   = IsCVVEmpty,
+    'exp_date'       = ExpDate,
+    'cardholder_name' = CardHolder
 }) ->
-    capi_utils:map_to_base64url(genlib_map:compact(#{
+    genlib_map:compact(#{
         <<"type"          >> => <<"bank_card">>,
         <<"token"         >> => Token,
         <<"payment_system">> => PaymentSystem,
@@ -224,8 +243,11 @@ decode_bank_card(#domain_BankCard{
         <<"issuer_country">> => IssuerCountry,
         <<"bank_name"     >> => BankName,
         <<"metadata"      >> => decode_bank_card_metadata(Metadata),
-        <<"is_cvv_empty"  >> => decode_bank_card_cvv_flag(IsCVVEmpty)
-    })).
+        <<"is_cvv_empty"  >> => decode_bank_card_cvv_flag(IsCVVEmpty),
+        %% TODO[0x42]: decode exp_date
+        <<"exp_date"      >> => ExpDate,
+        <<"cardholder_name">> => CardHolder
+    }).
 
 decode_bank_card_cvv_flag(undefined) ->
     undefined;
@@ -348,8 +370,9 @@ mask_phone_number(PhoneNumber) ->
 decode_disposable_payment_resource(Resource) ->
     #domain_DisposablePaymentResource{payment_tool = PaymentTool, payment_session_id = SessionID} = Resource,
     ClientInfo = decode_client_info(Resource#domain_DisposablePaymentResource.client_info),
+    PaymentToolSwag = decode_payment_tool(PaymentTool),
     #{
-        <<"paymentToolToken"  >> => decode_payment_tool_token(PaymentTool),
+        <<"paymentToolToken"  >> => decode_payment_tool_token(PaymentToolSwag),
         <<"paymentSession"    >> => capi_handler_utils:wrap_payment_session(ClientInfo, SessionID),
         <<"paymentToolDetails">> => decode_payment_tool_details(PaymentTool),
         <<"clientInfo"        >> => ClientInfo

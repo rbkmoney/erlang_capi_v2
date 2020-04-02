@@ -26,6 +26,8 @@
     get_invoice_events_ok_test/1,
     get_invoice_payment_methods_ok_test/1,
     create_payment_ok_test/1,
+    create_payment_ok_idemp_test/1,
+    create_payment_id_conflict_test/1,
     create_payment_qiwi_access_token_ok_test/1,
     create_payment_with_empty_cvv_ok_test/1,
     create_payment_with_googlepay_plain_ok_test/1,
@@ -62,29 +64,31 @@ init([]) ->
     [test_case_name()].
 all() ->
     [
-        {group, operations_by_invoice_access_token_after_invoice_creation},
+        % {group, operations_by_invoice_access_token_after_invoice_creation},
         {group, operations_by_invoice_access_token_after_token_creation}
     ].
 
 invoice_access_token_tests() ->
     [
-        get_invoice_ok_test,
-        get_invoice_events_ok_test,
-        get_invoice_payment_methods_ok_test,
-        create_payment_ok_test,
-        create_payment_qiwi_access_token_ok_test,
-        create_payment_with_empty_cvv_ok_test,
-        create_payment_with_googlepay_plain_ok_test,
-        create_payment_with_googlepay_encrypt_ok_test,
-        get_payments_ok_test,
-        get_client_payment_status_test,
-        get_payment_by_id_ok_test,
-        cancel_payment_ok_test,
-        capture_payment_ok_test,
-        capture_partial_payment_ok_test,
-        create_first_recurrent_payment_ok_test,
-        create_second_recurrent_payment_ok_test,
-        get_recurrent_payments_ok_test
+        % get_invoice_ok_test,
+        % get_invoice_events_ok_test,
+        % get_invoice_payment_methods_ok_test,
+        % create_payment_ok_test,
+        % create_payment_ok_idemp_test,
+        create_payment_id_conflict_test
+        % create_payment_qiwi_access_token_ok_test,
+        % create_payment_with_empty_cvv_ok_test,
+        % create_payment_with_googlepay_plain_ok_test,
+        % create_payment_with_googlepay_encrypt_ok_test,
+        % get_payments_ok_test,
+        % get_client_payment_status_test,
+        % get_payment_by_id_ok_test,
+        % cancel_payment_ok_test,
+        % capture_payment_ok_test,
+        % capture_partial_payment_ok_test,
+        % create_first_recurrent_payment_ok_test,
+        % create_second_recurrent_payment_ok_test,
+        % get_recurrent_payments_ok_test
     ].
 
 -spec groups() ->
@@ -247,6 +251,65 @@ create_payment_ok_test(Config) ->
         <<"id">> := BenderKey,
         <<"externalID">> := ExternalID
     }} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
+
+-spec create_payment_ok_idemp_test(config()) ->
+    _.
+
+create_payment_ok_idemp_test(Config) ->
+    BenderKey = <<"bender_key">>,
+    ExternalID = <<"merch_id">>,
+    Tid = capi_ct_helper_bender:create_storage(),
+    capi_ct_helper:mock_services(
+        [
+            {invoicing, fun('StartPayment', [_, _, IPP]) ->
+                #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
+                {ok, ?PAYPROC_PAYMENT(ID, EID)}
+            end},
+            {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
+                capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+            end}
+        ],
+        Config
+    ),
+    ContactInfo = #{},
+    Jwe1 = get_encrypted_token(visa, ?EXP_DATE),
+    Jwe2 = get_encrypted_token(visa, ?EXP_DATE),
+    Req1 = get_req_create_payment(ExternalID, Jwe1, ContactInfo, undefined),
+    Req2 = get_req_create_payment(ExternalID, Jwe2, ContactInfo, false),
+    {ok, Response} = capi_client_payments:create_payment(?config(context, Config), Req1, ?STRING),
+    {ok, Response} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING),
+    capi_ct_helper_bender:del_storage(Tid).
+
+-spec create_payment_id_conflict_test(config()) ->
+    _.
+
+create_payment_id_conflict_test(Config) ->
+    BenderKey = <<"bender_key">>,
+    ExternalID = <<"merch_id">>,
+    Tid = capi_ct_helper_bender:create_storage(),
+    capi_ct_helper:mock_services(
+        [
+            {invoicing, fun('StartPayment', [_, _, IPP]) ->
+                #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
+                {ok, ?PAYPROC_PAYMENT(ID, EID)}
+            end},
+            {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
+                capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+            end}
+        ],
+        Config
+    ),
+    ContactInfo = #{},
+    Jwe1 = get_encrypted_token(visa, ?EXP_DATE),
+    Jwe2 = get_encrypted_token(visa, ?EXP_DATE2),
+    Req1 = get_req_create_payment(ExternalID, Jwe1, ContactInfo, undefined),
+    Req2 = get_req_create_payment(ExternalID, Jwe2, ContactInfo, false),
+    {ok, _Response} = capi_client_payments:create_payment(?config(context, Config), Req1, ?STRING),
+    {error, {409, #{
+        <<"externalID">> := ExternalID,
+        <<"id">> := BenderKey
+    }}} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING),
+    capi_ct_helper_bender:del_storage(Tid).
 
 -spec create_payment_with_empty_cvv_ok_test(config()) ->
     _.
@@ -551,3 +614,36 @@ get_failed_payment_with_invalid_cvv(Config) ->
     ),
     % mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
     capi_client_payments:get_payment_by_id(?config(context, Config), ?STRING, ?STRING).
+
+% get_req_create_payment(ExternalID, Jwe) ->
+%     get_req_create_payment(ExternalID, Jwe, #{}).
+% get_req_create_payment(ExternalID, Jwe, ContactInfo) ->
+%     get_req_create_payment(ExternalID, Jwe, ContactInfo, undefined).
+get_req_create_payment(ExternalID, Jwe, ContactInfo, MakeRecurrent) ->
+    genlib_map:compact(#{
+        <<"externalID">> => ExternalID,
+        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
+        <<"payer">> => #{
+            <<"payerType">> => <<"PaymentResourcePayer">>,
+            <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
+            <<"paymentToolToken">> => Jwe,
+            <<"contactInfo">> => ContactInfo
+        },
+        <<"makeRecurrent">> => MakeRecurrent,
+        <<"metadata">> => ?JSON,
+        <<"processingDeadline">> => <<"5m">>
+    }).
+
+% get_encrypted_token(PS) ->
+%     get_encrypted_token(PS, undefined).
+
+get_encrypted_token(PS, ExpDate) ->
+    PaymentTool = {bank_card, #domain_BankCard{
+        token = ?TEST_PAYMENT_TOKEN(PS),
+        payment_system = PS,
+        bin = <<"411111">>,
+        last_digits = <<"1111">>,
+        exp_date = ExpDate,
+        cardholder_name = <<"Degus Degusovich">>
+    }},
+    capi_crypto:create_encrypted_payment_tool_token(PaymentTool).
