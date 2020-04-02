@@ -333,8 +333,7 @@ decode_chargeback(Chargeback, _Context) ->
             <<"levy"       >> => Levy,
             <<"currency"   >> => capi_handler_decoder_utils:decode_currency(Currency)
         },
-        #{}
-        % decode_chargeback_reason_code(Chargeback#domain_InvoicePaymentChargeback.reason)
+        decode_chargeback_reason_code(Chargeback#domain_InvoicePaymentChargeback.reason)
     ).
 
 decode_chargeback_status({pending, _StatusDetails}) ->
@@ -353,8 +352,8 @@ decode_chargeback_stage({pre_arbitration, _StageDetails}) ->
 decode_chargeback_stage({arbitration, _StageDetails}) ->
     <<"arbitration">>.
 
-% decode_chargeback_reason_code(#domain_InvoicePaymentChargebackReason{code = Code}) ->
-%     Code.
+decode_chargeback_reason_code(#domain_InvoicePaymentChargebackReason{code = Code}) ->
+    #{<<"reasonCode">> => Code}.
 
 -spec decode_invoice(capi_handler_encoder:encode_data()) ->
     capi_handler_decoder_utils:decode_data().
