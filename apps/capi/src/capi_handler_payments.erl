@@ -360,6 +360,7 @@ process_request('GetRefundByID', Req, Context) ->
 process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
+%% if externalID =:= undefined make start_payment without idempotent check
 create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
     %% WARNING!!! finish all -> 'TODO[0x42]:'
     ExternalID    = maps:get(<<"externalID">>, PaymentParams, undefined),
@@ -375,11 +376,11 @@ create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} =
             start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context);
         {external_id_busy, ID, ParamsOther} ->
             SavedSigns = from_params_bin(ParamsOther),
-            case capi_idempotent:compare_payment_signs(IdempotentSigns, SavedSigns) of
+            case capi_idempotent:compare_signs(IdempotentSigns, SavedSigns) of
                 true ->
                     start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context);
-                {false, _} = Result ->
-                    ct:print("conflict RESULT > ~p", [Result]),
+                {false, _Difference} ->
+                    %% сделать более читаемы вывод ошибок с учетом Difference
                     {error, {external_id_conflict, ID, ExternalID}}
             end
     end.

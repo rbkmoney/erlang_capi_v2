@@ -74,7 +74,7 @@ invoice_access_token_tests() ->
         % get_invoice_events_ok_test,
         % get_invoice_payment_methods_ok_test,
         % create_payment_ok_test,
-        % create_payment_ok_idemp_test,
+        create_payment_ok_idemp_test,
         create_payment_id_conflict_test
         % create_payment_qiwi_access_token_ok_test,
         % create_payment_with_empty_cvv_ok_test,

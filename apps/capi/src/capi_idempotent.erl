@@ -1,6 +1,6 @@
 -module(capi_idempotent).
 
--export([compare_payment_signs/2]).
+-export([compare_signs/2]).
 -export([payment_signs/1]).
 
 -type sign_name()  :: [binary()].
@@ -12,12 +12,12 @@
     missing => [sign_name()]
 }.
 
--spec compare_payment_signs(signs(), signs()) ->
+-spec compare_signs(signs(), signs()) ->
     true | {false, difference()}.
 
-compare_payment_signs(Sign, Sign) ->
+compare_signs(Sign, Sign) ->
     true;
-compare_payment_signs(NewSings, OldSings) ->
+compare_signs(NewSings, OldSings) ->
     WrongSigns   = wrong_signs(NewSings, OldSings),
     ExcessSigns  = delete_same_prefix(WrongSigns, excess_signs(NewSings, OldSings)),
     MissingSigns = delete_same_prefix(WrongSigns, missing_signs(NewSings, OldSings)),
@@ -50,7 +50,9 @@ filter_attribute(Attribute, ParamsFlat) ->
     end, #{}, Attribute).
 
 %% Idempotent attributes
-
+%% cut_name - используется, чтобы признаки payerType | type находились уровнем выше
+%% и если они отличаются, то diff дочерних признаков не попадал в вывод.
+%%
 payment_attribute() ->
     [
         [<<"externalID">>],
@@ -67,15 +69,13 @@ payment_attribute() ->
 %% sets intersection by signs values
 
 wrong_signs(NewSigns, OldSigns) ->
-    WrongSigns = maps:fold(fun(K, Value, Acc) ->
-        Compare = fun
-            (#{K := NewSignValue}) when NewSignValue =:= Value -> Acc;
-            (#{K := _WrongValue}) -> [K|Acc];
-            (_) -> Acc %% Attribute(Idempotent sign) doesn't exist
-        end,
-        Compare(NewSigns)
-    end, [], OldSigns),
-    WrongSigns.
+    Keys = maps:keys(OldSigns),
+    maps:fold(fun(K, Value, Acc) ->
+        case maps:get(K, OldSigns) of
+            Value -> Acc;
+            _WrongValue -> [K | Acc]
+        end
+    end, [], maps:with(Keys, NewSigns)).
 
 excess_signs(NewSigns, OldSigns) ->
     Keys = maps:keys(OldSigns),
@@ -106,3 +106,51 @@ add_prefix(Key, Value, {Prefix, Acc}) ->
     FlatKey = lists:reverse([Key | Prefix]),
     {Prefix, Acc#{FlatKey => Value}}.
 
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+-spec test() -> _.
+
+-spec wrong_sings_test() -> _.
+wrong_sings_test() ->
+    Set1 = #{
+        [a] => 1,
+        [a, b] => 2,
+        [a, b, c] => 3
+    },
+    Set2 = #{
+        [a] => 1,
+        [a, b] => 3
+    },
+    ?assertEqual(wrong_signs(Set1, Set2#{[a,b] => 2}), []),
+    ?assertEqual(wrong_signs(Set1, Set2), [[a, b]]).
+
+-spec excess_signs_test() -> _.
+excess_signs_test() ->
+    Set1 = #{[a] => 1, [a, c] => 3},
+    Set2 = #{[a] => 1, [a, b] => 2},
+    ?assertEqual(excess_signs(Set1, Set2), [[a, c]]),
+    ?assertEqual(excess_signs(Set2, Set1), [[a, b]]).
+
+-spec compare_signs_test() -> _.
+compare_signs_test() ->
+    Set1 = #{
+        [name] => <<"Degus">>,
+        [payer] => <<"ResourcePayer">>,
+        [payer, paymentTool, token] => 12345678
+    },
+    Set2 = #{
+        [name] => <<"Degus">>,
+        [payer] => <<"CustomerPayer">>,
+        [payer, customerID] => 12345678
+    },
+    ?assertEqual(compare_signs(Set1, Set2), {false, #{wrong => [[payer]]}}),
+    ?assertEqual(
+        compare_signs(Set1, Set2#{[payer] => <<"ResourcePayer">>}),
+        {false, #{
+            missing => [[payer, customerID]],
+            excess => [[payer, paymentTool, token]]
+        }}
+    ).
+
+-endif.
