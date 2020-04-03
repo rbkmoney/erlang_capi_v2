@@ -31,7 +31,7 @@ process_request('CreateInvoice' = OperationID, Req, Context) ->
                     {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_InvalidShopStatus{} ->
                     {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
-                #payproc_InvoiceCostOutOfRange{} ->
+                #payproc_InvoiceTermsViolated{} ->
                     {ok, logic_error(invoiceTermsViolated, <<"Invoice parameters violate contract terms">>)}
             end
     catch
