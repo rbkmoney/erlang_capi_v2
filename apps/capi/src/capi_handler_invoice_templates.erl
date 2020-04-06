@@ -140,7 +140,9 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
                 #payproc_InvoiceTemplateNotFound{} ->
                     {ok, general_error(404, <<"Invoice Template not found">>)};
                 #payproc_InvoiceTemplateRemoved{} ->
-                    {ok, general_error(404, <<"Invoice Template not found">>)}
+                    {ok, general_error(404, <<"Invoice Template not found">>)};
+                #payproc_InvoiceTermsViolated{} ->
+                    {ok, logic_error(invoiceTermsViolated, <<"Invoice parameters violate contract terms">>)}
             end
     catch
         throw:{bad_invoice_params, currency_no_amount} ->
