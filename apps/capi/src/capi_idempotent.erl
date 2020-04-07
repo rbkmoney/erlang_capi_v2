@@ -1,56 +1,56 @@
 -module(capi_idempotent).
 
--export([compare_signs/2]).
--export([payment_signs/1]).
--export([invoice_signs/1]).
--export([refund_signs/1]).
+-export([compare_features/2]).
+-export([payment_features/1]).
+-export([invoice_features/1]).
+-export([refund_features/1]).
 
--type sign_name()  :: [binary()].
--type sign_value() :: any().
--type signs()      :: [{sign_name(), sign_value()}].
+-type feature_name()  :: [binary()].
+-type feature_value() :: any().
+-type features()      :: [{feature_name(), feature_value()}].
 -type difference() :: #{
-    wrong   => [sign_name()],
-    excess  => [sign_name()],
-    missing => [sign_name()]
+    wrong   => [feature_name()],
+    excess  => [feature_name()],
+    missing => [feature_name()]
 }.
 
--spec compare_signs(signs(), signs()) ->
+-spec compare_features(features(), features()) ->
     true | {false, difference()}.
 
-compare_signs(Sign, Sign) ->
+compare_features(Feature, Feature) ->
     true;
-compare_signs(NewSignsBin, OldSignsBin) ->
-    NewSigns = erlang:binary_to_term(NewSignsBin),
-    OldSigns = erlang:binary_to_term(OldSignsBin),
+compare_features(NewFeaturesBin, OldFeaturesBin) ->
+    NewFeatures = erlang:binary_to_term(NewFeaturesBin),
+    OldFeatures = erlang:binary_to_term(OldFeaturesBin),
 
-    WrongSigns   = wrong_signs(NewSigns, OldSigns),
-    ExcessSigns  = delete_same_prefix(WrongSigns, excess_signs(NewSigns, OldSigns)),
-    MissingSigns = delete_same_prefix(WrongSigns, missing_signs(NewSigns, OldSigns)),
+    WrongFeatures   = wrong_features(NewFeatures, OldFeatures),
+    ExcessFeatures  = delete_same_prefix(WrongFeatures, excess_features(NewFeatures, OldFeatures)),
+    MissingFeatures = delete_same_prefix(WrongFeatures, missing_features(NewFeatures, OldFeatures)),
     {false, genlib_map:compact(#{
-        wrong => WrongSigns,
-        excess => ExcessSigns,
-        missing => MissingSigns
+        wrong => WrongFeatures,
+        excess => ExcessFeatures,
+        missing => MissingFeatures
     })}.
 
--spec payment_signs(any()) -> map().
+-spec payment_features(any()) -> map().
 
-payment_signs(PaymentParamsSwag) ->
+payment_features(PaymentParamsSwag) ->
     Prefix = [],
     {_, PaymentParamsFlat} = maps:fold(fun map_to_flat/3, {Prefix, #{}}, PaymentParamsSwag),
     Attributes = filter_attribute(payment_attributes(), PaymentParamsFlat),
     erlang:term_to_binary(Attributes).
 
--spec invoice_signs(any()) -> binary(). %% TODO[0x42]: make strong type definition
+-spec invoice_features(any()) -> binary(). %% TODO[0x42]: make strong type definition
 
-invoice_signs(InvoiceParamsSwag) ->
+invoice_features(InvoiceParamsSwag) ->
     Prefix = [],
     {_, InvoiceParamsFlat} = maps:fold(fun map_to_flat/3, {Prefix, #{}}, InvoiceParamsSwag),
     Attributes = filter_attribute(invoice_attributes(), InvoiceParamsFlat),
     erlang:term_to_binary(Attributes).
 
--spec refund_signs(any()) -> binary(). %% TODO[0x42]: make strong type definition
+-spec refund_features(any()) -> binary(). %% TODO[0x42]: make strong type definition
 
-refund_signs(RefundParamsSwag) ->
+refund_features(RefundParamsSwag) ->
     Prefix = [],
     {_, RefundParamsFlat} = maps:fold(fun map_to_flat/3, {Prefix, #{}}, RefundParamsSwag),
     Attributes = filter_attribute(refund_attributes(), RefundParamsFlat),
@@ -114,24 +114,24 @@ refund_attributes() ->
         {to_hash, [<<"cart">>]}
     ].
 
-%% sets intersection by signs values
+%% sets intersection by features values
 
-wrong_signs(NewSigns, OldSigns) ->
-    Keys = maps:keys(OldSigns),
+wrong_features(NewFeatures, OldFeatures) ->
+    Keys = maps:keys(OldFeatures),
     maps:fold(fun(K, Value, Acc) ->
-        case maps:get(K, OldSigns) of
+        case maps:get(K, OldFeatures) of
             Value -> Acc;
             _WrongValue -> [K | Acc]
         end
-    end, [], maps:with(Keys, NewSigns)).
+    end, [], maps:with(Keys, NewFeatures)).
 
-excess_signs(NewSigns, OldSigns) ->
-    Keys = maps:keys(OldSigns),
-    maps:keys(maps:without(Keys, NewSigns)).
+excess_features(NewFeatures, OldFeatures) ->
+    Keys = maps:keys(OldFeatures),
+    maps:keys(maps:without(Keys, NewFeatures)).
 
-missing_signs(NewSigns, OldSigns) ->
-    Keys = maps:keys(NewSigns),
-    maps:keys(maps:without(Keys, OldSigns)).
+missing_features(NewFeatures, OldFeatures) ->
+    Keys = maps:keys(NewFeatures),
+    maps:keys(maps:without(Keys, OldFeatures)).
 
 delete_same_prefix(Prefixs, Attrs) ->
     Result = lists:foldl(fun(Prefix, Acc) ->
@@ -159,8 +159,8 @@ add_prefix(Key, Value, {Prefix, Acc}) ->
 
 -spec test() -> _.
 
--spec wrong_sings_test() -> _.
-wrong_sings_test() ->
+-spec wrong_features_test() -> _.
+wrong_features_test() ->
     Set1 = #{
         [a] => 1,
         [a, b] => 2,
@@ -170,18 +170,18 @@ wrong_sings_test() ->
         [a] => 1,
         [a, b] => 3
     },
-    ?assertEqual(wrong_signs(Set1, Set2#{[a,b] => 2}), []),
-    ?assertEqual(wrong_signs(Set1, Set2), [[a, b]]).
+    ?assertEqual(wrong_features(Set1, Set2#{[a,b] => 2}), []),
+    ?assertEqual(wrong_features(Set1, Set2), [[a, b]]).
 
--spec excess_signs_test() -> _.
-excess_signs_test() ->
+-spec excess_features_test() -> _.
+excess_features_test() ->
     Set1 = #{[a] => 1, [a, c] => 3},
     Set2 = #{[a] => 1, [a, b] => 2},
-    ?assertEqual(excess_signs(Set1, Set2), [[a, c]]),
-    ?assertEqual(excess_signs(Set2, Set1), [[a, b]]).
+    ?assertEqual(excess_features(Set1, Set2), [[a, c]]),
+    ?assertEqual(excess_features(Set2, Set1), [[a, b]]).
 
--spec compare_signs_test() -> _.
-compare_signs_test() ->
+-spec compare_features_test() -> _.
+compare_features_test() ->
     Set1 = erlang:term_to_binary(#{
         [name] => <<"Degus">>,
         [payer] => <<"ResourcePayer">>,
@@ -192,9 +192,9 @@ compare_signs_test() ->
         [payer] => <<"CustomerPayer">>,
         [payer, customerID] => 12345678
     },
-    ?assertEqual(compare_signs(Set1, erlang:term_to_binary(Set2)), {false, #{wrong => [[payer]]}}),
+    ?assertEqual(compare_features(Set1, erlang:term_to_binary(Set2)), {false, #{wrong => [[payer]]}}),
     ?assertEqual(
-        compare_signs(Set1, erlang:term_to_binary(Set2#{[payer] => <<"ResourcePayer">>})),
+        compare_features(Set1, erlang:term_to_binary(Set2#{[payer] => <<"ResourcePayer">>})),
         {false, #{
             wrong => [],
             missing => [[payer, customerID]],

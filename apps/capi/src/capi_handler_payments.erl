@@ -367,20 +367,20 @@ create_payment(InvoiceID, PartyID, PaymentParams, Context, BenderPrefix) ->
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Payer = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
     PaymentParamsDecrypted = PaymentParams#{<<"payer">> => Payer},
-    IdempotentSigns = capi_idempotent:payment_signs(PaymentParamsDecrypted),
+    IdempotentFeatures = capi_idempotent:payment_features(PaymentParamsDecrypted),
     Hash = erlang:phash2(PaymentParams),
     %% delete after transition period
     Params = #{
         legacy => Hash,
-        current => IdempotentSigns
+        current => IdempotentFeatures
     },
     #{woody_context := WoodyCtx} = Context,
     CtxData = #{<<"invoice_id">> => InvoiceID},
     case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Params, WoodyCtx, CtxData) of
         {ok, ID} ->
             start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context);
-        {ok, ID, SavedSigns} ->
-            case capi_idempotent:compare_signs(IdempotentSigns, SavedSigns) of
+        {ok, ID, SavedFeatures} ->
+            case capi_idempotent:compare_features(IdempotentFeatures, SavedFeatures) of
                 true ->
                     start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context);
                 {false, _Difference} ->
@@ -563,8 +563,8 @@ create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} =
     SequenceID = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
     Hash = erlang:phash2(RefundParams),
     RefundParamsFull = RefundParams#{<<"invoiceID">> => invoiceID, <<"paymentID">> => PaymentID},
-    IdempotentSigns = capi_idempotent:refund_signs(RefundParamsFull),
-    BenderParams = #{legacy => Hash, current => IdempotentSigns},
+    IdempotentFeatures = capi_idempotent:refund_features(RefundParamsFull),
+    BenderParams = #{legacy => Hash, current => IdempotentFeatures},
     Params = #payproc_InvoicePaymentRefundParams{
         external_id = ExternalID,
         reason = genlib_map:get(<<"reason">>, RefundParams),
@@ -574,8 +574,8 @@ create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} =
     case capi_bender:gen_by_sequence(IdempotentKey, SequenceID, BenderParams, WoodyCtx, #{}, #{minimum => 100}) of
         {ok, ID} ->
             refund_payment(ID, InvoiceID, PaymentID, Params, Context);
-        {ok, ID, SavedSigns} ->
-            case capi_idempotent:compare_signs(IdempotentSigns, SavedSigns) of
+        {ok, ID, SavedFeatures} ->
+            case capi_idempotent:compare_features(IdempotentFeatures, SavedFeatures) of
                 true ->
                     refund_payment(ID, InvoiceID, PaymentID, Params, Context);
                 {false, _Difference} ->
