@@ -37,6 +37,8 @@ process_request('CreateInvoice' = OperationID, Req, Context) ->
             {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
         invalid_invoice_cost ->
             {ok, logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)};
+        {external_id_busy, InvoiceID, ExternalID} ->
+            {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})};
         {external_id_conflict, InvoiceID, ExternalID} ->
             {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
     end;
@@ -188,13 +190,28 @@ process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
+    CreateFun = fun(InvoiceID) ->
+        Call = {invoicing, 'Create', [encode_invoice_params(InvoiceID, PartyID, InvoiceParams)]},
+        capi_handler_utils:service_call_with([user_info, party_creation], Call, Context)
+    end,
+
     ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2(InvoiceParams),
-    case capi_bender:gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) of
+    IdempotentSigns = capi_idempotent:invoice_signs(InvoiceParams),
+    BenderParams = #{legacy => Hash, current => IdempotentSigns},
+    case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
         {ok, ID} ->
-            Call = {invoicing, 'Create', [encode_invoice_params(ID, PartyID, InvoiceParams)]},
-            capi_handler_utils:service_call_with([user_info, party_creation], Call, Context);
+            CreateFun(ID);
+        {external_id_busy, ID, OtherSigns} ->
+            case capi_idempotent:compare_signs(IdempotentSigns, OtherSigns) of
+                true ->
+                    CreateFun(ID);
+                {false, _Difference} ->
+                    %% сделать более читаемы вывод ошибок с учетом Difference
+                    throw({external_id_conflict, ID, ExternalID})
+            end;
+        %% Legacy
         {error, {external_id_conflict, ID}} ->
             throw({external_id_conflict, ID, ExternalID})
     end.

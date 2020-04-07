@@ -2,6 +2,8 @@
 
 -export([compare_signs/2]).
 -export([payment_signs/1]).
+-export([invoice_signs/1]).
+-export([refund_signs/1]).
 
 -type sign_name()  :: [binary()].
 -type sign_value() :: any().
@@ -17,10 +19,13 @@
 
 compare_signs(Sign, Sign) ->
     true;
-compare_signs(NewSings, OldSings) ->
-    WrongSigns   = wrong_signs(NewSings, OldSings),
-    ExcessSigns  = delete_same_prefix(WrongSigns, excess_signs(NewSings, OldSings)),
-    MissingSigns = delete_same_prefix(WrongSigns, missing_signs(NewSings, OldSings)),
+compare_signs(NewSignsBin, OldSignsBin) ->
+    NewSigns = erlang:binary_to_term(NewSignsBin),
+    OldSigns = erlang:binary_to_term(OldSignsBin),
+
+    WrongSigns   = wrong_signs(NewSigns, OldSigns),
+    ExcessSigns  = delete_same_prefix(WrongSigns, excess_signs(NewSigns, OldSigns)),
+    MissingSigns = delete_same_prefix(WrongSigns, missing_signs(NewSigns, OldSigns)),
     {false, genlib_map:compact(#{
         wrong => WrongSigns,
         excess => ExcessSigns,
@@ -32,18 +37,43 @@ compare_signs(NewSings, OldSings) ->
 payment_signs(PaymentParamsSwag) ->
     Prefix = [],
     {_, PaymentParamsFlat} = maps:fold(fun map_to_flat/3, {Prefix, #{}}, PaymentParamsSwag),
-    filter_attribute(payment_attribute(), PaymentParamsFlat).
+    Attributes = filter_attribute(payment_attributes(), PaymentParamsFlat),
+    erlang:term_to_binary(Attributes).
+
+-spec invoice_signs(any()) -> binary(). %% TODO[0x42]: make strong type definition
+
+invoice_signs(InvoiceParamsSwag) ->
+    Prefix = [],
+    {_, InvoiceParamsFlat} = maps:fold(fun map_to_flat/3, {Prefix, #{}}, InvoiceParamsSwag),
+    Attributes = filter_attribute(invoice_attributes(), InvoiceParamsFlat),
+    erlang:term_to_binary(Attributes).
+
+-spec refund_signs(any()) -> binary(). %% TODO[0x42]: make strong type definition
+
+refund_signs(RefundParamsSwag) ->
+    Prefix = [],
+    {_, RefundParamsFlat} = maps:fold(fun map_to_flat/3, {Prefix, #{}}, RefundParamsSwag),
+    Attributes = filter_attribute(refund_attributes(), RefundParamsFlat),
+    erlang:term_to_binary(Attributes).
+
 
 filter_attribute(Attribute, ParamsFlat) ->
     FunAdd = fun
         (_, undefined, Acc) -> Acc;
         (Key, Value, Acc) -> Acc#{Key => Value}
     end,
+    FunHash = fun
+        (undefined) -> undefined;
+        (Terms) -> erlang:phash2(Terms)
+    end,
     lists:foldl(fun
         ({cut_name, Attr}, Acc) ->
             Value = maps:get(Attr, ParamsFlat, undefined),
             Key = lists:droplast(Attr),
             FunAdd(Key, Value, Acc);
+        ({to_hash, Attr}, Acc) ->
+            Value = maps:get(Attr, ParamsFlat, undefined),
+            FunAdd(Attr, FunHash(Value), Acc);
         (Attr, Acc) ->
             Value = maps:get(Attr, ParamsFlat, undefined),
             FunAdd(Attr, Value, Acc)
@@ -51,9 +81,10 @@ filter_attribute(Attribute, ParamsFlat) ->
 
 %% Idempotent attributes
 %% cut_name - используется, чтобы признаки payerType | type находились уровнем выше
-%% и если они отличаются, то diff дочерних признаков не попадал в вывод.
+%%            и если они отличаются, то diff дочерних признаков не попадал в вывод.
+%% to_hash -  считает hash от значения признака, для упрощения алгоритма сравнения (fun wrong_value)
 %%
-payment_attribute() ->
+payment_attributes() ->
     [
         [<<"externalID">>],
         {cut_name, [<<"payer">>, <<"payerType">>]},
@@ -64,6 +95,24 @@ payment_attribute() ->
         [<<"payer">>, <<"CustomerID">>],
         [<<"payer">>, <<"recurrentParentPayment">>, <<"invoiceID">>],
         [<<"payer">>, <<"recurrentParentPayment">>, <<"paymentID">>]
+    ].
+
+invoice_attributes() ->
+    [
+        [<<"shopID">>],
+        [<<"amount">>],
+        [<<"currency">>],
+        [<<"product">>],
+        {to_hash, [<<"cart">>]}
+    ].
+
+refund_attributes() ->
+    [
+        [<<"invoiceID">>],
+        [<<"paymentID">>],
+        [<<"amount">>],
+        [<<"currency">>],
+        {to_hash, [<<"cart">>]}
     ].
 
 %% sets intersection by signs values
@@ -134,20 +183,21 @@ excess_signs_test() ->
 
 -spec compare_signs_test() -> _.
 compare_signs_test() ->
-    Set1 = #{
+    Set1 = erlang:term_to_binary(#{
         [name] => <<"Degus">>,
         [payer] => <<"ResourcePayer">>,
         [payer, paymentTool, token] => 12345678
-    },
+    }),
     Set2 = #{
         [name] => <<"Degus">>,
         [payer] => <<"CustomerPayer">>,
         [payer, customerID] => 12345678
     },
-    ?assertEqual(compare_signs(Set1, Set2), {false, #{wrong => [[payer]]}}),
+    ?assertEqual(compare_signs(Set1, erlang:term_to_binary(Set2)), {false, #{wrong => [[payer]]}}),
     ?assertEqual(
-        compare_signs(Set1, Set2#{[payer] => <<"ResourcePayer">>}),
+        compare_signs(Set1, erlang:term_to_binary(Set2#{[payer] => <<"ResourcePayer">>})),
         {false, #{
+            wrong => [],
             missing => [[payer, customerID]],
             excess => [[payer, paymentTool, token]]
         }}

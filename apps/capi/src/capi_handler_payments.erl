@@ -360,42 +360,50 @@ process_request('GetRefundByID', Req, Context) ->
 process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
-%% if externalID =:= undefined make start_payment without idempotent check
-create_payment(InvoiceID, PartyID, PaymentParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
+% create_payment(InvoiceID, PartyID, #{<<"externalID">> := ExternalID} = PaymentParams, Context, BenderPrefix) ->
+create_payment(InvoiceID, PartyID, PaymentParams, Context, BenderPrefix) ->
     %% WARNING!!! finish all -> 'TODO[0x42]:'
     ExternalID    = maps:get(<<"externalID">>, PaymentParams, undefined),
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Payer = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
     PaymentParamsDecrypted = PaymentParams#{<<"payer">> => Payer},
     IdempotentSigns = capi_idempotent:payment_signs(PaymentParamsDecrypted),
-    ParamsBin = to_params_bin(IdempotentSigns),
+    Hash = erlang:phash2(PaymentParams),
+    %% delete after transition period
+    Params = #{
+        legacy => Hash,
+        current => IdempotentSigns
+    },
+    #{woody_context := WoodyCtx} = Context,
     CtxData = #{<<"invoice_id">> => InvoiceID},
-
-    case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, ParamsBin, WoodyCtx, CtxData) of
+    case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Params, WoodyCtx, CtxData) of
         {ok, ID} ->
             start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context);
-        {external_id_busy, ID, ParamsOther} ->
-            SavedSigns = from_params_bin(ParamsOther),
+        {external_id_busy, ID, SavedSigns} ->
             case capi_idempotent:compare_signs(IdempotentSigns, SavedSigns) of
                 true ->
                     start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context);
                 {false, _Difference} ->
                     %% сделать более читаемы вывод ошибок с учетом Difference
                     {error, {external_id_conflict, ID, ExternalID}}
-            end
+            end;
+        %% Legacy
+        {error, {external_id_conflict, ID}} ->
+            {error, {external_id_conflict, ID, ExternalID}}
     end.
+% Uncomment after remove legacy code support
+% create_payment(InvoiceID, _PartyID, PaymentParams, Context, _) ->
+%     PaymentID = <<InvoiceID/binary, "/1">>,
+%     ExternalID = undefined,
+%     Payer = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
+%     PaymentParamsDecrypted = PaymentParams#{<<"payer">> => Payer},
+%     start_payment(PaymentID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context).
 
 start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context) ->
     InvoicePaymentParams = encode_invoice_payment_params(ExternalID, PaymentParamsDecrypted),
     InvoicePaymentParamsWithID = InvoicePaymentParams#payproc_InvoicePaymentParams{id = ID},
     Call = {invoicing, 'StartPayment', [InvoiceID, InvoicePaymentParamsWithID]},
     capi_handler_utils:service_call_with([user_info], Call, Context).
-
-to_params_bin(Terms) ->
-    erlang:term_to_binary(Terms).
-
-from_params_bin(Bin) ->
-    erlang:binary_to_term(Bin).
 
 decrypt_payer(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer) ->
     #{<<"paymentToolToken">> := Token} = Payer,
@@ -552,26 +560,43 @@ default_processing_deadline() ->
 %%
 
 create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
-    PartyID     = capi_handler_utils:get_party_id(Context),
-    ExternalID   = maps:get(<<"externalID">>, RefundParams, undefined),
+    PartyID = capi_handler_utils:get_party_id(Context),
+    ExternalID = maps:get(<<"externalID">>, RefundParams, undefined),
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
-    SequenceID   = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
-    CtxData     = #{<<"invoice_id">> => InvoiceID, <<"payment_id">> => PaymentID},
+    SequenceID = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
     Hash = erlang:phash2(RefundParams),
-    case capi_bender:gen_by_sequence(IdempotentKey, SequenceID, Hash, WoodyCtx, CtxData, #{minimum => 100}) of
+    RefundParamsFull = RefundParams#{<<"invoiceID">> => invoiceID, <<"paymentID">> => PaymentID},
+    IdempotentSigns = capi_idempotent:refund_signs(RefundParamsFull),
+    BenderParams = #{legacy => Hash, current => IdempotentSigns},
+    Params = #payproc_InvoicePaymentRefundParams{
+        external_id = ExternalID,
+        reason = genlib_map:get(<<"reason">>, RefundParams),
+        cash = encode_optional_cash(RefundParams, InvoiceID, PaymentID, Context),
+        cart = capi_handler_encoder:encode_invoice_cart(RefundParams)
+    },
+    case capi_bender:gen_by_sequence(IdempotentKey, SequenceID, BenderParams, WoodyCtx, #{}, #{minimum => 100}) of
         {ok, ID} ->
-            Params = #payproc_InvoicePaymentRefundParams{
-                id = ID,
-                external_id = ExternalID,
-                reason = genlib_map:get(<<"reason">>, RefundParams),
-                cash = encode_optional_cash(RefundParams, InvoiceID, PaymentID, Context),
-                cart = capi_handler_encoder:encode_invoice_cart(RefundParams)
-            },
-            Call = {invoicing, 'RefundPayment', [InvoiceID, PaymentID, Params]},
-            capi_handler_utils:service_call_with([user_info], Call, Context);
+            refund_payment(ID, InvoiceID, PaymentID, Params, Context);
+        {external_id_busy, ID, SavedSigns} ->
+            case capi_idempotent:compare_signs(IdempotentSigns, SavedSigns) of
+                true ->
+                    refund_payment(ID, InvoiceID, PaymentID, Params, Context);
+                {false, _Difference} ->
+                    %% сделать более читаемы вывод ошибок с учетом Difference
+                    {error, {external_id_conflict, ID, ExternalID}}
+            end;
+        %% Legacy
         {error, {external_id_conflict, ID}} ->
             {error, {external_id_conflict, ID, ExternalID}}
     end.
+
+refund_payment(RefundID, InvoiceID, PaymentID, Params, Context) ->
+    Call = {invoicing, 'RefundPayment', [
+        InvoiceID,
+        PaymentID,
+        Params#payproc_InvoicePaymentRefundParams{id = RefundID}
+    ]},
+    capi_handler_utils:service_call_with([user_info], Call, Context).
 
 %%
 

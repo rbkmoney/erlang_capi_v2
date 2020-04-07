@@ -175,15 +175,30 @@ process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
+    CreateFun = fun(InvoiceID) ->
+        Call = {invoicing, 'CreateWithTemplate', [encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams)]},
+        capi_handler_utils:service_call_with([user_info, party_creation], Call, Context)
+    end,
     ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
     % CAPI#344: Since the prefixes are different, it's possible to create 2 copies of the same Invoice with the same
     % externalId by using `CreateInvoice` and `CreateInvoiceWithTemplate` together
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2({InvoiceTplID, InvoiceParams}),
-    case capi_bender:gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) of
+    IdempotentSigns = capi_idempotent:invoice_signs(InvoiceParams),
+    BenderParams = #{legacy => Hash, current => IdempotentSigns},
+
+    case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
         {ok, ID} ->
-            Call = {invoicing, 'CreateWithTemplate', [encode_invoice_params_with_tpl(ID, InvoiceTplID, InvoiceParams)]},
-            capi_handler_utils:service_call_with([user_info, party_creation], Call, Context);
+            CreateFun(ID);
+        {external_id_busy, ID, OtherSigns} ->
+            case capi_idempotent:compare_signs(IdempotentSigns, OtherSigns) of
+                true ->
+                    CreateFun(ID);
+                {false, _Difference} ->
+                    %% сделать более читаемы вывод ошибок с учетом Difference
+                    throw({external_id_conflict, ID, ExternalID})
+            end;
+        %% Legacy
         {error, {external_id_conflict, ID}} ->
             throw({external_id_conflict, ID, ExternalID})
     end.

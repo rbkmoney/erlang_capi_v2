@@ -29,7 +29,10 @@
 -export([
     create_invoice_ok_test/1,
     create_invoice_idemp_ok_test/1,
+    create_invoice_idemp_fail_legacy_test/1,
     create_invoice_idemp_fail_test/1,
+    create_invoice_idemp_cart_ok_test/1,
+    create_invoice_idemp_cart_fail_test/1,
     get_invoice_by_external_id/1,
     create_invoice_access_token_ok_test/1,
     create_invoice_template_ok_test/1,
@@ -41,6 +44,7 @@
     fulfill_invoice_ok_test/1,
     get_merchant_payment_status_test/1,
     create_refund/1,
+    create_refund_legacy/1,
     create_refund_idemp_ok_test/1,
     create_refund_error/1,
     create_refund_idemp_fail_test/1,
@@ -139,8 +143,11 @@ groups() ->
             [
                 create_invoice_ok_test,
                 create_invoice_idemp_ok_test,
+                create_invoice_idemp_fail_legacy_test,
                 create_invoice_idemp_fail_test,
-                get_invoice_by_external_id,
+                create_invoice_idemp_cart_ok_test,
+                create_invoice_idemp_cart_fail_test,
+                % get_invoice_by_external_id,
                 create_invoice_access_token_ok_test,
                 create_invoice_template_ok_test,
                 create_invoice_with_template_test,
@@ -150,6 +157,7 @@ groups() ->
                 fulfill_invoice_ok_test,
                 get_merchant_payment_status_test,
                 create_refund,
+                create_refund_legacy,
                 create_refund_idemp_ok_test,
                 create_refund_error,
                 create_refund_idemp_fail_test,
@@ -318,9 +326,9 @@ create_invoice_idemp_ok_test(Config) ->
     ?assertEqual(ExternalID, maps:get(<<"externalID">>, Invoice)),
     ?assertEqual(Invoice, Invoice2).
 
--spec create_invoice_idemp_fail_test(config()) ->
+-spec create_invoice_idemp_fail_legacy_test(config()) ->
     _.
-create_invoice_idemp_fail_test(Config) ->
+create_invoice_idemp_fail_legacy_test(Config) ->
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
     Req = #{
@@ -333,7 +341,7 @@ create_invoice_idemp_fail_test(Config) ->
         <<"description">> => <<"test_invoice_description">>,
         <<"externalID">>  => ExternalID
     },
-    Ctx = capi_msgp_marshalling:marshal(#{<<"params_hash">> => erlang:phash2(Req)}),
+    Ctx = capi_msgp_marshalling:marshal(#{<<"version">> => 1,<<"params_hash">> => erlang:phash2(Req)}),
     capi_ct_helper:mock_services([
         {invoicing, fun('Create', [_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}]) ->
             {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
@@ -353,6 +361,131 @@ create_invoice_idemp_fail_test(Config) ->
         Req#{<<"product">> => <<"test_product2">>}
     ),
     ?assertEqual(BadExternalID, Response).
+
+-spec create_invoice_idemp_fail_test(config()) ->
+    _.
+create_invoice_idemp_fail_test(Config) ->
+    BenderKey = <<"bender_key">>,
+    ExternalID = <<"merch_id">>,
+    Tid = capi_ct_helper_bender:create_storage(),
+    Req = #{
+        <<"shopID">>      => ?STRING,
+        <<"amount">>      => ?INTEGER,
+        <<"currency">>    => ?RUB,
+        <<"metadata">>    => #{<<"invoice_dummy_metadata">> => <<"test_value">>},
+        <<"dueDate">>     => ?TIMESTAMP,
+        <<"product">>     => <<"test_product">>,
+        <<"description">> => <<"test_invoice_description">>,
+        <<"externalID">>  => ExternalID
+    },
+    capi_ct_helper:mock_services([
+        {invoicing, fun('Create', [_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}]) ->
+            {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
+        end},
+        {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
+            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+        end}
+    ], Config),
+
+    {ok, #{<<"invoice">> := Invoice}} = capi_client_invoices:create_invoice(?config(context, Config), Req),
+    InvoiceID = maps:get(<<"id">>, Invoice),
+    BadExternalID = {error, {409, #{
+        <<"externalID">> => ExternalID,
+        <<"id">>         => InvoiceID,
+        <<"message">>    => <<"This 'externalID' has been used by another request">>
+    }}},
+    Response = capi_client_invoices:create_invoice(
+        ?config(context, Config),
+        Req#{<<"product">> => <<"test_product2">>}
+    ),
+    ?assertEqual(BadExternalID, Response),
+    capi_ct_helper_bender:del_storage(Tid).
+
+-spec create_invoice_idemp_cart_ok_test(config()) ->
+    _.
+create_invoice_idemp_cart_ok_test(Config) ->
+    BenderKey = <<"bender_key">>,
+    ExternalID = <<"merch_id">>,
+    Tid = capi_ct_helper_bender:create_storage(),
+    Req = #{
+        <<"shopID">>      => ?STRING,
+        <<"amount">>      => ?INTEGER,
+        <<"currency">>    => ?RUB,
+        <<"metadata">>    => #{<<"invoice_dummy_metadata">> => <<"test_value">>},
+        <<"dueDate">>     => ?TIMESTAMP,
+        <<"product">>     => <<"test_products">>,
+        <<"description">> => <<"test_invoice_description">>,
+        <<"cart">>        => [
+            #{
+                <<"product">> => <<"product#1">>,
+                <<"quantity">> => 1,
+                <<"price">> => ?INTEGER
+            }
+        ],
+        <<"externalID">>  => ExternalID
+    },
+    capi_ct_helper:mock_services([
+        {invoicing, fun('Create', [_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}]) ->
+            {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
+        end},
+        {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
+            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+        end}
+    ], Config),
+
+    {ok, #{<<"invoice">> := Invoice}} = capi_client_invoices:create_invoice(?config(context, Config), Req),
+    InvoiceID = maps:get(<<"id">>, Invoice),
+    {ok, #{<<"invoice">> := Invoice}} = capi_client_invoices:create_invoice(?config(context, Config), Req),
+    ?assertEqual(InvoiceID, maps:get(<<"id">>, Invoice)),
+    capi_ct_helper_bender:del_storage(Tid).
+
+-spec create_invoice_idemp_cart_fail_test(config()) ->
+    _.
+create_invoice_idemp_cart_fail_test(Config) ->
+    BenderKey = <<"bender_key">>,
+    ExternalID = <<"merch_id">>,
+    Tid = capi_ct_helper_bender:create_storage(),
+    Req = #{
+        <<"shopID">>      => ?STRING,
+        <<"amount">>      => ?INTEGER,
+        <<"currency">>    => ?RUB,
+        <<"metadata">>    => #{<<"invoice_dummy_metadata">> => <<"test_value">>},
+        <<"dueDate">>     => ?TIMESTAMP,
+        <<"product">>     => <<"test_products">>,
+        <<"description">> => <<"test_invoice_description">>,
+        <<"cart">>        => [
+            #{
+                <<"product">> => <<"product#1">>,
+                <<"quantity">> => 1,
+                <<"price">> => ?INTEGER
+            }
+        ],
+        <<"externalID">>  => ExternalID
+    },
+    capi_ct_helper:mock_services([
+        {invoicing, fun('Create', [_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}]) ->
+            {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
+        end},
+        {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
+            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+        end}
+    ], Config),
+
+    {ok, _} = capi_client_invoices:create_invoice(?config(context, Config), Req),
+    Response = capi_client_invoices:create_invoice(?config(context, Config), Req#{
+        <<"cart">> => [
+            #{
+                <<"product">> => <<"product#1">>,
+                <<"quantity">> => 2,
+                <<"price">> => ?INTEGER
+            }
+        ]
+    }),
+    ?assertMatch({error, {409, #{
+        <<"externalID">> := ExternalID,
+        <<"id">> := BenderKey
+    }}}, Response),
+    capi_ct_helper_bender:del_storage(Tid).
 
 -spec get_invoice_by_external_id(config()) ->
     _.
@@ -535,24 +668,42 @@ get_failed_payment_with_invalid_cvv(Config) ->
     % mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
     capi_client_payments:get_payment_by_id(?config(context, Config), ?STRING, ?STRING).
 
-
--spec create_refund(config()) ->
+-spec create_refund_legacy(config()) ->
     _.
-create_refund(Config) ->
+create_refund_legacy(Config) ->
     BenderKey = <<"bender_key">>,
     Req = #{<<"reason">> => ?STRING},
-    Ctx = capi_msgp_marshalling:marshal(#{<<"params_hash">> => erlang:phash2(Req)}),
+    Ctx = capi_msgp_marshalling:marshal(#{
+        <<"version">> => 1,
+        <<"params_hash">> => erlang:phash2(Req)
+    }),
     capi_ct_helper:mock_services([
         {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end},
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
     ], Config),
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 
+-spec create_refund(config()) ->
+    _.
+create_refund(Config) ->
+    BenderKey = <<"bender_key">>,
+    Req = #{<<"reason">> => ?STRING},
+    Tid = capi_ct_helper_bender:create_storage(),
+    capi_ct_helper:mock_services([
+        {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end},
+        {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
+            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+        end}
+    ], Config),
+    {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
+    capi_ct_helper_bender:del_storage(Tid).
+
 -spec create_refund_idemp_ok_test(config()) ->
     _.
 create_refund_idemp_ok_test(Config) ->
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
+    Tid = capi_ct_helper_bender:create_storage(),
     capi_ct_helper:mock_services([
         {invoicing,
             fun(
@@ -561,7 +712,9 @@ create_refund_idemp_ok_test(Config) ->
             ) ->
                 {ok, ?REFUND(ID, EID)}
         end},
-        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
+        {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
+            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+        end}
     ], Config),
     Req = #{
         <<"reason">> => ?STRING,
@@ -572,14 +725,15 @@ create_refund_idemp_ok_test(Config) ->
     {ok, Refund2} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
     ?assertEqual(BenderKey,  maps:get(<<"id">>, Refund)),
     ?assertEqual(ExternalID, maps:get(<<"externalID">>, Refund)),
-    ?assertEqual(Refund, Refund2).
+    ?assertEqual(Refund, Refund2),
+    capi_ct_helper_bender:del_storage(Tid).
 
 -spec create_refund_error(config()) ->
     _.
 create_refund_error(Config) ->
     BenderKey = <<"bender_key">>,
     Req = #{<<"reason">> => ?STRING},
-    Ctx = capi_msgp_marshalling:marshal(#{<<"params_hash">> => erlang:phash2(Req)}),
+    Tid = capi_ct_helper_bender:create_storage(),
     capi_ct_helper:mock_services([
         {invoicing, fun
             ('RefundPayment', [_, <<"42">> | _]) ->
@@ -591,10 +745,13 @@ create_refund_error(Config) ->
                     status = {expired, #domain_ContractExpired{}}
                 })
         end},
-        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
+        {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
+            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+        end}
     ], Config),
     {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"42">>, ?STRING),
-    {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"43">>, ?STRING).
+    {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"43">>, ?STRING),
+    capi_ct_helper_bender:del_storage(Tid).
 
 -spec create_refund_idemp_fail_test(config()) ->
     _.
@@ -604,9 +761,11 @@ create_refund_idemp_fail_test(Config) ->
     Req = #{
         <<"reason">> => ?STRING,
         <<"externalID">>  => ExternalID,
-        <<"id">> => ?STRING
+        <<"id">> => ?STRING,
+        <<"amount">> => 10000,
+        <<"currency">> => <<"RUB">>
     },
-    Ctx = capi_msgp_marshalling:marshal(#{<<"params_hash">> => erlang:phash2(Req)}),
+    Tid = capi_ct_helper_bender:create_storage(),
     capi_ct_helper:mock_services([
         {invoicing,
             fun(
@@ -615,7 +774,9 @@ create_refund_idemp_fail_test(Config) ->
             ) ->
                 {ok, ?REFUND(ID, EID)}
         end},
-        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
+        {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
+            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+        end}
     ], Config),
     {ok, Refund} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
     RefundID = maps:get(<<"id">>, Refund),
@@ -624,8 +785,9 @@ create_refund_idemp_fail_test(Config) ->
         <<"id">>         => RefundID,
         <<"message">>    => <<"This 'externalID' has been used by another request">>
     }}},
-    Req1 = Req#{<<"reason">> => <<"because">>},
-    BadExternalID = capi_client_payments:create_refund(?config(context, Config), Req1, ?STRING, ?STRING).
+    Req1 = Req#{<<"amount">> => 100},
+    BadExternalID = capi_client_payments:create_refund(?config(context, Config), Req1, ?STRING, ?STRING),
+    capi_ct_helper_bender:del_storage(Tid).
 
 -spec create_partial_refund(config()) ->
     _.
@@ -643,12 +805,16 @@ create_partial_refund(Config) ->
         <<"amount">> => ?INTEGER,
         <<"cart">> => ?INVOICE_CART
     },
-    Ctx = capi_msgp_marshalling:marshal(#{<<"params_hash">> => erlang:phash2(Req)}),
+    Tid = capi_ct_helper_bender:create_storage(),
     capi_ct_helper:mock_services([
         {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end},
-        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
+        {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
+            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+        end}
     ], Config),
-    {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
+
+    {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
+    capi_ct_helper_bender:del_storage(Tid).
 
 -spec create_partial_refund_without_currency(config()) ->
     _.
@@ -658,7 +824,7 @@ create_partial_refund_without_currency(Config) ->
         <<"reason">> => ?STRING,
         <<"amount">> => ?INTEGER
     },
-    Ctx = capi_msgp_marshalling:marshal(#{<<"params_hash">> => erlang:phash2(Req)}),
+    Tid = capi_ct_helper_bender:create_storage(),
     capi_ct_helper:mock_services([
         {
             invoicing,
@@ -669,9 +835,12 @@ create_partial_refund_without_currency(Config) ->
                     {ok, ?REFUND}
             end
         },
-        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
+        {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
+            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+        end}
     ], Config),
-    {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
+    {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
+    capi_ct_helper_bender:del_storage(Tid).
 
 -spec get_refund_by_id(config()) ->
     _.
