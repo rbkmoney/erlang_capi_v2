@@ -139,15 +139,10 @@
         email = <<"test@test.ru">>
     }).
 
--define(EXP_DATE, #domain_BankCardExpDate{
-        month = 2,
-        year = 2020
+-define(EXP_DATE(Month, Year), #domain_BankCardExpDate{
+        month = Month,
+        year = Year
     }).
-
--define(EXP_DATE2, #domain_BankCardExpDate{
-    month = 12,
-    year = 2021
-}).
 
 -define(DISP_PAYMENT_RESOURCE, #domain_DisposablePaymentResource{
     payment_tool = {bank_card, ?BANK_CARD},

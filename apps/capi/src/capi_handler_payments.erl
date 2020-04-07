@@ -379,7 +379,7 @@ create_payment(InvoiceID, PartyID, PaymentParams, Context, BenderPrefix) ->
     case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Params, WoodyCtx, CtxData) of
         {ok, ID} ->
             start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context);
-        {external_id_busy, ID, SavedSigns} ->
+        {ok, ID, SavedSigns} ->
             case capi_idempotent:compare_signs(IdempotentSigns, SavedSigns) of
                 true ->
                     start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context);
@@ -400,9 +400,8 @@ create_payment(InvoiceID, PartyID, PaymentParams, Context, BenderPrefix) ->
 %     start_payment(PaymentID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context).
 
 start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context) ->
-    InvoicePaymentParams = encode_invoice_payment_params(ExternalID, PaymentParamsDecrypted),
-    InvoicePaymentParamsWithID = InvoicePaymentParams#payproc_InvoicePaymentParams{id = ID},
-    Call = {invoicing, 'StartPayment', [InvoiceID, InvoicePaymentParamsWithID]},
+    InvoicePaymentParams = encode_invoice_payment_params(ID, ExternalID, PaymentParamsDecrypted),
+    Call = {invoicing, 'StartPayment', [InvoiceID, InvoicePaymentParams]},
     capi_handler_utils:service_call_with([user_info], Call, Context).
 
 decrypt_payer(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer) ->
@@ -414,9 +413,6 @@ decrypt_payer(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer) ->
                 <<"paymentToolThrift">> => PaymentToolThrift,
                 <<"paymentTool">> => PaymentTool
             };
-        unrecognized ->
-            logger:warning("Payment tool token unrecognized: ~p", [Token]),
-            erlang:throw(invalid_token);
         {error, {decryption_failed, Error}} ->
             logger:warning("Payment tool token decryption failed: ~p", [Error]),
             erlang:throw(invalid_token)
@@ -424,9 +420,10 @@ decrypt_payer(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer) ->
 decrypt_payer(CustomerOrRecurrentPayer) ->
     CustomerOrRecurrentPayer.
 
-encode_invoice_payment_params(ExternalID, PaymentParams) ->
+encode_invoice_payment_params(ID, ExternalID, PaymentParams) ->
     Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
     #payproc_InvoicePaymentParams{
+        id                  = ID,
         external_id         = ExternalID,
         payer               = encode_payer_params(genlib_map:get(<<"payer">>, PaymentParams)),
         flow                = encode_flow(Flow),
@@ -577,7 +574,7 @@ create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} =
     case capi_bender:gen_by_sequence(IdempotentKey, SequenceID, BenderParams, WoodyCtx, #{}, #{minimum => 100}) of
         {ok, ID} ->
             refund_payment(ID, InvoiceID, PaymentID, Params, Context);
-        {external_id_busy, ID, SavedSigns} ->
+        {ok, ID, SavedSigns} ->
             case capi_idempotent:compare_signs(IdempotentSigns, SavedSigns) of
                 true ->
                     refund_payment(ID, InvoiceID, PaymentID, Params, Context);

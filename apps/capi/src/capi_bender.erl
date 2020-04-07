@@ -33,16 +33,16 @@
 
 -spec gen_by_snowflake(binary(), integer(), woody_context()) ->
     {ok, binary()} |
-    {error, {external_id_conflict, binary()}}|
-    {external_id_busy, binary(), binary()}.
+    {ok, binary(), binary()} |
+    {error, {external_id_conflict, binary()}}.
 
 gen_by_snowflake(IdempotentKey, Hash, WoodyContext) ->
     gen_by_snowflake(IdempotentKey, Hash, WoodyContext, #{}).
 
 -spec gen_by_snowflake(binary(), integer(), woody_context(), context_data()) ->
     {ok, binary()} |
-    {error, {external_id_conflict, binary()}} |
-    {external_id_busy, binary(), binary()}.
+    {ok, binary(), binary()} |
+    {error, {external_id_conflict, binary()}}.
 
 gen_by_snowflake(IdempotentKey, Hash, WoodyContext, CtxData) ->
     Snowflake = {snowflake, #bender_SnowflakeSchema{}},
@@ -50,24 +50,24 @@ gen_by_snowflake(IdempotentKey, Hash, WoodyContext, CtxData) ->
 
 -spec gen_by_sequence(binary(), binary(), params(), woody_context()) ->
     {ok, binary()} |
-    {error, {external_id_conflict, binary()}} |
-    {external_id_busy, binary(), binary()}.
+    {ok, binary(), binary()} |
+    {error, {external_id_conflict, binary()}}.
 
 gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext) ->
     gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext, #{}).
 
 -spec gen_by_sequence(binary(), binary(), params(), woody_context(), context_data()) ->
     {ok, binary()} |
-    {error, {external_id_conflict, binary()}} | %% legacy delete
-    {external_id_busy, binary(), binary()}.
+    {external_id_busy, binary(), binary()}|
+    {error, {external_id_conflict, binary()}}. %% legacy delete
 
 gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext, CtxData) ->
     gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext, CtxData, #{}).
 
 -spec gen_by_sequence(binary(), binary(), params(), woody_context(), context_data(), sequence_params()) ->
     {ok, binary()} |
-    {error, {external_id_conflict, binary()}} | %% legacy delete
-    {external_id_busy, binary(), binary()}.
+    {ok, binary(), binary()} |
+    {error, {external_id_conflict, binary()}}. %% legacy delete
 
 gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext, CtxData, SeqParams) ->
     Minimum = maps:get(minimum, SeqParams, undefined),
@@ -144,7 +144,7 @@ generate_id(Key, BenderSchema, Params, WoodyContext, CtxData) ->
         {ok, ID, #{<<"version">> := ?SCHEMA_VER1} = DeprecatedCtx} ->
             idepmotent_conflict_legacy(ID, Hash, DeprecatedCtx);
         {ok, ID, #{<<"version">> := ?SCHEMA_VER2, <<"params_bin">> := ParamsBin}} ->
-            {external_id_busy, ID, ParamsBin}
+            {ok, ID, ParamsBin}
     end.
 
 idepmotent_conflict_legacy(ID, Hash, #{<<"params_hash">> := Hash}) ->

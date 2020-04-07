@@ -86,7 +86,6 @@ filter_attribute(Attribute, ParamsFlat) ->
 %%
 payment_attributes() ->
     [
-        [<<"externalID">>],
         {cut_name, [<<"payer">>, <<"payerType">>]},
         {cut_name, [<<"payer">>, <<"paymentTool">>, <<"type">>]},
         [<<"payer">>, <<"paymentTool">>, <<"token">>],

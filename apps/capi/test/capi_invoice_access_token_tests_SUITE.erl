@@ -230,7 +230,7 @@ create_payment_ok_test(Config) ->
         ],
         Config
     ),
-    PaymentToolToken = get_encrypted_token(visa, ?EXP_DATE),
+    PaymentToolToken = get_encrypted_token(visa, ?EXP_DATE(2, 2020)),
     Req2 = #{
         <<"externalID">> => ExternalID,
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
@@ -264,14 +264,14 @@ create_payment_ok_idemp_test(Config) ->
                 {ok, ?PAYPROC_PAYMENT(ID, EID)}
             end},
             {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-                capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+                capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
             end}
         ],
         Config
     ),
     ContactInfo = #{},
-    Jwe1 = get_encrypted_token(visa, ?EXP_DATE),
-    Jwe2 = get_encrypted_token(visa, ?EXP_DATE),
+    Jwe1 = get_encrypted_token(visa, ?EXP_DATE(2, 2020)),
+    Jwe2 = get_encrypted_token(visa, ?EXP_DATE(2, 2020)),
     Req1 = get_req_create_payment(ExternalID, Jwe1, ContactInfo, undefined),
     Req2 = get_req_create_payment(ExternalID, Jwe2, ContactInfo, false),
     {ok, Response} = capi_client_payments:create_payment(?config(context, Config), Req1, ?STRING),
@@ -292,14 +292,14 @@ create_payment_id_conflict_test(Config) ->
                 {ok, ?PAYPROC_PAYMENT(ID, EID)}
             end},
             {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-                capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+                capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
             end}
         ],
         Config
     ),
     ContactInfo = #{},
-    Jwe1 = get_encrypted_token(visa, ?EXP_DATE),
-    Jwe2 = get_encrypted_token(visa, ?EXP_DATE2),
+    Jwe1 = get_encrypted_token(visa, ?EXP_DATE(1, 2020)),
+    Jwe2 = get_encrypted_token(visa, ?EXP_DATE(2, 2020)),
     Req1 = get_req_create_payment(ExternalID, Jwe1, ContactInfo, undefined),
     Req2 = get_req_create_payment(ExternalID, Jwe2, ContactInfo, false),
     {ok, _Response} = capi_client_payments:create_payment(?config(context, Config), Req1, ?STRING),
@@ -332,7 +332,7 @@ create_payment_with_empty_cvv_ok_test(Config) ->
         ],
         Config
     ),
-    PaymentToolToken = get_encrypted_token(visa, ?EXP_DATE, true),
+    PaymentToolToken = get_encrypted_token(visa, ?EXP_DATE(1, 2020), true),
     Req2 = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"payer">> => #{
@@ -402,7 +402,7 @@ create_payment_with_googlepay_plain_ok_test(Config) ->
             end},
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
     ], Config),
-    PaymentToolToken = get_encrypted_token(mastercard, ?EXP_DATE),
+    PaymentToolToken = get_encrypted_token(mastercard, ?EXP_DATE(1, 2020)),
     Req2 = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"payer">> => #{
@@ -483,7 +483,7 @@ create_first_recurrent_payment_ok_test(Config) ->
         ],
         Config
     ),
-    PaymentToolToken = get_encrypted_token(visa, ?EXP_DATE),
+    PaymentToolToken = get_encrypted_token(visa, ?EXP_DATE(1, 2020)),
     Req2 = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"makeRecurrent">> => true,

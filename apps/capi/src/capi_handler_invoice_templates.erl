@@ -190,7 +190,7 @@ create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx
     case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
         {ok, ID} ->
             CreateFun(ID);
-        {external_id_busy, ID, OtherSigns} ->
+        {ok, ID, OtherSigns} ->
             case capi_idempotent:compare_signs(IdempotentSigns, OtherSigns) of
                 true ->
                     CreateFun(ID);

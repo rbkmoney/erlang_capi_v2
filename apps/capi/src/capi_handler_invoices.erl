@@ -37,8 +37,6 @@ process_request('CreateInvoice' = OperationID, Req, Context) ->
             {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
         invalid_invoice_cost ->
             {ok, logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)};
-        {external_id_busy, InvoiceID, ExternalID} ->
-            {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})};
         {external_id_conflict, InvoiceID, ExternalID} ->
             {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
     end;
@@ -203,7 +201,7 @@ create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context, B
     case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
         {ok, ID} ->
             CreateFun(ID);
-        {external_id_busy, ID, OtherSigns} ->
+        {ok, ID, OtherSigns} ->
             case capi_idempotent:compare_signs(IdempotentSigns, OtherSigns) of
                 true ->
                     CreateFun(ID);

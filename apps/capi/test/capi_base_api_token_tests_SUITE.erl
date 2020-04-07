@@ -383,7 +383,7 @@ create_invoice_idemp_fail_test(Config) ->
             {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
         end},
         {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+            capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
         end}
     ], Config),
 
@@ -429,7 +429,7 @@ create_invoice_idemp_cart_ok_test(Config) ->
             {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
         end},
         {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+            capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
         end}
     ], Config),
 
@@ -467,7 +467,7 @@ create_invoice_idemp_cart_fail_test(Config) ->
             {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
         end},
         {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+            capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
         end}
     ], Config),
 
@@ -692,7 +692,7 @@ create_refund(Config) ->
     capi_ct_helper:mock_services([
         {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end},
         {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+            capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
         end}
     ], Config),
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
@@ -713,7 +713,7 @@ create_refund_idemp_ok_test(Config) ->
                 {ok, ?REFUND(ID, EID)}
         end},
         {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+            capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
         end}
     ], Config),
     Req = #{
@@ -746,7 +746,7 @@ create_refund_error(Config) ->
                 })
         end},
         {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+            capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
         end}
     ], Config),
     {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"42">>, ?STRING),
@@ -775,7 +775,7 @@ create_refund_idemp_fail_test(Config) ->
                 {ok, ?REFUND(ID, EID)}
         end},
         {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+            capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
         end}
     ], Config),
     {ok, Refund} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
@@ -809,7 +809,7 @@ create_partial_refund(Config) ->
     capi_ct_helper:mock_services([
         {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end},
         {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+            capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
         end}
     ], Config),
 
@@ -836,7 +836,7 @@ create_partial_refund_without_currency(Config) ->
             end
         },
         {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-            capi_ct_helper_bender:compare_context(Tid, BenderKey, CtxMsgPack)
+            capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
         end}
     ], Config),
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
