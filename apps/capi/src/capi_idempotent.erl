@@ -9,7 +9,7 @@
 -type feature_value() :: any().
 -type features()      :: [{feature_name(), feature_value()}].
 -type difference() :: #{
-    wrong   => [feature_name()],
+    unequal   => [feature_name()],
     excess  => [feature_name()],
     missing => [feature_name()]
 }.
@@ -23,11 +23,11 @@ compare_features(NewFeaturesBin, OldFeaturesBin) ->
     NewFeatures = erlang:binary_to_term(NewFeaturesBin),
     OldFeatures = erlang:binary_to_term(OldFeaturesBin),
 
-    WrongFeatures   = wrong_features(NewFeatures, OldFeatures),
-    ExcessFeatures  = delete_same_prefix(WrongFeatures, excess_features(NewFeatures, OldFeatures)),
-    MissingFeatures = delete_same_prefix(WrongFeatures, missing_features(NewFeatures, OldFeatures)),
+    UnEqualFeatures = unequal_features(NewFeatures, OldFeatures),
+    ExcessFeatures  = delete_same_prefix(UnEqualFeatures, excess_features(NewFeatures, OldFeatures)),
+    MissingFeatures = delete_same_prefix(UnEqualFeatures, missing_features(NewFeatures, OldFeatures)),
     {false, genlib_map:compact(#{
-        wrong => WrongFeatures,
+        unequal => UnEqualFeatures,
         excess => ExcessFeatures,
         missing => MissingFeatures
     })}.
@@ -116,7 +116,7 @@ refund_attributes() ->
 
 %% sets intersection by features values
 
-wrong_features(NewFeatures, OldFeatures) ->
+unequal_features(NewFeatures, OldFeatures) ->
     Keys = maps:keys(OldFeatures),
     maps:fold(fun(K, Value, Acc) ->
         case maps:get(K, OldFeatures) of
