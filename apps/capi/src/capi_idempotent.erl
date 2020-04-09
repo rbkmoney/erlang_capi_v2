@@ -170,8 +170,8 @@ wrong_features_test() ->
         [a] => 1,
         [a, b] => 3
     },
-    ?assertEqual(wrong_features(Set1, Set2#{[a,b] => 2}), []),
-    ?assertEqual(wrong_features(Set1, Set2), [[a, b]]).
+    ?assertEqual(unequal_features(Set1, Set2#{[a,b] => 2}), []),
+    ?assertEqual(unequal_features(Set1, Set2), [[a, b]]).
 
 -spec excess_features_test() -> _.
 excess_features_test() ->
@@ -192,11 +192,11 @@ compare_features_test() ->
         [payer] => <<"CustomerPayer">>,
         [payer, customerID] => 12345678
     },
-    ?assertEqual(compare_features(Set1, erlang:term_to_binary(Set2)), {false, #{wrong => [[payer]]}}),
+    ?assertEqual(compare_features(Set1, erlang:term_to_binary(Set2)), {false, #{unequal => [[payer]]}}),
     ?assertEqual(
         compare_features(Set1, erlang:term_to_binary(Set2#{[payer] => <<"ResourcePayer">>})),
         {false, #{
-            wrong => [],
+            unequal => [],
             missing => [[payer, customerID]],
             excess => [[payer, paymentTool, token]]
         }}

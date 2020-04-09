@@ -12,6 +12,9 @@
 -export([refund_features/1]).
 -export([compare_features/2]).
 
+-export([payment_features_2/1]).
+% -export([compare_features_2/2]).
+
 -spec payment_features(payment_swag()) ->
     features().
 
@@ -29,31 +32,91 @@ payment_features(PaymentSwag) ->
     ],
     read_features_value(Features, PaymentSwag).
 
-%% payer.payerType = CustomerPayer, PaymentResourcePayer, RecurrentPayer
-% foo() ->
-% #{
-%     payer => {
-%         {swag, [<<"payer">>, <<"payerType">>]}, #{
-%         <<"CustomerPayer">> => #{
-%             customerID => {swag, [<<"payer">>, <<"CustomerID">>]}
-%         },
-%         <<"PaymentResourcePayer">> => {
-%             {swag, [<<"payer">>, <<"paymentTool">>, <<"type">>]}, #{
-%                 <<"bank_card">> => #{
-%                     token           => {swag, [<<"payer">>, <<"paymentTool">>, <<"token">>]},
-%                     cardholder_name => {swag, [<<"payer">>, <<"paymentTool">>, <<"cardholder_name">>]},
-%                     exp_date        => {swag, [<<"payer">>, <<"paymentTool">>, <<"exp_date">>]}
-%                 },
-%                 <<"digital_wallet">> => #{
-%                     provider => {swag, [<<"payer">>, <<"paymentTool">>, <<"provider">>]},
-%                     id       => {swag, [<<"payer">>, <<"paymentTool">>, <<"id">>]},
-%                     token    => {swag, [<<"payer">>, <<"paymentTool">>, <<"token">>]}
-%                 }
-%             }
-%         }}
 
-%     }
-% }.
+%% ---------------
+%% Second version
+%% ---------------
+
+-type pfeatures() :: #{
+    payer => {payer_type(), customer() | payment_resource()}
+}.
+
+
+-type payer_type()        :: binary().
+-type payment_tool_type() :: binary().
+-type customer()          :: #{customerID => binary()}.
+-type payment_resource()  :: {payment_tool_type(), bank_card() | payment_terminal()}.
+-type bank_card()         :: #{
+    token => binary(),
+    cardholder_name => binary(),
+    exp_date => any()
+}.
+-type payment_terminal() :: #{terminal_type => binary()}.
+
+-spec payment_features_2(payment_swag()) -> pfeatures().
+
+payment_features_2(Swag) ->
+    PayerType       = get_swag_value([<<"payer">>, <<"payerType">>],                          Swag),
+    CustomerID      = get_swag_value([<<"payer">>, <<"CustomerID">>],                         Swag),
+    PaymentToolType = get_swag_value([<<"payer">>, <<"paymentTool">>, <<"type">>],            Swag),
+    Token           = get_swag_value([<<"payer">>, <<"paymentTool">>, <<"token">>],           Swag),
+    CardHolderName  = get_swag_value([<<"payer">>, <<"paymentTool">>, <<"cardholder_name">>], Swag),
+    ExpDate         = get_swag_value([<<"payer">>, <<"paymentTool">>, <<"exp_date">>],        Swag),
+    Provider        = get_swag_value([<<"payer">>, <<"paymentTool">>, <<"provider">>],        Swag),
+    ID              = get_swag_value([<<"payer">>, <<"paymentTool">>, <<"id">>],              Swag),
+    TerminalType    = get_swag_value([<<"payer">>, <<"paymentTool">>, <<"terminal_type">>],   Swag),
+    CryptoCurrency  = get_swag_value([<<"payer">>, <<"paymentTool">>, <<"currency">>],        Swag),
+    Operator        = get_swag_value([<<"payer">>, <<"paymentTool">>, <<"operator">>],        Swag),
+    Phone           = get_swag_value([<<"payer">>, <<"paymentTool">>, <<"phone">>],           Swag),
+    gen_features(#{
+        payer => {PayerType, #{
+            <<"CustomerPayer">> => #{
+                customerID => CustomerID
+            },
+            <<"PaymentResourcePayer">> => #{
+                payment_tool => {PaymentToolType, #{
+                    <<"bank_card">> => #{
+                        token           => Token,
+                        cardholder_name => CardHolderName,
+                        exp_date        => ExpDate
+                    },
+                    <<"payment_terminal">> => #{
+                        terminal_type => TerminalType
+                    },
+                    <<"digital_wallet">> => #{
+                        provider => Provider,
+                        id       => ID,
+                        token    => Token
+                    },
+                    <<"crypto_currency">> => #{
+                        currency => CryptoCurrency
+                    },
+                    <<"mobile_commerce">> => #{
+                        operator => Operator,
+                        phone => Phone
+                    }
+                }}
+            }}
+        }
+    }).
+-include_lib("eunit/include/eunit.hrl").
+
+gen_features(Features) ->
+    maps:fold(fun
+        (K, Values, Acc) when is_map(Values) ->
+            Acc#{K => gen_features(Values)};
+        (K, {Name, Values}, Acc) when is_map(Values) ->
+            case maps:get(Name, Values) of
+                Map when is_map(Map) -> Acc#{K => {Name, gen_features(Map)}};
+                OtherType ->
+                    Acc#{K => OtherType}
+            end;
+        (K, Values, Acc) ->
+            Acc#{K => Values}
+    end, #{}, Features).
+
+
+%% -----
 
 -spec invoice_features(invoice_swag()) ->
     features().
@@ -118,9 +181,41 @@ hash(Value) ->
 
 
 -ifdef(TEST).
--include_lib("eunit/include/eunit.hrl").
+% -include_lib("eunit/include/eunit.hrl").
 
 -spec test() -> _.
+
+-spec payment_features_test() -> _.
+payment_features_test() ->
+    Swag1 = #{
+        <<"externalID">> => <<"abc123">>,
+        <<"payer">> => #{
+            <<"payerType">> => <<"PaymentResourcePayer">>,
+            <<"paymentTool">> => #{
+                <<"type">> => <<"bank_card">>,
+                <<"token">> => <<"cds_token">>,
+                <<"payment_system">> => <<"master_card">>,
+                <<"cardholder_name">> => <<"Degus Degusovich">>,
+                <<"exp_date">> => <<"10:10:2020">>
+            }
+        }
+    },
+    Swag2 = #{
+        <<"payer">> => #{
+            <<"payerType">> => <<"PaymentResourcePayer">>,
+            <<"paymentTool">> => #{
+                <<"type">> => <<"digital_wallet">>,
+                <<"token">> => <<"digital_token">>
+            }
+        }
+    },
+    Features1 = payment_features_2(Swag1),
+    Features2 = payment_features_2(Swag2),
+    ?debugFmt("~nFeatures1[payment] >>> ~n~p", [Features1]),
+    ?debugFmt("~nFeatures2[payment] >>> ~n~p", [Features2]),
+    Diff = compare2(Features2, Features1),
+    ?debugFmt("ITOG Diff >>> ~n~p", [Diff]),
+    ok.
 
 -spec compare_features_test() -> _.
 compare_features_test() ->
@@ -137,7 +232,7 @@ compare_features_test() ->
         'payer.paymentTool' => <<"digital_wallet">>,
         'payer.paymentTool.token' => <<"digital_wallet_token">>
     },
-    ?assertEqual([payer], compare_features(Features2, Features1)),
-    ?assertEqual(['payer.paymentTool', 'payer.paymentTool.token'], compare_features(Features3, Features1).
+    ?assertEqual(compare_features(Features2, Features1), [payer]),
+    ?assertEqual(compare_features(Features3, Features1), ['payer.paymentTool.token', 'payer.paymentTool']).
 
 -endif.
