@@ -1118,7 +1118,7 @@ create_webhook_limit_exceeded_test(Config) ->
     capi_ct_helper:mock_services(
         [
             {party_management, fun('GetShop', _) -> {ok, ?SHOP} end},
-            {webhook_manager, fun('Create', _) -> {exception, #webhooker_WebhookNotFound{}} end}
+            {webhook_manager, fun('Create', _) -> throw(#webhooker_LimitExceeded{}) end}
         ],
         Config
     ),
