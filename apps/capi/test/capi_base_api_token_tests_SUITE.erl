@@ -1110,8 +1110,6 @@ create_webhook_ok_test(Config) ->
     },
     {ok, _} = capi_client_webhooks:create_webhook(?config(context, Config), Req).
 
-% WIP
-
 -spec create_webhook_limit_exceeded_test(config()) ->
     _.
 create_webhook_limit_exceeded_test(Config) ->
@@ -1143,9 +1141,8 @@ create_webhook_limit_exceeded_test(Config) ->
                                 ]
         }
     },
-    {ok, _} = capi_client_webhooks:create_webhook(?config(context, Config), Req).
-
-% WIP
+    Body = #{<<"message">> := <<"webhook limit exceeded">>},
+    {error, {429, Body}} = capi_client_webhooks:create_webhook(?config(context, Config), Req).
 
 -spec get_webhooks(config()) ->
     _.
