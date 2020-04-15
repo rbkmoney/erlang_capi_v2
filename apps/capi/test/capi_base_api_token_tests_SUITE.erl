@@ -77,6 +77,7 @@
     get_payout/1,
     get_payout_fail/1,
     create_webhook_ok_test/1,
+    create_webhook_limit_exceeded_test/1,
     get_webhooks/1,
     get_webhook_by_id/1,
     delete_webhook_by_id/1,
@@ -188,6 +189,7 @@ groups() ->
                 get_payout,
                 get_payout_fail,
                 create_webhook_ok_test,
+                create_webhook_limit_exceeded_test,
                 get_webhooks,
                 get_webhook_by_id,
                 delete_webhook_by_id,
@@ -1107,6 +1109,40 @@ create_webhook_ok_test(Config) ->
         }
     },
     {ok, _} = capi_client_webhooks:create_webhook(?config(context, Config), Req).
+
+-spec create_webhook_limit_exceeded_test(config()) ->
+    _.
+create_webhook_limit_exceeded_test(Config) ->
+    capi_ct_helper:mock_services(
+        [
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end},
+            {webhook_manager, fun('Create', _) -> throw(#webhooker_LimitExceeded{}) end}
+        ],
+        Config
+    ),
+    Req = #{
+        <<"url">> => <<"http://localhost:8080/TODO">>,
+        <<"scope">> => #{
+            <<"topic">> => <<"InvoicesTopic">>,
+            <<"shopID">> => ?STRING,
+            <<"eventTypes">> => [ <<"InvoiceCreated">>
+                                , <<"InvoicePaid">>
+                                , <<"InvoiceCancelled">>
+                                , <<"InvoiceFulfilled">>
+                                , <<"PaymentStarted">>
+                                , <<"PaymentProcessed">>
+                                , <<"PaymentCaptured">>
+                                , <<"PaymentCancelled">>
+                                , <<"PaymentRefunded">>
+                                , <<"PaymentFailed">>
+                                , <<"PaymentRefundCreated">>
+                                , <<"PaymentRefundFailed">>
+                                , <<"PaymentRefundSucceeded">>
+                                ]
+        }
+    },
+    Body = #{<<"message">> => <<"Webhook limit exceeded">>},
+    {error, {429, Body}} = capi_client_webhooks:create_webhook(?config(context, Config), Req).
 
 -spec get_webhooks(config()) ->
     _.
