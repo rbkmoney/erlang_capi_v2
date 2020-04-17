@@ -184,14 +184,14 @@ create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx
     % externalId by using `CreateInvoice` and `CreateInvoiceWithTemplate` together
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2({InvoiceTplID, InvoiceParams}),
-    IdempotentFeatures = capi_idempotent:invoice_features(InvoiceParams),
-    BenderParams = #{legacy => Hash, current => IdempotentFeatures},
+    IdempotentFeatures = capi_idempotent_draft:read_invoice_features(InvoiceParams),
+    BenderParams = #{legacy => Hash, value => IdempotentFeatures},
 
     case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
         {ok, ID} ->
             CreateFun(ID);
         {ok, ID, OtherFeatures} ->
-            case capi_idempotent:compare_features(IdempotentFeatures, OtherFeatures) of
+            case capi_idempotent_draft:equal_features(IdempotentFeatures, OtherFeatures) of
                 true ->
                     CreateFun(ID);
                 {false, _Difference} ->

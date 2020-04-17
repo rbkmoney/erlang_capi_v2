@@ -191,7 +191,7 @@ decode_payment_institution_ref(#domain_PaymentInstitutionRef{id = Ref}) ->
     Ref.
 
 -spec decode_payment_tool(capi_handler_encoder:encode_data()) ->
-    any(). %% TODO[0x42] ---> add type payment_tool()
+    capi_handler_decoder_utils:decode_data().
 
 decode_payment_tool({bank_card, BankCard}) ->
     decode_bank_card(BankCard);
@@ -204,21 +204,20 @@ decode_payment_tool({crypto_currency, CryptoCurrency}) ->
 decode_payment_tool({mobile_commerce, MobileCommerce}) ->
     decode_mobile_commerce(MobileCommerce).
 
--spec decode_payment_tool_token(capi_handler_encoder:encode_data()) ->
+-spec decode_payment_tool_token(capi_handler_decoder_utils:decode_data()) ->
     binary().
 
 decode_payment_tool_token(#{<<"type">> := <<"bank_card">>} = BankCard) ->
     BankCard1 = maps:remove(<<"exp_date">>, BankCard),
     capi_utils:map_to_base64url(maps:remove(<<"cardholder_name">>, BankCard1));
-    % decode_bank_card(BankCard);
-decode_payment_tool_token({payment_terminal, PaymentTerminal}) ->
-    decode_payment_terminal(PaymentTerminal);
-decode_payment_tool_token({digital_wallet, DigitalWallet}) ->
-    decode_digital_wallet(DigitalWallet);
-decode_payment_tool_token({crypto_currency, CryptoCurrency}) ->
-    decode_crypto_wallet(CryptoCurrency);
-decode_payment_tool_token({mobile_commerce, MobileCommerce}) ->
-    decode_mobile_commerce(MobileCommerce).
+decode_payment_tool_token(#{<<"type">> := <<"payment_terminal">>} = PaymentTerminal) ->
+    capi_utils:map_to_base64url(PaymentTerminal);
+decode_payment_tool_token(#{<<"type">> := <<"digital_wallet">>} = DigitalWallet) ->
+    capi_utils:map_to_base64url(DigitalWallet);
+decode_payment_tool_token(#{<<"type">> := <<"crypto_currency">>} = CryptoCurrency) ->
+    capi_utils:map_to_base64url(CryptoCurrency);
+decode_payment_tool_token(#{<<"type">> := <<"mobile_commerce">>} =  MobileCommerce) ->
+    capi_utils:map_to_base64url(MobileCommerce).
 
 decode_bank_card(#domain_BankCard{
     'token'          = Token,
@@ -262,38 +261,38 @@ decode_bank_card_metadata(Meta) ->
 decode_payment_terminal(#domain_PaymentTerminal{
     terminal_type = Type
 }) ->
-    capi_utils:map_to_base64url(#{
+    #{
         <<"type"         >> => <<"payment_terminal">>,
         <<"terminal_type">> => Type
-    }).
+    }.
 
 decode_digital_wallet(#domain_DigitalWallet{
     provider = Provider,
     id = ID,
     token = undefined
 }) ->
-    capi_utils:map_to_base64url(#{
+    #{
         <<"type"    >> => <<"digital_wallet">>,
         <<"provider">> => atom_to_binary(Provider, utf8),
         <<"id"      >> => ID
-    });
+    };
 decode_digital_wallet(#domain_DigitalWallet{
     provider = Provider,
     id = ID,
     token = Token
 }) ->
-    capi_utils:map_to_base64url(#{
+    #{
         <<"type"    >> => <<"digital_wallet">>,
         <<"provider">> => atom_to_binary(Provider, utf8),
         <<"id"      >> => ID,
         <<"token"   >> => Token
-    }).
+    }.
 
 decode_crypto_wallet(CryptoCurrency) ->
-    capi_utils:map_to_base64url(#{
+    #{
         <<"type"           >> => <<"crypto_wallet">>,
         <<"crypto_currency">> => capi_handler_decoder_utils:convert_crypto_currency_to_swag(CryptoCurrency)
-    }).
+    }.
 
 decode_mobile_commerce(MobileCommerce) ->
     #domain_MobileCommerce{
@@ -304,11 +303,11 @@ decode_mobile_commerce(MobileCommerce) ->
         }
     } = MobileCommerce,
     Phone = #{<<"cc">> => Cc, <<"ctn">> => Ctn},
-    capi_utils:map_to_base64url(#{
+    #{
        <<"type">> => <<"mobile_commerce">>,
        <<"phone">> => Phone,
        <<"operator">> => atom_to_binary(Operator, utf8)
-    }).
+    }.
 
 -spec decode_payment_tool_details(capi_handler_encoder:encode_data()) ->
     capi_handler_decoder_utils:decode_data().

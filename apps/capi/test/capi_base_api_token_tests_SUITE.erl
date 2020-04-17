@@ -147,7 +147,7 @@ groups() ->
                 create_invoice_idemp_fail_test,
                 create_invoice_idemp_cart_ok_test,
                 create_invoice_idemp_cart_fail_test,
-                % get_invoice_by_external_id,
+                get_invoice_by_external_id,
                 create_invoice_access_token_ok_test,
                 create_invoice_template_ok_test,
                 create_invoice_with_template_test,

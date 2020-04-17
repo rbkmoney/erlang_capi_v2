@@ -360,19 +360,18 @@ process_request('GetRefundByID', Req, Context) ->
 process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
-% create_payment(InvoiceID, PartyID, #{<<"externalID">> := ExternalID} = PaymentParams, Context, BenderPrefix) ->
 create_payment(InvoiceID, PartyID, PaymentParams, Context, BenderPrefix) ->
     %% WARNING!!! finish all -> 'TODO[0x42]:'
-    ExternalID    = maps:get(<<"externalID">>, PaymentParams, undefined),
+    ExternalID = maps:get(<<"externalID">>, PaymentParams, undefined),
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Payer = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
     PaymentParamsDecrypted = PaymentParams#{<<"payer">> => Payer},
-    IdempotentFeatures = capi_idempotent:payment_features(PaymentParamsDecrypted),
+    IdempotentFeatures = capi_idempotent_draft:read_payment_features(PaymentParamsDecrypted),
     Hash = erlang:phash2(PaymentParams),
     %% delete after transition period
     Params = #{
         legacy => Hash,
-        current => IdempotentFeatures
+        value => IdempotentFeatures
     },
     #{woody_context := WoodyCtx} = Context,
     CtxData = #{<<"invoice_id">> => InvoiceID},
@@ -380,10 +379,11 @@ create_payment(InvoiceID, PartyID, PaymentParams, Context, BenderPrefix) ->
         {ok, ID} ->
             start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context);
         {ok, ID, SavedFeatures} ->
-            case capi_idempotent:compare_features(IdempotentFeatures, SavedFeatures) of
+            case capi_idempotent_draft:equal_features(IdempotentFeatures, SavedFeatures) of
                 true ->
                     start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context);
-                {false, _Difference} ->
+                {false, Diff} ->
+                    logger:warning("externalID used in another request. Difference: ~p", [Diff]),
                     %% сделать более читаемы вывод ошибок с учетом Difference
                     {error, {external_id_conflict, ID, ExternalID}}
             end;
@@ -391,7 +391,6 @@ create_payment(InvoiceID, PartyID, PaymentParams, Context, BenderPrefix) ->
         {error, {external_id_conflict, ID}} ->
             {error, {external_id_conflict, ID, ExternalID}}
     end.
-% Uncomment after remove legacy code support
 % create_payment(InvoiceID, _PartyID, PaymentParams, Context, _) ->
 %     PaymentID = <<InvoiceID/binary, "/1">>,
 %     ExternalID = undefined,
@@ -563,8 +562,8 @@ create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} =
     SequenceID = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
     Hash = erlang:phash2(RefundParams),
     RefundParamsFull = RefundParams#{<<"invoiceID">> => invoiceID, <<"paymentID">> => PaymentID},
-    IdempotentFeatures = capi_idempotent:refund_features(RefundParamsFull),
-    BenderParams = #{legacy => Hash, current => IdempotentFeatures},
+    IdempotentFeatures = capi_idempotent_draft:read_refund_features(RefundParamsFull),
+    BenderParams = #{legacy => Hash, value => IdempotentFeatures},
     Params = #payproc_InvoicePaymentRefundParams{
         external_id = ExternalID,
         reason = genlib_map:get(<<"reason">>, RefundParams),
@@ -575,7 +574,7 @@ create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} =
         {ok, ID} ->
             refund_payment(ID, InvoiceID, PaymentID, Params, Context);
         {ok, ID, SavedFeatures} ->
-            case capi_idempotent:compare_features(IdempotentFeatures, SavedFeatures) of
+            case capi_idempotent_draft:equal_features(IdempotentFeatures, SavedFeatures) of
                 true ->
                     refund_payment(ID, InvoiceID, PaymentID, Params, Context);
                 {false, _Difference} ->

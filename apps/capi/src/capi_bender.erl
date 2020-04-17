@@ -10,8 +10,10 @@
 
 -type params() :: #{
     legacy => integer(),
-    current => binary()
+    value  => params_value()
 }.
+-type params_value() :: term().
+
 
 -export_type([
     bender_context/0,
@@ -31,26 +33,26 @@
 -define(SCHEMA_VER1, 1). %% deprecated
 -define(SCHEMA_VER2, 2).
 
--spec gen_by_snowflake(binary(), integer(), woody_context()) ->
+-spec gen_by_snowflake(binary(), params(), woody_context()) ->
     {ok, binary()} |
-    {ok, binary(), binary()} |
+    {ok, binary(), params_value()} |
     {error, {external_id_conflict, binary()}}.
 
-gen_by_snowflake(IdempotentKey, Hash, WoodyContext) ->
-    gen_by_snowflake(IdempotentKey, Hash, WoodyContext, #{}).
+gen_by_snowflake(IdempotentKey, Params, WoodyContext) ->
+    gen_by_snowflake(IdempotentKey, Params, WoodyContext, #{}).
 
--spec gen_by_snowflake(binary(), integer(), woody_context(), context_data()) ->
+-spec gen_by_snowflake(binary(), params(), woody_context(), context_data()) ->
     {ok, binary()} |
-    {ok, binary(), binary()} |
+    {ok, binary(), params_value()} |
     {error, {external_id_conflict, binary()}}.
 
-gen_by_snowflake(IdempotentKey, Hash, WoodyContext, CtxData) ->
+gen_by_snowflake(IdempotentKey, Params, WoodyContext, CtxData) ->
     Snowflake = {snowflake, #bender_SnowflakeSchema{}},
-    generate_id(IdempotentKey, Snowflake, Hash, WoodyContext, CtxData).
+    generate_id(IdempotentKey, Snowflake, Params, WoodyContext, CtxData).
 
 -spec gen_by_sequence(binary(), binary(), params(), woody_context()) ->
     {ok, binary()} |
-    {ok, binary(), binary()} |
+    {ok, binary(), params_value()} |
     {error, {external_id_conflict, binary()}}.
 
 gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext) ->
@@ -58,7 +60,7 @@ gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext) ->
 
 -spec gen_by_sequence(binary(), binary(), params(), woody_context(), context_data()) ->
     {ok, binary()} |
-    {external_id_busy, binary(), binary()}|
+    {ok, binary(), params_value()} |
     {error, {external_id_conflict, binary()}}. %% legacy delete
 
 gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext, CtxData) ->
@@ -66,7 +68,7 @@ gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext, CtxData) ->
 
 -spec gen_by_sequence(binary(), binary(), params(), woody_context(), context_data(), sequence_params()) ->
     {ok, binary()} |
-    {ok, binary(), binary()} |
+    {ok, binary(), params_value()} |
     {error, {external_id_conflict, binary()}}. %% legacy delete
 
 gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext, CtxData, SeqParams) ->
@@ -77,20 +79,22 @@ gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext, CtxData, SeqPar
     }},
     generate_id(IdempotentKey, Sequence, Params, WoodyContext, CtxData).
 
--spec gen_by_constant(binary(), binary(), integer(), woody_context()) ->
+-spec gen_by_constant(binary(), binary(), params(), woody_context()) ->
     {ok,    binary()} |
+    {ok, binary(), params_value()} |
     {error, {external_id_conflict, binary()}}.
 
-gen_by_constant(IdempotentKey, ConstantID, Hash, WoodyContext) ->
-    gen_by_constant(IdempotentKey, ConstantID, Hash, WoodyContext, #{}).
+gen_by_constant(IdempotentKey, ConstantID, Params, WoodyContext) ->
+    gen_by_constant(IdempotentKey, ConstantID, Params, WoodyContext, #{}).
 
--spec gen_by_constant(binary(), binary(), integer(), woody_context(), context_data()) ->
+-spec gen_by_constant(binary(), binary(), params(), woody_context(), context_data()) ->
     {ok,    binary()} |
+    {ok, binary(), params_value()} |
     {error, {external_id_conflict, binary()}}.
 
-gen_by_constant(IdempotentKey, ConstantID, Hash, WoodyContext, CtxData) ->
+gen_by_constant(IdempotentKey, ConstantID, Params, WoodyContext, CtxData) ->
     Constant = {constant, #bender_ConstantSchema{internal_id = ConstantID}},
-    generate_id(IdempotentKey, Constant, Hash, WoodyContext, CtxData).
+    generate_id(IdempotentKey, Constant, Params, WoodyContext, CtxData).
 
 -spec get_idempotent_key(atom() | binary(), binary(), binary() | undefined) ->
     binary().
@@ -122,14 +126,10 @@ get_internal_id(ExternalID, WoodyContext) ->
 gen_external_id() ->
     genlib:unique().
 
-generate_id(Key, BenderSchema, Params, WoodyContext, CtxData) ->
-    #{
-        legacy := Hash,
-        current := Bin
-    } = Params,
+generate_id(Key, BenderSchema, #{legacy := Hash, value := Params}, WoodyContext, CtxData) ->
     Context = capi_msgp_marshalling:marshal(#{
         <<"version">>       => ?SCHEMA_VER2,
-        <<"params_bin">>    => Bin,
+        <<"params">>        => Params,
         <<"context_data">>  => CtxData
     }),
     Args = [Key, BenderSchema, Context],
@@ -143,10 +143,10 @@ generate_id(Key, BenderSchema, Params, WoodyContext, CtxData) ->
             {ok, ID};
         {ok, ID, #{<<"version">> := ?SCHEMA_VER1} = DeprecatedCtx} ->
             idepmotent_conflict_legacy(ID, Hash, DeprecatedCtx);
-        {ok, ID, #{<<"version">> := ?SCHEMA_VER2, <<"params_bin">> := ParamsBin}} ->
-            {ok, ID, ParamsBin}
+        {ok, ID, #{<<"version">> := ?SCHEMA_VER2, <<"params">> := SavedParams}} ->
+            {ok, ID, SavedParams}
     end.
-
+%% legacy
 idepmotent_conflict_legacy(ID, Hash, #{<<"params_hash">> := Hash}) ->
     {ok, ID};
 idepmotent_conflict_legacy(ID, _Hash, #{<<"params_hash">> := _OtherHash}) ->
