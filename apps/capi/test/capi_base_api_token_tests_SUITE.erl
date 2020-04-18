@@ -341,7 +341,7 @@ create_invoice_idemp_fail_legacy_test(Config) ->
         <<"description">> => <<"test_invoice_description">>,
         <<"externalID">>  => ExternalID
     },
-    Ctx = capi_msgp_marshalling:marshal(#{<<"version">> => 1,<<"params_hash">> => erlang:phash2(Req)}),
+    Ctx = capi_msgp_marshalling:marshal(#{<<"version">> => 1, <<"params_hash">> => erlang:phash2(Req)}),
     capi_ct_helper:mock_services([
         {invoicing, fun('Create', [_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}]) ->
             {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}

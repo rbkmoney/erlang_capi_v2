@@ -176,7 +176,8 @@ process_request(_OperationID, _Req, _Context) ->
 
 create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
     CreateFun = fun(InvoiceID) ->
-        Call = {invoicing, 'CreateWithTemplate', [encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams)]},
+        Params = [encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams)],
+        Call = {invoicing, 'CreateWithTemplate', Params},
         capi_handler_utils:service_call_with([user_info, party_creation], Call, Context)
     end,
     ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
