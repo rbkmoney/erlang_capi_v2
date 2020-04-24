@@ -49,13 +49,16 @@ issue_access_token(PartyID, TokenSpec) ->
     uac_authorizer_jwt:token().
 issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
     {Claims0, DomainRoles, LifeTime} = resolve_token_spec(TokenSpec),
-    Claims = maps:merge(ExtraProperties, Claims0),
+    Claims = maps:merge(
+        ExtraProperties, Claims0),
+    Claims1 = Claims#{
+        <<"exp">> => LifeTime,
+        <<"resource_access">> => DomainRoles
+    },
     capi_utils:unwrap(uac_authorizer_jwt:issue(
         capi_utils:get_unique_id(),
-        LifeTime,
         PartyID,
-        DomainRoles,
-        Claims,
+        Claims1,
         ?SIGNEE
     )).
 
