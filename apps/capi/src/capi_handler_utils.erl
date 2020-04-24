@@ -203,15 +203,9 @@ get_split_interval(SplitSize, year  ) -> get_split_interval(SplitSize, day   ) *
     integer().
 
 get_time_diff(From, To) ->
-    {DateFrom, TimeFrom} = parse_rfc3339_datetime(From),
-    {DateTo, TimeTo} = parse_rfc3339_datetime(To),
-    UnixFrom = genlib_time:daytime_to_unixtime({DateFrom, TimeFrom}),
-    UnixTo = genlib_time:daytime_to_unixtime({DateTo, TimeTo}),
+    UnixFrom = genlib_rfc3339:parse(From, second),
+    UnixTo = genlib_rfc3339:parse(To, second),
     UnixTo - UnixFrom.
-
-parse_rfc3339_datetime(DateTime) ->
-    {ok, {DateFrom, TimeFrom, _, _}} = rfc3339:parse(DateTime),
-    {DateFrom, TimeFrom}.
 
 -spec collect_events(
     integer(),

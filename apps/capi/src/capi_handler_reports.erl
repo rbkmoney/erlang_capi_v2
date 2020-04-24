@@ -135,7 +135,7 @@ generate_report_presigned_url(FileID, Context) ->
 get_default_url_lifetime() ->
     Now      = erlang:system_time(second),
     Lifetime = application:get_env(capi, reporter_url_lifetime, ?DEFAULT_URL_LIFETIME),
-    capi_utils:unwrap(rfc3339:format(Now + Lifetime, second)).
+    genlib_rfc3339:format_relaxed(Now + Lifetime, second).
 
 %%
 
