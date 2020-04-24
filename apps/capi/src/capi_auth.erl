@@ -48,27 +48,20 @@ issue_access_token(PartyID, TokenSpec) ->
 -spec issue_access_token(PartyID :: binary(), token_spec(), map()) ->
     uac_authorizer_jwt:token().
 issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
-    {Claims0, DomainRoles, LifeTime} = resolve_token_spec(TokenSpec),
     Claims = maps:merge(
-        ExtraProperties, Claims0),
-    Claims1 = Claims#{
-        <<"exp">> => LifeTime,
-        <<"resource_access">> => DomainRoles
-    },
+        ExtraProperties,
+        resolve_token_spec(TokenSpec)
+    ),
     capi_utils:unwrap(uac_authorizer_jwt:issue(
         capi_utils:get_unique_id(),
         PartyID,
-        Claims1,
+        Claims,
         ?SIGNEE
     )).
 
 -spec resolve_token_spec(token_spec()) ->
     {claims(), uac_authorizer_jwt:domains(), uac_authorizer_jwt:expiration()}.
 resolve_token_spec({invoice, InvoiceID}) ->
-    Claims =
-        #{
-            <<"cons">> => <<"client">> % token consumer
-        },
     DomainRoles = #{
         <<"common-api">> => uac_acl:from_list([
             {[{invoices, InvoiceID}]           , read },
@@ -78,7 +71,11 @@ resolve_token_spec({invoice, InvoiceID}) ->
         ])
     },
     Expiration = {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME},
-    {Claims, DomainRoles, Expiration};
+    #{
+        <<"exp">> => Expiration,
+        <<"resource_access">> => DomainRoles,
+        <<"cons">> => <<"client">> % token consumer
+    };
 resolve_token_spec({invoice_tpl, InvoiceTplID}) ->
     DomainRoles = #{
         <<"common-api">> => uac_acl:from_list([
@@ -86,7 +83,10 @@ resolve_token_spec({invoice_tpl, InvoiceTplID}) ->
             {[party, {invoice_templates, InvoiceTplID}, invoice_template_invoices], write}
         ])
     },
-    {#{}, DomainRoles, unlimited};
+    #{
+        <<"exp">> => unlimited,
+        <<"resource_access">> => DomainRoles
+    };
 resolve_token_spec({customer, CustomerID}) ->
     DomainRoles = #{
         <<"common-api">> => uac_acl:from_list([
@@ -97,7 +97,10 @@ resolve_token_spec({customer, CustomerID}) ->
         ])
     },
     Expiration = {lifetime, ?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME},
-    {#{}, DomainRoles, Expiration}.
+    #{
+        <<"exp">> => Expiration,
+        <<"resource_access">> => DomainRoles
+    }.
 
 %%
 
