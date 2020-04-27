@@ -22,7 +22,6 @@
         jose,
         cowboy_cors,
         cowboy_access_log,
-        rfc3339,
         base64url,
         woody_user_identity,
         payproc_errors,

@@ -33,7 +33,7 @@ build('capi', 'docker-host', finalHook) {
         sh 'make wc_xref'
       }
       runStage('pre-dialyze') {
-        withWsCache("_build/default/rebar3_22.2.6_plt") {
+        withWsCache("_build/default/rebar3_22.3.1_plt") {
           sh 'make wc_update_plt'
         }
       }
