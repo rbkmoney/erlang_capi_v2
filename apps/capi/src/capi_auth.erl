@@ -60,7 +60,7 @@ issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
     )).
 
 -spec resolve_token_spec(token_spec()) ->
-    {claims(), uac_authorizer_jwt:domains(), uac_authorizer_jwt:expiration()}.
+    claims().
 resolve_token_spec({invoice, InvoiceID}) ->
     DomainRoles = #{
         <<"common-api">> => uac_acl:from_list([
