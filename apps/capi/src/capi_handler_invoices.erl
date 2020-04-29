@@ -196,21 +196,14 @@ create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context, B
     ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2(InvoiceParams),
-    IdempotentFeatures = capi_idempotent_draft:read_invoice_features(InvoiceParams),
-    BenderParams = #{legacy => Hash, value => IdempotentFeatures},
+    BenderParams = #{
+        params_hash => Hash,
+        feature_schema => capi_idempotent_draft:invoice_schema(),
+        feature_values => InvoiceParams
+    },
     case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
         {ok, ID} ->
             CreateFun(ID);
-        {ok, ID, OtherFeatures} ->
-            case capi_idempotent_draft:equal_features(IdempotentFeatures, OtherFeatures) of
-                true ->
-                    CreateFun(ID);
-                {false, Difference} ->
-                    logger:warning("externalID used in another request. Difference: ~p", [Difference]),
-                    %% сделать более читаемы вывод ошибок с учетом Difference
-                    throw({external_id_conflict, ID, ExternalID})
-            end;
-        %% Legacy
         {error, {external_id_conflict, ID}} ->
             throw({external_id_conflict, ID, ExternalID})
     end.

@@ -161,7 +161,7 @@ decode_payer({customer, #domain_CustomerPayer{
     #{
         <<"payerType" >> => <<"CustomerPayer">>,
         <<"customerID">> => ID,
-        <<"paymentToolToken"  >> => capi_handler_decoder_party:decode_payment_tool_token(PaymentToolSwag),
+        <<"paymentToolToken"  >> => capi_handler_decoder_party:wrap_payment_tool_token(PaymentToolSwag),
         <<"paymentToolDetails">> => capi_handler_decoder_party:decode_payment_tool_details(PaymentTool)
     };
 decode_payer({recurrent, #domain_RecurrentPayer{
@@ -172,7 +172,7 @@ decode_payer({recurrent, #domain_RecurrentPayer{
     PaymentToolSwag = capi_handler_decoder_party:decode_payment_tool(PaymentTool),
     #{
         <<"payerType"             >> => <<"RecurrentPayer">>,
-        <<"paymentToolToken"      >> => capi_handler_decoder_party:decode_payment_tool_token(PaymentToolSwag),
+        <<"paymentToolToken"      >> => capi_handler_decoder_party:wrap_payment_tool_token(PaymentToolSwag),
         <<"paymentToolDetails"    >> => capi_handler_decoder_party:decode_payment_tool_details(PaymentTool),
         <<"contactInfo"           >> => capi_handler_decoder_party:decode_contact_info(ContactInfo),
         <<"recurrentParentPayment">> => decode_recurrent_parent(RecurrentParent)

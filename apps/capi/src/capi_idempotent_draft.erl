@@ -1,8 +1,14 @@
 -module(capi_idempotent_draft).
 
--type schema()          :: #{feature_name() := [_]}.
+-define(DIFFERENCE, -1).
+
+-type schema()          :: #{feature_name() := [accessor() | schema() | [schema()]]}.
+-type accessor()        :: binary(). % name of field in a map
+
+-type request()         :: #{binary() := request_value()}.
+-type request_value()   :: integer() | binary() | request() | [request()].
+
 -type features()        :: #{feature_name() := feature_value()}.
--type request()         :: capi_handler:request_data().
 -type difference()      :: features().
 -type feature_name()    :: binary().
 -type feature_value()   :: integer() | features() | [features()].
@@ -24,16 +30,26 @@ payment_schema() -> #{
         <<"type">> => [<<"payerType">>],
         <<"tool">> => [<<"paymentTool">>, #{
             <<"type">>          => [<<"type">>],
-            <<"token">>         => [<<"token">>],
-            <<"cardholder">>    => [<<"cardholder_name">>],
-            <<"expdate">>       => [<<"exp_date">>],
-            % 'provider'      => 'reserved', % to mark some field as dangerous to reuse
-            <<"provider">>      => [<<"provider">>],
-            <<"id">>            => [<<"id">>],
-            <<"terminal_type">> => [<<"terminal_type">>],
-            <<"currency">>      => [<<"currency">>],
-            <<"operator">>      => [<<"operator">>],
-            <<"phone">>         => [<<"phone">>]
+            <<"bank_card">>     => #{
+                <<"token">>         => [<<"token">>],
+                <<"cardholder">>    => [<<"cardholder_name">>],
+                <<"expdate">>       => [<<"exp_date">>]
+            },
+            <<"terminal">> => #{
+                <<"type">> => [<<"terminal_type">>]
+            },
+            <<"wallet">> => #{
+                <<"provider">> => [<<"provider">>],
+                <<"id">> => [<<"id">>],
+                <<"token">> => [<<"token">>]
+            },
+            <<"crypto">> => #{
+                <<"currency">> => [<<"currency">>]
+            },
+            <<"mobile_commerce">> => #{
+                <<"operator">>      => [<<"operator">>],
+                <<"phone">>         => [<<"phone">>]
+            }
         }],
         <<"customer">> => [<<"customerID">>],
         <<"recurrent">> => [<<"recurrentParentPayment">>, #{
@@ -50,16 +66,7 @@ invoice_schema() -> #{
     <<"amount">>    => [<<"amount">>],
     <<"currency">>  => [<<"currency">>],
     <<"product">>   => [<<"product">>],
-    <<"cart">>      => [<<"cart">>, [#{
-            <<"product">>  => [<<"product">>],
-            <<"quantity">> => [<<"quantity">>],
-            <<"price">>    => [<<"price">>],
-            <<"tax">>      => #{
-                <<"type">> => [<<"type">>],
-                <<"rate">> => [<<"rate">>]
-            }
-        }
-    ]]
+    <<"cart">>      => [<<"cart">>, [cart_schema()]]
 }.
 
 -spec refund_schema() -> schema().
@@ -67,17 +74,21 @@ invoice_schema() -> #{
 refund_schema() -> #{
     <<"amount">>    => [<<"amount">>],
     <<"currency">>  => [<<"currency">>],
-    <<"cart">>      => [<<"cart">>, [#{
-            <<"product">>  => [<<"product">>],
-            <<"quantity">> => [<<"quantity">>],
-            <<"price">>    => [<<"price">>],
-            <<"tax">>      => #{
-                <<"type">> => [<<"type">>],
-                <<"rate">> => [<<"rate">>]
-            }
-        }
-    ]]
+    <<"cart">>      => [<<"cart">>, [cart_schema()]]
 }.
+
+-spec cart_schema() -> schema().
+
+cart_schema() ->
+    #{
+        <<"product">>  => [<<"product">>],
+        <<"quantity">> => [<<"quantity">>],
+        <<"price">>    => [<<"price">>],
+        <<"tax">>      => #{
+            <<"type">> => [<<"type">>],
+            <<"rate">> => [<<"rate">>]
+        }
+    }.
 
 -spec read_payment_features(request()) -> features().
 
@@ -120,14 +131,8 @@ read_request_value([], V) ->
     hash(V);
 read_request_value([Schema = #{}], Request = #{}) ->
     read_features(Schema, Request);
-read_request_value([Key | [[Schema = #{}]]], Request = #{}) when is_binary(Key) ->
-    case maps:get(Key, Request, undefined) of
-        undefined ->
-            undefined;
-        ValueList -> lists:foldl(fun(Req, Acc) ->
-            [read_features(Schema, Req) | Acc]
-        end, [], ValueList)
-    end;
+read_request_value([[Schema = #{}]], List) when is_list(List) ->
+    lists:map(fun (Req) -> read_features(Schema, Req) end, List);
 read_request_value([Key | Rest], Request = #{}) when is_binary(Key) ->
     read_request_value(Rest, maps:get(Key, Request, undefined));
 read_request_value(_, undefined) ->
@@ -157,7 +162,7 @@ compare_features(Fs, FsWith) ->
             (Key, Value, ValueWith, Diff) when is_map(ValueWith) and is_map(Value) ->
                 case compare_features(Value, ValueWith) of
                     ValueWith ->
-                        Diff#{Key => '_'}; % different everywhere
+                        Diff#{Key => ?DIFFERENCE}; % different everywhere
                     Diff1 when map_size(Diff1) > 0 ->
                         Diff#{Key => Diff1};
                     #{} ->
@@ -166,19 +171,20 @@ compare_features(Fs, FsWith) ->
             (Key, [#{} | _] = ListValues, [#{} | _] = ListValuesWith, Diff) ->
                 case compare_list_features(ListValues, ListValuesWith) of
                     false ->
-                        Diff#{Key => '_'};
+                        Diff#{Key => ?DIFFERENCE};
                     true ->
                         Diff
                 end;
-            %% User can't receive response, but entity(payment, invoice ) was successfully created.
-            %% User makes retries and set a feature value(not specify before).
-            %% System return response with entity instead of external_id conflict.
+            %% We expect that clients may _at any time_ change their implementation and start
+            %% sending information they were not sending beforehand, so this is not considered a
+            %% conflict. Yet, we DO NOT expect them to do the opposite, to stop sending
+            %% information they were sending, this is still a conflict.
             (_Key, _Value, undefined, Diff) ->
                 Diff;
             (Key, _, [#{} | _] = _ValueWith, Diff) ->
-                Diff#{Key => '_'};
+                Diff#{Key => ?DIFFERENCE};
             (Key, [#{} | _],  _, Diff) ->
-                Diff#{Key => '_'};
+                Diff#{Key => ?DIFFERENCE};
             (_Key, Value, Value, Diff) ->
                 Diff;
             (Key, Value, _ValueWith, Diff) ->
@@ -208,7 +214,8 @@ zipfold(Fun, Acc, M1, M2) ->
             case maps:find(Key, M2) of
                 {ok, V2} ->
                     Fun(Key, V1, V2, AccIn);
-                error    -> AccIn
+                error ->
+                    AccIn
             end
         end,
         Acc,
@@ -229,16 +236,27 @@ zipfold(Fun, Acc, M1, M2) ->
         <<"recurrent">>   => undefined,
         <<"customer">>    => undefined,
         <<"tool">> => #{
-            <<"type">>            => undefined,
-            <<"token">>           => undefined,
-            <<"cardholder">>      => undefined,
-            <<"expdate">>         => undefined,
-            <<"currency">>        => undefined,
-            <<"id">>              => undefined,
-            <<"operator">>        => undefined,
-            <<"phone">>           => undefined,
-            <<"provider">>        => undefined,
-            <<"terminal_type">>   => undefined
+            <<"type">> => undefined,
+            <<"bank_card">> => #{
+                <<"token">>      => undefined,
+                <<"cardholder">> => undefined,
+                <<"expdate">>    => undefined
+            },
+            <<"mobile_commerce">> => #{
+                <<"operator">> => undefined,
+                <<"phone">>    => undefined
+            },
+            <<"terminal">> => #{
+                <<"type">> => undefined
+            },
+            <<"wallet">> => #{
+                <<"provider">> => undefined,
+                <<"id">>       => undefined,
+                <<"token">>    => undefined
+            },
+            <<"crypto">> => #{
+                <<"currency">> => undefined
+            }
         }
     }
 }).
@@ -266,7 +284,7 @@ set_value({[Key], V}, Map) ->
 set_value({[Key| T], V}, Map) ->
     Map#{Key => set_value({T, V}, maps:get(Key, Map))}.
 
-set_values(Map, Values) ->
+deep_merge(Map, Values) ->
     lists:foldl(fun set_value/2, Map, Values).
 
 -spec test() -> _.
@@ -288,12 +306,13 @@ read_payment_features_value_test() ->
                 <<"cardholder_name">> => CardHolder
             }
     }},
-    Payer = set_values(?PAYER, [
-        {[<<"payer">>, <<"type">>],             hash(PayerType)},
-        {[<<"payer">>, <<"tool">>, <<"type">>],       hash(Tool)},
-        {[<<"payer">>, <<"tool">>, <<"token">>],      hash(Token)},
-        {[<<"payer">>, <<"tool">>, <<"expdate">>],    hash(ExpDate)},
-        {[<<"payer">>, <<"tool">>, <<"cardholder">>], hash(CardHolder)}
+    Payer = deep_merge(?PAYER, [
+        {[<<"payer">>, <<"type">>],                                     hash(PayerType)},
+        {[<<"payer">>, <<"tool">>, <<"type">>],                         hash(Tool)},
+        {[<<"payer">>, <<"tool">>, <<"bank_card">>, <<"token">>],       hash(Token)},
+        {[<<"payer">>, <<"tool">>, <<"wallet">>, <<"token">>],          hash(Token)},
+        {[<<"payer">>, <<"tool">>, <<"bank_card">>, <<"expdate">>],     hash(ExpDate)},
+        {[<<"payer">>, <<"tool">>, <<"bank_card">>, <<"cardholder">>],  hash(CardHolder)}
     ]),
     ?assertEqual(Payer, read_features(payment_schema(), Request)).
 
@@ -307,7 +326,7 @@ read_payment_customer_features_value_test() ->
             <<"customerID">> => CustomerID
         }
     },
-    Payer = set_values(?PAYER, [
+    Payer = deep_merge(?PAYER, [
         {[<<"payer">>, <<"type">>],     hash(PayerType)},
         {[<<"payer">>, <<"customer">>], hash(CustomerID)},
         {[<<"payer">>, <<"tool">>],     undefined}
@@ -337,7 +356,17 @@ compare_payment_bank_card_test() ->
     F1 = read_features(payment_schema(), Request1),
     F2 = read_features(payment_schema(), Request2),
     ?assertEqual(true, equal_features(F1, F1)),
-    ?assertEqual({false, #{<<"payer">> => #{<<"tool">> => #{<<"token">> => hash(Token1)}}}}, equal_features(F1, F2)).
+    ?assertEqual({false, #{
+        <<"payer">> => #{
+            <<"tool">> => #{
+                <<"bank_card">> => #{
+                    <<"token">> => hash(Token1)
+                },
+                <<"wallet">> => #{
+                    <<"token">> => hash(Token1)
+                }
+        }
+    }}}, equal_features(F1, F2)).
 
 -spec read_invoice_features_value_test() -> _.
 read_invoice_features_value_test() ->
@@ -348,7 +377,7 @@ read_invoice_features_value_test() ->
     Price1      = 10000,
     Price2      = 20000,
     Quantity    = 1,
-    Product = set_values(?PRODUCT, [
+    Product = deep_merge(?PRODUCT, [
        {[<<"product">>],  hash(Prod1)},
        {[<<"quantity">>], hash(Quantity)},
        {[<<"price">>],    hash(Price1)}
@@ -357,7 +386,7 @@ read_invoice_features_value_test() ->
         <<"product">> => hash(Prod2),
         <<"price">> => hash(Price2)
     },
-    Invoice = set_values(?INVOICE, [
+    Invoice = deep_merge(?INVOICE, [
         {[<<"shop_id">>], hash(ShopID)},
         {[<<"currency">>], hash(Cur)},
         {[<<"cart">>], [Product, Product2]}
@@ -366,8 +395,8 @@ read_invoice_features_value_test() ->
         <<"shopID">> => ShopID,
         <<"currency">> => Cur,
         <<"cart">> => [
-            #{<<"product">> => Prod2, <<"quantity">> => 1, <<"price">> => Price2},
-            #{<<"product">> => Prod1, <<"quantity">> => 1, <<"price">> => Price1}
+            #{<<"product">> => Prod1, <<"quantity">> => 1, <<"price">> => Price1},
+            #{<<"product">> => Prod2, <<"quantity">> => 1, <<"price">> => Price2}
         ]
     },
     ?assertEqual(Invoice, read_features(invoice_schema(), Request)).
@@ -381,17 +410,17 @@ compare_invoices_test() ->
     Price1      = 10000,
     Price2      = 20000,
     Quantity    = 1,
-    Product1 = set_values(?PRODUCT, [
+    Product1 = deep_merge(?PRODUCT, [
        {[<<"product">>],  hash(Prod1)},
        {[<<"quantity">>], hash(Quantity)},
        {[<<"price">>],    hash(Price1)}
     ]),
-    Invoice1 = set_values(?INVOICE, [
+    Invoice1 = deep_merge(?INVOICE, [
         {[<<"shop_id">>], hash(ShopID)},
         {[<<"currency">>], hash(Cur)},
         {[<<"cart">>], [Product1]}
     ]),
-    Product2 = set_values(?PRODUCT, [
+    Product2 = deep_merge(?PRODUCT, [
        {[<<"product">>],  hash(Prod2)},
        {[<<"price">>],    hash(Price2)}
     ]),
@@ -400,14 +429,14 @@ compare_invoices_test() ->
     },
     Invoice2 = Invoice1#{<<"cart">> => [Product2]},
     InvoiceWithFullCart = Invoice2#{cart => [Product2_]},
-    ?assertEqual({false, #{<<"cart">> => '_'}}, equal_features(Invoice2, Invoice1)),
+    ?assertEqual({false, #{<<"cart">> => ?DIFFERENCE}}, equal_features(Invoice2, Invoice1)),
     ?assert(equal_features(Invoice1, Invoice1)),
     %% Feature was deleted
     ?assert(equal_features(InvoiceWithFullCart, Invoice2)),
     %% Feature was add
     ?assert(equal_features(Invoice2, InvoiceWithFullCart)),
     %% When second request didn't contain feature, this situation detected as conflict.
-    ?assertEqual({false, #{<<"cart">> => '_'}}, equal_features(Invoice1#{<<"cart">> => undefined}, Invoice1)),
+    ?assertEqual({false, #{<<"cart">> => ?DIFFERENCE}}, equal_features(Invoice1#{<<"cart">> => undefined}, Invoice1)),
 
     ?assert(equal_features(Invoice1, Invoice1#{<<"cart">> => undefined})).
 

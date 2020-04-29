@@ -175,31 +175,22 @@ process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
-    CreateFun = fun(InvoiceID) ->
-        Params = [encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams)],
-        Call = {invoicing, 'CreateWithTemplate', Params},
-        capi_handler_utils:service_call_with([user_info, party_creation], Call, Context)
-    end,
     ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
     % CAPI#344: Since the prefixes are different, it's possible to create 2 copies of the same Invoice with the same
     % externalId by using `CreateInvoice` and `CreateInvoiceWithTemplate` together
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2({InvoiceTplID, InvoiceParams}),
-    IdempotentFeatures = capi_idempotent_draft:read_invoice_features(InvoiceParams),
-    BenderParams = #{legacy => Hash, value => IdempotentFeatures},
+    BenderParams = #{
+        params_hash => Hash,
+        feature_schema => capi_idempotent_draft:invoice_schema(),
+        feature_values => InvoiceParams
+    },
 
     case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
-        {ok, ID} ->
-            CreateFun(ID);
-        {ok, ID, OtherFeatures} ->
-            case capi_idempotent_draft:equal_features(IdempotentFeatures, OtherFeatures) of
-                true ->
-                    CreateFun(ID);
-                {false, _Difference} ->
-                    %% сделать более читаемы вывод ошибок с учетом Difference
-                    throw({external_id_conflict, ID, ExternalID})
-            end;
-        %% Legacy
+        {ok, InvoiceID} ->
+            Params = [encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams)],
+            Call = {invoicing, 'CreateWithTemplate', Params},
+            capi_handler_utils:service_call_with([user_info, party_creation], Call, Context);
         {error, {external_id_conflict, ID}} ->
             throw({external_id_conflict, ID, ExternalID})
     end.

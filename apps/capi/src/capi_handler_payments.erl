@@ -254,8 +254,10 @@ process_request('CreateRefund' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
     RefundParams = maps:get('RefundParams', Req),
+    ct:print("CreateRefund request >>>~n ~p", [RefundParams]),
     try create_refund(InvoiceID, PaymentID, RefundParams, Context, OperationID) of
         {ok, Refund} ->
+            ct:print("Refund: ~p", [Refund]),
             {ok, {201, #{}, capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
         {exception, Exception} ->
             case Exception of
@@ -364,30 +366,20 @@ create_payment(InvoiceID, PartyID, PaymentParams, Context, BenderPrefix) ->
     %% WARNING!!! finish all -> 'TODO[0x42]:'
     ExternalID = maps:get(<<"externalID">>, PaymentParams, undefined),
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
-    Payer = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
+    {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
     PaymentParamsDecrypted = PaymentParams#{<<"payer">> => Payer},
-    IdempotentFeatures = capi_idempotent_draft:read_payment_features(PaymentParamsDecrypted),
     Hash = erlang:phash2(PaymentParams),
-    %% delete after transition period
     Params = #{
-        legacy => Hash,
-        value => IdempotentFeatures
+        params_hash => Hash,
+        feature_schema => capi_idempotent_draft:payment_schema(),
+        feature_values => PaymentParamsDecrypted
     },
     #{woody_context := WoodyCtx} = Context,
     CtxData = #{<<"invoice_id">> => InvoiceID},
+
     case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Params, WoodyCtx, CtxData) of
         {ok, ID} ->
-            start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context);
-        {ok, ID, SavedFeatures} ->
-            case capi_idempotent_draft:equal_features(IdempotentFeatures, SavedFeatures) of
-                true ->
-                    start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context);
-                {false, Diff} ->
-                    logger:warning("externalID used in another request. Difference: ~p", [Diff]),
-                    %% сделать более читаемы вывод ошибок с учетом Difference
-                    {error, {external_id_conflict, ID, ExternalID}}
-            end;
-        %% Legacy
+            start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context);
         {error, {external_id_conflict, ID}} ->
             {error, {external_id_conflict, ID, ExternalID}}
     end.
@@ -398,8 +390,8 @@ create_payment(InvoiceID, PartyID, PaymentParams, Context, BenderPrefix) ->
 %     PaymentParamsDecrypted = PaymentParams#{<<"payer">> => Payer},
 %     start_payment(PaymentID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context).
 
-start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, Context) ->
-    InvoicePaymentParams = encode_invoice_payment_params(ID, ExternalID, PaymentParamsDecrypted),
+start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context) ->
+    InvoicePaymentParams = encode_invoice_payment_params(ID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift),
     Call = {invoicing, 'StartPayment', [InvoiceID, InvoicePaymentParams]},
     capi_handler_utils:service_call_with([user_info], Call, Context).
 
@@ -408,23 +400,21 @@ decrypt_payer(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer) ->
     case capi_crypto:decrypt_payment_tool_token(Token) of
         {ok, PaymentToolThrift} ->
             PaymentTool = capi_handler_decoder_party:decode_payment_tool(PaymentToolThrift),
-            Payer#{
-                <<"paymentToolThrift">> => PaymentToolThrift,
-                <<"paymentTool">> => PaymentTool
-            };
+            {Payer#{<<"paymentTool">> => PaymentTool}, PaymentToolThrift};
         {error, {decryption_failed, Error}} ->
             logger:warning("Payment tool token decryption failed: ~p", [Error]),
             erlang:throw(invalid_token)
     end;
 decrypt_payer(CustomerOrRecurrentPayer) ->
-    CustomerOrRecurrentPayer.
+    {CustomerOrRecurrentPayer, undefined}.
 
-encode_invoice_payment_params(ID, ExternalID, PaymentParams) ->
+encode_invoice_payment_params(ID, ExternalID, PaymentParams, PaymentToolThrift) ->
     Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
+    Payer = genlib_map:get(<<"payer">>, PaymentParams),
     #payproc_InvoicePaymentParams{
         id                  = ID,
         external_id         = ExternalID,
-        payer               = encode_payer_params(genlib_map:get(<<"payer">>, PaymentParams)),
+        payer               = encode_payer_params({Payer, PaymentToolThrift}),
         flow                = encode_flow(Flow),
         make_recurrent      = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false),
         context             = capi_handler_encoder:encode_payment_context(PaymentParams),
@@ -433,33 +423,32 @@ encode_invoice_payment_params(ID, ExternalID, PaymentParams) ->
         )
     }.
 
-encode_payer_params(#{
+encode_payer_params({#{
     <<"payerType" >> := <<"CustomerPayer">>,
     <<"customerID">> := ID
-}) ->
+}, _}) ->
     {customer, #payproc_CustomerPayerParams{customer_id = ID}};
 
-encode_payer_params(#{
+encode_payer_params({#{
     <<"payerType"       >>  := <<"PaymentResourcePayer">>,
-    <<"paymentToolThrift">> := PaymentTool,
     <<"paymentSession"  >>  := EncodedSession,
     <<"contactInfo"     >>  := ContactInfo
-}) ->
+}, PaymentToolThrift}) ->
     {ClientInfo, PaymentSession} = capi_handler_utils:unwrap_payment_session(EncodedSession),
     {payment_resource, #payproc_PaymentResourcePayerParams{
         resource = #domain_DisposablePaymentResource{
-            payment_tool = PaymentTool,
+            payment_tool = PaymentToolThrift,
             payment_session_id = PaymentSession,
             client_info = capi_handler_encoder:encode_client_info(ClientInfo)
         },
         contact_info = capi_handler_encoder:encode_contact_info(ContactInfo)
     }};
 
-encode_payer_params(#{
+encode_payer_params({#{
     <<"payerType"             >> := <<"RecurrentPayer">>,
     <<"recurrentParentPayment">> := RecurrentParent,
     <<"contactInfo"           >> := ContactInfo
-}) ->
+}, _}) ->
     #{
         <<"invoiceID">> := InvoiceID,
         <<"paymentID">> := PaymentID
@@ -562,26 +551,20 @@ create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} =
     SequenceID = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
     Hash = erlang:phash2(RefundParams),
     RefundParamsFull = RefundParams#{<<"invoiceID">> => invoiceID, <<"paymentID">> => PaymentID},
-    IdempotentFeatures = capi_idempotent_draft:read_refund_features(RefundParamsFull),
-    BenderParams = #{legacy => Hash, value => IdempotentFeatures},
-    Params = #payproc_InvoicePaymentRefundParams{
-        external_id = ExternalID,
-        reason = genlib_map:get(<<"reason">>, RefundParams),
-        cash = encode_optional_cash(RefundParams, InvoiceID, PaymentID, Context),
-        cart = capi_handler_encoder:encode_invoice_cart(RefundParams)
+    Params = #{
+        params_hash => Hash,
+        feature_schema => capi_idempotent_draft:refund_schema(),
+        feature_values => RefundParamsFull
     },
-    case capi_bender:gen_by_sequence(IdempotentKey, SequenceID, BenderParams, WoodyCtx, #{}, #{minimum => 100}) of
+    case capi_bender:gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyCtx, #{}, #{minimum => 100}) of
         {ok, ID} ->
-            refund_payment(ID, InvoiceID, PaymentID, Params, Context);
-        {ok, ID, SavedFeatures} ->
-            case capi_idempotent_draft:equal_features(IdempotentFeatures, SavedFeatures) of
-                true ->
-                    refund_payment(ID, InvoiceID, PaymentID, Params, Context);
-                {false, _Difference} ->
-                    %% сделать более читаемы вывод ошибок с учетом Difference
-                    {error, {external_id_conflict, ID, ExternalID}}
-            end;
-        %% Legacy
+            InvoicePaymentRefundParams = #payproc_InvoicePaymentRefundParams{
+                external_id = ExternalID,
+                reason = genlib_map:get(<<"reason">>, RefundParams),
+                cash = encode_optional_cash(RefundParams, InvoiceID, PaymentID, Context),
+                cart = capi_handler_encoder:encode_invoice_cart(RefundParams)
+            },
+            refund_payment(ID, InvoiceID, PaymentID, InvoicePaymentRefundParams, Context);
         {error, {external_id_conflict, ID}} ->
             {error, {external_id_conflict, ID, ExternalID}}
     end.

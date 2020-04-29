@@ -9,11 +9,11 @@
 -type sequence_params() :: #{minimum => integer()}.
 
 -type params() :: #{
-    legacy => integer(),
-    value  => params_value()
+    params_hash     => integer(),
+    feature_schema  => capi_idempotent_draft:schema(),
+    feature_values  => params_value()
 }.
 -type params_value() :: term().
-
 
 -export_type([
     bender_context/0,
@@ -126,13 +126,9 @@ get_internal_id(ExternalID, WoodyContext) ->
 gen_external_id() ->
     genlib:unique().
 
-generate_id(Key, BenderSchema, #{legacy := Hash, value := Params}, WoodyContext, CtxData) ->
-    Context = capi_msgp_marshalling:marshal(#{
-        <<"version">>       => ?SCHEMA_VER2,
-        <<"params">>        => Params,
-        <<"context_data">>  => CtxData
-    }),
-    Args = [Key, BenderSchema, Context],
+generate_id(Key, BenderSchema, #{params_hash := Hash} = Params, WoodyContext, CtxData) ->
+    BenderCtx = bender_ctx(Params, CtxData),
+    Args = [Key, BenderSchema, capi_msgp_marshalling:marshal(BenderCtx)],
     Result = case capi_woody_client:call_service(bender, 'GenerateID', Args, WoodyContext) of
         {ok, #bender_GenerationResult{internal_id = InternalID, context = undefined}} -> {ok, InternalID};
         {ok, #bender_GenerationResult{internal_id = InternalID, context = Ctx}} ->
@@ -142,14 +138,41 @@ generate_id(Key, BenderSchema, #{legacy := Hash, value := Params}, WoodyContext,
         {ok, ID} ->
             {ok, ID};
         {ok, ID, #{<<"version">> := ?SCHEMA_VER1} = DeprecatedCtx} ->
-            idepmotent_conflict_legacy(ID, Hash, DeprecatedCtx);
-        {ok, ID, #{<<"version">> := ?SCHEMA_VER2, <<"params">> := SavedParams}} ->
-            {ok, ID, SavedParams}
+            idempotent_conflict_legacy(ID, Hash, DeprecatedCtx);
+        {ok, ID, #{<<"version">> := ?SCHEMA_VER2} = SavedBenderCtx} ->
+            idempotent_conflict(ID, BenderCtx, SavedBenderCtx)
     end.
-%% legacy
-idepmotent_conflict_legacy(ID, Hash, #{<<"params_hash">> := Hash}) ->
+
+bender_ctx(Params, Ctx) ->
+    Schema = maps:get(feature_schema, Params),
+    Values = maps:get(feature_values, Params),
+    Features = capi_idempotent_draft:read_features(Schema, Values),
+    #{
+        <<"version">>      => ?SCHEMA_VER2,
+        <<"features">>     => Features,
+        <<"context_data">> => Ctx
+    }.
+
+features(#{<<"version">> := ?SCHEMA_VER2, <<"features">> := Features}) ->
+    Features.
+
+idempotent_conflict(ID, BenderCtx, SavedBenderCtx) ->
+    Features = features(BenderCtx),
+    OtherFeatures = features(SavedBenderCtx),
+    case capi_idempotent_draft:equal_features(Features, OtherFeatures) of
+        true ->
+            {ok, ID};
+        {false, Difference} ->
+            logger:warning("externalID used in another request. Difference: ~p", [Difference]),
+            %% сделать более читаемы вывод ошибок с учетом Difference
+            {error, {external_id_conflict, ID}}
+    end.
+
+%% Legacy
+
+idempotent_conflict_legacy(ID, Hash, #{<<"params_hash">> := Hash}) ->
     {ok, ID};
-idepmotent_conflict_legacy(ID, _Hash, #{<<"params_hash">> := _OtherHash}) ->
+idempotent_conflict_legacy(ID, _Hash, #{<<"params_hash">> := _OtherHash}) ->
     {error, {external_id_conflict, ID}}.
 
 -spec get_context_data(bender_context()) -> undefined | context_data().
