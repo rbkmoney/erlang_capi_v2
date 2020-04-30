@@ -254,10 +254,8 @@ process_request('CreateRefund' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
     RefundParams = maps:get('RefundParams', Req),
-    ct:print("CreateRefund request >>>~n ~p", [RefundParams]),
     try create_refund(InvoiceID, PaymentID, RefundParams, Context, OperationID) of
         {ok, Refund} ->
-            ct:print("Refund: ~p", [Refund]),
             {ok, {201, #{}, capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
         {exception, Exception} ->
             case Exception of

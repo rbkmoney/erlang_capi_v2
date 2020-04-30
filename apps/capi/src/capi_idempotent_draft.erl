@@ -13,6 +13,8 @@
 -type feature_name()    :: binary().
 -type feature_value()   :: integer() | features() | [features()].
 
+-export_type([schema/0]).
+
 -export([payment_schema/0]).
 -export([invoice_schema/0]).
 -export([refund_schema/0]).

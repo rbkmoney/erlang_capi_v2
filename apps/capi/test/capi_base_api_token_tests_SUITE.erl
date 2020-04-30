@@ -786,7 +786,6 @@ create_refund_idemp_fail_test(Config) ->
         <<"message">>    => <<"This 'externalID' has been used by another request">>
     }}},
     Req1 = Req#{<<"amount">> => 100},
-    ct:print(" ----- SECOND REQUEST ----- "),
     BadExternalID = capi_client_payments:create_refund(?config(context, Config), Req1, ?STRING, ?STRING),
     capi_ct_helper_bender:del_storage(Tid).
 
