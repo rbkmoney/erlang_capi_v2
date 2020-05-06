@@ -31,7 +31,7 @@
     Result :: false | {true, capi_auth:context()}.
 
 authorize_api_key(OperationID, ApiKey, _HandlerOpts) ->
-    case uac:authorize_api_key(ApiKey,get_verification_options()) of
+    case uac:authorize_api_key(ApiKey, get_verification_options()) of
         {ok, Context} ->
             {true, Context};
         {error, Error} ->
