@@ -25,12 +25,13 @@
 
 %% @WARNING Must be refactored in case of different classes of users using this API
 -define(REALM, <<"external">>).
+-define(DOMAIN, <<"common-api">>).
 
 -spec authorize_api_key(swag_server:operation_id(), swag_server:api_key(), handler_opts()) ->
     Result :: false | {true, capi_auth:context()}.
 
 authorize_api_key(OperationID, ApiKey, _HandlerOpts) ->
-    case uac:authorize_api_key(ApiKey, #{}) of
+    case uac:authorize_api_key(ApiKey, get_verification_options()) of
         {ok, Context} ->
             {true, Context};
         {error, Error} ->
@@ -234,3 +235,8 @@ clear_rpc_meta() ->
         Metadata ->
             logger:set_process_metadata(maps:without([trace_id, parent_id, span_id], Metadata))
     end.
+
+get_verification_options() ->
+    #{
+        domains_to_decode => [?DOMAIN]
+    }.
