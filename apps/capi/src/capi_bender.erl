@@ -61,7 +61,7 @@ gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext) ->
 -spec gen_by_sequence(binary(), binary(), params(), woody_context(), context_data()) ->
     {ok, binary()} |
     {ok, binary(), params_value()} |
-    {error, {external_id_conflict, binary()}}. %% legacy delete
+    {error, {external_id_conflict, binary()}}.
 
 gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext, CtxData) ->
     gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext, CtxData, #{}).
@@ -69,7 +69,7 @@ gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext, CtxData) ->
 -spec gen_by_sequence(binary(), binary(), params(), woody_context(), context_data(), sequence_params()) ->
     {ok, binary()} |
     {ok, binary(), params_value()} |
-    {error, {external_id_conflict, binary()}}. %% legacy delete
+    {error, {external_id_conflict, binary()}}.
 
 gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext, CtxData, SeqParams) ->
     Minimum = maps:get(minimum, SeqParams, undefined),
@@ -127,7 +127,7 @@ gen_external_id() ->
     genlib:unique().
 
 generate_id(Key, BenderSchema, #{params_hash := Hash} = Params, WoodyContext, CtxData) ->
-    BenderCtx = bender_ctx(Params, CtxData),
+    BenderCtx = create_bender_ctx(Params, CtxData),
     Args = [Key, BenderSchema, capi_msgp_marshalling:marshal(BenderCtx)],
     Result = case capi_woody_client:call_service(bender, 'GenerateID', Args, WoodyContext) of
         {ok, #bender_GenerationResult{internal_id = InternalID, context = undefined}} -> {ok, InternalID};
@@ -138,12 +138,12 @@ generate_id(Key, BenderSchema, #{params_hash := Hash} = Params, WoodyContext, Ct
         {ok, ID} ->
             {ok, ID};
         {ok, ID, #{<<"version">> := ?SCHEMA_VER1} = DeprecatedCtx} ->
-            idempotent_conflict_legacy(ID, Hash, DeprecatedCtx);
+            check_idempotent_conflict_deprecated(ID, Hash, DeprecatedCtx);
         {ok, ID, #{<<"version">> := ?SCHEMA_VER2} = SavedBenderCtx} ->
-            idempotent_conflict(ID, BenderCtx, SavedBenderCtx)
+            check_idempotent_conflict(ID, BenderCtx, SavedBenderCtx)
     end.
 
-bender_ctx(Params, Ctx) ->
+create_bender_ctx(Params, Ctx) ->
     Schema = maps:get(feature_schema, Params),
     Values = maps:get(feature_values, Params),
     Features = capi_idempotent_draft:read_features(Schema, Values),
@@ -156,7 +156,7 @@ bender_ctx(Params, Ctx) ->
 features(#{<<"version">> := ?SCHEMA_VER2, <<"features">> := Features}) ->
     Features.
 
-idempotent_conflict(ID, BenderCtx, SavedBenderCtx) ->
+check_idempotent_conflict(ID, BenderCtx, SavedBenderCtx) ->
     Features = features(BenderCtx),
     OtherFeatures = features(SavedBenderCtx),
     case capi_idempotent_draft:equal_features(Features, OtherFeatures) of
@@ -168,11 +168,11 @@ idempotent_conflict(ID, BenderCtx, SavedBenderCtx) ->
             {error, {external_id_conflict, ID}}
     end.
 
-%% Legacy
+%% Deprecated idempotent context
 
-idempotent_conflict_legacy(ID, Hash, #{<<"params_hash">> := Hash}) ->
+check_idempotent_conflict_deprecated(ID, Hash, #{<<"params_hash">> := Hash}) ->
     {ok, ID};
-idempotent_conflict_legacy(ID, _Hash, #{<<"params_hash">> := _OtherHash}) ->
+check_idempotent_conflict_deprecated(ID, _Hash, #{<<"params_hash">> := _OtherHash}) ->
     {error, {external_id_conflict, ID}}.
 
 -spec get_context_data(bender_context()) -> undefined | context_data().

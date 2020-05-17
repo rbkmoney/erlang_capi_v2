@@ -369,7 +369,7 @@ create_payment(InvoiceID, PartyID, PaymentParams, Context, BenderPrefix) ->
     Hash = erlang:phash2(PaymentParams),
     Params = #{
         params_hash => Hash,
-        feature_schema => capi_idempotent_draft:payment_schema(),
+        feature_schema => capi_idempotent_draft:get_schema(payment),
         feature_values => PaymentParamsDecrypted
     },
     #{woody_context := WoodyCtx} = Context,
