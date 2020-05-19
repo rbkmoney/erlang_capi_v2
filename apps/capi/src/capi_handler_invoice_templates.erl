@@ -182,7 +182,7 @@ create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx
     Hash = erlang:phash2({InvoiceTplID, InvoiceParams}),
     BenderParams = #{
         params_hash => Hash,
-        feature_schema => capi_idempotent_draft:invoice_schema(),
+        feature_schema => invoice,
         feature_values => InvoiceParams
     },
 
@@ -192,6 +192,9 @@ create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx
             Call = {invoicing, 'CreateWithTemplate', Params},
             capi_handler_utils:service_call_with([user_info, party_creation], Call, Context);
         {error, {external_id_conflict, ID}} ->
+            throw({external_id_conflict, ID, ExternalID});
+        {error, {external_id_conflict, ID, Difference}} ->
+            logger:warning("externalID used in another request.~nDifference: ~p", [Difference]),
             throw({external_id_conflict, ID, ExternalID})
     end.
 

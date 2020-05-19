@@ -198,13 +198,16 @@ create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context, B
     Hash = erlang:phash2(InvoiceParams),
     BenderParams = #{
         params_hash => Hash,
-        feature_schema => capi_idempotent_draft:invoice_schema(),
+        feature_schema => invoice,
         feature_values => InvoiceParams
     },
     case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
         {ok, ID} ->
             CreateFun(ID);
         {error, {external_id_conflict, ID}} ->
+            throw({external_id_conflict, ID, ExternalID});
+        {error, {external_id_conflict, ID, Difference}} ->
+            logger:warning("externalID used in another request.~nDifference: ~p", [Difference]),
             throw({external_id_conflict, ID, ExternalID})
     end.
 

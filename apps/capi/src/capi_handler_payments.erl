@@ -361,7 +361,6 @@ process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 create_payment(InvoiceID, PartyID, PaymentParams, Context, BenderPrefix) ->
-    %% WARNING!!! finish all -> 'TODO[0x42]:'
     ExternalID = maps:get(<<"externalID">>, PaymentParams, undefined),
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
@@ -369,16 +368,18 @@ create_payment(InvoiceID, PartyID, PaymentParams, Context, BenderPrefix) ->
     Hash = erlang:phash2(PaymentParams),
     Params = #{
         params_hash => Hash,
-        feature_schema => capi_idempotent_draft:get_schema(payment),
+        feature_schema => payment,
         feature_values => PaymentParamsDecrypted
     },
     #{woody_context := WoodyCtx} = Context,
     CtxData = #{<<"invoice_id">> => InvoiceID},
-
     case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Params, WoodyCtx, CtxData) of
         {ok, ID} ->
             start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context);
         {error, {external_id_conflict, ID}} ->
+            {error, {external_id_conflict, ID, ExternalID}};
+        {error, {external_id_conflict, ID, Difference}} ->
+            logger:warning("externalID used in another request.~nDifference: ~p", [Difference]),
             {error, {external_id_conflict, ID, ExternalID}}
     end.
 % create_payment(InvoiceID, _PartyID, PaymentParams, Context, _) ->
@@ -551,7 +552,7 @@ create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} =
     RefundParamsFull = RefundParams#{<<"invoiceID">> => invoiceID, <<"paymentID">> => PaymentID},
     Params = #{
         params_hash => Hash,
-        feature_schema => capi_idempotent_draft:refund_schema(),
+        feature_schema => refund,
         feature_values => RefundParamsFull
     },
     case capi_bender:gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyCtx, #{}, #{minimum => 100}) of
@@ -564,6 +565,9 @@ create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} =
             },
             refund_payment(ID, InvoiceID, PaymentID, InvoicePaymentRefundParams, Context);
         {error, {external_id_conflict, ID}} ->
+            {error, {external_id_conflict, ID, ExternalID}};
+        {error, {external_id_conflict, ID, Difference}} ->
+            logger:warning("externalID used in another request.~nDifference: ~p", [Difference]),
             {error, {external_id_conflict, ID, ExternalID}}
     end.
 
