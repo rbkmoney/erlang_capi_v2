@@ -237,9 +237,9 @@
     adjustments    = Adjustments
 }).
 
--define(PAYPROC_PAYMENT, ?PAYPROC_PAYMENT(?PAYMENT, [?REFUND], [?ADJUSTMENT], [?CHARGEBACK])).
+-define(PAYPROC_PAYMENT, ?PAYPROC_PAYMENT(?PAYMENT, [?REFUND], [?ADJUSTMENT], [?PAYPROC_CHARGEBACK])).
 
--define(PAYPROC_PAYMENT(ID, IED), ?PAYPROC_PAYMENT(?PAYMENT(ID, IED), [?REFUND], [?ADJUSTMENT], [?CHARGEBACK])).
+-define(PAYPROC_PAYMENT(ID, IED), ?PAYPROC_PAYMENT(?PAYMENT(ID, IED), [?REFUND], [?ADJUSTMENT], [?PAYPROC_CHARGEBACK])).
 
 -define(FAILED_PAYMENT(Failure), ?PAYMENT(?STRING, ?STRING, {failed, #domain_InvoicePaymentFailed{failure = Failure}})).
 
@@ -270,6 +270,12 @@
 }).
 
 -define(CHARGEBACK, ?CHARGEBACK(?STRING)).
+
+-define(PAYPROC_CHARGEBACK, ?PAYPROC_CHARGEBACK(?STRING)).
+
+-define(PAYPROC_CHARGEBACK(ID), #payproc_InvoicePaymentChargeback{
+    chargeback = ?CHARGEBACK(ID)
+}).
 
 -define(CHARGEBACK(ID), #domain_InvoicePaymentChargeback{
     id = ID,
@@ -975,12 +981,18 @@
 
 -define(PAYMENTS_SERVICE_TERMS, #domain_PaymentsServiceTerms{
     payment_methods = {value,
-        [
+        ordsets:from_list([
             #domain_PaymentMethodRef{
-                id = {bank_card, mastercard}
+                id = {bank_card, #domain_BankCardPaymentMethod{
+                    payment_system = mastercard,
+                    has_cvv = true
+                }}
             },
             #domain_PaymentMethodRef{
-                id = {bank_card, visa}
+                id = {bank_card, #domain_BankCardPaymentMethod{
+                    payment_system = visa,
+                    has_cvv = true
+                }}
             },
             #domain_PaymentMethodRef{
                 id = {crypto_currency, bitcoin}
@@ -989,18 +1001,20 @@
                 id = {crypto_currency, bitcoin_cash}
             },
             #domain_PaymentMethodRef{
-                id = {tokenized_bank_card, #domain_TokenizedBankCard{
+                id = {bank_card, #domain_BankCardPaymentMethod{
                     payment_system = mastercard,
+                    has_cvv = true,
                     token_provider = applepay
                 }}
             },
             #domain_PaymentMethodRef{
-                id = {tokenized_bank_card, #domain_TokenizedBankCard{
+                id = {bank_card, #domain_BankCardPaymentMethod{
                     payment_system = visa,
+                    has_cvv = true,
                     token_provider = applepay
                 }}
             }
-        ]
+        ])
     }
 }).
 
