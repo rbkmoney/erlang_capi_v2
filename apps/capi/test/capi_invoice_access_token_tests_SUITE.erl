@@ -6,7 +6,6 @@
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_errors_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_tool_token_thrift.hrl").
--include_lib("damsel/include/dmsl_cds_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 -include_lib("jose/include/jose_jwk.hrl").
 
@@ -420,9 +419,9 @@ get_encrypted_token() ->
 -spec get_payments_ok_test(config()) ->
     _.
 get_payments_ok_test(Config) ->
-    Payment0 = ?PAYPROC_PAYMENT(?PAYMENT_WITH_CUSTOMER_PAYER, [?REFUND], [?ADJUSTMENT], [?CHARGEBACK]),
-    Payment1 = ?PAYPROC_PAYMENT(?PAYMENT_WITH_RECURRENT_PAYER, [?REFUND], [?ADJUSTMENT], [?CHARGEBACK]),
-    Payment2 = ?PAYPROC_PAYMENT(?PAYMENT, [?REFUND], [?ADJUSTMENT], [?CHARGEBACK]),
+    Payment0 = ?PAYPROC_PAYMENT(?PAYMENT_WITH_CUSTOMER_PAYER, [?REFUND], [?ADJUSTMENT], [?PAYPROC_CHARGEBACK]),
+    Payment1 = ?PAYPROC_PAYMENT(?PAYMENT_WITH_RECURRENT_PAYER, [?REFUND], [?ADJUSTMENT], [?PAYPROC_CHARGEBACK]),
+    Payment2 = ?PAYPROC_PAYMENT(?PAYMENT, [?REFUND], [?ADJUSTMENT], [?PAYPROC_CHARGEBACK]),
     Result   = ?PAYPROC_INVOICE([Payment0, Payment1, Payment2]),
     capi_ct_helper:mock_services([{invoicing, fun('Get', _) -> {ok, Result} end}], Config),
     {ok, _} = capi_client_payments:get_payments(?config(context, Config), ?STRING).
@@ -430,7 +429,7 @@ get_payments_ok_test(Config) ->
 -spec get_payment_by_id_ok_test(config()) ->
     _.
 get_payment_by_id_ok_test(Config) ->
-    Result = ?PAYPROC_PAYMENT(?PAYMENT_WITH_RECURRENT_PAYER, [?REFUND], [?ADJUSTMENT], [?CHARGEBACK]),
+    Result = ?PAYPROC_PAYMENT(?PAYMENT_WITH_RECURRENT_PAYER, [?REFUND], [?ADJUSTMENT], [?PAYPROC_CHARGEBACK]),
     capi_ct_helper:mock_services([{invoicing, fun('GetPayment', _) -> {ok, Result} end}], Config),
     {ok, _} = capi_client_payments:get_payment_by_id(?config(context, Config), ?STRING, ?STRING).
 
@@ -528,7 +527,7 @@ create_second_recurrent_payment_ok_test(Config) ->
 -spec get_recurrent_payments_ok_test(config()) ->
     _.
 get_recurrent_payments_ok_test(Config) ->
-    Invoice = ?PAYPROC_INVOICE([?PAYPROC_PAYMENT(?RECURRENT_PAYMENT, [?REFUND], [?ADJUSTMENT], [?CHARGEBACK])]),
+    Invoice = ?PAYPROC_INVOICE([?PAYPROC_PAYMENT(?RECURRENT_PAYMENT, [?REFUND], [?ADJUSTMENT], [?PAYPROC_CHARGEBACK])]),
     capi_ct_helper:mock_services([{invoicing, fun('Get', _) -> {ok, Invoice} end}], Config),
     {ok, _} = capi_client_payments:get_payments(?config(context, Config), ?STRING).
 
