@@ -320,7 +320,7 @@ decode_refund_status({Status, StatusInfo}, Context) ->
 -spec decode_chargeback(capi_handler_encoder:encode_data(), processing_context()) ->
     capi_handler_decoder_utils:decode_data().
 
-decode_chargeback(Chargeback, _Context) ->
+decode_chargeback(#payproc_InvoicePaymentChargeback{chargeback = Chargeback}, _Context) ->
     #domain_Cash{amount = Body, currency = Currency} = Chargeback#domain_InvoicePaymentChargeback.body,
     #domain_Cash{amount = Levy, currency = Currency} = Chargeback#domain_InvoicePaymentChargeback.levy,
     capi_handler_utils:merge_and_compact(
