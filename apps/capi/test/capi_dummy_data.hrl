@@ -237,9 +237,9 @@
     adjustments    = Adjustments
 }).
 
--define(PAYPROC_PAYMENT, ?PAYPROC_PAYMENT(?PAYMENT, [?REFUND], [?ADJUSTMENT], [?CHARGEBACK])).
+-define(PAYPROC_PAYMENT, ?PAYPROC_PAYMENT(?PAYMENT, [?REFUND], [?ADJUSTMENT], [?PAYPROC_CHARGEBACK])).
 
--define(PAYPROC_PAYMENT(ID, IED), ?PAYPROC_PAYMENT(?PAYMENT(ID, IED), [?REFUND], [?ADJUSTMENT], [?CHARGEBACK])).
+-define(PAYPROC_PAYMENT(ID, IED), ?PAYPROC_PAYMENT(?PAYMENT(ID, IED), [?REFUND], [?ADJUSTMENT], [?PAYPROC_CHARGEBACK])).
 
 -define(FAILED_PAYMENT(Failure), ?PAYMENT(?STRING, ?STRING, {failed, #domain_InvoicePaymentFailed{failure = Failure}})).
 
@@ -269,6 +269,7 @@
     external_id = EID
 }).
 
+
 -define(CHARGEBACK, ?CHARGEBACK(?STRING)).
 
 -define(CHARGEBACK(ID), #domain_InvoicePaymentChargeback{
@@ -280,6 +281,12 @@
     reason = ?CHARGEBACK_REASON,
     body = ?CASH,
     levy = ?CASH
+}).
+
+-define(PAYPROC_CHARGEBACK, ?PAYPROC_CHARGEBACK(?STRING)).
+
+-define(PAYPROC_CHARGEBACK(ID), #payproc_InvoicePaymentChargeback{
+    chargeback = ?CHARGEBACK(ID)
 }).
 
 -define(CHARGEBACK_REASON, #domain_InvoicePaymentChargebackReason{
