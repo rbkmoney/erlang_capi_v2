@@ -250,6 +250,9 @@ compare_features(Fs, FsWith) ->
         FsWith
     ).
 
+compare_list_features(L1, L2, _)
+when length(L1) =/= length(L2) ->
+    {false, L1};
 compare_list_features(L, L, []) ->
     true;
 compare_list_features(L, L, Diff) ->
@@ -367,12 +370,12 @@ read_payment_features_value_test() ->
                 <<"cardholder_name">> => CardHolder
             }
     }},
-    PaymentTool = deep_merge(#{}, #{
+    PaymentTool = #{
         <<"type">>        => hash(Tool),
         <<"token">>       => hash(Token),
         <<"expdate">>     => hash(ExpDate),
         <<"cardholder">>  => hash(CardHolder)
-    }),
+    },
     Payer = deep_merge(?PAYER, #{
         <<"payer">> => #{
             <<"type">> => hash(PayerType),
@@ -478,8 +481,8 @@ compare_invoices_test() ->
         <<"price">>      => hash(Price1)
     }),
     Product1 = Product1_#{<<"tax">> => #{
-        <<"type">> => <<"InvoiceLineTaxVAT">>,
-        <<"rate">> => <<"10%">>
+        <<"type">> => hash(<<"InvoiceLineTaxVAT">>),
+        <<"rate">> => hash(<<"10%">>)
     }},
     Invoice1 = deep_merge(?INVOICE, #{
         <<"shop_id">>   => hash(ShopID),
@@ -512,7 +515,7 @@ compare_invoices_test() ->
         #{
             <<"price">> => hash(Price2),
             <<"tax">> => #{
-                <<"rate">> => <<"18%">>
+                <<"rate">> => hash(<<"18%">>)
             }
         }
     ]}),
