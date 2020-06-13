@@ -271,15 +271,17 @@
 
 -define(CHARGEBACK, ?CHARGEBACK(?STRING)).
 
--define(CHARGEBACK(ID), #domain_InvoicePaymentChargeback{
-    id = ID,
-    status = {pending, #domain_InvoicePaymentChargebackPending{}},
-    stage = {chargeback, #domain_InvoicePaymentChargebackStageChargeback{}},
-    created_at = ?TIMESTAMP,
-    domain_revision = ?INTEGER,
-    reason = ?CHARGEBACK_REASON,
-    body = ?CASH,
-    levy = ?CASH
+-define(CHARGEBACK(ID), #payproc_InvoicePaymentChargeback{
+    chargeback = #domain_InvoicePaymentChargeback{
+        id = ID,
+        status = {pending, #domain_InvoicePaymentChargebackPending{}},
+        stage = {chargeback, #domain_InvoicePaymentChargebackStageChargeback{}},
+        created_at = ?TIMESTAMP,
+        domain_revision = ?INTEGER,
+        reason = ?CHARGEBACK_REASON,
+        body = ?CASH,
+        levy = ?CASH
+    }
 }).
 
 -define(CHARGEBACK_REASON, #domain_InvoicePaymentChargebackReason{
