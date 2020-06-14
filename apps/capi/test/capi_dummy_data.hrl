@@ -269,10 +269,8 @@
     external_id = EID
 }).
 
--define(CHARGEBACK, ?CHARGEBACK(?STRING)).
-
--define(CHARGEBACK(ID), #payproc_InvoicePaymentChargeback{
-    chargeback = #domain_InvoicePaymentChargeback{
+-define(DOMAIN_CHARGEBACK, ?DOMAIN_CHARGEBACK(?STRING)).
+-define(DOMAIN_CHARGEBACK(ID), #domain_InvoicePaymentChargeback{
         id = ID,
         status = {pending, #domain_InvoicePaymentChargebackPending{}},
         stage = {chargeback, #domain_InvoicePaymentChargebackStageChargeback{}},
@@ -281,7 +279,11 @@
         reason = ?CHARGEBACK_REASON,
         body = ?CASH,
         levy = ?CASH
-    }
+    }).
+
+-define(CHARGEBACK, ?CHARGEBACK(?STRING)).
+-define(CHARGEBACK(ID), #payproc_InvoicePaymentChargeback{
+    chargeback = ?DOMAIN_CHARGEBACK(ID)
 }).
 
 -define(CHARGEBACK_REASON, #domain_InvoicePaymentChargebackReason{
