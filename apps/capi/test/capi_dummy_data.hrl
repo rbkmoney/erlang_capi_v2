@@ -269,9 +269,7 @@
     external_id = EID
 }).
 
-
 -define(CHARGEBACK, ?CHARGEBACK(?STRING)).
-
 -define(CHARGEBACK(ID), #domain_InvoicePaymentChargeback{
     id = ID,
     status = {pending, #domain_InvoicePaymentChargebackPending{}},
