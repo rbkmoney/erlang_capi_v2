@@ -207,7 +207,7 @@ create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context, B
         {error, {external_id_conflict, ID}} ->
             throw({external_id_conflict, ID, ExternalID});
         {error, {external_id_conflict, ID, Difference}} ->
-            logger:warning("externalID used in another request.~nDifference: ~p", [Difference]),
+            logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, Difference]),
             throw({external_id_conflict, ID, ExternalID})
     end.
 
