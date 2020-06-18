@@ -985,13 +985,13 @@
             #domain_PaymentMethodRef{
                 id = {bank_card, #domain_BankCardPaymentMethod{
                     payment_system = mastercard,
-                    has_cvv = true
+                    is_cvv_empty = false
                 }}
             },
             #domain_PaymentMethodRef{
                 id = {bank_card, #domain_BankCardPaymentMethod{
                     payment_system = visa,
-                    has_cvv = true
+                    is_cvv_empty = false
                 }}
             },
             #domain_PaymentMethodRef{
@@ -1003,14 +1003,14 @@
             #domain_PaymentMethodRef{
                 id = {bank_card, #domain_BankCardPaymentMethod{
                     payment_system = mastercard,
-                    has_cvv = true,
+                    is_cvv_empty = false,
                     token_provider = applepay
                 }}
             },
             #domain_PaymentMethodRef{
                 id = {bank_card, #domain_BankCardPaymentMethod{
                     payment_system = visa,
-                    has_cvv = true,
+                    is_cvv_empty = false,
                     token_provider = applepay
                 }}
             }
