@@ -5,11 +5,11 @@
 -type request()         :: #{binary() := request_value()}.
 -type request_value()   :: integer() | binary() | request() | [request()].
 -type schema()          :: capi_req_schemas:schema().
--type schema_type()     :: capi_req_schemas:schema_type().
 -type features()        :: capi_req_schemas:features().
 -type difference()      :: features().
 
 -export_type([difference/0]).
+-export_type([schema/0]).
 
 -export([read_payment_features/1]).
 -export([read_invoice_features/1]).
@@ -18,38 +18,42 @@
 -export([equal_features/2]).
 -export([clarify_diff_meaning/2]).
 
--include_lib("eunit/include/eunit.hrl").
-
--spec read_payment_features(request()) -> features().
+-spec read_payment_features(request()) -> {features(), schema()}.
 
 read_payment_features(Request) ->
     read_features(capi_req_schemas:get_schema(payment), Request).
 
--spec read_invoice_features(request()) -> features().
+-spec read_invoice_features(request()) -> {features(), schema()}.
 
 read_invoice_features(Request) ->
     read_features(capi_req_schemas:get_schema(invoice), Request).
 
--spec read_refund_features(request()) -> features().
+-spec read_refund_features(request()) -> {features(), schema()}.
 
 read_refund_features(Request) ->
     read_features(capi_req_schemas:get_schema(refund), Request).
 
--spec read_features(schema(), request()) -> features().
+-spec read_features(schema(), request()) ->
+    {features(), schema()}.
 
 read_features(Schema, Request) ->
     maps:fold(
         fun
-            (Name, Fs = #{}, Acc) ->
-                Acc#{Name => read_features(Fs, Request)};
-            (Name, Accessor, Acc) when is_list(Accessor) ->
+            (Name, Fs = #{}, {Acc, Mapping}) ->
+                {Value, M} = read_features(Fs, Request),
+                {Acc#{Name => Value}, Mapping#{Name => M}};
+            (Name, [N | _] = Accessor, {Acc, Mapping}) when is_list(Accessor) ->
                 V = read_request_value(Accessor, Request),
-                ?debugFmt("Feature ~p Value ~p", [Name, V]),
-                Acc#{Name => V};
+                case V of
+                    {FeatureValue, M} ->
+                        {Acc#{Name => FeatureValue}, Mapping#{Name => [N, M]}};
+                    _ ->
+                        {Acc#{Name => V}, Mapping#{Name => Accessor}}
+                end;
             (_Name, 'reserved', Acc) ->
                 Acc
         end,
-        #{},
+        {#{}, #{}},
         Schema
     ).
 
@@ -70,7 +74,8 @@ read_request_value([{filter, [Key], Schemas}], Request) ->
 read_request_value([Schema = #{}], Request = #{}) ->
     read_features(Schema, Request);
 read_request_value([[Schema = #{}]], List) when is_list(List) ->
-    lists:map(fun (Req) -> read_features(Schema, Req) end, List);
+    {F, S} = lists:mapfoldl(fun(Req, _) -> read_features(Schema, Req) end, [], List),
+    {F, [S]};
 read_request_value([Key | Rest], Request = #{}) when is_binary(Key) ->
     read_request_value(Rest, maps:get(Key, Request, undefined));
 read_request_value(_, undefined) ->
@@ -83,11 +88,10 @@ read_request_value(Key, Request) ->
 hash(V) ->
     erlang:phash2(V).
 
--spec clarify_diff_meaning(schema_type(), difference()) ->
+-spec clarify_diff_meaning(schema(), difference()) ->
     [binary()].
 
-clarify_diff_meaning(SchemaType, Diff) ->
-    Features = capi_req_schemas:get_schema(SchemaType),
+clarify_diff_meaning(Features, Diff) ->
     ConvertedDiff = map_to_flat(features_to_schema(Diff, Features)),
     maps:fold(fun(Keys, _, AccIn) ->
         [list_to_binary(lists:join(<<".">>, Keys)) | AccIn]
@@ -289,151 +293,175 @@ read_payment_features_value_test() ->
     Payer = deep_merge(?PAYER, #{
         <<"payer">> => #{
             <<"type">> => hash(PayerType),
-            <<"tool">> => #{<<"bank_card">> => PaymentTool}
+            <<"tool">> => PaymentTool
+        }
+    }),
+    Mapping = #{<<"payer">> => [<<"payer">>,
+        #{<<"customer">> => [<<"customerID">>],
+            <<"recurrent">> => [<<"recurrentParentPayment">>, #{
+                <<"invoice">> => [<<"invoiceID">>],
+                <<"payment">> => [<<"paymentID">>]}],
+            <<"tool">> => [<<"paymentTool">>, #{
+                <<"cardholder">> => [<<"cardholder_name">>],
+                <<"expdate">> => [<<"exp_date">>],
+                <<"token">> => [<<"token">>],
+                <<"type">> => [<<"type">>]}],
+            <<"type">> => [<<"payerType">>]
+        }
+    ]},
+    SchemaType = payment,
+    ?assertEqual({Payer, Mapping}, read_features(capi_req_schemas:get_schema(SchemaType), Request)).
+
+-spec read_payment_customer_features_value_test() -> _.
+read_payment_customer_features_value_test() ->
+    PayerType = <<"CustomerPayer">>,
+    CustomerID = <<"some customer id">>,
+    Request = #{
+        <<"payer">> => #{
+            <<"payerType">>  => PayerType,
+            <<"customerID">> => CustomerID
+        }
+    },
+    Payer = deep_merge(?PAYER, #{
+        <<"payer">> => #{
+            <<"type">>      => hash(PayerType),
+            <<"customer">>  => hash(CustomerID),
+            <<"tool">>      => undefined
         }
     }),
     SchemaType = payment,
-    ?assertEqual(Payer, read_features(capi_req_schemas:get_schema(SchemaType), Request)).
+    ?assertMatch({Payer, _}, read_features(capi_req_schemas:get_schema(SchemaType), Request)).
 
-% -spec read_payment_customer_features_value_test() -> _.
-% read_payment_customer_features_value_test() ->
-%     PayerType = <<"CustomerPayer">>,
-%     CustomerID = <<"some customer id">>,
-%     Request = #{
-%         <<"payer">> => #{
-%             <<"payerType">>  => PayerType,
-%             <<"customerID">> => CustomerID
-%         }
-%     },
-%     Payer = deep_merge(?PAYER, #{
-%         <<"payer">> => #{
-%             <<"type">>      => hash(PayerType),
-%             <<"customer">>  => hash(CustomerID),
-%             <<"tool">>      => undefined
-%         }
-%     }),
-%     SchemaType = payment,
-%     ?assertEqual(Payer, read_features(capi_req_schemas:get_schema(SchemaType), Request)).
+-spec compare_payment_bank_card_test() -> _.
+compare_payment_bank_card_test() ->
+    PayerType   = <<"PaymentResourcePayer">>,
+    Tool        = <<"bank_card">>,
+    Token1      = <<"cds token">>,
+    Token2      = <<"cds token 2">>,
+    CardHolder  = <<"0x42">>,
+    ExpDate     = {exp_date, 02, 2022},
+    Request1 = #{
+        <<"payer">> => #{
+            <<"payerType">>   => PayerType,
+            <<"paymentTool">> => #{
+                <<"type">>            => Tool,
+                <<"token">>           => Token1,
+                <<"exp_date">>        => ExpDate,
+                <<"cardholder_name">> => CardHolder
+            }
+    }},
+    Request2 = deep_merge(Request1, #{<<"payer">> => #{<<"paymentTool">> => #{<<"token">> => Token2}}}),
+    SchemaType = payment,
+    Schema = capi_req_schemas:get_schema(SchemaType),
+    {F1, M1} = read_features(Schema, Request1),
+    {F2, _} = read_features(Schema, Request2),
+    ?assertEqual(true, equal_features(F1, F1)),
+    {false, Diff} = equal_features(F1, F2),
+    ?assertEqual([<<"payer.paymentTool.token">>], clarify_diff_meaning(M1, Diff)).
 
-% -spec compare_payment_bank_card_test() -> _.
-% compare_payment_bank_card_test() ->
-%     PayerType   = <<"PaymentResourcePayer">>,
-%     Tool        = <<"bank_card">>,
-%     Token1      = <<"cds token">>,
-%     Token2      = <<"cds token 2">>,
-%     CardHolder  = <<"0x42">>,
-%     ExpDate     = {exp_date, 02, 2022},
-%     Request1 = #{
-%         <<"payer">> => #{
-%             <<"payerType">>   => PayerType,
-%             <<"paymentTool">> => #{
-%                 <<"type">>            => Tool,
-%                 <<"token">>           => Token1,
-%                 <<"exp_date">>        => ExpDate,
-%                 <<"cardholder_name">> => CardHolder
-%             }
-%     }},
-%     Request2 = deep_merge(Request1, #{<<"payer">> => #{<<"paymentTool">> => #{<<"token">> => Token2}}}),
-%     SchemaType = payment,
-%     Schema = capi_req_schemas:get_schema(SchemaType),
-%     F1 = read_features(Schema, Request1),
-%     F2 = read_features(Schema, Request2),
-%     ?debugFmt("Features#1: ~p", [F1]),
-%     ?debugFmt("Features#2: ~p", [F2]),
-%     ?assertEqual(true, equal_features(F1, F1)),
-%     {false, Diff} = equal_features(F1, F2),
-%     ?debugFmt("DIFF: ~p", [Diff]),
-%     ?assertEqual([<<"payer.paymentTool.token">>], clarify_diff_meaning(SchemaType, Diff)).
+-spec read_invoice_features_value_test() -> _.
+read_invoice_features_value_test() ->
+    ShopID      = <<"shopus">>,
+    Cur         = <<"XXX">>,
+    Prod1       = <<"yellow duck">>,
+    Prod2       = <<"blue duck">>,
+    Price1      = 10000,
+    Price2      = 20000,
+    Quantity    = 1,
+    Product = deep_merge(?PRODUCT, #{
+        <<"product">>   => hash(Prod1),
+        <<"quantity">>  => hash(Quantity),
+        <<"price">>     => hash(Price1)
+    }),
+    Product2 = Product#{
+        <<"product">> => hash(Prod2),
+        <<"price">> => hash(Price2)
+    },
+    Invoice = deep_merge(?INVOICE, #{
+        <<"shop_id">>   => hash(ShopID),
+        <<"currency">>  => hash(Cur),
+        <<"cart">>      => [Product, Product2]
+    }),
+    Request = #{
+        <<"shopID">> => ShopID,
+        <<"currency">> => Cur,
+        <<"cart">> => [
+            #{<<"product">> => Prod1, <<"quantity">> => 1, <<"price">> => Price1},
+            #{<<"product">> => Prod2, <<"quantity">> => 1, <<"price">> => Price2}
+        ]
+    },
+    Mapping = #{
+        <<"amount">> => [<<"amount">>],
+        <<"cart">> => [<<"cart">>, [#{
+            <<"price">> => [<<"price">>],
+            <<"product">> => [<<"product">>],
+            <<"quantity">> => [<<"quantity">>],
+            <<"tax">> => [<<"taxMode">>, #{
+                <<"rate">> => [<<"rate">>],
+                <<"type">> => [<<"type">>]}
+            ]}]],
+        <<"currency">> => [<<"currency">>],
+        <<"product">> => [<<"product">>],
+        <<"shop_id">> => [<<"shopID">>]
+    },
+    SchemaType = invoice,
+    ?assertEqual({Invoice, Mapping}, read_features(capi_req_schemas:get_schema(SchemaType), Request)).
 
-% -spec read_invoice_features_value_test() -> _.
-% read_invoice_features_value_test() ->
-%     ShopID      = <<"shopus">>,
-%     Cur         = <<"XXX">>,
-%     Prod1       = <<"yellow duck">>,
-%     Prod2       = <<"blue duck">>,
-%     Price1      = 10000,
-%     Price2      = 20000,
-%     Quantity    = 1,
-%     Product = deep_merge(?PRODUCT, #{
-%         <<"product">>   => hash(Prod1),
-%         <<"quantity">>  => hash(Quantity),
-%         <<"price">>     => hash(Price1)
-%     }),
-%     Product2 = Product#{
-%         <<"product">> => hash(Prod2),
-%         <<"price">> => hash(Price2)
-%     },
-%     Invoice = deep_merge(?INVOICE, #{
-%         <<"shop_id">>   => hash(ShopID),
-%         <<"currency">>  => hash(Cur),
-%         <<"cart">>      => [Product, Product2]
-%     }),
-%     Request = #{
-%         <<"shopID">> => ShopID,
-%         <<"currency">> => Cur,
-%         <<"cart">> => [
-%             #{<<"product">> => Prod1, <<"quantity">> => 1, <<"price">> => Price1},
-%             #{<<"product">> => Prod2, <<"quantity">> => 1, <<"price">> => Price2}
-%         ]
-%     },
-%     SchemaType = invoice,
-%     ?assertEqual(Invoice, read_features(capi_req_schemas:get_schema(SchemaType), Request)).
+-spec compare_invoices_test() -> _.
+compare_invoices_test() ->
+    ShopID      = <<"shopus">>,
+    Cur         = <<"RUB">>,
+    Prod1       = <<"yellow duck">>,
+    Prod2       = <<"blue duck">>,
+    Price1      = 10000,
+    Price2      = 20000,
+    Request1 = #{
+        <<"shopID">> => ShopID,
+        <<"currency">> => Cur,
+        <<"cart">> => [#{
+            <<"product">> => Prod1,
+            <<"quantity">> => 1,
+            <<"price">> => Price1,
+            <<"taxMode">> => #{
+                <<"type">> => <<"InvoiceLineTaxVAT">>,
+                <<"rate">> => <<"10%">>
+            }}
+        ]
+    },
+    Request2 = deep_merge(Request1, #{
+        <<"cart">> => [#{<<"product">> => Prod2, <<"price">> => Price2}]
+    }),
+    Request3 = deep_merge(Request1, #{
+        <<"cart">> => [#{<<"product">> => Prod2, <<"price">> => Price2, <<"quantity">> => undefined}]
+    }),
+    SchemaType = invoice,
+    {Invoice1, Mapping} = read_features(capi_req_schemas:get_schema(SchemaType), Request1),
+    {Invoice2, _} = read_features(capi_req_schemas:get_schema(SchemaType), Request2),
+    {InvoiceWithFullCart, _} = read_features(capi_req_schemas:get_schema(SchemaType), Request3),
 
-% -spec compare_invoices_test() -> _.
-% compare_invoices_test() ->
-%     ShopID      = <<"shopus">>,
-%     Cur         = <<"RUB">>,
-%     Prod1       = <<"yellow duck">>,
-%     Prod2       = <<"blue duck">>,
-%     Price1      = 10000,
-%     Price2      = 20000,
-%     Quantity    = 1,
-%     Product1_ = deep_merge(?PRODUCT, #{
-%         <<"product">>    => hash(Prod1),
-%         <<"quantity">>   => hash(Quantity),
-%         <<"price">>      => hash(Price1)
-%     }),
-%     Product1 = Product1_#{<<"tax">> => #{
-%         <<"type">> => hash(<<"InvoiceLineTaxVAT">>),
-%         <<"rate">> => hash(<<"10%">>)
-%     }},
-%     Invoice1 = deep_merge(?INVOICE, #{
-%         <<"shop_id">>   => hash(ShopID),
-%         <<"currency">>  => hash(Cur),
-%         <<"cart">>      => [Product1]
-%     }),
-%     Product2 = deep_merge(?PRODUCT, #{
-%        <<"product">> => hash(Prod2),
-%        <<"price">>   => hash(Price2)
-%     }),
-%     Product2_ = Product2#{
-%         <<"quantity">> => undefined
-%     },
-%     Invoice2 = Invoice1#{<<"cart">> => [Product2]},
-%     InvoiceWithFullCart = Invoice2#{cart => [Product2_]},
-%     ?assertEqual({false, #{<<"cart">> => [#{
-%         <<"price">>     => hash(Price2),
-%         <<"product">>   => hash(Prod2),
-%         <<"quantity">>  => undefined,
-%         <<"tax">>       => undefined
-%     }]}}, equal_features(Invoice2, Invoice1)),
-%     ?assert(equal_features(Invoice1, Invoice1)),
-%     %% Feature was deleted
-%     ?assert(equal_features(InvoiceWithFullCart, Invoice2)),
-%     %% Feature was add
-%     ?assert(equal_features(Invoice2, InvoiceWithFullCart)),
-%     %% When second request didn't contain feature, this situation detected as conflict.
-%     ?assertEqual({false, #{<<"cart">> => undefined}}, equal_features(Invoice1#{<<"cart">> => undefined}, Invoice1)),
-%     {false, Diff} = equal_features(Invoice1, Invoice1#{<<"cart">> => [
-%         #{
-%             <<"price">> => hash(Price2),
-%             <<"tax">> => #{
-%                 <<"rate">> => hash(<<"18%">>)
-%             }
-%         }
-%     ]}),
-%     ?assertEqual([<<"cart.0.taxMode.rate">>, <<"cart.0.price">>], clarify_diff_meaning(invoice, Diff)),
+    ?assertEqual({false, #{<<"cart">> => [#{
+        <<"price">>     => hash(Price2),
+        <<"product">>   => hash(Prod2),
+        <<"quantity">>  => undefined,
+        <<"tax">>       => undefined
+    }]}}, equal_features(Invoice2, Invoice1)),
+    ?assert(equal_features(Invoice1, Invoice1)),
+    %% Feature was deleted
+    ?assert(equal_features(InvoiceWithFullCart, Invoice2)),
+    %% Feature was add
+    ?assert(equal_features(Invoice2, InvoiceWithFullCart)),
+    % %% When second request didn't contain feature, this situation detected as conflict.
+    ?assertMatch({false, #{<<"cart">> := undefined}}, equal_features(Invoice1#{<<"cart">> => undefined}, Invoice1)),
+    {false, Diff} = equal_features(Invoice1, Invoice1#{<<"cart">> => [
+        #{
+            <<"price">> => hash(Price2),
+            <<"tax">> => #{
+                <<"rate">> => hash(<<"18%">>)
+            }
+        }
+    ]}),
 
-%     ?assert(equal_features(Invoice1, Invoice1#{<<"cart">> => undefined})).
+    ?assertEqual([<<"cart.0.taxMode.rate">>, <<"cart.0.price">>], clarify_diff_meaning(Mapping, Diff)),
+    ?assert(equal_features(Invoice1, Invoice1#{<<"cart">> => undefined})).
 
 -endif.

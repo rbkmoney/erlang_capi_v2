@@ -7,11 +7,11 @@
 -type context_data() :: #{binary() => term()}.
 -type bender_context() :: #{binary() => term()}.
 -type sequence_params() :: #{minimum => integer()}.
--type difference() :: capi_idemp_features:difference() | undefined.
+-type difference() :: {capi_idemp_features:difference(), capi_idemp_features:schema()} | undefined.
 
 -type params() :: #{
     params_hash     => integer(),
-    feature_schema  => capi_idemp_features:schema_type(),
+    feature_schema  => capi_req_schemas:schema_type(),
     feature_values  => params_value()
 }.
 
@@ -128,7 +128,7 @@ gen_external_id() ->
     genlib:unique().
 
 generate_id(Key, BenderSchema, #{params_hash := Hash} = Params, WoodyContext, CtxData) ->
-    BenderCtx = create_bender_ctx(Params, CtxData),
+    {BenderCtx, FeaturesSchema} = create_bender_ctx(Params, CtxData),
     Args = [Key, BenderSchema, capi_msgp_marshalling:marshal(BenderCtx)],
     Result = case capi_woody_client:call_service(bender, 'GenerateID', Args, WoodyContext) of
         {ok, #bender_GenerationResult{internal_id = InternalID, context = undefined}} -> {ok, InternalID};
@@ -141,31 +141,30 @@ generate_id(Key, BenderSchema, #{params_hash := Hash} = Params, WoodyContext, Ct
         {ok, ID, #{<<"version">> := ?SCHEMA_VER1} = DeprecatedCtx} ->
             check_idempotent_conflict_deprecated(ID, Hash, DeprecatedCtx);
         {ok, ID, #{<<"version">> := ?SCHEMA_VER2} = SavedBenderCtx} ->
-            check_idempotent_conflict(ID, BenderCtx, SavedBenderCtx)
+            check_idempotent_conflict(ID, BenderCtx, SavedBenderCtx, FeaturesSchema)
     end.
 
 create_bender_ctx(Params, Ctx) ->
-    SchemaType = maps:get(feature_schema, Params),
-    Schema = capi_req_schemas:get_schema(SchemaType),
+    SchemaType = capi_req_schemas:get_schema(maps:get(feature_schema, Params)),
     Values = maps:get(feature_values, Params),
-    Features = capi_idemp_features:read_features(Schema, Values),
-    #{
+    {Features, Schema} = capi_idemp_features:read_features(SchemaType, Values),
+    {#{
         <<"version">>      => ?SCHEMA_VER2,
         <<"features">>     => Features,
         <<"context_data">> => Ctx
-    }.
+    }, Schema}.
 
 features(#{<<"version">> := ?SCHEMA_VER2, <<"features">> := Features}) ->
     Features.
 
-check_idempotent_conflict(ID, BenderCtx, SavedBenderCtx) ->
+check_idempotent_conflict(ID, BenderCtx, SavedBenderCtx, FeaturesSchema) ->
     Features = features(BenderCtx),
     OtherFeatures = features(SavedBenderCtx),
     case capi_idemp_features:equal_features(Features, OtherFeatures) of
         true ->
             {ok, ID};
         {false, Difference} ->
-               {error, {external_id_conflict, ID, Difference}}
+               {error, {external_id_conflict, ID, {Difference, FeaturesSchema}}}
     end.
 
 %% Deprecated idempotent context

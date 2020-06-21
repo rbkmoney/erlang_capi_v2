@@ -1,11 +1,12 @@
 -module(capi_req_schemas).
 
 -type schema_type()     :: payment | invoice | refund.
--type schema()          :: #{feature_name() := [accessor() | schema() | [schema()]]}.
+-type schema()          :: #{feature_name() := [accessor() | schema() | [schema()] | filter()]}.
 -type accessor()        :: binary(). % name of field in a map
+-type filter()          :: {filter, [accessor()], schema()}.
 -type feature_name()    :: binary().
 -type feature_value()   :: integer() | features() | [features()].
--type features()        :: #{feature_name() := feature_value()}.
+-type features()        :: #{feature_name() := feature_value() | undefined}.
 
 -export_type([schema_type/0]).
 -export_type([schema/0]).

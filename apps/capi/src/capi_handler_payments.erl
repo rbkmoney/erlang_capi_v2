@@ -378,8 +378,8 @@ create_payment(InvoiceID, PartyID, PaymentParams, Context, BenderPrefix) ->
             start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context);
         {error, {external_id_conflict, ID, undefined}} ->
             {error, {external_id_conflict, ID, ExternalID}};
-        {error, {external_id_conflict, ID, Difference}} ->
-            ReadableDiff = capi_idemp_features:clarify_diff_meaning(payment, Difference),
+        {error, {external_id_conflict, ID, {Difference, Schema}}} ->
+            ReadableDiff = capi_idemp_features:clarify_diff_meaning(Schema, Difference),
             logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, ReadableDiff]),
             {error, {external_id_conflict, ID, ExternalID}}
     end.
@@ -567,8 +567,8 @@ create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} =
             refund_payment(ID, InvoiceID, PaymentID, InvoicePaymentRefundParams, Context);
         {error, {external_id_conflict, ID, undefined}} ->
             {error, {external_id_conflict, ID, ExternalID}};
-        {error, {external_id_conflict, ID, Difference}} ->
-            ReadableDiff = capi_idemp_features:clarify_diff_meaning(payment, Difference),
+        {error, {external_id_conflict, ID, {Difference, Schema}}} ->
+            ReadableDiff = capi_idemp_features:clarify_diff_meaning(Schema, Difference),
             logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, ReadableDiff]),
             {error, {external_id_conflict, ID, ExternalID}}
     end.

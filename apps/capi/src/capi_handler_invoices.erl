@@ -204,10 +204,11 @@ create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context, B
     case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
         {ok, ID} ->
             CreateFun(ID);
-        {error, {external_id_conflict, ID}} ->
+        {error, {external_id_conflict, ID, undefined}} ->
             throw({external_id_conflict, ID, ExternalID});
-        {error, {external_id_conflict, ID, Difference}} ->
-            logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, Difference]),
+        {error, {external_id_conflict, ID, {Difference, Schema}}} ->
+            ReadableDiff = capi_idemp_features:clarify_diff_meaning(Schema, Difference),
+            logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, ReadableDiff]),
             throw({external_id_conflict, ID, ExternalID})
     end.
 
