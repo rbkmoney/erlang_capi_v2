@@ -39,16 +39,16 @@ read_refund_features(Request) ->
 read_features(Schema, Request) ->
     maps:fold(
         fun
-            (Name, Fs = #{}, {Acc, Mapping}) ->
+            (Name, Fs = #{}, {Acc, S}) ->
                 {Value, M} = read_features(Fs, Request),
-                {Acc#{Name => Value}, Mapping#{Name => M}};
-            (Name, [N | _] = Accessor, {Acc, Mapping}) when is_list(Accessor) ->
+                {Acc#{Name => Value}, S#{Name => M}};
+            (Name, [N | _] = Accessor, {Acc, S}) when is_list(Accessor) ->
                 V = read_request_value(Accessor, Request),
                 case V of
                     {FeatureValue, M} ->
-                        {Acc#{Name => FeatureValue}, Mapping#{Name => [N, M]}};
+                        {Acc#{Name => FeatureValue}, S#{Name => [N, M]}};
                     _ ->
-                        {Acc#{Name => V}, Mapping#{Name => Accessor}}
+                        {Acc#{Name => V}, S#{Name => Accessor}}
                 end;
             (_Name, 'reserved', Acc) ->
                 Acc
@@ -296,7 +296,7 @@ read_payment_features_value_test() ->
             <<"tool">> => PaymentTool
         }
     }),
-    Mapping = #{<<"payer">> => [<<"payer">>,
+    Schema = #{<<"payer">> => [<<"payer">>,
         #{<<"customer">> => [<<"customerID">>],
             <<"recurrent">> => [<<"recurrentParentPayment">>, #{
                 <<"invoice">> => [<<"invoiceID">>],
@@ -310,7 +310,7 @@ read_payment_features_value_test() ->
         }
     ]},
     SchemaType = payment,
-    ?assertEqual({Payer, Mapping}, read_features(capi_req_schemas:get_schema(SchemaType), Request)).
+    ?assertEqual({Payer, Schema}, read_features(capi_req_schemas:get_schema(SchemaType), Request)).
 
 -spec read_payment_customer_features_value_test() -> _.
 read_payment_customer_features_value_test() ->
@@ -390,7 +390,7 @@ read_invoice_features_value_test() ->
             #{<<"product">> => Prod2, <<"quantity">> => 1, <<"price">> => Price2}
         ]
     },
-    Mapping = #{
+    Schema = #{
         <<"amount">> => [<<"amount">>],
         <<"cart">> => [<<"cart">>, [#{
             <<"price">> => [<<"price">>],
@@ -401,11 +401,11 @@ read_invoice_features_value_test() ->
                 <<"type">> => [<<"type">>]}
             ]}]],
         <<"currency">> => [<<"currency">>],
-        <<"product">> => [<<"product">>],
+        <<"product">> => [<<"pr2oduct">>],
         <<"shop_id">> => [<<"shopID">>]
     },
     SchemaType = invoice,
-    ?assertEqual({Invoice, Mapping}, read_features(capi_req_schemas:get_schema(SchemaType), Request)).
+    ?assertEqual({Invoice, Schema}, read_features(capi_req_schemas:get_schema(SchemaType), Request)).
 
 -spec compare_invoices_test() -> _.
 compare_invoices_test() ->
@@ -435,7 +435,7 @@ compare_invoices_test() ->
         <<"cart">> => [#{<<"product">> => Prod2, <<"price">> => Price2, <<"quantity">> => undefined}]
     }),
     SchemaType = invoice,
-    {Invoice1, Mapping} = read_features(capi_req_schemas:get_schema(SchemaType), Request1),
+    {Invoice1, Schema} = read_features(capi_req_schemas:get_schema(SchemaType), Request1),
     {Invoice2, _} = read_features(capi_req_schemas:get_schema(SchemaType), Request2),
     {InvoiceWithFullCart, _} = read_features(capi_req_schemas:get_schema(SchemaType), Request3),
 
@@ -461,7 +461,7 @@ compare_invoices_test() ->
         }
     ]}),
 
-    ?assertEqual([<<"cart.0.taxMode.rate">>, <<"cart.0.price">>], clarify_diff_meaning(Mapping, Diff)),
+    ?assertEqual([<<"cart.0.taxMode.rate">>, <<"cart.0.price">>], clarify_diff_meaning(Schema, Diff)),
     ?assert(equal_features(Invoice1, Invoice1#{<<"cart">> => undefined})).
 
 -endif.
