@@ -401,7 +401,7 @@ read_invoice_features_value_test() ->
                 <<"type">> => [<<"type">>]}
             ]}]],
         <<"currency">> => [<<"currency">>],
-        <<"product">> => [<<"pr2oduct">>],
+        <<"product">> => [<<"product">>],
         <<"shop_id">> => [<<"shopID">>]
     },
     SchemaType = invoice,
