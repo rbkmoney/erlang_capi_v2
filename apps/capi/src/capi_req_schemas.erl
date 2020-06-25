@@ -28,7 +28,7 @@ get_schema(refund) ->
 payment_schema() -> #{
     <<"payer">> => [<<"payer">>, #{
         <<"type">> => [<<"payerType">>],
-        <<"tool">> => [<<"paymentTool">>, #{
+        {<<"tool">>, '$type'} => [<<"paymentTool">>, #{
             '$type' => [<<"type">>],
             <<"bank_card">> => #{
                 <<"token">>      => [<<"token">>],

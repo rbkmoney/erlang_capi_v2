@@ -45,9 +45,7 @@ read_features(Schema, Request) ->
                 Value = read_features(Fs, Request),
                 Acc#{Name => Value};
             (Name, Accessor, Acc) when is_list(Accessor) ->
-                % ct:print("Name ~p~nAccessor ~p~nRequest ~p~n", [Name, Accessor, Request]),
                 FeatureValue = read_request_value(Accessor, Request),
-                % ct:print("FeatureValue: ~p~n=====~n", [FeatureValue]),
                 Acc#{Name => FeatureValue};
             (_Name, 'reserved', Acc) ->
                 Acc
@@ -60,31 +58,13 @@ read_request_value([], undefined) ->
     undefined;
 read_request_value([], V) ->
     hash(V);
-% read_request_value([{filter, _, _Schemas}], undefined) ->
-%     undefined;
-% read_request_value([{filter, [Key], Schemas}], Request) ->
-%     Filter = maps:get(Key, Request, undefined),
-%     case maps:get(Filter, Schemas, undefined) of
-%         undefined ->
-%             undefined;
-%         Schema ->
-%             read_features(Schema, Request)
-%     end;
 read_request_value([Schema = #{}], Request = #{}) ->
-    ct:print("[1]read_request_value Request ~p", [Request]),
     read_features(Schema, Request);
 read_request_value([[Schema = #{}]], List) when is_list(List) ->
-    ct:print("[2]read_request_value ~p", [List]),
-    R = lists:mapfoldl(fun(Req, _) ->
-        ct:print(">>> ~p~n~p", [Schema, Req]),
-        B = read_features(Schema, Req),
-        ct:print("=== ~p", [B]),
-        B
-    end, [], List),
-    ct:print("RESULT >>> ~p", [R]),
-    R;
+    lists:foldl(fun(Req, Acc) ->
+        [read_features(Schema, Req) | Acc]
+    end, [], List);
 read_request_value([Key | Rest], Request = #{}) when is_binary(Key) ->
-    % ct:print("[3]read_request_value ~p", [Key]),
     read_request_value(Rest, maps:get(Key, Request, undefined));
 read_request_value(_, undefined) ->
     undefined;
@@ -111,13 +91,13 @@ features_to_schema(Diff, Features) ->
                 AccIn#{Key => features_to_schema(Value, ValueWith)};
             (_Feature, Values, [Key, [ValueWith]], AccIn) when is_map(ValueWith) and is_list(Values) ->
                 Result = lists:foldl(fun(Value, Acc) ->
-                    [features_to_schema(Value, ValueWith)| Acc]
+                    [features_to_schema(Value, ValueWith) | Acc]
                 end, [], Values),
                 AccIn#{Key => Result};
             (_Feature, Value, [Key], AccIn) when is_binary(Key) ->
                 AccIn#{Key => Value};
-            (_Feature, Value, ValueWith, _AccIn) when is_map(ValueWith) ->
-                features_to_schema(Value, ValueWith)
+            (_Feature, Value, ValueWith, AccIn) when is_map(ValueWith) ->
+                maps:merge(AccIn, features_to_schema(Value, ValueWith))
         end,
         #{},
         Diff,
@@ -142,7 +122,7 @@ compare_features(Fs, FsWith) ->
                     ValueWith ->
                         Diff#{Key => ?DIFFERENCE}; % different everywhere
                     Diff1 when map_size(Diff1) > 0 ->
-                        Diff#{Key => Diff1};
+                        Diff#{Key => hide_secondary_features(Key, Diff1)};
                     #{} ->
                         Diff % no notable differences
                 end;
@@ -188,6 +168,16 @@ compare_list_features([Fs | List1], [FsWith | List2], AccIn) ->
             AccIn
     end,
     compare_list_features(List1, List2, AccOut).
+
+hide_secondary_features({_, MainFeature}, Diff1) ->
+    case maps:find(MainFeature, Diff1) of
+        {ok, DiffValue} ->
+            #{MainFeature => DiffValue};
+        _ ->
+            Diff1
+    end;
+hide_secondary_features(_, Diff) ->
+    Diff.
 
 zipfold(Fun, Acc, M1, M2) ->
     maps:fold(
@@ -272,143 +262,177 @@ deep_merge(M1, M2) ->
 
 -spec test() -> _.
 
-% -spec read_payment_features_value_test() -> _.
-% read_payment_features_value_test() ->
-%     PayerType   = <<"PaymentResourcePayer">>,
-%     Tool        = <<"bank_card">>,
-%     Token       = <<"cds token">>,
-%     CardHolder  = <<"0x42">>,
-%     ExpDate     = {exp_date, 02, 2022},
-%     Request = #{
-%         <<"payer">> => #{
-%             <<"payerType">>   => PayerType,
-%             <<"paymentTool">> => #{
-%                 <<"type">>            => Tool,
-%                 <<"token">>           => Token,
-%                 <<"exp_date">>        => ExpDate,
-%                 <<"cardholder_name">> => CardHolder
-%             }
-%     }},
+-spec read_payment_features_value_test() -> _.
+read_payment_features_value_test() ->
+    PayerType   = <<"PaymentResourcePayer">>,
+    Tool        = <<"bank_card">>,
+    Token       = <<"cds token">>,
+    CardHolder  = <<"0x42">>,
+    ExpDate     = {exp_date, 02, 2022},
+    Request = #{
+        <<"payer">> => #{
+            <<"payerType">>   => PayerType,
+            <<"paymentTool">> => #{
+                <<"type">>            => Tool,
+                <<"token">>           => Token,
+                <<"exp_date">>        => ExpDate,
+                <<"cardholder_name">> => CardHolder
+            }
+    }},
 
-%     PaymentTool = #{
-%         '$type' => hash(Tool),
-%         <<"bank_card">> => #{
-%             <<"cardholder">> => hash(CardHolder),
-%             <<"expdate">>    => hash(ExpDate),
-%             <<"token">>      => hash(Token)},
-%         <<"crypto">> => #{<<"currency">> => undefined},
-%         <<"mobile_commerce">> => #{
-%             <<"operator">> => undefined,
-%             <<"phone">>    => undefined},
-%         <<"terminal">> => #{<<"terminal_type">> => undefined},
-%         <<"wallet">> => #{
-%             <<"id">>        => undefined,
-%             <<"provider">>  => undefined,
-%             <<"token">>     => hash(Token)}
-%     },
-%     Payer = deep_merge(?PAYER, #{
-%         <<"payer">> => #{
-%             <<"type">> => hash(PayerType),
-%             <<"tool">> => PaymentTool
-%         }
-%     }),
-%     SchemaType = payment,
-%     ?assertEqual(Payer, read_features(capi_req_schemas:get_schema(SchemaType), Request)).
+    Payer = #{
+        <<"payer">> => #{
+            <<"type">> => hash(PayerType),
+            <<"customer">> => undefined,
+            <<"recurrent">> => undefined,
+            {<<"tool">>, '$type'} => #{
+                '$type' => hash(Tool),
+                <<"bank_card">> => #{
+                    <<"cardholder">> => hash(CardHolder),
+                    <<"expdate">>    => hash(ExpDate),
+                    <<"token">>      => hash(Token)},
+                <<"crypto">> => #{<<"currency">> => undefined},
+                <<"mobile_commerce">> => #{
+                    <<"operator">> => undefined,
+                    <<"phone">>    => undefined},
+                <<"terminal">> => #{<<"terminal_type">> => undefined},
+                <<"wallet">> => #{
+                    <<"id">>        => undefined,
+                    <<"provider">>  => undefined,
+                    <<"token">>     => hash(Token)}
+            }
+        }
+    },
+    SchemaType = payment,
+    ?assertEqual(Payer, read_features(capi_req_schemas:get_schema(SchemaType), Request)).
 
-% -spec read_payment_customer_features_value_test() -> _.
-% read_payment_customer_features_value_test() ->
-%     PayerType = <<"CustomerPayer">>,
-%     CustomerID = <<"some customer id">>,
-%     Request = #{
-%         <<"payer">> => #{
-%             <<"payerType">>  => PayerType,
-%             <<"customerID">> => CustomerID
-%         }
-%     },
-%     Payer = deep_merge(?PAYER, #{
-%         <<"payer">> => #{
-%             <<"type">>      => hash(PayerType),
-%             <<"customer">>  => hash(CustomerID),
-%             <<"tool">>      => undefined
-%         }
-%     }),
-%     SchemaType = payment,
-%     ?assertMatch(Payer, read_features(capi_req_schemas:get_schema(SchemaType), Request)).
+-spec read_payment_customer_features_value_test() -> _.
+read_payment_customer_features_value_test() ->
+    PayerType = <<"CustomerPayer">>,
+    CustomerID = <<"some customer id">>,
+    Request = #{
+        <<"payer">> => #{
+            <<"payerType">>  => PayerType,
+            <<"customerID">> => CustomerID
+        }
+    },
+    Payer = #{
+        <<"payer">> => #{
+            <<"type">>            => hash(PayerType),
+            <<"customer">>        => hash(CustomerID),
+            <<"recurrent">>       => undefined,
+            {<<"tool">>, '$type'} => undefined
+        }
+    },
+    SchemaType = payment,
+    ?assertMatch(Payer, read_features(capi_req_schemas:get_schema(SchemaType), Request)).
 
-% -spec compare_payment_bank_card_test() -> _.
-% compare_payment_bank_card_test() ->
-%     PayerType   = <<"PaymentResourcePayer">>,
-%     Tool        = <<"bank_card">>,
-%     Token1      = <<"cds token">>,
-%     Token2      = <<"cds token 2">>,
-%     CardHolder  = <<"0x42">>,
-%     ExpDate     = {exp_date, 02, 2022},
-%     Request1 = #{
-%         <<"payer">> => #{
-%             <<"payerType">>   => PayerType,
-%             <<"paymentTool">> => #{
-%                 <<"type">>            => Tool,
-%                 <<"token">>           => Token1,
-%                 <<"exp_date">>        => ExpDate,
-%                 <<"cardholder_name">> => CardHolder
-%             }
-%     }},
-%     Request2 = deep_merge(Request1, #{<<"payer">> => #{<<"paymentTool">> => #{<<"token">> => Token2}}}),
-%     SchemaType = payment,
-%     Schema = capi_req_schemas:get_schema(SchemaType),
-%     F1 = read_features(Schema, Request1),
-%     F2 = read_features(Schema, Request2),
-%     ?assertEqual(true, equal_features(F1, F1)),
-%     {false, Diff} = equal_features(F1, F2),
-%     ?assertEqual([<<"payer.paymentTool.token">>], list_diff_fields(Schema, Diff)).
+-spec compare_payment_bank_card_test() -> _.
+compare_payment_bank_card_test() ->
+    PayerType   = <<"PaymentResourcePayer">>,
+    Tool        = <<"bank_card">>,
+    Token1      = <<"cds token">>,
+    Token2      = <<"cds token 2">>,
+    CardHolder1 = <<"0x42">>,
+    CardHolder2 = <<"Cake">>,
+    ExpDate     = {exp_date, 02, 2022},
+    Request1 = #{
+        <<"payer">> => #{
+            <<"payerType">>   => PayerType,
+            <<"paymentTool">> => #{
+                <<"type">>            => Tool,
+                <<"token">>           => Token1,
+                <<"exp_date">>        => ExpDate,
+                <<"cardholder_name">> => CardHolder1
+            }
+    }},
+    Request2 = deep_merge(Request1, #{<<"payer">> => #{
+        <<"paymentTool">> => #{
+            <<"token">> => Token2,
+            <<"cardholder_name">> => CardHolder2
+        }
+    }}),
+    SchemaType = payment,
+    Schema = capi_req_schemas:get_schema(SchemaType),
+    F1 = read_features(Schema, Request1),
+    F2 = read_features(Schema, Request2),
+    ?assertEqual(true, equal_features(F1, F1)),
+    {false, Diff} = equal_features(F1, F2),
+    ?assertEqual([
+        <<"payer.paymentTool.token">>,
+        <<"payer.paymentTool.cardholder_name">>
+    ], list_diff_fields(Schema, Diff)).
 
-% -spec read_invoice_features_value_test() -> _.
-% read_invoice_features_value_test() ->
-%     ShopID      = <<"shopus">>,
-%     Cur         = <<"XXX">>,
-%     Prod1       = <<"yellow duck">>,
-%     Prod2       = <<"blue duck">>,
-%     Price1      = 10000,
-%     Price2      = 20000,
-%     Quantity    = 1,
-%     Product = deep_merge(?PRODUCT, #{
-%         <<"product">>   => hash(Prod1),
-%         <<"quantity">>  => hash(Quantity),
-%         <<"price">>     => hash(Price1)
-%     }),
-%     Product2 = Product#{
-%         <<"product">> => hash(Prod2),
-%         <<"price">> => hash(Price2)
-%     },
-%     Invoice = deep_merge(?INVOICE, #{
-%         <<"shop_id">>   => hash(ShopID),
-%         <<"currency">>  => hash(Cur),
-%         <<"cart">>      => [Product, Product2]
-%     }),
-%     Request = #{
-%         <<"shopID">> => ShopID,
-%         <<"currency">> => Cur,
-%         <<"cart">> => [
-%             #{<<"product">> => Prod1, <<"quantity">> => 1, <<"price">> => Price1},
-%             #{<<"product">> => Prod2, <<"quantity">> => 1, <<"price">> => Price2}
-%         ]
-%     },
-%     Schema = #{
-%         <<"amount">> => [<<"amount">>],
-%         <<"cart">> => [<<"cart">>, [#{
-%             <<"price">> => [<<"price">>],
-%             <<"product">> => [<<"product">>],
-%             <<"quantity">> => [<<"quantity">>],
-%             <<"tax">> => [<<"taxMode">>, #{
-%                 <<"rate">> => [<<"rate">>],
-%                 <<"type">> => [<<"type">>]}
-%             ]}]],
-%         <<"currency">> => [<<"currency">>],
-%         <<"product">> => [<<"product">>],
-%         <<"shop_id">> => [<<"shopID">>]
-%     },
-%     SchemaType = invoice,
-%     ?assertEqual({Invoice, Schema}, read_features(capi_req_schemas:get_schema(SchemaType), Request)).
+-spec compare_different_payment_tool_test() -> _.
+compare_different_payment_tool_test() ->
+    PayerType   = <<"PaymentResourcePayer">>,
+    Tool1       = <<"bank_card">>,
+    Tool2       = <<"wallet">>,
+    Token1      = <<"cds token">>,
+    Token2      = <<"wallet token">>,
+    CardHolder  = <<"0x42">>,
+    ExpDate     = {exp_date, 02, 2022},
+    Request1 = #{
+        <<"payer">> => #{
+            <<"payerType">>   => PayerType,
+            <<"paymentTool">> => #{
+                <<"type">>            => Tool1,
+                <<"token">>           => Token1,
+                <<"exp_date">>        => ExpDate,
+                <<"cardholder_name">> => CardHolder
+            }
+    }},
+    Request2 = #{
+        <<"payer">> => #{
+            <<"payerType">>   => PayerType,
+            <<"paymentTool">> => #{
+                <<"type">>  => Tool2,
+                <<"token">> => Token2
+            }
+        }
+    },
+
+    SchemaType = payment,
+    Schema = capi_req_schemas:get_schema(SchemaType),
+    F1 = read_features(Schema, Request1),
+    F2 = read_features(Schema, Request2),
+    ?assertEqual(true, equal_features(F1, F1)),
+    {false, Diff} = equal_features(F1, F2),
+    ?assertEqual([<<"payer.paymentTool.type">>], list_diff_fields(Schema, Diff)).
+
+-spec read_invoice_features_value_test() -> _.
+read_invoice_features_value_test() ->
+    ShopID      = <<"shopus">>,
+    Cur         = <<"XXX">>,
+    Prod1       = <<"yellow duck">>,
+    Prod2       = <<"blue duck">>,
+    Price1      = 10000,
+    Price2      = 20000,
+    Quantity    = 1,
+    Product = deep_merge(?PRODUCT, #{
+        <<"product">>   => hash(Prod1),
+        <<"quantity">>  => hash(Quantity),
+        <<"price">>     => hash(Price1)
+    }),
+    Product2 = Product#{
+        <<"product">> => hash(Prod2),
+        <<"price">> => hash(Price2)
+    },
+    Invoice = deep_merge(?INVOICE, #{
+        <<"shop_id">>   => hash(ShopID),
+        <<"currency">>  => hash(Cur),
+        <<"cart">>      => [Product, Product2]
+    }),
+    Request = #{
+        <<"shopID">> => ShopID,
+        <<"currency">> => Cur,
+        <<"cart">> => [
+            #{<<"product">> => Prod2, <<"quantity">> => 1, <<"price">> => Price2},
+            #{<<"product">> => Prod1, <<"quantity">> => 1, <<"price">> => Price1}
+        ]
+    },
+    SchemaType = invoice,
+    ?assertEqual(Invoice, read_features(capi_req_schemas:get_schema(SchemaType), Request)).
 
 -spec compare_invoices_test() -> _.
 compare_invoices_test() ->
