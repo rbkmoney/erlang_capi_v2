@@ -1,16 +1,12 @@
 -module(capi_req_schemas).
 
 -type schema_type()     :: payment | invoice | refund.
--type schema()          :: #{feature_name() := [accessor() | schema() | [schema()] | filter()]}.
+-type schema()          :: #{binary() := [accessor() | schema() | [schema()] | filter()]}.
 -type accessor()        :: binary(). % name of field in a map
 -type filter()          :: {filter, [accessor()], schema()}.
--type feature_name()    :: binary().
--type feature_value()   :: integer() | features() | [features()].
--type features()        :: #{feature_name() := feature_value() | undefined}.
 
 -export_type([schema_type/0]).
 -export_type([schema/0]).
--export_type([features/0]).
 
 -export([get_schema/1]).
 -export([payment_schema/0]).
@@ -32,35 +28,29 @@ get_schema(refund) ->
 payment_schema() -> #{
     <<"payer">> => [<<"payer">>, #{
         <<"type">> => [<<"payerType">>],
-        <<"tool">> => [<<"paymentTool">>,
-            {filter, [<<"type">>], #{
-                <<"bank_card">> => #{
-                    <<"type">>       => [<<"type">>],
-                    <<"token">>      => [<<"token">>],
-                    <<"cardholder">> => [<<"cardholder_name">>],
-                    <<"expdate">>    => [<<"exp_date">>]
-                },
-                <<"terminal">> => #{
-                    <<"type">>          => [<<"type">>],
-                    <<"terminal_type">> => [<<"terminal_type">>]
-                },
-                <<"wallet">> => #{
-                    <<"type">>     => [<<"type">>],
-                    <<"provider">> => [<<"provider">>],
-                    <<"id">>       => [<<"id">>],
-                    <<"token">>    => [<<"token">>]
-                },
-                <<"crypto">> => #{
-                    <<"type">>     => [<<"type">>],
-                    <<"currency">> => [<<"currency">>]
-                },
-                <<"mobile_commerce">> => #{
-                    <<"type">>     => [<<"type">>],
-                    <<"operator">> => [<<"operator">>],
-                    <<"phone">>    => [<<"phone">>]
-                }
-            }}
-        ],
+        <<"tool">> => [<<"paymentTool">>, #{
+            '$type' => [<<"type">>],
+            <<"bank_card">> => #{
+                <<"token">>      => [<<"token">>],
+                <<"cardholder">> => [<<"cardholder_name">>],
+                <<"expdate">>    => [<<"exp_date">>]
+            },
+            <<"terminal">> => #{
+                <<"terminal_type">> => [<<"terminal_type">>]
+            },
+            <<"wallet">> => #{
+                <<"provider">> => [<<"provider">>],
+                <<"id">>       => [<<"id">>],
+                <<"token">>    => [<<"token">>]
+            },
+            <<"crypto">> => #{
+                <<"currency">> => [<<"currency">>]
+            },
+            <<"mobile_commerce">> => #{
+                <<"operator">> => [<<"operator">>],
+                <<"phone">>    => [<<"phone">>]
+            }
+        }],
         <<"customer">> => [<<"customerID">>],
         <<"recurrent">> => [<<"recurrentParentPayment">>, #{
             <<"invoice">> => [<<"invoiceID">>],

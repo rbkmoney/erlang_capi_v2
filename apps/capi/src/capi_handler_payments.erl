@@ -366,11 +366,8 @@ create_payment(InvoiceID, PartyID, PaymentParams, Context, BenderPrefix) ->
     {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
     PaymentParamsDecrypted = PaymentParams#{<<"payer">> => Payer},
     Hash = erlang:phash2(PaymentParams),
-    Params = #{
-        params_hash => Hash,
-        feature_schema => payment,
-        feature_values => PaymentParamsDecrypted
-    },
+    Params = {Hash, capi_idemp_features:read_payment_features(PaymentParamsDecrypted)},
+
     #{woody_context := WoodyCtx} = Context,
     CtxData = #{<<"invoice_id">> => InvoiceID},
     case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Params, WoodyCtx, CtxData) of
