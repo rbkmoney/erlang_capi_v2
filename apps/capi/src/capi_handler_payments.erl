@@ -366,7 +366,8 @@ create_payment(InvoiceID, PartyID, PaymentParams, Context, BenderPrefix) ->
     {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
     PaymentParamsDecrypted = PaymentParams#{<<"payer">> => Payer},
     Hash = erlang:phash2(PaymentParams),
-    Params = {Hash, capi_idemp_features:read_payment_features(PaymentParamsDecrypted)},
+    Schema = capi_feature_schemas:payment(),
+    Params = {Hash, capi_idemp_features:read_features(Schema, PaymentParamsDecrypted)},
 
     #{woody_context := WoodyCtx} = Context,
     CtxData = #{<<"invoice_id">> => InvoiceID},
@@ -375,8 +376,8 @@ create_payment(InvoiceID, PartyID, PaymentParams, Context, BenderPrefix) ->
             start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context);
         {error, {external_id_conflict, ID, undefined}} ->
             {error, {external_id_conflict, ID, ExternalID}};
-        {error, {external_id_conflict, ID, {Difference, Schema}}} ->
-            ReadableDiff = capi_idemp_features:clarify_diff_meaning(Schema, Difference),
+        {error, {external_id_conflict, ID, Difference}} ->
+            ReadableDiff = capi_idemp_features:list_diff_fields(Schema, Difference),
             logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, ReadableDiff]),
             {error, {external_id_conflict, ID, ExternalID}}
     end.
@@ -548,11 +549,8 @@ create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} =
     SequenceID = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
     Hash = erlang:phash2(RefundParams),
     RefundParamsFull = RefundParams#{<<"invoiceID">> => invoiceID, <<"paymentID">> => PaymentID},
-    Params = #{
-        params_hash => Hash,
-        feature_schema => refund,
-        feature_values => RefundParamsFull
-    },
+    Schema = capi_feature_schemas:refund(),
+    Params = {Hash, capi_idemp_features:read_features(Schema, RefundParamsFull)},
     case capi_bender:gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyCtx, #{}, #{minimum => 100}) of
         {ok, ID} ->
             InvoicePaymentRefundParams = #payproc_InvoicePaymentRefundParams{
@@ -564,8 +562,8 @@ create_refund(InvoiceID, PaymentID, RefundParams, #{woody_context := WoodyCtx} =
             refund_payment(ID, InvoiceID, PaymentID, InvoicePaymentRefundParams, Context);
         {error, {external_id_conflict, ID, undefined}} ->
             {error, {external_id_conflict, ID, ExternalID}};
-        {error, {external_id_conflict, ID, {Difference, Schema}}} ->
-            ReadableDiff = capi_idemp_features:clarify_diff_meaning(Schema, Difference),
+        {error, {external_id_conflict, ID, Difference}} ->
+            ReadableDiff = capi_idemp_features:list_diff_fields(Schema, Difference),
             logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, ReadableDiff]),
             {error, {external_id_conflict, ID, ExternalID}}
     end.

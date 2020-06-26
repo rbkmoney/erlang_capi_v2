@@ -1,4 +1,4 @@
--module(capi_req_schemas).
+-module(capi_feature_schemas).
 
 -type schema_type()     :: payment | invoice | refund.
 -type schema()          :: #{binary() := [accessor() | schema() | [schema()] | filter()]}.
@@ -8,28 +8,17 @@
 -export_type([schema_type/0]).
 -export_type([schema/0]).
 
--export([get_schema/1]).
--export([payment_schema/0]).
--export([invoice_schema/0]).
--export([refund_schema/0]).
+-export([payment/0]).
+-export([invoice/0]).
+-export([refund/0]).
 
--spec get_schema(schema_type()) ->
-    schema().
+-spec payment() -> schema().
 
-get_schema(payment) ->
-    payment_schema();
-get_schema(invoice) ->
-    invoice_schema();
-get_schema(refund) ->
-    refund_schema().
-
--spec payment_schema() -> schema().
-
-payment_schema() -> #{
+payment() -> #{
     <<"payer">> => [<<"payer">>, #{
         <<"type">> => [<<"payerType">>],
-        {<<"tool">>, '$type'} => [<<"paymentTool">>, #{
-            '$type' => [<<"type">>],
+        <<"tool">> => [<<"paymentTool">>, #{
+            <<"$type">> => [<<"type">>],
             <<"bank_card">> => #{
                 <<"token">>      => [<<"token">>],
                 <<"cardholder">> => [<<"cardholder_name">>],
@@ -59,9 +48,9 @@ payment_schema() -> #{
     }]
 }.
 
--spec invoice_schema() -> schema().
+-spec invoice() -> schema().
 
-invoice_schema() -> #{
+invoice() -> #{
     <<"shop_id">>   => [<<"shopID">>],
     <<"amount">>    => [<<"amount">>],
     <<"currency">>  => [<<"currency">>],
@@ -69,9 +58,9 @@ invoice_schema() -> #{
     <<"cart">>      => [<<"cart">>, [cart_line_schema()]]
 }.
 
--spec refund_schema() -> schema().
+-spec refund() -> schema().
 
-refund_schema() -> #{
+refund() -> #{
     <<"amount">>    => [<<"amount">>],
     <<"currency">>  => [<<"currency">>],
     <<"cart">>      => [<<"cart">>, [cart_line_schema()]]

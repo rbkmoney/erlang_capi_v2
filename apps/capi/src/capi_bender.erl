@@ -7,7 +7,7 @@
 -type context_data() :: #{binary() => term()}.
 -type bender_context() :: #{binary() => term()}.
 -type sequence_params() :: #{minimum => integer()}.
--type difference() :: {capi_idemp_features:difference(), capi_idemp_features:schema()} | undefined.
+-type difference() :: capi_idemp_features:difference() | undefined.
 
 -type params()       :: {integer(), capi_idemp_features:features()}.
 -type params_value() :: term().

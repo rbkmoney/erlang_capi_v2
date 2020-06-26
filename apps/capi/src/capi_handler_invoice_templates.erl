@@ -180,12 +180,8 @@ create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx
     % externalId by using `CreateInvoice` and `CreateInvoiceWithTemplate` together
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2({InvoiceTplID, InvoiceParams}),
-    BenderParams = #{
-        params_hash => Hash,
-        feature_schema => invoice,
-        feature_values => InvoiceParams
-    },
-
+    Schema = capi_feature_schemas:invoice(),
+    BenderParams = {Hash, capi_idemp_features:read_features(Schema, InvoiceParams)},
     case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
         {ok, InvoiceID} ->
             Params = [encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams)],
@@ -193,8 +189,8 @@ create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx
             capi_handler_utils:service_call_with([user_info, party_creation], Call, Context);
         {error, {external_id_conflict, ID, undefined}} ->
             throw({external_id_conflict, ID, ExternalID});
-        {error, {external_id_conflict, ID, {Difference, Schema}}} ->
-            ReadableDiff = capi_idemp_features:clarify_diff_meaning(Schema, Difference),
+        {error, {external_id_conflict, ID, Difference}} ->
+            ReadableDiff = capi_idemp_features:list_diff_fields(Schema, Difference),
             logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, ReadableDiff]),
             throw({external_id_conflict, ID, ExternalID})
     end.
