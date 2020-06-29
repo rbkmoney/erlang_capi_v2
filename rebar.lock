@@ -99,7 +99,7 @@
   0},
  {<<"snowflake">>,
   {git,"https://github.com/rbkmoney/snowflake.git",
-       {ref,"c34a962e17539e63a53f721cbf4ddcffeb0032a4"}},
+       {ref,"563d8ef9543c1e4424aefa9ec7b41aa68885f0ad"}},
   1},
  {<<"ssl_verify_fun">>,{pkg,<<"ssl_verify_fun">>,<<"1.1.4">>},1},
  {<<"thrift">>,
@@ -112,12 +112,12 @@
   0},
  {<<"unicode_util_compat">>,{pkg,<<"unicode_util_compat">>,<<"0.4.1">>},2},
  {<<"woody">>,
-  {git,"git@github.com:rbkmoney/woody_erlang.git",
-       {ref,"8543878a5560a7828c71629d1f81270e5dcfd811"}},
+  {git,"https://github.com/rbkmoney/woody_erlang.git",
+       {ref,"dd5eaa73ce56a85ddc45d4d3c632627ee99e16c1"}},
   0},
  {<<"woody_user_identity">>,
-  {git,"git@github.com:rbkmoney/woody_erlang_user_identity.git",
-       {ref,"0feebda4f7b4a9b5ee93cfe7b28d824a3dc2d8dc"}},
+  {git,"https://github.com/rbkmoney/woody_erlang_user_identity.git",
+       {ref,"a73d40b053bdb39a29fb879d47417eacafee5da5"}},
   0}]}.
 [
 {pkg_hash,[
