@@ -188,11 +188,6 @@ process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
-    CreateFun = fun(InvoiceID) ->
-        Call = {invoicing, 'Create', [encode_invoice_params(InvoiceID, PartyID, InvoiceParams)]},
-        capi_handler_utils:service_call_with([user_info, party_creation], Call, Context)
-    end,
-
     ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2(InvoiceParams),
@@ -200,7 +195,8 @@ create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context, B
     BenderParams = {Hash, capi_idemp_features:read_features(Schema, InvoiceParams)},
     case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
         {ok, ID} ->
-            CreateFun(ID);
+            Call = {invoicing, 'Create', [encode_invoice_params(ID, PartyID, InvoiceParams)]},
+            capi_handler_utils:service_call_with([user_info, party_creation], Call, Context);
         {error, {external_id_conflict, ID, undefined}} ->
             throw({external_id_conflict, ID, ExternalID});
         {error, {external_id_conflict, ID, Difference}} ->

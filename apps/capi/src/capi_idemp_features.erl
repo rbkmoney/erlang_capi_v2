@@ -45,8 +45,7 @@ read_request_value([Schema = #{}], Request = #{}) ->
     read_features(Schema, Request);
 read_request_value([[Schema = #{}]], List) when is_list(List) ->
     {_, Value} = lists:foldl(fun(Req, {N, Acc}) ->
-        Pos = integer_to_binary(N),
-        {N + 1, Acc#{Pos => read_features(Schema, Req)}}
+        {N + 1, Acc#{N => read_features(Schema, Req)}}
     end, {0, #{}}, lists:sort(List)),
     Value;
 read_request_value([Key | Rest], Request = #{}) when is_binary(Key) ->
@@ -63,15 +62,18 @@ hash(V) ->
 -spec list_diff_fields(schema(), difference()) ->
     [binary()].
 
-list_diff_fields(Features, Diff) ->
-    ConvertedDiff = map_to_flat(features_to_schema(Diff, Features)),
+list_diff_fields(Schema, Diff) ->
+    ConvertedDiff = map_to_flat(features_to_schema(Diff, Schema)),
     maps:fold(fun(Keys, _, AccIn) ->
-        [list_to_binary(lists:join(<<".">>, Keys)) | AccIn]
+        KeysBin = lists:map(fun genlib:to_binary/1, Keys),
+        [list_to_binary(lists:join(<<".">>, KeysBin)) | AccIn]
     end, [], ConvertedDiff).
 
-features_to_schema(Diff, Features) ->
+features_to_schema(Diff, Schema) ->
     zipfold(
         fun
+            (_Feature, ?DIFFERENCE, [Key, ValueWith], AccIn) when is_map(ValueWith) ->
+                AccIn#{Key => ?DIFFERENCE};
             (_Feature, Value, [Key, ValueWith], AccIn) when is_map(ValueWith) and is_map(Value) ->
                 AccIn#{Key => features_to_schema(Value, ValueWith)};
             (_Feature, Values, [Key, [ValueWith]], AccIn) when is_map(ValueWith) and is_map(Values) ->
@@ -86,7 +88,7 @@ features_to_schema(Diff, Features) ->
         end,
         #{},
         Diff,
-        Features).
+        Schema).
 
 -spec equal_features(features(), features()) ->
     true | {false, difference()}.
@@ -107,7 +109,8 @@ compare_features(Fs, FsWith) ->
                     ValueWith ->
                         Diff#{Key => ?DIFFERENCE}; % different everywhere
                     #{<<"$type">> := _} ->
-                        Diff#{Key => #{<<"$type">> => ?DIFFERENCE}};
+                        Diff#{Key => ?DIFFERENCE};
+                        % Diff#{Key => #{<<"$type">> => ?DIFFERENCE}};
                     Diff1 when map_size(Diff1) > 0 ->
                         Diff#{Key => Diff1};
                     #{} ->
@@ -344,7 +347,7 @@ compare_different_payment_tool_test() ->
     F2 = read_features(Schema, Request2),
     ?assertEqual(true, equal_features(F1, F1)),
     {false, Diff} = equal_features(F1, F2),
-    ?assertEqual([<<"payer.paymentTool.type">>], list_diff_fields(Schema, Diff)).
+    ?assertEqual([<<"payer.paymentTool">>], list_diff_fields(Schema, Diff)).
 
 -spec read_invoice_features_value_test() -> _.
 read_invoice_features_value_test() ->
@@ -370,8 +373,8 @@ read_invoice_features_value_test() ->
         <<"shop_id">>   => hash(ShopID),
         <<"currency">>  => hash(Cur),
         <<"cart">>      => #{
-            <<"0">> => Product,
-            <<"1">> => Product2
+            0 => Product,
+            1 => Product2
         }
     },
     Request = #{
@@ -425,7 +428,7 @@ compare_invoices_test() ->
     InvoiceWithFullCart = read_features(Schema, Request3),
 
     ?assertEqual({false, #{<<"cart">> => #{
-        <<"0">> => #{
+        0 => #{
             <<"price">>     => hash(Price2),
             <<"product">>   => hash(Prod2),
             <<"quantity">>  => undefined,

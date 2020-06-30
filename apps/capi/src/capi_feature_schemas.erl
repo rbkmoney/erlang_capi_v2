@@ -1,11 +1,7 @@
 -module(capi_feature_schemas).
 
--type schema_type()     :: payment | invoice | refund.
--type schema()          :: #{binary() := [accessor() | schema() | [schema()] | filter()]}.
--type accessor()        :: binary(). % name of field in a map
--type filter()          :: {filter, [accessor()], schema()}.
+-type schema()          :: #{binary() := [binary() | schema() | [schema()]]}.
 
--export_type([schema_type/0]).
 -export_type([schema/0]).
 
 -export([payment/0]).
