@@ -60,8 +60,8 @@ prepare_param(Param) ->
     case Param of
         {limit, P}          -> #{<<"limit">> => genlib:to_binary(P)};
         {offset, P}         -> #{<<"offset">> => genlib:to_binary(P)};
-        {from_time, P}      -> #{<<"fromTime">> => genlib_format:format_datetime_iso8601(P)};
-        {to_time, P}        -> #{<<"toTime">> => genlib_format:format_datetime_iso8601(P)};
+        {from_time, P}      -> #{<<"fromTime">> => format_datetime(P)};
+        {to_time, P}        -> #{<<"toTime">> => format_datetime(P)};
         {status, P}         -> #{<<"status">> => genlib:to_binary(P)};
         {split_unit, P}     -> #{<<"splitUnit">> => genlib:to_binary(P)};
         {split_size, P}     -> #{<<"splitSize">> => genlib:to_binary(P)};
@@ -195,3 +195,7 @@ decode_body(Body) when is_binary(Body) ->
     jsx:decode(Body, [return_maps]);
 decode_body(Body) ->
     Body.
+
+format_datetime(P) ->
+    Seconds = genlib_time:daytime_to_unixtime(P),
+    genlib_rfc3339:format_relaxed(Seconds, second).

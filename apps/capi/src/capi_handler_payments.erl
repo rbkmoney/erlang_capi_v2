@@ -355,6 +355,46 @@ process_request('GetRefundByID', Req, Context) ->
             end
     end;
 
+process_request('GetChargebacks', Req, Context) ->
+    DecodeChargebackFun = fun(C) ->
+        capi_handler_decoder_invoicing:decode_chargeback(C#payproc_InvoicePaymentChargeback.chargeback, Context)
+    end,
+    case capi_handler_utils:get_payment_by_id(maps:get(invoiceID, Req), maps:get(paymentID, Req), Context) of
+        {ok, #payproc_InvoicePayment{chargebacks = Chargebacks}} ->
+            {ok, {200, #{}, [DecodeChargebackFun(C) || C <- Chargebacks]}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, general_error(404, <<"Invoice not found">>)};
+                #payproc_InvoicePaymentNotFound{} ->
+                    {ok, general_error(404, <<"Payment not found">>)};
+                #payproc_InvoiceNotFound{} ->
+                    {ok, general_error(404, <<"Invoice not found">>)}
+            end
+    end;
+
+process_request('GetChargebackByID', Req, Context) ->
+    Call = {
+        invoicing,
+        'GetPaymentChargeback',
+        [maps:get(invoiceID, Req), maps:get(paymentID, Req), maps:get(chargebackID, Req)]
+    },
+    case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        {ok, Chargeback} ->
+            {ok, {200, #{}, capi_handler_decoder_invoicing:decode_chargeback(Chargeback, Context)}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvoicePaymentChargebackNotFound{} ->
+                    {ok, general_error(404, <<"Invoice payment chargeback not found">>)};
+                #payproc_InvoicePaymentNotFound{} ->
+                    {ok, general_error(404, <<"Payment not found">>)};
+                #payproc_InvoiceNotFound{} ->
+                    {ok, general_error(404, <<"Invoice not found">>)};
+                #payproc_InvalidUser{} ->
+                    {ok, general_error(404, <<"Invoice not found">>)}
+            end
+    end;
+
 %%
 
 process_request(_OperationID, _Req, _Context) ->

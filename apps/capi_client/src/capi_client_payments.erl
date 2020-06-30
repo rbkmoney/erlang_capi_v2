@@ -9,6 +9,8 @@
 -export([get_refunds/3]).
 -export([get_refund_by_id/4]).
 -export([get_refund_by_external_id/2]).
+-export([get_chargebacks/3]).
+-export([get_chargeback_by_id/4]).
 -export([create_refund/4]).
 
 -type context() :: capi_client_lib:context().
@@ -141,3 +143,27 @@ create_refund(Context, Request, InvoiceID, PaymentID) ->
     Response = swag_client_payments_api:create_refund(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 
+-spec get_chargebacks(context(), binary(), binary()) -> {ok, term()} | {error, term()}.
+get_chargebacks(Context, InvoiceID, PaymentID) ->
+    Params = #{
+        binding => #{
+            <<"invoiceID">> => InvoiceID,
+            <<"paymentID">> => PaymentID
+        }
+    },
+    {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
+    Response = swag_client_payments_api:get_chargebacks(Url, PreparedParams, Opts),
+    capi_client_lib:handle_response(Response).
+
+-spec get_chargeback_by_id(context(), binary(), binary(), binary()) -> {ok, term()} | {error, term()}.
+get_chargeback_by_id(Context, InvoiceID, PaymentID, ChargebackID) ->
+    Params = #{
+        binding => #{
+            <<"invoiceID">> => InvoiceID,
+            <<"paymentID">> => PaymentID,
+            <<"chargebackID">> => ChargebackID
+        }
+    },
+    {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
+    Response = swag_client_payments_api:get_chargeback_by_id(Url, PreparedParams, Opts),
+    capi_client_lib:handle_response(Response).

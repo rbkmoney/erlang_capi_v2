@@ -20,10 +20,12 @@ process_request('CreateWebhook', Req, Context) ->
     Call = {party_management, 'GetShop', [ShopID]},
     case capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context) of
         {ok, _} ->
-            Webhook = capi_utils:unwrap(
-                capi_handler_utils:service_call({webhook_manager, 'Create', [WebhookParams]}, Context)
-            ),
-            {ok, {201, #{}, decode_webhook(Webhook)}};
+            case capi_handler_utils:service_call({webhook_manager, 'Create', [WebhookParams]}, Context) of
+                {ok, Webhook} ->
+                    {ok, {201, #{}, decode_webhook(Webhook)}};
+                {exception, #webhooker_LimitExceeded{}} ->
+                    {ok, general_error(429, <<"Webhook limit exceeded">>)}
+            end;
         {exception, #payproc_ShopNotFound{}} ->
             {ok, logic_error(invalidShopID, <<"Shop not found">>)}
     end;

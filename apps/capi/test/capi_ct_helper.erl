@@ -134,15 +134,16 @@ issue_token(ACL, LifeTime, ExtraProperties) ->
     }.
 
 issue_token(PartyID, ACL, LifeTime, ExtraProperties) ->
-    Claims = maps:merge(#{?STRING => ?STRING}, ExtraProperties),
-    DomainRoles = #{
-        <<"common-api">> => uac_acl:from_list(ACL)
-    },
+    Claims = maps:merge(#{
+        ?STRING => ?STRING,
+        <<"exp">> => LifeTime,
+        <<"resource_access">> => #{
+            <<"common-api">> => uac_acl:from_list(ACL)
+        }
+    }, ExtraProperties),
     uac_authorizer_jwt:issue(
         capi_utils:get_unique_id(),
-        LifeTime,
         PartyID,
-        DomainRoles,
         Claims,
         capi
     ).

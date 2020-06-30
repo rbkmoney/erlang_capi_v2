@@ -123,7 +123,7 @@ worker(Token, ParentPID) ->
     ParentPID ! {result, Result}.
 
 get_context(Token) ->
-    {ok, Deadline} = build_deadline(genlib_time:now()),
+    Deadline = build_deadline(genlib_time:now()),
     capi_ct_helper:get_context(Token, #{}, Deadline).
 
 get_token() ->
@@ -135,8 +135,4 @@ get_token() ->
     Token.
 
 build_deadline(CurrentSeconds) ->
-    rfc3339:format(
-        genlib_time:unixtime_to_daytime(
-            genlib_time:add_hours(CurrentSeconds, 1)
-        )
-    ).
+    genlib_rfc3339:format_relaxed(genlib_time:add_hours(CurrentSeconds, 1), second).
