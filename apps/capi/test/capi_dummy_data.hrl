@@ -287,11 +287,6 @@
     levy = ?CASH
 }).
 
--define(PAYPROC_CHARGEBACK, ?PAYPROC_CHARGEBACK(?STRING)).
-
--define(PAYPROC_CHARGEBACK(ID), #payproc_InvoicePaymentChargeback{
-    chargeback = ?CHARGEBACK(ID)
-}).
 
 -define(CHARGEBACK_REASON, #domain_InvoicePaymentChargebackReason{
     code = <<"C0D3">>,
