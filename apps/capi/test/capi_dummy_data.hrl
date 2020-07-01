@@ -276,7 +276,6 @@
 -define(PAYPROC_CHARGEBACK(ID), #payproc_InvoicePaymentChargeback{
     chargeback = ?CHARGEBACK(ID)
 }).
-
 -define(CHARGEBACK(ID), #domain_InvoicePaymentChargeback{
     id = ID,
     status = {pending, #domain_InvoicePaymentChargebackPending{}},
@@ -286,6 +285,12 @@
     reason = ?CHARGEBACK_REASON,
     body = ?CASH,
     levy = ?CASH
+}).
+
+-define(PAYPROC_CHARGEBACK, ?PAYPROC_CHARGEBACK(?STRING)).
+
+-define(PAYPROC_CHARGEBACK(ID), #payproc_InvoicePaymentChargeback{
+    chargeback = ?CHARGEBACK(ID)
 }).
 
 -define(CHARGEBACK_REASON, #domain_InvoicePaymentChargebackReason{

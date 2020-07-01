@@ -712,7 +712,9 @@ get_refund_by_external_id(Config) ->
 -spec get_chargeback_by_id(config()) ->
     _.
 get_chargeback_by_id(Config) ->
-    capi_ct_helper:mock_services([{invoicing, fun('GetPaymentChargeback', _) -> {ok, ?CHARGEBACK} end}], Config),
+    capi_ct_helper:mock_services([{invoicing, fun('GetPaymentChargeback', _) ->
+        {ok, ?CHARGEBACK}
+    end}], Config),
     {ok, _} = capi_client_payments:get_chargeback_by_id(?config(context, Config), ?STRING, ?STRING, ?STRING).
 
 -spec get_chargebacks(config()) ->
