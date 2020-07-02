@@ -270,6 +270,12 @@
 }).
 
 -define(CHARGEBACK, ?CHARGEBACK(?STRING)).
+
+-define(PAYPROC_CHARGEBACK, ?PAYPROC_CHARGEBACK(?STRING)).
+
+-define(PAYPROC_CHARGEBACK(ID), #payproc_InvoicePaymentChargeback{
+    chargeback = ?CHARGEBACK(ID)
+}).
 -define(CHARGEBACK(ID), #domain_InvoicePaymentChargeback{
     id = ID,
     status = {pending, #domain_InvoicePaymentChargebackPending{}},
@@ -281,11 +287,6 @@
     levy = ?CASH
 }).
 
--define(PAYPROC_CHARGEBACK, ?PAYPROC_CHARGEBACK(?STRING)).
-
--define(PAYPROC_CHARGEBACK(ID), #payproc_InvoicePaymentChargeback{
-    chargeback = ?CHARGEBACK(ID)
-}).
 
 -define(CHARGEBACK_REASON, #domain_InvoicePaymentChargebackReason{
     code = <<"C0D3">>,
@@ -980,12 +981,18 @@
 
 -define(PAYMENTS_SERVICE_TERMS, #domain_PaymentsServiceTerms{
     payment_methods = {value,
-        [
+        ordsets:from_list([
             #domain_PaymentMethodRef{
-                id = {bank_card, mastercard}
+                id = {bank_card, #domain_BankCardPaymentMethod{
+                    payment_system = mastercard,
+                    is_cvv_empty = false
+                }}
             },
             #domain_PaymentMethodRef{
-                id = {bank_card, visa}
+                id = {bank_card, #domain_BankCardPaymentMethod{
+                    payment_system = visa,
+                    is_cvv_empty = false
+                }}
             },
             #domain_PaymentMethodRef{
                 id = {crypto_currency, bitcoin}
@@ -994,18 +1001,20 @@
                 id = {crypto_currency, bitcoin_cash}
             },
             #domain_PaymentMethodRef{
-                id = {tokenized_bank_card, #domain_TokenizedBankCard{
+                id = {bank_card, #domain_BankCardPaymentMethod{
                     payment_system = mastercard,
+                    is_cvv_empty = false,
                     token_provider = applepay
                 }}
             },
             #domain_PaymentMethodRef{
-                id = {tokenized_bank_card, #domain_TokenizedBankCard{
+                id = {bank_card, #domain_BankCardPaymentMethod{
                     payment_system = visa,
+                    is_cvv_empty = false,
                     token_provider = applepay
                 }}
             }
-        ]
+        ])
     }
 }).
 
