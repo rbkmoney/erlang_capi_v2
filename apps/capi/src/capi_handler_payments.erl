@@ -356,9 +356,12 @@ process_request('GetRefundByID', Req, Context) ->
     end;
 
 process_request('GetChargebacks', Req, Context) ->
+    DecodeChargebackFun = fun(C) ->
+        capi_handler_decoder_invoicing:decode_chargeback(C#payproc_InvoicePaymentChargeback.chargeback, Context)
+    end,
     case capi_handler_utils:get_payment_by_id(maps:get(invoiceID, Req), maps:get(paymentID, Req), Context) of
         {ok, #payproc_InvoicePayment{chargebacks = Chargebacks}} ->
-            {ok, {200, #{}, [capi_handler_decoder_invoicing:decode_chargeback(C, Context) || C <- Chargebacks]}};
+            {ok, {200, #{}, [DecodeChargebackFun(C) || C <- Chargebacks]}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
