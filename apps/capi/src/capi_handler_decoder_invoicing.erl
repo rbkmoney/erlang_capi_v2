@@ -451,6 +451,12 @@ decode_payment_methods({value, PaymentMethodRefs}) ->
         proplists:get_keys(PaymentMethods)
     ).
 
+decode_payment_method(empty_cvv_bank_card_deprecated, PaymentSystems) ->
+    [#{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems)}];
+decode_payment_method(bank_card_deprecated, PaymentSystems) ->
+    [#{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems)}];
+decode_payment_method(tokenized_bank_card_deprecated, TokenizedBankCards) ->
+    decode_tokenized_bank_cards(TokenizedBankCards);
 decode_payment_method(bank_card, Cards) ->
     Regular = lists:filter(fun(#domain_BankCardPaymentMethod{token_provider = TP}) -> TP =:= undefined end, Cards),
     Tokenized = Cards -- Regular,
@@ -471,10 +477,18 @@ decode_payment_method(mobile, MobileOperators) ->
 
 decode_bank_card(#domain_BankCardPaymentMethod{payment_system = PS}) -> genlib:to_binary(PS).
 
-decode_tokenized_bank_cards(TokenizedBankCards) ->
+decode_tokenized_bank_cards([#domain_BankCardPaymentMethod{} | _ ] = TokenizedBankCards) ->
     PropTokenizedBankCards = [
         {TP, PS} || #domain_BankCardPaymentMethod{payment_system = PS, token_provider = TP} <- TokenizedBankCards
     ],
+    do_decode_tokenized_bank_cards(PropTokenizedBankCards);
+decode_tokenized_bank_cards([#domain_TokenizedBankCard{} | _ ] = TokenizedBankCards) ->
+    PropTokenizedBankCards = [
+        {TP, PS} || #domain_TokenizedBankCard{payment_system = PS, token_provider = TP} <- TokenizedBankCards
+    ],
+    do_decode_tokenized_bank_cards(PropTokenizedBankCards).
+
+do_decode_tokenized_bank_cards(PropTokenizedBankCards) ->
     lists:map(
         fun(TokenProvider) ->
             {_, PaymentSystems} = lists:unzip(proplists:lookup_all(TokenProvider, PropTokenizedBankCards)),
@@ -482,6 +496,7 @@ decode_tokenized_bank_cards(TokenizedBankCards) ->
         end,
         proplists:get_keys(PropTokenizedBankCards)
     ).
+
 
 decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
     #{
