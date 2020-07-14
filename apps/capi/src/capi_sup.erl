@@ -5,7 +5,6 @@
 -behaviour(supervisor).
 
 -define(APP, capi).
-
 %% API
 -export([start_link/0]).
 
@@ -30,12 +29,12 @@ init([]) ->
     HealthCheck = enable_health_logging(genlib_app:env(?APP, health_check, #{})),
     HealthRoutes = [{'_', [erl_health_handle:get_route(HealthCheck)]}],
     SwaggerHandlerOpts = genlib_app:env(?APP, swagger_handler_opts, #{}),
-    SwaggerSpecs = capi_swagger_server:child_spec({HealthRoutes, LogicHandler, SwaggerHandlerOpts}),
+    SwaggerSpec = capi_swagger_server:child_spec({HealthRoutes, LogicHandler, SwaggerHandlerOpts}),
     UacConf = get_uac_config(),
     ok = uac:configure(UacConf),
     {ok, {
         {one_for_all, 0, 1},
-            [LechiffreSpec] ++ LogicHandlerSpecs ++ [SwaggerSpecs]
+            [LechiffreSpec] ++ LogicHandlerSpecs ++ [SwaggerSpec]
     }}.
 
 -spec get_logic_handler_info() -> {Handler :: atom(), [Spec :: supervisor:child_spec()] | []} .
