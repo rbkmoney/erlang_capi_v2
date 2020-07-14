@@ -16,7 +16,7 @@
 
 -export([get_unique_id/0]).
 
--define(MAX_DEADLINE_TIME, 1*60*1000). % 1 min
+-define(MAX_REQUEST_DEADLINE_TIME, timer:minutes(1)). % 1 min
 
 -spec base64url_to_map(binary()) -> map() | no_return().
 base64url_to_map(Base64) when is_binary(Base64) ->
@@ -97,7 +97,7 @@ try_parse_deadline(DeadlineStr, [P | Parsers]) ->
 try_parse_woody_default(DeadlineStr) ->
     try
         Deadline = woody_deadline:from_binary(to_universal_time(DeadlineStr)),
-        NewDeadline = clamp_max_deadline(woody_deadline:to_timeout(Deadline)),
+        NewDeadline = clamp_max_request_deadline(woody_deadline:to_timeout(Deadline)),
         {ok, woody_deadline:from_timeout(NewDeadline)}
     catch
         error:{bad_deadline, _Reason} ->
@@ -120,7 +120,7 @@ try_parse_relative(Number, Unit) ->
     case unit_factor(Unit) of
         {ok, Factor} ->
             Timeout = erlang:round(Number * Factor),
-            {ok, woody_deadline:from_timeout(clamp_max_deadline(Timeout))};
+            {ok, woody_deadline:from_timeout(clamp_max_request_deadline(Timeout))};
         {error, _Reason} ->
             {error, bad_deadline}
     end.
@@ -133,8 +133,8 @@ unit_factor(<<"m">>) ->
 unit_factor(_Other) ->
     {error, unknown_unit}.
 
-clamp_max_deadline(Value) when is_integer(Value)->
-    MaxDeadline = genlib_app:env(capi, max_deadline, ?MAX_DEADLINE_TIME),
+clamp_max_request_deadline(Value) when is_integer(Value)->
+    MaxDeadline = genlib_app:env(capi, max_request_deadline, ?MAX_REQUEST_DEADLINE_TIME),
     case Value > MaxDeadline of
         true ->
             MaxDeadline;
