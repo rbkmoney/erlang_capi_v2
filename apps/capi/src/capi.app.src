@@ -22,6 +22,7 @@
         jose,
         cowboy_cors,
         cowboy_access_log,
+        cowboy_draining_server,
         base64url,
         woody_user_identity,
         payproc_errors,
