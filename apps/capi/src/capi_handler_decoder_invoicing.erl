@@ -458,8 +458,8 @@ decode_payment_method(bank_card_deprecated, PaymentSystems) ->
 decode_payment_method(tokenized_bank_card_deprecated, TokenizedBankCards) ->
     decode_tokenized_bank_cards(TokenizedBankCards);
 decode_payment_method(bank_card, Cards) ->
-    Regular = lists:filter(fun(#domain_BankCardPaymentMethod{token_provider = TP}) -> TP =:= undefined end, Cards),
-    Tokenized = Cards -- Regular,
+    {Regular, Tokenized} =
+        lists:partition(fun(#domain_BankCardPaymentMethod{token_provider = TP}) -> TP =:= undefined end, Cards),
     [#{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun decode_bank_card/1, Regular)}
         | decode_tokenized_bank_cards(Tokenized)];
 decode_payment_method(payment_terminal, Providers) ->
