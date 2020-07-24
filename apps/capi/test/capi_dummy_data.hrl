@@ -1005,6 +1005,30 @@
                     payment_system = visa,
                     token_provider = applepay
                 }}
+            },
+            #domain_PaymentMethodRef{
+                id = {bank_card, #domain_BankCardPaymentMethod{
+                    payment_system = mastercard,
+                    token_provider = applepay,
+                    tokenization_method = dpan
+                }}
+            },
+            #domain_PaymentMethodRef{
+                id = {bank_card, #domain_BankCardPaymentMethod{
+                    payment_system = visa,
+                    token_provider = applepay,
+                    tokenization_method = dpan
+                }}
+            },
+            #domain_PaymentMethodRef{
+                id = {bank_card, #domain_BankCardPaymentMethod{
+                    payment_system = mastercard
+                }}
+            },
+            #domain_PaymentMethodRef{
+                id = {bank_card, #domain_BankCardPaymentMethod{
+                    payment_system = visa
+                }}
             }
         ])
     }
