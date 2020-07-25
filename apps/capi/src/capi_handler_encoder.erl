@@ -67,7 +67,8 @@ encode_bank_card(BankCard) ->
         issuer_country = encode_residence(genlib_map:get(<<"issuer_country">>, BankCard)),
         bank_name      = genlib_map:get(<<"bank_name">>, BankCard),
         metadata       = encode_bank_card_metadata(genlib_map:get(<<"metadata">>, BankCard)),
-        is_cvv_empty   = encode_bank_card_cvv_flag(genlib_map:get(<<"is_cvv_empty">>, BankCard))
+        is_cvv_empty   = encode_bank_card_cvv_flag(genlib_map:get(<<"is_cvv_empty">>, BankCard)),
+        tokenization_method = genlib_map:get(<<"tokenization_method">>, BankCard)
     }}.
 
 encode_payment_system(PaymentSystem) ->
