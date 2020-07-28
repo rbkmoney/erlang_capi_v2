@@ -230,7 +230,8 @@ decode_bank_card(#domain_BankCard{
     'metadata'       = Metadata,
     'is_cvv_empty'   = IsCVVEmpty,
     'exp_date'       = ExpDate,
-    'cardholder_name' = CardHolder
+    'cardholder_name' = CardHolder,
+    'tokenization_method' = TokenizationMethod
 }) ->
     genlib_map:compact(#{
         <<"type"          >> => <<"bank_card">>,
@@ -243,9 +244,9 @@ decode_bank_card(#domain_BankCard{
         <<"bank_name"     >> => BankName,
         <<"metadata"      >> => decode_bank_card_metadata(Metadata),
         <<"is_cvv_empty"  >> => decode_bank_card_cvv_flag(IsCVVEmpty),
-        %% TODO[0x42]: decode exp_date
         <<"exp_date"      >> => ExpDate,
-        <<"cardholder_name">> => CardHolder
+        <<"cardholder_name">> => CardHolder,
+        <<"tokenization_method">> => TokenizationMethod
     }).
 
 decode_bank_card_cvv_flag(undefined) ->
@@ -341,7 +342,8 @@ decode_bank_card_details(BankCard, V) ->
         <<"first6">>    => Bin,
         <<"cardNumberMask">> => capi_handler_decoder_utils:decode_masked_pan(Bin, LastDigits),
         <<"paymentSystem" >> => genlib:to_binary(BankCard#domain_BankCard.payment_system),
-        <<"tokenProvider" >> => decode_token_provider(BankCard#domain_BankCard.token_provider)
+        <<"tokenProvider" >> => decode_token_provider(BankCard#domain_BankCard.token_provider),
+        <<"tokenizationMethod">> => genlib:to_binary(BankCard#domain_BankCard.tokenization_method)
     }).
 
 decode_token_provider(Provider) when Provider /= undefined ->

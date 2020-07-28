@@ -6,7 +6,6 @@
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_errors_thrift.hrl").
 -include_lib("damsel/include/dmsl_accounter_thrift.hrl").
--include_lib("damsel/include/dmsl_cds_thrift.hrl").
 -include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 -include_lib("damsel/include/dmsl_webhooker_thrift.hrl").
 -include_lib("damsel/include/dmsl_merch_stat_thrift.hrl").
