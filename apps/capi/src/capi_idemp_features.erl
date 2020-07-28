@@ -84,7 +84,9 @@ features_to_schema(Diff, Schema) ->
             (_Feature, Value, [Key], AccIn) when is_binary(Key) ->
                 AccIn#{Key => Value};
             (_Feature, Value, ValueWith, AccIn) when is_map(ValueWith) ->
-                maps:merge(AccIn, features_to_schema(Value, ValueWith))
+                maps:merge(AccIn, features_to_schema(Value, ValueWith));
+            (_Feature, undefined, [Key, ValueWith], AccIn) when is_map(ValueWith) ->
+                AccIn#{Key => ?DIFFERENCE}
         end,
         #{},
         Diff,
@@ -110,7 +112,6 @@ compare_features(Fs, FsWith) ->
                         Diff#{Key => ?DIFFERENCE}; % different everywhere
                     #{<<"$type">> := _} ->
                         Diff#{Key => ?DIFFERENCE};
-                        % Diff#{Key => #{<<"$type">> => ?DIFFERENCE}};
                     Diff1 when map_size(Diff1) > 0 ->
                         Diff#{Key => Diff1};
                     #{} ->
