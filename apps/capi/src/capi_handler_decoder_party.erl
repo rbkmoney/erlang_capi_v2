@@ -212,8 +212,8 @@ decode_bank_card(#domain_BankCard{
     'issuer_country'      = IssuerCountry,
     'bank_name'           = BankName,
     'metadata'            = Metadata,
-    'is_cvv_empty'        = IsCVVEmpty,
-    'tokenization_method' = TokenizationMethod
+    'is_cvv_empty'        = IsCVVEmpty
+    % 'tokenization_method' = TokenizationMethod
 }) ->
     capi_utils:map_to_base64url(genlib_map:compact(#{
         <<"type"          >>      => <<"bank_card">>,
@@ -225,8 +225,9 @@ decode_bank_card(#domain_BankCard{
         <<"issuer_country">>      => IssuerCountry,
         <<"bank_name"     >>      => BankName,
         <<"metadata"      >>      => decode_bank_card_metadata(Metadata),
-        <<"is_cvv_empty"  >>      => decode_bank_card_cvv_flag(IsCVVEmpty),
-        <<"tokenization_method">> => TokenizationMethod
+        <<"is_cvv_empty"  >>      => decode_bank_card_cvv_flag(IsCVVEmpty)
+        % TODO: Uncomment or delete this when we negotiate deploying non-breaking changes
+        % <<"tokenization_method">> => TokenizationMethod
     })).
 
 decode_bank_card_cvv_flag(undefined) ->
@@ -322,8 +323,9 @@ decode_bank_card_details(BankCard, V) ->
         <<"first6">>    => Bin,
         <<"cardNumberMask">> => capi_handler_decoder_utils:decode_masked_pan(Bin, LastDigits),
         <<"paymentSystem" >> => genlib:to_binary(BankCard#domain_BankCard.payment_system),
-        <<"tokenProvider" >> => decode_token_provider(BankCard#domain_BankCard.token_provider),
-        <<"tokenizationMethod">> => genlib:to_binary(BankCard#domain_BankCard.tokenization_method)
+        <<"tokenProvider" >> => decode_token_provider(BankCard#domain_BankCard.token_provider)
+        % TODO: Uncomment or delete this when we negotiate deploying non-breaking changes
+        % <<"tokenizationMethod">> => genlib:to_binary(BankCard#domain_BankCard.tokenization_method)
     }).
 
 decode_token_provider(Provider) when Provider /= undefined ->
