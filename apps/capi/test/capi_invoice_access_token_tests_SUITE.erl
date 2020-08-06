@@ -25,11 +25,6 @@
     get_invoice_events_ok_test/1,
     get_invoice_payment_methods_ok_test/1,
     create_payment_ok_test/1,
-    create_payment_ok_idemp_test/1,
-    payment_add_idemp_feature_test/1,
-    payment_idemp_feature_undef_test/1,
-    payment_idemp_another_payment_tool_test/1,
-    create_payment_idemp_conflict_test/1,
     create_payment_qiwi_access_token_ok_test/1,
     create_payment_with_empty_cvv_ok_test/1,
     create_payment_with_googlepay_plain_ok_test/1,
@@ -75,11 +70,6 @@ invoice_access_token_tests() ->
         get_invoice_events_ok_test,
         get_invoice_payment_methods_ok_test,
         create_payment_ok_test,
-        create_payment_ok_idemp_test,
-        payment_add_idemp_feature_test,
-        payment_idemp_feature_undef_test,
-        payment_idemp_another_payment_tool_test,
-        create_payment_idemp_conflict_test,
         create_payment_qiwi_access_token_ok_test,
         create_payment_with_empty_cvv_ok_test,
         create_payment_with_googlepay_plain_ok_test,
@@ -254,95 +244,6 @@ create_payment_ok_test(Config) ->
         <<"id">> := BenderKey,
         <<"externalID">> := ExternalID
     }} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
-
--spec create_payment_ok_idemp_test(config()) ->
-    _.
-create_payment_ok_idemp_test(Config) ->
-    BenderKey = <<"bender_key">>,
-    ExternalID = <<"merch_id">>,
-    ContactInfo = #{},
-    Jwe1 = get_encrypted_token(visa, ?EXP_DATE(2, 2020)),
-    Jwe2 = get_encrypted_token(visa, ?EXP_DATE(2, 2020)),
-    Req1 = get_req_create_payment(ExternalID, Jwe1, ContactInfo, undefined),
-    Req2 = get_req_create_payment(ExternalID, Jwe2, ContactInfo, false),
-    {{ok, Response}, {ok, Response}} = crt_payment_double_req(BenderKey, Req1, Req2, Config).
-
--spec payment_idemp_another_payment_tool_test(config()) ->
-    _.
-payment_idemp_another_payment_tool_test(Config) ->
-    BenderKey = <<"bender_key">>,
-    ExternalID = <<"merch_id">>,
-    ContactInfo = #{},
-    Jwe1 = encrypt_payment_tool({bank_card, ?BANK_CARD(visa, ?EXP_DATE(2, 2020), <<"Mr. Surname">>)}),
-    Jwe2 = encrypt_payment_tool({digital_wallet, ?DIGITAL_WALLET(<<"+79876543210">>, <<"token id">>)}),
-    Req1 = get_req_create_payment(ExternalID, Jwe1, ContactInfo, undefined),
-    Req2 = get_req_create_payment(ExternalID, Jwe2, ContactInfo, false),
-    {{ok, _}, Response} = crt_payment_double_req(BenderKey, Req1, Req2, Config),
-    {error, {409, #{
-        <<"externalID">> := ExternalID,
-        <<"id">> := BenderKey
-    }}} = Response.
-
--spec payment_idemp_feature_undef_test(config()) ->
-    _.
-payment_idemp_feature_undef_test(Config) ->
-    BenderKey = <<"bender_key">>,
-    ExternalID = <<"merch_id">>,
-    ContactInfo = #{},
-    Jwe1 = encrypt_payment_tool({bank_card, ?BANK_CARD(visa, ?EXP_DATE(2, 2020), <<"Mr. Surname">>)}),
-    Jwe2 = encrypt_payment_tool({bank_card, ?BANK_CARD(visa, ?EXP_DATE(2, 2020), undefined)}),
-    Req1 = get_req_create_payment(ExternalID, Jwe1, ContactInfo, undefined),
-    Req2 = get_req_create_payment(ExternalID, Jwe2, ContactInfo, undefined),
-    {{ok, _}, Response} = crt_payment_double_req(BenderKey, Req1, Req2, Config),
-    {error, {409, #{
-        <<"externalID">> := ExternalID,
-        <<"id">> := BenderKey
-    }}} = Response.
-
--spec payment_add_idemp_feature_test(config()) ->
-    _.
-payment_add_idemp_feature_test(Config) ->
-    BenderKey = <<"bender_key">>,
-    ExternalID = <<"merch_id">>,
-    Jwe1 = encrypt_payment_tool({bank_card, ?BANK_CARD(visa, ?EXP_DATE(2, 2020), undefined)}),
-    Jwe2 = encrypt_payment_tool({bank_card, ?BANK_CARD(visa, ?EXP_DATE(2, 2020), <<"Mr. Surname">>)}),
-    Req1 = get_req_create_payment(ExternalID, Jwe1, #{}, undefined),
-    Req2 = get_req_create_payment(ExternalID, Jwe2, #{}, undefined),
-    {{ok, Response}, {ok, Response}} = crt_payment_double_req(BenderKey, Req1, Req2, Config).
-
--spec create_payment_idemp_conflict_test(config()) ->
-    _.
-create_payment_idemp_conflict_test(Config) ->
-    BenderKey = <<"bender_key">>,
-    ExternalID = <<"merch_id">>,
-    Jwe1 = get_encrypted_token(visa, ?EXP_DATE(1, 2020)),
-    Jwe2 = get_encrypted_token(visa, ?EXP_DATE(2, 2020)),
-    Req1 = get_req_create_payment(ExternalID, Jwe1, #{}, undefined),
-    Req2 = get_req_create_payment(ExternalID, Jwe2, #{}, false),
-    {{ok, _}, Response} = crt_payment_double_req(BenderKey, Req1, Req2, Config),
-    {error, {409, #{
-        <<"externalID">> := ExternalID,
-        <<"id">> := BenderKey
-    }}} = Response.
-
-crt_payment_double_req(BenderKey, Req1, Req2, Config) ->
-    Tid = capi_ct_helper_bender:create_storage(),
-    capi_ct_helper:mock_services(
-        [
-            {invoicing, fun('StartPayment', [_, _, IPP]) ->
-                #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
-                {ok, ?PAYPROC_PAYMENT(ID, EID)}
-            end},
-            {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-                capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
-            end}
-        ],
-        Config
-    ),
-    Result1 = capi_client_payments:create_payment(?config(context, Config), Req1, ?STRING),
-    Result2 = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING),
-    capi_ct_helper_bender:del_storage(Tid),
-    {Result1, Result2}.
 
 -spec create_payment_with_empty_cvv_ok_test(config()) ->
     _.
@@ -543,7 +444,7 @@ create_second_recurrent_payment_ok_test(Config) ->
         ],
         Config
     ),
-    Req2 = #{
+    Req = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"makeRecurrent">> => true,
         <<"payer">> => #{
@@ -557,7 +458,7 @@ create_second_recurrent_payment_ok_test(Config) ->
             }
         }
     },
-    {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
+    {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req, ?STRING).
 
 -spec get_recurrent_payments_ok_test(config()) ->
     _.
@@ -586,27 +487,6 @@ get_failed_payment_with_invalid_cvv(Config) ->
     % mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
     capi_client_payments:get_payment_by_id(?config(context, Config), ?STRING, ?STRING).
 
-% get_req_create_payment(ExternalID, Jwe) ->
-%     get_req_create_payment(ExternalID, Jwe, #{}).
-% get_req_create_payment(ExternalID, Jwe, ContactInfo) ->
-%     get_req_create_payment(ExternalID, Jwe, ContactInfo, undefined).
-get_req_create_payment(ExternalID, Jwe, ContactInfo, MakeRecurrent) ->
-    genlib_map:compact(#{
-        <<"externalID">> => ExternalID,
-        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
-        <<"payer">> => #{
-            <<"payerType">> => <<"PaymentResourcePayer">>,
-            <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
-            <<"paymentToolToken">> => Jwe,
-            <<"contactInfo">> => ContactInfo
-        },
-        <<"makeRecurrent">> => MakeRecurrent,
-        <<"metadata">> => ?JSON,
-        <<"processingDeadline">> => <<"5m">>
-    }).
-
-% get_encrypted_token(PS) ->
-%     get_encrypted_token(PS, undefined).
 get_encrypted_token({qiwi, Phone, TokenID}) ->
     PaymentTool = {digital_wallet, #domain_DigitalWallet{
         provider = qiwi,
@@ -627,7 +507,4 @@ get_encrypted_token(PS, ExpDate, IsCvvEmpty) ->
         cardholder_name = <<"Degus Degusovich">>,
         is_cvv_empty = IsCvvEmpty
     }},
-    capi_crypto:create_encrypted_payment_tool_token(PaymentTool).
-
-encrypt_payment_tool(PaymentTool) ->
     capi_crypto:create_encrypted_payment_tool_token(PaymentTool).
