@@ -46,9 +46,9 @@ init([]) ->
     [test_case_name()].
 all() ->
     [
-        % {group, payment_creation},
-        {group, invoice_creation}
-        % {group, refund_creation}
+        {group, payment_creation},
+        {group, invoice_creation},
+        {group, refund_creation}
     ].
 
 -spec groups() ->
@@ -63,9 +63,10 @@ groups() ->
             second_request_without_idempotent_feature_test
         ]},
         {invoice_creation, [], [
-            % create_invoice_ok_test,
-            % create_invoice_legacy_fail_test,
-            % create_invoice_fail_test,
+            create_invoice_ok_test,
+            create_invoice_legacy_fail_test,
+            create_invoice_fail_test,
+            create_invoice_idemp_cart_fail_test,
             create_invoice_idemp_cart_ok_test
         ]},
         {refund_creation, [], [

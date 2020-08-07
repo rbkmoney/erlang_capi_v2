@@ -85,9 +85,6 @@ features_to_schema(Diff, Schema) ->
                 AccIn#{Key => Value};
             (_Feature, Value, SchemaPart, AccIn) when is_map(SchemaPart) ->
                 maps:merge(AccIn, features_to_schema(Value, SchemaPart))
-            % ;
-            % (_Feature, undefined, [Key, SchemaPart], AccIn) when is_map(SchemaPart) ->
-            %     AccIn#{Key => ?DIFFERENCE}
         end,
         #{},
         Diff,
@@ -127,8 +124,8 @@ compare_features(Fs, FsWith) ->
                 Diff;
             (_Key, Value, Value, Diff) ->
                 Diff;
-            (Key, Value, _ValueWith, Diff) ->
-                Diff#{Key => Value}
+            (Key, Value, ValueWith, Diff) when Value =/= ValueWith ->
+                Diff#{Key => ?DIFFERENCE}
         end,
         #{},
         Fs,
@@ -432,10 +429,10 @@ compare_invoices_test() ->
 
     ?assertEqual({false, #{<<"cart">> => #{
         0 => #{
-            <<"price">>     => hash(Price2),
-            <<"product">>   => hash(Prod2),
-            <<"quantity">>  => undefined,
-            <<"tax">>       => undefined
+            <<"price">>     => ?DIFFERENCE,
+            <<"product">>   => ?DIFFERENCE,
+            <<"quantity">>  => ?DIFFERENCE,
+            <<"tax">>       => ?DIFFERENCE
     }}}}, equal_features(Invoice2, Invoice1)),
     ?assert(equal_features(Invoice1, Invoice1)),
     %% Feature was deleted
@@ -443,7 +440,7 @@ compare_invoices_test() ->
     %% Feature was add
     ?assert(equal_features(Invoice2, InvoiceWithFullCart)),
     % %% When second request didn't contain feature, this situation detected as conflict.
-    ?assertMatch({false, #{<<"cart">> := undefined}}, equal_features(Invoice1#{<<"cart">> => undefined}, Invoice1)),
+    ?assertMatch({false, #{<<"cart">> := ?DIFFERENCE}}, equal_features(Invoice1#{<<"cart">> => undefined}, Invoice1)),
 
     {false, Diff} = equal_features(Invoice1, InvoiceChg1),
     ?assertEqual([<<"cart.0.taxMode.rate">>, <<"cart.0.price">>], list_diff_fields(Schema, Diff)),
