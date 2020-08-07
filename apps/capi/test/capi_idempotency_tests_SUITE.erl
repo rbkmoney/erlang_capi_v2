@@ -6,9 +6,6 @@
 -include_lib("capi_dummy_data.hrl").
 -include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
-% -include_lib("damsel/include/dmsl_payment_processing_errors_thrift.hrl").
-% -include_lib("damsel/include/dmsl_payment_tool_token_thrift.hrl").
-% -include_lib("jose/include/jose_jwk.hrl").
 
 -export([all/0]).
 -export([groups/0]).
@@ -49,9 +46,9 @@ init([]) ->
     [test_case_name()].
 all() ->
     [
-        {group, payment_creation},
-        {group, invoice_creation},
-        {group, refund_creation}
+        % {group, payment_creation},
+        {group, invoice_creation}
+        % {group, refund_creation}
     ].
 
 -spec groups() ->
@@ -66,9 +63,9 @@ groups() ->
             second_request_without_idempotent_feature_test
         ]},
         {invoice_creation, [], [
-            create_invoice_ok_test,
-            create_invoice_legacy_fail_test,
-            create_invoice_fail_test,
+            % create_invoice_ok_test,
+            % create_invoice_legacy_fail_test,
+            % create_invoice_fail_test,
             create_invoice_idemp_cart_ok_test
         ]},
         {refund_creation, [], [

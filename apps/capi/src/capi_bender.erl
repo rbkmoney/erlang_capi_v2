@@ -10,7 +10,6 @@
 -type difference() :: capi_idemp_features:difference() | undefined.
 
 -type params()       :: {integer(), capi_idemp_features:features()}.
--type params_value() :: term().
 
 -export_type([bender_context/0]).
 -export_type([context_data/0]).

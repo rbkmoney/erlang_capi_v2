@@ -84,9 +84,10 @@ features_to_schema(Diff, Schema) ->
             (_Feature, Value, [Key], AccIn) when is_binary(Key) ->
                 AccIn#{Key => Value};
             (_Feature, Value, SchemaPart, AccIn) when is_map(SchemaPart) ->
-                maps:merge(AccIn, features_to_schema(Value, SchemaPart));
-            (_Feature, undefined, [Key, SchemaPart], AccIn) when is_map(SchemaPart) ->
-                AccIn#{Key => ?DIFFERENCE}
+                maps:merge(AccIn, features_to_schema(Value, SchemaPart))
+            % ;
+            % (_Feature, undefined, [Key, SchemaPart], AccIn) when is_map(SchemaPart) ->
+            %     AccIn#{Key => ?DIFFERENCE}
         end,
         #{},
         Diff,
