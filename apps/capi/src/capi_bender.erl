@@ -31,7 +31,6 @@
 
 -spec gen_by_snowflake(binary(), params(), woody_context()) ->
     {ok, binary()} |
-    {ok, binary(), params_value()} |
     {error, {external_id_conflict, binary(), difference()}}.
 
 gen_by_snowflake(IdempotentKey, Params, WoodyContext) ->
@@ -39,7 +38,6 @@ gen_by_snowflake(IdempotentKey, Params, WoodyContext) ->
 
 -spec gen_by_snowflake(binary(), params(), woody_context(), context_data()) ->
     {ok, binary()} |
-    {ok, binary(), params_value()} |
     {error, {external_id_conflict, binary(), difference()}}.
 
 gen_by_snowflake(IdempotentKey, Params, WoodyContext, CtxData) ->
@@ -48,7 +46,6 @@ gen_by_snowflake(IdempotentKey, Params, WoodyContext, CtxData) ->
 
 -spec gen_by_sequence(binary(), binary(), params(), woody_context()) ->
     {ok, binary()} |
-    {ok, binary(), params_value()} |
     {error, {external_id_conflict, binary(), difference()}}.
 
 gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext) ->
@@ -56,7 +53,6 @@ gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext) ->
 
 -spec gen_by_sequence(binary(), binary(), params(), woody_context(), context_data()) ->
     {ok, binary()} |
-    {ok, binary(), params_value()} |
     {error, {external_id_conflict, binary(), difference()}}.
 
 gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext, CtxData) ->
@@ -64,7 +60,6 @@ gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext, CtxData) ->
 
 -spec gen_by_sequence(binary(), binary(), params(), woody_context(), context_data(), sequence_params()) ->
     {ok, binary()} |
-    {ok, binary(), params_value()} |
     {error, {external_id_conflict, binary(), difference()}}.
 
 gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext, CtxData, SeqParams) ->
@@ -77,7 +72,6 @@ gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyContext, CtxData, SeqPar
 
 -spec gen_by_constant(binary(), binary(), params(), woody_context()) ->
     {ok,    binary()} |
-    {ok, binary(), params_value()} |
     {error, {external_id_conflict, binary(), difference()}}.
 
 gen_by_constant(IdempotentKey, ConstantID, Params, WoodyContext) ->
@@ -85,7 +79,6 @@ gen_by_constant(IdempotentKey, ConstantID, Params, WoodyContext) ->
 
 -spec gen_by_constant(binary(), binary(), params(), woody_context(), context_data()) ->
     {ok,    binary()} |
-    {ok, binary(), params_value()} |
     {error, {external_id_conflict, binary(), difference()}}.
 
 gen_by_constant(IdempotentKey, ConstantID, Params, WoodyContext, CtxData) ->
@@ -136,7 +129,7 @@ generate_id(Key, BenderSchema, {Hash, Features}, WoodyContext, CtxData) ->
         {ok, ID, #{<<"version">> := ?SCHEMA_VER1} = DeprecatedCtx} ->
             check_idempotent_conflict_deprecated(ID, Hash, DeprecatedCtx);
         {ok, ID, #{<<"version">> := ?SCHEMA_VER2} = SavedBenderCtx} ->
-            check_idempotent_conflict(ID, BenderCtx, SavedBenderCtx)
+            check_idempotent_conflict(ID, Features, SavedBenderCtx)
     end.
 
 create_bender_ctx(Features, Ctx) ->
@@ -146,12 +139,11 @@ create_bender_ctx(Features, Ctx) ->
         <<"context_data">> => Ctx
     }.
 
-features(#{<<"version">> := ?SCHEMA_VER2, <<"features">> := Features}) ->
-    Features.
-
-check_idempotent_conflict(ID, BenderCtx, SavedBenderCtx) ->
-    Features = features(BenderCtx),
-    OtherFeatures = features(SavedBenderCtx),
+check_idempotent_conflict(ID, Features, SavedBenderCtx) ->
+    #{
+        <<"version">> := ?SCHEMA_VER2,
+        <<"features">> := OtherFeatures
+    } = SavedBenderCtx,
     case capi_idemp_features:equal_features(Features, OtherFeatures) of
         true ->
             {ok, ID};

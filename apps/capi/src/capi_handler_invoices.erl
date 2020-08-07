@@ -200,6 +200,7 @@ create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context, B
             Call = {invoicing, 'Create', [encode_invoice_params(ID, PartyID, InvoiceParams)]},
             capi_handler_utils:service_call_with([user_info, party_creation], Call, Context);
         {error, {external_id_conflict, ID, undefined}} ->
+            logger:warning("This externalID: ~p, used in another request.~n", [ID]),
             throw({external_id_conflict, ID, ExternalID});
         {error, {external_id_conflict, ID, Difference}} ->
             ReadableDiff = capi_idemp_features:list_diff_fields(Schema, Difference),

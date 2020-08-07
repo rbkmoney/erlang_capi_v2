@@ -72,20 +72,20 @@ list_diff_fields(Schema, Diff) ->
 features_to_schema(Diff, Schema) ->
     zipfold(
         fun
-            (_Feature, ?DIFFERENCE, [Key, ValueWith], AccIn) when is_map(ValueWith) ->
+            (_Feature, ?DIFFERENCE, [Key, SchemaPart], AccIn) when is_map(SchemaPart) ->
                 AccIn#{Key => ?DIFFERENCE};
-            (_Feature, Value, [Key, ValueWith], AccIn) when is_map(ValueWith) and is_map(Value) ->
-                AccIn#{Key => features_to_schema(Value, ValueWith)};
-            (_Feature, Values, [Key, [ValueWith]], AccIn) when is_map(ValueWith) and is_map(Values) ->
+            (_Feature, Value, [Key, SchemaPart], AccIn) when is_map(SchemaPart) and is_map(Value) ->
+                AccIn#{Key => features_to_schema(Value, SchemaPart)};
+            (_Feature, Values, [Key, [SchemaPart]], AccIn) when is_map(SchemaPart) and is_map(Values) ->
                 Result = maps:fold(fun(Index, Value, Acc) ->
-                    Acc#{Index => features_to_schema(Value, ValueWith)}
+                    Acc#{Index => features_to_schema(Value, SchemaPart)}
                 end, #{}, Values),
                 AccIn#{Key => Result};
             (_Feature, Value, [Key], AccIn) when is_binary(Key) ->
                 AccIn#{Key => Value};
-            (_Feature, Value, ValueWith, AccIn) when is_map(ValueWith) ->
-                maps:merge(AccIn, features_to_schema(Value, ValueWith));
-            (_Feature, undefined, [Key, ValueWith], AccIn) when is_map(ValueWith) ->
+            (_Feature, Value, SchemaPart, AccIn) when is_map(SchemaPart) ->
+                maps:merge(AccIn, features_to_schema(Value, SchemaPart));
+            (_Feature, undefined, [Key, SchemaPart], AccIn) when is_map(SchemaPart) ->
                 AccIn#{Key => ?DIFFERENCE}
         end,
         #{},
@@ -111,6 +111,7 @@ compare_features(Fs, FsWith) ->
                     ValueWith ->
                         Diff#{Key => ?DIFFERENCE}; % different everywhere
                     #{<<"$type">> := _} ->
+                        % Different with regard to _type_, semantically same as different everywhere.
                         Diff#{Key => ?DIFFERENCE};
                     Diff1 when map_size(Diff1) > 0 ->
                         Diff#{Key => Diff1};
