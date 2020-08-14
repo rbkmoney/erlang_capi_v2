@@ -32,7 +32,7 @@ gen_by_sequence(SequenceID, SequenceParams, WoodyContext) ->
     }},
     generated_id(Sequence, WoodyContext).
 
--spec gen_by_constant(binary(),woody_context()) ->
+-spec gen_by_constant(binary(), woody_context()) ->
     generated_id().
 
 gen_by_constant(ConstantID, WoodyContext) ->
