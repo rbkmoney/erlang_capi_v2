@@ -3,7 +3,7 @@
 -include_lib("bender_proto/include/bender_thrift.hrl").
 
 -type woody_context()   :: woody_context:ctx().
--type sequence_params() :: #{minimum := integer()}.
+-type sequence_params() :: #{minimum => integer()}.
 -type generated_id()    :: #{
     id => binary(),
     integer_id => integer()
