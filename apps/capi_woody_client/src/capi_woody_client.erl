@@ -96,7 +96,9 @@ get_service_modname(customer_management) ->
 get_service_modname(party_management) ->
     {dmsl_payment_processing_thrift, 'PartyManagement'};
 get_service_modname(bender) ->
-    {bender_thrift, 'Bender'}.
+    {bender_thrift, 'Bender'};
+get_service_modname(generator) ->
+    {bender_thrift, 'Generator'}.
 
 
 get_service_deadline(ServiceName) ->

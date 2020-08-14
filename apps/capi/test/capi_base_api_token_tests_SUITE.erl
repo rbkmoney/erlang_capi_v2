@@ -277,7 +277,7 @@ end_per_testcase(_Name, C) ->
 create_invoice_ok_test(Config) ->
     capi_ct_helper:mock_services([
         {invoicing, fun('Create', _)     -> {ok, ?PAYPROC_INVOICE} end},
-        {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"key">>)} end}
+        {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
     ], Config),
     Req = #{
         <<"shopID">> => ?STRING,
@@ -474,7 +474,10 @@ get_failed_payment_with_invalid_cvv(Config) ->
     _.
 create_refund_legacy(Config) ->
     BenderKey = <<"bender_key">>,
-    Req = #{<<"reason">> => ?STRING},
+    Req = #{
+        <<"reason">> => ?STRING,
+        <<"externalID">> => ?STRING
+    },
     Ctx = capi_msgp_marshalling:marshal(#{
         <<"version">> => 1,
         <<"params_hash">> => erlang:phash2(Req)
@@ -493,8 +496,8 @@ create_refund(Config) ->
     Tid = capi_ct_helper_bender:create_storage(),
     capi_ct_helper:mock_services([
         {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end},
-        {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-            capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
+        {generator, fun('GenerateID', _) ->
+            capi_ct_helper_bender:generate_id(BenderKey)
         end}
     ], Config),
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
@@ -505,7 +508,6 @@ create_refund(Config) ->
 create_refund_error(Config) ->
     BenderKey = <<"bender_key">>,
     Req = #{<<"reason">> => ?STRING},
-    Tid = capi_ct_helper_bender:create_storage(),
     capi_ct_helper:mock_services([
         {invoicing, fun
             ('RefundPayment', [_, <<"42">> | _]) ->
@@ -517,13 +519,12 @@ create_refund_error(Config) ->
                     status = {expired, #domain_ContractExpired{}}
                 })
         end},
-        {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-            capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
+        {generator, fun('GenerateID', _) ->
+            capi_ct_helper_bender:generate_id(BenderKey)
         end}
     ], Config),
     {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"42">>, ?STRING),
-    {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"43">>, ?STRING),
-    capi_ct_helper_bender:del_storage(Tid).
+    {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"43">>, ?STRING).
 
 -spec create_partial_refund(config()) ->
     _.
@@ -541,16 +542,14 @@ create_partial_refund(Config) ->
         <<"amount">> => ?INTEGER,
         <<"cart">> => ?INVOICE_CART
     },
-    Tid = capi_ct_helper_bender:create_storage(),
     capi_ct_helper:mock_services([
         {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end},
-        {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-            capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
+        {generator, fun('GenerateID', _) ->
+            capi_ct_helper_bender:generate_id(BenderKey)
         end}
     ], Config),
 
-    {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
-    capi_ct_helper_bender:del_storage(Tid).
+    {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec create_partial_refund_without_currency(config()) ->
     _.
@@ -560,7 +559,6 @@ create_partial_refund_without_currency(Config) ->
         <<"reason">> => ?STRING,
         <<"amount">> => ?INTEGER
     },
-    Tid = capi_ct_helper_bender:create_storage(),
     capi_ct_helper:mock_services([
         {
             invoicing,
@@ -571,12 +569,11 @@ create_partial_refund_without_currency(Config) ->
                     {ok, ?REFUND}
             end
         },
-        {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
-            capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
+        {generator, fun('GenerateID', _) ->
+            capi_ct_helper_bender:generate_id(BenderKey)
         end}
     ], Config),
-    {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
-    capi_ct_helper_bender:del_storage(Tid).
+    {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec get_refund_by_id(config()) ->
     _.

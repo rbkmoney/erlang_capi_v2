@@ -98,7 +98,7 @@ init_per_group(payment_creation, Config) ->
     {ok, Token} = capi_ct_helper:issue_token([{[invoices], write}], unlimited, ExtraProperties),
     capi_ct_helper:mock_services([
         {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end},
-        {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
+        {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
     ], MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,

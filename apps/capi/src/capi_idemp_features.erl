@@ -43,7 +43,7 @@ read_request_value([], V) ->
     hash(V);
 read_request_value([Schema = #{}], Request = #{}) ->
     read_features(Schema, Request);
-read_request_value([[Schema = #{}]], List) when is_list(List) ->
+read_request_value([{set, [Schema = #{}]}], List) when is_list(List) ->
     {_, Value} = lists:foldl(fun(Req, {N, Acc}) ->
         {N + 1, Acc#{N => read_features(Schema, Req)}}
     end, {0, #{}}, lists:sort(List)),
@@ -76,7 +76,7 @@ features_to_schema(Diff, Schema) ->
                 AccIn#{Key => ?DIFFERENCE};
             (_Feature, Value, [Key, SchemaPart], AccIn) when is_map(SchemaPart) and is_map(Value) ->
                 AccIn#{Key => features_to_schema(Value, SchemaPart)};
-            (_Feature, Values, [Key, [SchemaPart]], AccIn) when is_map(SchemaPart) and is_map(Values) ->
+            (_Feature, Values, [Key, {set, [SchemaPart]}], AccIn) when is_map(SchemaPart) and is_map(Values) ->
                 Result = maps:fold(fun(Index, Value, Acc) ->
                     Acc#{Index => features_to_schema(Value, SchemaPart)}
                 end, #{}, Values),
@@ -154,16 +154,6 @@ map_to_flat(Value) ->
 
 map_to_flat(Key, #{} = Value, {Prefix, Acc}) ->
     {_Prefix2, AccOut} = maps:fold(fun map_to_flat/3, {[Key | Prefix], Acc}, Value),
-    {Prefix, AccOut};
-map_to_flat(Key, [#{} | _ ] = Value, {Prefix, Acc}) ->
-    {_, _, AccOut} = lists:foldl(fun
-        (Map, {Pr, N, AccIn}) ->
-            {_, FlatMap} = maps:fold(fun map_to_flat/3, {[integer_to_binary(N), Pr], #{}}, Map),
-            {Pr, N + 1, maps:merge(FlatMap, AccIn)}
-        end,
-        {Key, 0, Acc},
-        Value
-    ),
     {Prefix, AccOut};
 map_to_flat(Key, Value, {Prefix, Acc}) ->
     add_prefix(Key, Value, {Prefix, Acc}).

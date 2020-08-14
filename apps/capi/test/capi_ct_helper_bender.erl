@@ -13,10 +13,12 @@
 -export([create_storage/0]).
 -export([del_storage/1]).
 -export([get_internal_id/3]).
+-export([generate_id/1]).
 
 -spec create_storage() -> tid().
 -spec del_storage(tid()) -> ok.
 -spec get_internal_id(tid(), internal_id(), msg_pack()) -> bender_thrift:bender_GenerationResult().
+-spec generate_id(binary()) -> bender_thrift:bender_GenerateID().
 
 -spec get_result(binary()) -> bender_thrift:bender_GenerationResult().
 -spec get_result(binary(), msgpack_thrift:'Value'() | undefined) -> bender_thrift:bender_GenerationResult().
@@ -41,6 +43,11 @@ get_internal_id(Tid, IdempotentKey, MsgPack) ->
         [{IdempotentKey, #{ctx := Ctx}}] ->
             {ok, get_result(IdempotentKey, Ctx)}
     end.
+
+generate_id(ID) ->
+    {ok, #bender_GeneratedID{
+        id = ID
+    }}.
 
 get_result(ID) ->
     get_result(ID, undefined).

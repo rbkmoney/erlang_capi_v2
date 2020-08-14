@@ -47,19 +47,19 @@ payment() -> #{
 -spec invoice() -> schema().
 
 invoice() -> #{
-    <<"shop_id">>   => [<<"shopID">>],
-    <<"amount">>    => [<<"amount">>],
-    <<"currency">>  => [<<"currency">>],
-    <<"product">>   => [<<"product">>],
-    <<"cart">>      => [<<"cart">>, [cart_line_schema()]]
+    <<"shop_id">>     => [<<"shopID">>],
+    <<"amount">>      => [<<"amount">>],
+    <<"currency">>    => [<<"currency">>],
+    <<"product">>     => [<<"product">>],
+    <<"cart">>        => [<<"cart">>, {set, [cart_line_schema()]}]
 }.
 
 -spec refund() -> schema().
 
 refund() -> #{
-    <<"amount">>    => [<<"amount">>],
-    <<"currency">>  => [<<"currency">>],
-    <<"cart">>      => [<<"cart">>, [cart_line_schema()]]
+    <<"amount">>      => [<<"amount">>],
+    <<"currency">>    => [<<"currency">>],
+    <<"cart">>        => [<<"cart">>, {set, [cart_line_schema()]}]
 }.
 
 -spec cart_line_schema() -> schema().

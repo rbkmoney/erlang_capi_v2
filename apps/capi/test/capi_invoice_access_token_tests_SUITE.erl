@@ -119,7 +119,7 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
     {ok, Token} = capi_ct_helper:issue_token([{[invoices], write}], unlimited, ExtraProperties),
     capi_ct_helper:mock_services([
         {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end},
-        {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
+        {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
     ], MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
@@ -263,8 +263,8 @@ create_payment_with_empty_cvv_ok_test(Config) ->
                         }}
                     }
                 ]) -> {ok, ?PAYPROC_PAYMENT}
-             end},
-            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
+            end},
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
         ],
         Config
     ),
@@ -300,7 +300,7 @@ create_payment_qiwi_access_token_ok_test(Config) ->
                     }
                 ]) -> {ok, ?PAYPROC_PAYMENT}
             end},
-        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
+        {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
     ], Config),
     PaymentToolToken = get_encrypted_token({qiwi, <<"+79876543210">>, <<"benderkey0">>}),
     Req = #{
@@ -336,7 +336,7 @@ create_payment_with_googlepay_plain_ok_test(Config) ->
                     }
                 ]) -> {ok, ?PAYPROC_PAYMENT}
             end},
-        {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
+        {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
     ], Config),
     PaymentToolToken = get_encrypted_token(mastercard, ?EXP_DATE(1, 2020)),
     Req2 = #{
@@ -415,7 +415,9 @@ create_first_recurrent_payment_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
             {invoicing, fun('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT} end},
-            {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
+            {generator, fun('GenerateID', _) ->
+                capi_ct_helper_bender:generate_id(<<"bender_key">>)
+            end}
         ],
         Config
     ),
@@ -440,7 +442,7 @@ create_second_recurrent_payment_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
             {invoicing, fun('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT} end},
-            {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
         ],
         Config
     ),
