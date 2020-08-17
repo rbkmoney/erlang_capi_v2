@@ -176,14 +176,15 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
 process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
-create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
-    ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
+create_invoice(PartyID, InvoiceTplID, #{<<"externalID">> := ExternalID} = InvoiceParams, Context, BenderPrefix) ->
+    #{woody_context := WoodyCtx} = Context,
     % CAPI#344: Since the prefixes are different, it's possible to create 2 copies of the same Invoice with the same
     % externalId by using `CreateInvoice` and `CreateInvoiceWithTemplate` together
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2({InvoiceTplID, InvoiceParams}),
     Schema = capi_feature_schemas:invoice(),
-    BenderParams = {Hash, capi_idemp_features:read_features(Schema, InvoiceParams)},
+    {Features, _} = capi_idemp_features:read_features(Schema, InvoiceParams),
+    BenderParams = {Hash, Features},
     case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
         {ok, InvoiceID} ->
             Params = [encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams)],
@@ -195,7 +196,13 @@ create_invoice(PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx
             ReadableDiff = capi_idemp_features:list_diff_fields(Schema, Difference),
             logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, ReadableDiff]),
             throw({external_id_conflict, ID, ExternalID})
-    end.
+    end;
+create_invoice(_PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx} = Context, _) ->
+    #{id := InvoiceID} = capi_bender_generator:gen_by_snowflake(WoodyCtx),
+    InvoiceParamsWithEID = InvoiceParams#{<<"externalID">> => undefined},
+    Params = [encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParamsWithEID)],
+    Call = {invoicing, 'CreateWithTemplate', Params},
+    capi_handler_utils:service_call_with([user_info, party_creation], Call, Context).
 
 encode_invoice_tpl_create_params(PartyID, Params) ->
     Details = encode_invoice_tpl_details(genlib_map:get(<<"details">>, Params)),

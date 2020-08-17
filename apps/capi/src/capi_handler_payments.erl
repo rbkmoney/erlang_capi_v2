@@ -406,7 +406,8 @@ create_payment(InvoiceID, PartyID, #{<<"externalID">> := ExternalID} = PaymentPa
     PaymentParamsDecrypted = PaymentParams#{<<"payer">> => Payer},
     Hash = erlang:phash2(PaymentParams),
     Schema = capi_feature_schemas:payment(),
-    Params = {Hash, capi_idemp_features:read_features(Schema, PaymentParamsDecrypted)},
+    {Features, _} = capi_idemp_features:read_features(Schema, PaymentParamsDecrypted),
+    Params = {Hash, Features},
     #{woody_context := WoodyCtx} = Context,
     CtxData = #{<<"invoice_id">> => InvoiceID},
     case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Params, WoodyCtx, CtxData) of
@@ -588,7 +589,8 @@ create_refund(InvoiceID, PaymentID, #{<<"externalID">> := ExternalID} = RefundPa
     Hash = erlang:phash2(RefundParams),
     RefundParamsFull = RefundParams#{<<"invoiceID">> => invoiceID, <<"paymentID">> => PaymentID},
     Schema = capi_feature_schemas:refund(),
-    Params = {Hash, capi_idemp_features:read_features(Schema, RefundParamsFull)},
+    {Features, _} = capi_idemp_features:read_features(Schema, RefundParamsFull),
+    Params = {Hash, Features},
     case capi_bender:gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyCtx, #{}, #{minimum => 100}) of
         {ok, ID} ->
             InvoicePaymentRefundParams = #payproc_InvoicePaymentRefundParams{
