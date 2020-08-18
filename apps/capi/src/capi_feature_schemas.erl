@@ -1,6 +1,6 @@
 -module(capi_feature_schemas).
 
--type schema()          :: #{binary() := [binary() | schema() | [schema()]]}.
+-type schema() :: #{binary() := [binary() | schema() | [schema()]]}.
 
 -export_type([schema/0]).
 
@@ -51,7 +51,7 @@ invoice() -> #{
     <<"amount">>      => [<<"amount">>],
     <<"currency">>    => [<<"currency">>],
     <<"product">>     => [<<"product">>],
-    <<"cart">>        => [<<"cart">>, {set, [cart_line_schema()]}]
+    <<"cart">>        => [<<"cart">>, {set, cart_line_schema()}]
 }.
 
 -spec refund() -> schema().
@@ -59,13 +59,13 @@ invoice() -> #{
 refund() -> #{
     <<"amount">>      => [<<"amount">>],
     <<"currency">>    => [<<"currency">>],
-    <<"cart">>        => [<<"cart">>, {set, [cart_line_schema()]}]
+    <<"cart">>        => [<<"cart">>, {set, cart_line_schema()}]
 }.
 
 -spec cart_line_schema() -> schema().
 
 cart_line_schema() ->
-    #{
+    [#{
         <<"product">>  => [<<"product">>],
         <<"quantity">> => [<<"quantity">>],
         <<"price">>    => [<<"price">>],
@@ -73,4 +73,4 @@ cart_line_schema() ->
             <<"type">> => [<<"type">>],
             <<"rate">> => [<<"rate">>]
         }]
-    }.
+    }].

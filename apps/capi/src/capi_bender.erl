@@ -143,7 +143,7 @@ check_idempotent_conflict(ID, Features, SavedBenderCtx) ->
         <<"version">> := ?SCHEMA_VER2,
         <<"features">> := OtherFeatures
     } = SavedBenderCtx,
-    case capi_idemp_features:equal_features(Features, OtherFeatures) of
+    case capi_idemp_features:compare(Features, OtherFeatures) of
         true ->
             {ok, ID};
         {false, Difference} ->
