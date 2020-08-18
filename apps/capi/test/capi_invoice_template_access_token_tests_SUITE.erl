@@ -129,7 +129,8 @@ end_per_testcase(_Name, C) ->
     _.
 create_invoice_with_tpl_ok_test(Config) ->
     capi_ct_helper:mock_services([
-        {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end},
+        {generator, fun('GenerateID', _) ->
+            capi_ct_helper_bender:generate_id(<<"bender_key">>) end},
         {invoicing, fun('CreateWithTemplate', _) -> {ok, ?PAYPROC_INVOICE} end}
     ], Config),
     Req = #{

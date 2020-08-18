@@ -209,7 +209,7 @@ create_invoice(PartyID, #{<<"externalID">> := ExternalID} = InvoiceParams, Conte
             throw({external_id_conflict, ID, ExternalID})
     end;
 create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context, _) ->
-    #{id := ID} = capi_bender_generator:gen_by_snowflake(WoodyCtx),
+    {ok, {ID, _}} = bender_generator_client:gen_snowflake(WoodyCtx),
     Call = {invoicing, 'Create', [encode_invoice_params(ID, PartyID, InvoiceParams)]},
     capi_handler_utils:service_call_with([user_info, party_creation], Call, Context).
 

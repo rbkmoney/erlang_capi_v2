@@ -424,7 +424,7 @@ create_payment(InvoiceID, _PartyID, PaymentParams, #{woody_context := WoodyCtx} 
     ExternalID = undefined,
     {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
     PaymentParamsDecrypted = PaymentParams#{<<"payer">> => Payer},
-    #{id := ID} = capi_bender_generator:gen_by_sequence(InvoiceID, #{}, WoodyCtx),
+    {ok, {ID, _}} = bender_generator_client:gen_sequence(InvoiceID, WoodyCtx, #{}),
     PaymentID = <<InvoiceID/binary, ".", ID/binary>>,
     start_payment(PaymentID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context).
 
@@ -611,7 +611,7 @@ create_refund(InvoiceID, PaymentID, RefundParams, Context, BenderPrefix) ->
     #{woody_context := WoodyCtx} = Context,
     SequenceID = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
     SequenceParams = #{minimum => 100},
-    #{id := ID} = capi_bender_generator:gen_by_sequence(SequenceID, SequenceParams, WoodyCtx),
+    {ok, {ID, _}} = bender_generator_client:gen_sequence(SequenceID, WoodyCtx, SequenceParams),
     InvoicePaymentRefundParams = #payproc_InvoicePaymentRefundParams{
         reason = genlib_map:get(<<"reason">>, RefundParams),
         cash = encode_optional_cash(RefundParams, InvoiceID, PaymentID, Context),

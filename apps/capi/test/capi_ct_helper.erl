@@ -197,7 +197,15 @@ mock_services(Services, SupOrConfig) ->
     start_woody_client(mock_services_(Services, SupOrConfig)).
 
 start_woody_client(Services) ->
-    start_app(capi_woody_client, [{services, Services}]).
+    {CapiServices, GeneratorService} = maps:fold(fun
+        (generator, V, {AccIn, Acc}) ->
+            {AccIn, Acc#{'Generator' => V}};
+        (K, V, {Acc, AccIn}) ->
+            {Acc#{K => V}, AccIn}
+    end, {#{}, #{}}, Services),
+
+    start_app(bender_client, [{services, GeneratorService}]),
+    start_app(capi_woody_client, [{services, CapiServices}]).
 
 -spec mock_services_(_, _) ->
     _.

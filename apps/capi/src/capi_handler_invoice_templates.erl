@@ -198,7 +198,7 @@ create_invoice(PartyID, InvoiceTplID, #{<<"externalID">> := ExternalID} = Invoic
             throw({external_id_conflict, ID, ExternalID})
     end;
 create_invoice(_PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx} = Context, _) ->
-    #{id := InvoiceID} = capi_bender_generator:gen_by_snowflake(WoodyCtx),
+    {ok, {InvoiceID, _}} = bender_generator_client:gen_snowflake(WoodyCtx),
     InvoiceParamsWithEID = InvoiceParams#{<<"externalID">> => undefined},
     Params = [encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParamsWithEID)],
     Call = {invoicing, 'CreateWithTemplate', Params},
