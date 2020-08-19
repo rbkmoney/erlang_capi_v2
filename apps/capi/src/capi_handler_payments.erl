@@ -590,7 +590,7 @@ create_refund(InvoiceID, PaymentID, #{<<"externalID">> := ExternalID} = RefundPa
     Hash = erlang:phash2(RefundParams),
     RefundParamsFull = RefundParams#{<<"invoiceID">> => invoiceID, <<"paymentID">> => PaymentID},
     Schema = capi_feature_schemas:refund(),
-    {Features, _} = capi_idemp_features:read(Schema, RefundParamsFull),
+    {Features, _} = capi_idemp_features:read_features(Schema, RefundParamsFull),
     Params = {Hash, Features},
     case capi_bender:gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyCtx, #{}, SequenceParams) of
         {ok, ID} ->
