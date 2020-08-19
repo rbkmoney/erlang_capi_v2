@@ -221,7 +221,8 @@ create_payment_ok_test(Config) ->
                 #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
                 {ok, ?PAYPROC_PAYMENT(ID, EID)}
             end},
-            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
+            {bender, fun('GenerateID', _) ->
+                {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
         ],
         Config
     ),

@@ -406,7 +406,7 @@ create_payment(InvoiceID, PartyID, #{<<"externalID">> := ExternalID} = PaymentPa
     PaymentParamsDecrypted = PaymentParams#{<<"payer">> => Payer},
     Hash = erlang:phash2(PaymentParams),
     Schema = capi_feature_schemas:payment(),
-    {Features, _} = capi_idemp_features:read_features(Schema, PaymentParamsDecrypted),
+    {Features, _} = capi_idemp_features:read(Schema, PaymentParamsDecrypted),
     Params = {Hash, Features},
     #{woody_context := WoodyCtx} = Context,
     CtxData = #{<<"invoice_id">> => InvoiceID},
@@ -586,20 +586,15 @@ create_refund(InvoiceID, PaymentID, #{<<"externalID">> := ExternalID} = RefundPa
     #{woody_context := WoodyCtx} = Context,
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     SequenceID = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
+    SequenceParams = #{minimum => 100},
     Hash = erlang:phash2(RefundParams),
     RefundParamsFull = RefundParams#{<<"invoiceID">> => invoiceID, <<"paymentID">> => PaymentID},
     Schema = capi_feature_schemas:refund(),
-    {Features, _} = capi_idemp_features:read_features(Schema, RefundParamsFull),
+    {Features, _} = capi_idemp_features:read(Schema, RefundParamsFull),
     Params = {Hash, Features},
-    case capi_bender:gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyCtx, #{}, #{minimum => 100}) of
+    case capi_bender:gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyCtx, #{}, SequenceParams) of
         {ok, ID} ->
-            InvoicePaymentRefundParams = #payproc_InvoicePaymentRefundParams{
-                external_id = ExternalID,
-                reason = genlib_map:get(<<"reason">>, RefundParams),
-                cash = encode_optional_cash(RefundParams, InvoiceID, PaymentID, Context),
-                cart = capi_handler_encoder:encode_invoice_cart(RefundParams)
-            },
-            refund_payment(ID, InvoiceID, PaymentID, InvoicePaymentRefundParams, Context);
+            refund_payment(ID, InvoiceID, PaymentID, RefundParams, Context);
         {error, {external_id_conflict, ID, undefined}} ->
             {error, {external_id_conflict, ID, ExternalID}};
         {error, {external_id_conflict, ID, Difference}} ->
@@ -612,14 +607,16 @@ create_refund(InvoiceID, PaymentID, RefundParams, Context, BenderPrefix) ->
     SequenceID = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
     SequenceParams = #{minimum => 100},
     {ok, {ID, _}} = bender_generator_client:gen_sequence(SequenceID, WoodyCtx, SequenceParams),
-    InvoicePaymentRefundParams = #payproc_InvoicePaymentRefundParams{
+    refund_payment(ID, InvoiceID, PaymentID, RefundParams, Context).
+
+refund_payment(RefundID, InvoiceID, PaymentID, RefundParams, Context) ->
+    ExternalID = maps:get(<<"externalID">>, RefundParams, undefined),
+    Params = #payproc_InvoicePaymentRefundParams{
+        external_id = ExternalID,
         reason = genlib_map:get(<<"reason">>, RefundParams),
         cash = encode_optional_cash(RefundParams, InvoiceID, PaymentID, Context),
         cart = capi_handler_encoder:encode_invoice_cart(RefundParams)
     },
-    refund_payment(ID, InvoiceID, PaymentID, InvoicePaymentRefundParams, Context).
-
-refund_payment(RefundID, InvoiceID, PaymentID, Params, Context) ->
     Call = {invoicing, 'RefundPayment', [
         InvoiceID,
         PaymentID,
