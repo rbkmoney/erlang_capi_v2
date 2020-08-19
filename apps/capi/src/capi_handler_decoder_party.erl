@@ -208,7 +208,18 @@ decode_payment_tool({mobile_commerce, MobileCommerce}) ->
     binary().
 
 wrap_payment_tool_token(#{<<"type">> := <<"bank_card">>} = BankCard) ->
-    BankCard1 = maps:with([<<"exp_date">>, <<"token">>], BankCard),
+    Fields = [
+        <<"token">>,
+        <<"payment_system">>,
+        <<"bin">>,
+        <<"masked_pan">>,
+        <<"token_provider">>,
+        <<"issuer_country">>,
+        <<"bank_name">>,
+        <<"metadata">>,
+        <<"is_cvv_empty">>,
+        <<"tokenization_method">>],
+    BankCard1 = maps:with(Fields, BankCard),
     capi_utils:map_to_base64url(BankCard1);
 wrap_payment_tool_token(#{<<"type">> := <<"payment_terminal">>} = PaymentTerminal) ->
     capi_utils:map_to_base64url(PaymentTerminal);
