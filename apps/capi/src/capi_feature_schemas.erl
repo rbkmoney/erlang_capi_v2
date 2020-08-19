@@ -61,7 +61,7 @@ refund() -> #{
     <<"cart">>        => [<<"cart">>, {set, cart_line_schema()}]
 }.
 
--spec cart_line_schema() -> schema().
+-spec cart_line_schema() -> [schema()].
 
 cart_line_schema() ->
     [#{
