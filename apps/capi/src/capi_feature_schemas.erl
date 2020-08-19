@@ -17,7 +17,6 @@ payment() -> #{
             <<"$type">> => [<<"type">>],
             <<"bank_card">> => #{
                 <<"token">>      => [<<"token">>],
-                <<"cardholder">> => [<<"cardholder_name">>],
                 <<"expdate">>    => [<<"exp_date">>]
             },
             <<"terminal">> => #{
