@@ -282,7 +282,6 @@ read_payment_features_value_test() ->
             <<"tool">> => #{
                 <<"$type">> => hash(ToolType),
                 <<"bank_card">> => #{
-                    <<"cardholder">> => hash(CardHolder),
                     <<"expdate">>    => hash(ExpDate),
                     <<"token">>      => hash(Token)},
                 <<"crypto">> => #{<<"currency">> => undefined},
@@ -299,7 +298,10 @@ read_payment_features_value_test() ->
     },
     Diff = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowHold">>},
-        <<"payer">> => #{<<"paymentTool">> => #{<<"category">> => Category}}
+        <<"payer">> => #{<<"paymentTool">> => #{
+            <<"cardholder_name">> => CardHolder,
+            <<"category">> => Category
+        }}
     },
     {Features, RequestNotUse} = read(capi_feature_schemas:payment(), Request),
     ?assertEqual(Payer, Features),
@@ -356,7 +358,6 @@ compare_payment_bank_card_test() ->
     ?assertEqual(true, compare(F1, F1)),
     {false, Diff} = compare(F1, F2),
     ?assertEqual([
-        <<"payer.paymentTool.cardholder_name">>,
         <<"payer.paymentTool.token">>
     ], list_diff_fields(Schema, Diff)).
 
