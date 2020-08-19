@@ -201,7 +201,7 @@ second_request_without_idempotent_feature_test(Config) ->
     ExternalID = <<"merch_id">>,
     ContactInfo = #{},
     Jwe1 = encrypt_payment_tool({bank_card, ?BANK_CARD(visa, ?EXP_DATE(2, 2020), <<"Mr. Surname">>)}),
-    Jwe2 = encrypt_payment_tool({bank_card, ?BANK_CARD(visa, ?EXP_DATE(2, 2020), undefined)}),
+    Jwe2 = encrypt_payment_tool({bank_card, ?BANK_CARD(visa, undefined, <<"Mr. Surname">>)}),
     Req1 = payment_params(ExternalID, Jwe1, ContactInfo, undefined),
     Req2 = payment_params(ExternalID, Jwe2, ContactInfo, undefined),
     {{ok, _}, Response2} = create_payment(BenderKey, Req1, Req2, Config),
