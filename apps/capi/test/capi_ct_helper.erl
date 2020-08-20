@@ -194,18 +194,17 @@ stop_mocked_service_sup(SupPid) ->
     _.
 
 mock_services(Services, SupOrConfig) ->
-    start_woody_client(mock_services_(Services, SupOrConfig)).
+    {BenderClientServices, WoodyServices} = lists:partition(fun({ServiceName, _}) ->
+        ServiceName == generator
+    end, Services),
+    start_bender_client(mock_services_(BenderClientServices, SupOrConfig)),
+    start_woody_client(mock_services_(WoodyServices, SupOrConfig)).
+
+start_bender_client(Services) ->
+    start_app(bender_client, [{services, Services}]).
 
 start_woody_client(Services) ->
-    {CapiServices, GeneratorService} = maps:fold(fun
-        (generator, V, {AccIn, Acc}) ->
-            {AccIn, Acc#{'Generator' => V}};
-        (K, V, {Acc, AccIn}) ->
-            {Acc#{K => V}, AccIn}
-    end, {#{}, #{}}, Services),
-
-    start_app(bender_client, [{services, GeneratorService}]),
-    start_app(capi_woody_client, [{services, CapiServices}]).
+    start_app(capi_woody_client, [{services, Services}]).
 
 -spec mock_services_(_, _) ->
     _.
@@ -237,11 +236,15 @@ mock_services_(Services, SupPid) when is_pid(SupPid) ->
         Services
     ).
 
+get_service_name({generator, _}) ->
+    'Generator';
 get_service_name({ServiceName, _Fun}) ->
     ServiceName;
 get_service_name({ServiceName, _WoodyService, _Fun}) ->
     ServiceName.
 
+mock_service_handler({generator, Fun}) ->
+    mock_service_handler('Generator', {bender_thrift, 'Generator'}, Fun);
 mock_service_handler({ServiceName, Fun}) ->
     mock_service_handler(ServiceName, capi_woody_client:get_service_modname(ServiceName), Fun);
 mock_service_handler({ServiceName, WoodyService, Fun}) ->

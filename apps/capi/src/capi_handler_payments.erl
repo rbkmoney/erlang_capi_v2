@@ -3,10 +3,20 @@
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 
 -behaviour(capi_handler).
+-behaviour(capi_idemp_features).
+
 -export([process_request/3]).
+-export([handle_error/2]).
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -define(DEFAULT_PROCESSING_DEADLINE, <<"30m">>).
+
+-spec handle_error(capi_idemp_features:feature_name(), capi_idemp_features:request()) ->
+    {undefined, undefined}.
+
+handle_error(Key, Request) ->
+    logger:warning("Unable to extract idemp feature with schema: ~p from client request subset: ~p", [Key, Request]),
+    {undefined, undefined}.
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -425,8 +435,7 @@ create_payment(InvoiceID, _PartyID, PaymentParams, #{woody_context := WoodyCtx} 
     {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
     PaymentParamsDecrypted = PaymentParams#{<<"payer">> => Payer},
     {ok, {ID, _}} = bender_generator_client:gen_sequence(InvoiceID, WoodyCtx, #{}),
-    PaymentID = <<InvoiceID/binary, ".", ID/binary>>,
-    start_payment(PaymentID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context).
+    start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context).
 
 start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context) ->
     InvoicePaymentParams = encode_invoice_payment_params(ID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift),

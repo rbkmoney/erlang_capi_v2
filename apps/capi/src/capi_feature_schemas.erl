@@ -1,8 +1,6 @@
 -module(capi_feature_schemas).
 
--type schema() :: #{binary() := [binary() | schema() | [schema()]]}.
-
--export_type([schema/0]).
+-type schema() :: capi_idemp_features:schema().
 
 -export([payment/0]).
 -export([invoice/0]).
@@ -61,10 +59,10 @@ refund() -> #{
     <<"cart">>        => [<<"cart">>, {set, cart_line_schema()}]
 }.
 
--spec cart_line_schema() -> [schema()].
+-spec cart_line_schema() -> schema().
 
 cart_line_schema() ->
-    [#{
+    #{
         <<"product">>  => [<<"product">>],
         <<"quantity">> => [<<"quantity">>],
         <<"price">>    => [<<"price">>],
@@ -72,4 +70,4 @@ cart_line_schema() ->
             <<"type">> => [<<"type">>],
             <<"rate">> => [<<"rate">>]
         }]
-    }].
+    }.

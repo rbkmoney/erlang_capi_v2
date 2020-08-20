@@ -8,15 +8,25 @@
 -type feature_name()    :: binary().
 -type feature_value()   :: integer() | features() | [features()].
 -type features()        :: #{feature_name() := feature_value() | undefined}.
+-type schema()          :: #{binary() := [binary() | schema() | [schema()]]}.
 
+-export_type([schema/0]).
+-export_type([request/0]).
 -export_type([difference/0]).
 -export_type([features/0]).
+-export_type([feature_name/0]).
 
 -export([read/2]).
 -export([compare/2]).
 -export([list_diff_fields/2]).
 
--spec read(capi_feature_schemas:schema(), request()) ->
+-callback handle_error(feature_name(), request()) -> no_return() | {undefined, undefined}.
+
+-spec handle_error(feature_name(), request()) -> no_return().
+handle_error(Key, Request) ->
+    throw({extact_idemp_feature, Key, Request}).
+
+-spec read(schema(), request()) ->
     {features(), request()}.
 
 read(Schema, Request) ->
@@ -84,7 +94,7 @@ read_request_value([], V) ->
     {hash(V), V};
 read_request_value([Schema = #{}], Request = #{}) ->
     read_(Schema, Request);
-read_request_value([{set, [Schema = #{}]}], List) when is_list(List) ->
+read_request_value([{set, Schema = #{}}], List) when is_list(List) ->
     {_, Value, Trace} = lists:foldl(fun(Req, {N, Acc, TraceIn}) ->
         {Value, TraceOut} = read_(Schema, Req),
         {N + 1, Acc#{N => Value}, [TraceOut | TraceIn]}
@@ -96,17 +106,16 @@ read_request_value([Key | Rest], Request = #{}) when is_binary(Key) ->
 read_request_value(_, undefined) ->
     {undefined, undefined};
 read_request_value(Key, Request) ->
-    logger:warning("Unable to extract idemp feature with schema: ~p from client request subset: ~p", [Key, Request]),
-    {undefined, undefined}.
+    handle_error(Key, Request).
 
 hash(V) ->
     erlang:phash2(V).
 
--spec list_diff_fields(capi_feature_schemas:schema(), difference()) ->
+-spec list_diff_fields(schema(), difference()) ->
     [binary()].
 
 list_diff_fields(Schema, Diff) ->
-    ConvertedDiff = features_to_schema(Diff, Schema),
+    ConvertedDiff = list_diff_fields_(Diff, Schema),
     lists:foldl(fun(Keys, AccIn) ->
         KeysBin = lists:map(fun genlib:to_binary/1, Keys),
         Item = list_to_binary(lists:join(<<".">>, KeysBin)),
@@ -118,39 +127,48 @@ list_diff_fields(Schema, Diff) ->
         end
     end, [], ConvertedDiff).
 
-features_to_schema(Diff, Schema) ->
+list_diff_fields_(Diff, Schema) ->
     zipfold(
         fun
             (_Feature, ?DIFFERENCE, [Key, _SchemaPart], AccIn)  ->
                 [[Key] | AccIn];
-            (_Feature, Value, [Key, SchemaPart], AccIn) when is_map(SchemaPart) and is_map(Value) ->
-                List = add(Key, features_to_schema(Value, SchemaPart)),
-                List ++ AccIn;
-            (_Feature, Values, [Key, {set, [SchemaPart]}], AccIn) when is_map(SchemaPart) and is_map(Values) ->
-                Result = maps:fold(fun(Index, Value, Acc) ->
-                    List = add([Key, Index], features_to_schema(Value, SchemaPart)),
-                    List ++ Acc
-                end, [], Values),
-                Result ++ AccIn;
+            (_Feature, Value, [Key | SchemaPart], AccIn) when is_list(SchemaPart) and is_map(Value) ->
+                list_diff_fields_(Value, SchemaPart, {[Key], AccIn});
+            % (_Feature, Value, [Key | SchemaPart], AccIn) when is_map(Value) ->
+            %     ct:print("Value ~p Key ~p Part ~p", [Value, Key, SchemaPart]),
+
+            %     Result = [[Key | List] || List <- list_diff_fields_(Value, SchemaPart)],
+            %     Result ++ AccIn;
+            % (_Feature, Values, [Key, {set, SchemaPart}], AccIn) when is_map(SchemaPart) and is_map(Values) ->
+            %     Result = maps:fold(fun(Index, Value, Acc) ->
+            %         Prefix = [Key, Index],
+            %         List = [Prefix ++ L || L <- list_diff_fields_(Value, SchemaPart)],
+            %         List ++ Acc
+            %     end, [], Values),
+            %     Result ++ AccIn;
             (_Feature, _Value, [Key], AccIn) when is_binary(Key) ->
                 [[Key] | AccIn];
             (_Feature, Value, SchemaPart, AccIn) when is_map(SchemaPart) ->
-                Result = features_to_schema(Value, SchemaPart),
+                Result = list_diff_fields_(Value, SchemaPart),
                 Result ++ AccIn
         end,
         [],
         Diff,
         Schema).
 
-add(Key, [H | _] = Lists) when is_binary(Key) and is_list(H) ->
-    lists:foldl(fun(List, Acc) ->
-        [[Key | List] | Acc]
-    end, [], Lists);
-add(Keys, [H | _] = Lists) when is_list(Keys) and is_list(H) ->
-    lists:foldl(fun(List, Acc) ->
-        [lists:merge(Keys, List) | Acc]
-    end, [], Lists).
-
+list_diff_fields_(Value, [SchemaPart], {PrefixIn, AccIn}) when is_map(SchemaPart) ->
+    Prefix = lists:reverse(PrefixIn),
+    Result = [Prefix ++ List || List <- list_diff_fields_(Value, SchemaPart)],
+    Result ++ AccIn;
+list_diff_fields_(Values, [{set, SchemaPart}], {PrefixIn, AccIn}) when is_map(SchemaPart) and is_map(Values) ->
+    Result = maps:fold(fun(Index, Value, Acc) ->
+        Prefix = lists:reverse([Index | PrefixIn]),
+        List = [Prefix ++ L || L <- list_diff_fields_(Value, SchemaPart)],
+        List ++ Acc
+    end, [], Values),
+    Result ++ AccIn;
+list_diff_fields_(Value, [Key | SchemaPart], {Prefix, Acc}) ->
+    list_diff_fields_(Value, SchemaPart, {[Key | Prefix], Acc}).
 
 -spec compare(features(), features()) ->
     true | {false, difference()}.
@@ -197,6 +215,7 @@ compare_features(Fs, FsWith) ->
 zipfold(Fun, Acc, M1, M2) ->
     maps:fold(
         fun (Key, V1, AccIn) ->
+            % ct:print("Key ~p V1 ~p M2 ~p", [Key, V1, M2]),
             case maps:find(Key, M2) of
                 {ok, V2} ->
                     Fun(Key, V1, V2, AccIn);
@@ -361,6 +380,50 @@ compare_payment_bank_card_test() ->
         <<"payer.paymentTool.token">>
     ], list_diff_fields(Schema, Diff)).
 
+-spec feature_multi_accessor_test() -> _.
+feature_multi_accessor_test() ->
+    PayerType   = <<"PaymentResourcePayer">>,
+    ToolType    = <<"bank_card">>,
+    Token1      = <<"cds token">>,
+    Token2      = <<"cds token 2">>,
+    CardHolder1 = <<"0x42">>,
+    CardHolder2 = <<"Cake">>,
+    ExpDate     = {exp_date, 02, 2022},
+    Request1 = #{
+        <<"payer">> => #{
+            <<"payerType">>   => PayerType,
+            <<"paymentTool">> => #{<<"wrapper">> => #{
+                <<"type">>            => ToolType,
+                <<"token">>           => Token1,
+                <<"exp_date">>        => ExpDate,
+                <<"cardholder_name">> => CardHolder1
+            }
+        }
+    }},
+    Request2 = deep_merge(Request1, #{<<"payer">> => #{
+        <<"paymentTool">> => #{<<"wrapper">> => #{
+            <<"token">> => Token2,
+            <<"cardholder_name">> => CardHolder2
+        }}
+    }}),
+    Schema = #{
+        <<"payer">> => [<<"payer">>, #{
+            <<"type">> => [<<"payerType">>],
+            <<"tool">> => [<<"paymentTool">>, <<"wrapper">>, #{
+                <<"$type">> => [<<"type">>],
+                <<"bank_card">> => #{
+                    <<"token">>      => [<<"token">>],
+                    <<"expdate">>    => [<<"exp_date">>]
+                }
+            }]
+        }]
+    },
+    {F1, #{}} = read(Schema, Request1),
+    {F2, #{}} = read(Schema, Request2),
+    ?assertEqual(true, compare(F1, F1)),
+    {false, Diff} = compare(F1, F2),
+    ?assertEqual([<<"payer.paymentTool.wrapper.token">>], list_diff_fields(Schema, Diff)).
+
 -spec compare_different_payment_tool_test() -> _.
 compare_different_payment_tool_test() ->
     PayerType   = <<"PaymentResourcePayer">>,
@@ -503,7 +566,7 @@ compare_invoices_test() ->
     ?assertMatch({false, #{<<"cart">> := ?DIFFERENCE}}, compare(Invoice1#{<<"cart">> => undefined}, Invoice1)),
 
     {false, Diff} = compare(Invoice1, InvoiceChg1),
-    ?assertEqual([<<"cart.0.taxMode.rate">>, <<"cart.0.price">>], list_diff_fields(Schema, Diff)),
+    ?assertEqual([<<"cart.0.price">>, <<"cart.0.taxMode.rate">>], list_diff_fields(Schema, Diff)),
     ?assert(compare(Invoice1, Invoice1#{<<"cart">> => undefined})).
 
 -endif.

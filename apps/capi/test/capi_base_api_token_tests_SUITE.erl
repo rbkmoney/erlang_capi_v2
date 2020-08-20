@@ -529,25 +529,22 @@ create_refund_error(Config) ->
 -spec create_partial_refund(config()) ->
     _.
 create_partial_refund(Config) ->
-    capi_ct_helper:mock_services([{invoicing, fun('RefundPayment', [_, _, _,
-        #payproc_InvoicePaymentRefundParams{
-            cash = ?CASH,
-            cart = ?THRIFT_INVOICE_CART
-        }
-    ]) -> {ok, ?REFUND} end}], Config),
     BenderKey = <<"bender_key">>,
+    capi_ct_helper:mock_services([
+        {invoicing, fun('RefundPayment', [_, _, _,
+            #payproc_InvoicePaymentRefundParams{
+                cash = ?CASH,
+                cart = ?THRIFT_INVOICE_CART
+            }
+        ]) -> {ok, ?REFUND} end},
+        {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(BenderKey) end}
+    ], Config),
     Req = #{
         <<"reason">> => ?STRING,
         <<"currency">> => ?RUB,
         <<"amount">> => ?INTEGER,
         <<"cart">> => ?INVOICE_CART
     },
-    capi_ct_helper:mock_services([
-        {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end},
-        {generator, fun('GenerateID', _) ->
-            capi_ct_helper_bender:generate_id(BenderKey)
-        end}
-    ], Config),
 
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 
