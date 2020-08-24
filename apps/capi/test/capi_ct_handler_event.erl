@@ -45,14 +45,11 @@ handle_event({request_key_index_visited, _N}) ->
     ok;
 handle_event({request_key_visit, {key, Key, SubReq}}) ->
     push_path({Key, SubReq}),
-    % ct:print("request_key_visit Key ~p SubReq ~p", [Key, SubReq]),
     ok;
 handle_event({request_key_visited, {key, Key}}) ->
     Path = get_path(),
-    % ct:print("request_key_visited Key ~p Path ~p", [Key, Path]),
     [{Key, SubReq} | Tail] = Path,
     delete_subpath(Key, SubReq, Tail),
-    % ct:print("Path >>>> ~p", [get_path()]),
     ok.
 
 delete_subpath(Key, SubReq, []) when

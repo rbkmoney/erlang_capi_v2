@@ -102,7 +102,8 @@ groups() ->
 -spec init_per_suite(config()) ->
     config().
 init_per_suite(Config) ->
-    capi_ct_helper:init_suite(?MODULE, Config).
+    ExtraEnv = [{idempotence_event_handler, undefined}],
+    capi_ct_helper:init_suite(?MODULE, Config, ExtraEnv).
 
 -spec end_per_suite(config()) ->
     _.
