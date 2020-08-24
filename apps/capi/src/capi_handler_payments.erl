@@ -12,11 +12,11 @@
 -define(DEFAULT_PROCESSING_DEADLINE, <<"30m">>).
 
 -spec handle_event(capi_idemp_features:event()) ->
-    {capi_idemp_features:feature_value(), capi_idemp_features:request_value()}.
+    capi_idemp_features:feature_value().
 
 handle_event({invalid_schema_fragment, Key, Request}) ->
     logger:warning("Unable to extract idemp feature with schema: ~p from client request subset: ~p", [Key, Request]),
-    {undefined, undefined}.
+    undefined.
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),

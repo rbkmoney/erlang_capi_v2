@@ -10,20 +10,25 @@
 -type features()        :: #{feature_name() := feature_value()}.
 -type schema()          :: #{binary() := [binary() | schema() | [schema()]]}.
 
--type event()           :: {invalid_schema_fragment, feature_name(), request()}.
-
+-type event()           :: {invalid_schema_fragment, feature_name(), request()} |
+                           {request_visited, {request, request()}} |
+                           {request_key_index_visit, integer()} |
+                           {request_key_index_visited, integer()} |
+                           {request_key_visit, {key, integer(), request()}} |
+                           {request_key_visited, {key, integer()}}.
 -export_type([event/0]).
 -export_type([schema/0]).
 -export_type([request/0]).
 -export_type([difference/0]).
 -export_type([features/0]).
 -export_type([feature_name/0]).
+-export_type([feature_value/0]).
 
 -export([read/2]).
 -export([compare/2]).
 -export([list_diff_fields/2]).
 
--callback handle_event(event()) -> no_return().
+-callback handle_event(event()) -> ok | feature_value().
 
 -spec read(schema(), request()) ->
     features().
