@@ -183,7 +183,7 @@ create_invoice(PartyID, InvoiceTplID, #{<<"externalID">> := ExternalID} = Invoic
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2({InvoiceTplID, InvoiceParams}),
     Schema = capi_feature_schemas:invoice(),
-    {Features, _} = capi_idemp_features:read(Schema, InvoiceParams),
+    Features = capi_idemp_features:read(Schema, InvoiceParams),
     BenderParams = {Hash, Features},
     case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
         {ok, InvoiceID} ->

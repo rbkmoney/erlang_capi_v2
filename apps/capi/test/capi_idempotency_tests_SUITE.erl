@@ -46,9 +46,9 @@ init([]) ->
     [test_case_name()].
 all() ->
     [
-        % {group, payment_creation},
-        {group, invoice_creation}
-        % {group, refund_creation}
+        {group, payment_creation},
+        {group, invoice_creation},
+        {group, refund_creation}
     ].
 
 -spec groups() ->
@@ -63,11 +63,11 @@ groups() ->
             second_request_without_idempotent_feature_test
         ]},
         {invoice_creation, [], [
-            % create_invoice_ok_test,
-            % create_invoice_legacy_fail_test,
-            % create_invoice_fail_test,
-            create_invoice_idemp_cart_fail_test
-            % create_invoice_idemp_cart_ok_test
+            create_invoice_ok_test,
+            create_invoice_legacy_fail_test,
+            create_invoice_fail_test,
+            create_invoice_idemp_cart_fail_test,
+            create_invoice_idemp_cart_ok_test
         ]},
         {refund_creation, [], [
             create_refund_idemp_ok_test,
@@ -81,7 +81,8 @@ groups() ->
 -spec init_per_suite(config()) ->
     config().
 init_per_suite(Config) ->
-    capi_ct_helper:init_suite(?MODULE, Config).
+    ExtraEnv = [{idempotence_event_handler, capi_ct_handler_event}],
+    capi_ct_helper:init_suite(?MODULE, Config, ExtraEnv).
 
 -spec end_per_suite(config()) ->
     _.
@@ -166,7 +167,25 @@ create_payment_ok_test(Config) ->
     Jwe2 = get_encrypted_token(visa, ?EXP_DATE(2, 2020)),
     Req1 = payment_params(ExternalID, Jwe1, ContactInfo, undefined),
     Req2 = payment_params(ExternalID, Jwe2, ContactInfo, false),
-    {Response1, Response2} = create_payment(BenderKey, Req1, Req2, Config),
+    {
+        {{ok, Response1}, Unused1},
+        {{ok, Response2}, _}
+    } = create_payment(BenderKey, Req1, Req2, Config),
+    ?assertMatch(#{
+        <<"externalID">> := <<"merch_id">>,
+        <<"flow">> := #{<<"type">> := <<"PaymentFlowInstant">>},
+        <<"metadata">> := #{<<"bla">> := "*"},
+        <<"payer">> := #{
+            <<"contactInfo">> := #{},
+            <<"paymentSession">> := PS,
+            <<"paymentTool">> := #{
+                <<"bin">> := <<"411111">>,
+                <<"cardholder_name">> := <<"Degus Degusovich">>,
+                <<"masked_pan">> := <<"1111">>,
+                <<"payment_system">> := visa
+            }
+        }
+    } when is_binary(PS), Unused1),
     ?assertEqual(Response1, Response2).
 
 -spec create_payment_fail_test(config()) ->
@@ -178,7 +197,9 @@ create_payment_fail_test(Config) ->
     Jwe2 = get_encrypted_token(visa, ?EXP_DATE(2, 2020)),
     Req1 = payment_params(ExternalID, Jwe1, #{}, undefined),
     Req2 = payment_params(ExternalID, Jwe2, #{}, false),
-    {{ok, _}, Response} = create_payment(BenderKey, Req1, Req2, Config),
+    {{{ok, _}, _}, {Response, _}} = create_payment(BenderKey, Req1, Req2, Config),
+    % create_payment(BenderKey, Req1, Req2, Config),
+    % ok.
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response).
 
 -spec different_payment_tools_test(config()) ->
@@ -191,7 +212,19 @@ different_payment_tools_test(Config) ->
     Jwe2 = encrypt_payment_tool({digital_wallet, ?DIGITAL_WALLET(<<"+79876543210">>, <<"token id">>)}),
     Req1 = payment_params(ExternalID, Jwe1, ContactInfo, undefined),
     Req2 = payment_params(ExternalID, Jwe2, ContactInfo, false),
-    {{ok, _}, Response2} = create_payment(BenderKey, Req1, Req2, Config),
+    {{{ok, _}, _}, {Response2, Unused}} = create_payment(BenderKey, Req1, Req2, Config),
+      ?assertMatch(#{
+        <<"externalID">> := <<"merch_id">>,
+        <<"flow">> := #{<<"type">> := <<"PaymentFlowInstant">>},
+        <<"makeRecurrent">> := false,
+        <<"metadata">> := #{<<"bla">> := "*"},
+        <<"payer">> := #{
+            <<"contactInfo">> := #{},
+            <<"paymentSession">> := PS,
+            <<"paymentToolToken">> := PT
+        },
+        <<"processingDeadline">> := <<"5m">>
+    } when is_binary(PS) and is_binary(PT), Unused),
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response2).
 
 -spec second_request_without_idempotent_feature_test(config()) ->
@@ -204,7 +237,7 @@ second_request_without_idempotent_feature_test(Config) ->
     Jwe2 = encrypt_payment_tool({bank_card, ?BANK_CARD(visa, undefined, <<"Mr. Surname">>)}),
     Req1 = payment_params(ExternalID, Jwe1, ContactInfo, undefined),
     Req2 = payment_params(ExternalID, Jwe2, ContactInfo, undefined),
-    {{ok, _}, Response2} = create_payment(BenderKey, Req1, Req2, Config),
+    {{{ok, _}, _}, {Response2, _}} = create_payment(BenderKey, Req1, Req2, Config),
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response2).
 
 -spec second_request_with_idempotent_feature_test(config()) ->
@@ -216,7 +249,7 @@ second_request_with_idempotent_feature_test(Config) ->
     Jwe2 = encrypt_payment_tool({bank_card, ?BANK_CARD(visa, ?EXP_DATE(2, 2020), <<"Mr. Surname">>)}),
     Req1 = payment_params(ExternalID, Jwe1, #{}, undefined),
     Req2 = payment_params(ExternalID, Jwe2, #{}, undefined),
-    {Response1, Response2} = create_payment(BenderKey, Req1, Req2, Config),
+    {{{ok, Response1}, _}, {{ok, Response2}, _}} = create_payment(BenderKey, Req1, Req2, Config),
     ?assertEqual(Response1, Response2).
 
 -spec create_invoice_ok_test(config()) ->
@@ -230,19 +263,24 @@ create_invoice_ok_test(Config) ->
         end},
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
     ], Config),
-    Req = invoice_params(ExternalID),
-    {ok, #{<<"invoice">> := Invoice}}  = capi_client_invoices:create_invoice(?config(context, Config), Req),
-    {ok, #{<<"invoice">> := Invoice2}} = capi_client_invoices:create_invoice(?config(context, Config), Req),
-    ?assertEqual(BenderKey,  maps:get(<<"id">>, Invoice)),
-    ?assertEqual(ExternalID, maps:get(<<"externalID">>, Invoice)),
-    ?assertEqual(Invoice, Invoice2).
+    {Params, Unused} = invoice_params(ExternalID),
+    Req = maps:merge(Params, Unused),
+    {{ok, #{<<"invoice">> := Invoice1}}, Unused1} = create_invoice_(Req, Config),
+    {{ok, #{<<"invoice">> := Invoice2}}, Unused2} = create_invoice_(Req, Config),
+
+    ?assertEqual(Unused, Unused2),
+    ?assertEqual(Unused, Unused1),
+    ?assertEqual(BenderKey,  maps:get(<<"id">>, Invoice1)),
+    ?assertEqual(ExternalID, maps:get(<<"externalID">>, Invoice1)),
+    ?assertEqual(Invoice1, Invoice2).
 
 -spec create_invoice_legacy_fail_test(config()) ->
     _.
 create_invoice_legacy_fail_test(Config) ->
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
-    Req = invoice_params(ExternalID),
+    {Params, Unused} = invoice_params(ExternalID),
+    Req = maps:merge(Params, Unused),
     Req2 = Req#{<<"product">> => <<"test_product2">>},
     Ctx = capi_msgp_marshalling:marshal(#{<<"version">> => 1, <<"params_hash">> => erlang:phash2(Req)}),
     capi_ct_helper:mock_services([
@@ -251,10 +289,10 @@ create_invoice_legacy_fail_test(Config) ->
         end},
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
     ], Config),
-
-    {ok, Invoice} = capi_client_invoices:create_invoice(?config(context, Config), Req),
-    #{<<"invoice">> := #{<<"id">> := InvoiceID}} = Invoice,
-    Response = capi_client_invoices:create_invoice(?config(context, Config), Req2),
+    {{ok, Invoice1}, _} = create_invoice_(Req, Config),
+    #{<<"invoice">> := #{<<"id">> := InvoiceID}} = Invoice1,
+    {Response, Unused2} = create_invoice_(Req2, Config),
+    ?assertEqual(Unused, Unused2),
     ?assertEqual(response_error(409, ExternalID, InvoiceID), Response).
 
 -spec create_invoice_fail_test(config()) ->
@@ -262,9 +300,13 @@ create_invoice_legacy_fail_test(Config) ->
 create_invoice_fail_test(Config) ->
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
-    Req1 = invoice_params(ExternalID),
+    {Params, Unused} = invoice_params(ExternalID),
+    Req1 = maps:merge(Params, Unused),
     Req2 = Req1#{<<"product">> => <<"test_product2">>},
-    [{ok, #{<<"invoice">> := #{<<"id">> := InvoiceID}}}, Response] = create_invoice(BenderKey, [Req1, Req2], Config),
+    [
+        {{ok, #{<<"invoice">> := #{<<"id">> := InvoiceID}}}, _},
+        {Response, _}
+    ] = create_invoice(BenderKey, [Req1, Req2], Config),
     ?assertEqual(response_error(409, ExternalID, InvoiceID), Response).
 
 -spec create_invoice_idemp_cart_ok_test(config()) ->
@@ -272,24 +314,31 @@ create_invoice_fail_test(Config) ->
 create_invoice_idemp_cart_ok_test(Config) ->
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
-    Req1 = invoice_params(ExternalID),
-    Req2 = Req1#{<<"cart">> => [#{
-        <<"product">> => <<"product#1">>,
-        <<"quantity">> => 1,
-        <<"price">> => ?INTEGER
-    }]},
+    {Params, Unused} = invoice_params(ExternalID),
+    Req1 = Params#{
+        <<"amount">> => 10000,
+        <<"cart">> => [
+            #{<<"product">> => <<"product#1">>, <<"quantity">> => 1, <<"price">> => 9000},
+            #{<<"product">> => <<"product#1">>, <<"quantity">> => 1, <<"price">> => 1000}
+    ]},
+    Req2 = Req1#{<<"cart">> => [
+        #{<<"product">> => <<"product#1">>, <<"quantity">> => 1, <<"price">> => 1000},
+        #{<<"product">> => <<"product#1">>, <<"quantity">> => 1, <<"price">> => 9000}
+    ]},
     [
-        {ok, #{<<"invoice">> := Invoice1}},
-        {ok, #{<<"invoice">> := Invoice2}}
+        {{ok, #{<<"invoice">> := Invoice1}}, UnusedParams1},
+        {{ok, #{<<"invoice">> := Invoice2}}, UnusedParams2}
     ] = create_invoice(BenderKey, [Req1, Req2], Config),
-    ?assertEqual(Invoice1, Invoice2).
+    ?assertEqual(Invoice1, Invoice2),
+    ?assertEqual(Unused, UnusedParams1),
+    ?assertEqual(Unused, UnusedParams2).
 
 -spec create_invoice_idemp_cart_fail_test(config()) ->
     _.
 create_invoice_idemp_cart_fail_test(Config) ->
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
-    Req = invoice_params(ExternalID),
+    {Req, Unused} = invoice_params(ExternalID),
     Req1 = Req#{<<"cart">> => [#{
         <<"product">> => <<"product#1">>,
         <<"quantity">> => 1,
@@ -306,7 +355,12 @@ create_invoice_idemp_cart_fail_test(Config) ->
         <<"quantity">> => 1,
         <<"price">> => ?INTEGER
     }]},
-    [{ok, _}, Response2, Response3] = create_invoice(BenderKey, [Req1, Req2, Req3], Config),
+    [
+        {{ok, _}, UnusedParams},
+        {Response2, _},
+        {Response3, _}
+    ] = create_invoice(BenderKey, [Req1, Req2, Req3], Config),
+    ?assertEqual(Unused, UnusedParams),
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response2),
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response3).
 
@@ -345,7 +399,16 @@ create_refund_idemp_fail_test(Config) ->
             #{<<"product">> => <<"cat">>, <<"quantity">> => 1, <<"price">> => 500}
         ]
     },
-    [{ok, _Refund1}, Response2] = create_refund(BenderKey, [Req1, Req2], Config),
+    [{{ok, _Refund1}, Unused1}, {Response2, Unused2}] = create_refund(BenderKey, [Req1, Req2], Config),
+    Unused = #{
+        <<"externalID">> => <<"merch_id">>,
+        <<"id">> => <<"TEST">>,
+        <<"invoiceID">> => <<"TEST">>,
+        <<"paymentID">> => <<"TEST">>,
+        <<"reason">> => <<"TEST">>
+    },
+    ?assertEqual(Unused, Unused1),
+    ?assertEqual(Unused, Unused2),
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response2).
 
 %% Internal functions
@@ -364,10 +427,17 @@ create_payment(BenderKey, Req1, Req2, Config) ->
         ],
         Config
     ),
-    Result1 = capi_client_payments:create_payment(?config(context, Config), Req1, ?STRING),
-    Result2 = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING),
+    Result1 = create_payment_(Req1, Config),
+    Result2 = create_payment_(Req2, Config),
     capi_ct_helper_bender:del_storage(Tid),
     {Result1, Result2}.
+
+create_payment_(Req, Config) ->
+    _AccPid = capi_ct_handler_event:create_acc(),
+    Res = capi_client_payments:create_payment(?config(context, Config), Req, ?STRING),
+    UnusedParams = capi_ct_handler_event:get_unused_params(),
+    capi_ct_handler_event:del_storage(),
+    {Res, UnusedParams}.
 
 create_invoice(BenderKey, Requests, Config) ->
     Tid = capi_ct_helper_bender:create_storage(),
@@ -379,12 +449,16 @@ create_invoice(BenderKey, Requests, Config) ->
             capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
         end}
     ], Config),
-    Results = lists:foldl(fun(Req, Acc) ->
-        Res = capi_client_invoices:create_invoice(?config(context, Config), Req),
-        [Res | Acc]
-    end, [], Requests),
+    Results = lists:foldl(fun(Req, Acc) -> [create_invoice_(Req, Config) | Acc] end, [], Requests),
     capi_ct_helper_bender:del_storage(Tid),
     lists:reverse(Results).
+
+create_invoice_(Req, Config) ->
+    _AccPid = capi_ct_handler_event:create_acc(),
+    Res = capi_client_invoices:create_invoice(?config(context, Config), Req),
+    UnusedParams = capi_ct_handler_event:get_unused_params(),
+    capi_ct_handler_event:del_storage(),
+    {Res, UnusedParams}.
 
 create_refund(BenderKey, Requests, Config) ->
     Tid = capi_ct_helper_bender:create_storage(),
@@ -401,11 +475,18 @@ create_refund(BenderKey, Requests, Config) ->
         end}
     ], Config),
     Results = lists:foldl(fun(Req, Acc) ->
-        Res = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
-        [Res | Acc]
+        [create_refund_(Req, Config) | Acc]
     end, [], Requests),
     capi_ct_helper_bender:del_storage(Tid),
     lists:reverse(Results).
+
+create_refund_(Req, Config) ->
+    _AccPid = capi_ct_handler_event:create_acc(),
+    Res = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
+    UnusedParams = capi_ct_handler_event:get_unused_params(),
+    capi_ct_handler_event:del_storage(),
+    {Res, UnusedParams}.
+
 
 payment_params(ExternalID, Jwe, ContactInfo, MakeRecurrent) ->
     genlib_map:compact(#{
@@ -423,16 +504,18 @@ payment_params(ExternalID, Jwe, ContactInfo, MakeRecurrent) ->
     }).
 
 invoice_params(EID) ->
-    genlib_map:compact(#{
+    Unused = #{
+        <<"metadata">>    => #{<<"invoice_dummy_metadata">> => <<"test_value">>},
+        <<"dueDate">>     => ?TIMESTAMP,
+        <<"description">> => <<"test_invoice_description">>,
+        <<"externalID">>  => EID
+    },
+    {genlib_map:compact(maps:merge(Unused, #{
         <<"shopID">>      => ?STRING,
         <<"amount">>      => ?INTEGER,
         <<"currency">>    => ?RUB,
-        <<"metadata">>    => #{<<"invoice_dummy_metadata">> => <<"test_value">>},
-        <<"dueDate">>     => ?TIMESTAMP,
-        <<"product">>     => <<"test_product">>,
-        <<"description">> => <<"test_invoice_description">>,
-        <<"externalID">>  => EID
-    }).
+        <<"product">>     => <<"test_product">>
+    })), Unused}.
 
 get_encrypted_token(PS, ExpDate) ->
     get_encrypted_token(PS, ExpDate, undefined).

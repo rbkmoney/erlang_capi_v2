@@ -6,15 +6,15 @@
 -behaviour(capi_idemp_features).
 
 -export([process_request/3]).
--export([handle_error/2]).
+-export([handle_event/1]).
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -define(DEFAULT_PROCESSING_DEADLINE, <<"30m">>).
 
--spec handle_error(capi_idemp_features:feature_name(), capi_idemp_features:request()) ->
-    {undefined, undefined}.
+-spec handle_event(capi_idemp_features:event()) ->
+    {capi_idemp_features:feature_value(), capi_idemp_features:request_value()}.
 
-handle_error(Key, Request) ->
+handle_event({invalid_schema_fragment, Key, Request}) ->
     logger:warning("Unable to extract idemp feature with schema: ~p from client request subset: ~p", [Key, Request]),
     {undefined, undefined}.
 
@@ -416,7 +416,7 @@ create_payment(InvoiceID, PartyID, #{<<"externalID">> := ExternalID} = PaymentPa
     PaymentParamsDecrypted = PaymentParams#{<<"payer">> => Payer},
     Hash = erlang:phash2(PaymentParams),
     Schema = capi_feature_schemas:payment(),
-    {Features, _} = capi_idemp_features:read(Schema, PaymentParamsDecrypted),
+    Features = capi_idemp_features:read(Schema, PaymentParamsDecrypted),
     Params = {Hash, Features},
     #{woody_context := WoodyCtx} = Context,
     CtxData = #{<<"invoice_id">> => InvoiceID},
@@ -597,9 +597,9 @@ create_refund(InvoiceID, PaymentID, #{<<"externalID">> := ExternalID} = RefundPa
     SequenceID = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
     SequenceParams = #{minimum => 100},
     Hash = erlang:phash2(RefundParams),
-    RefundParamsFull = RefundParams#{<<"invoiceID">> => invoiceID, <<"paymentID">> => PaymentID},
+    RefundParamsFull = RefundParams#{<<"invoiceID">> => InvoiceID, <<"paymentID">> => PaymentID},
     Schema = capi_feature_schemas:refund(),
-    {Features, _} = capi_idemp_features:read(Schema, RefundParamsFull),
+    Features = capi_idemp_features:read(Schema, RefundParamsFull),
     Params = {Hash, Features},
     case capi_bender:gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyCtx, #{}, SequenceParams) of
         {ok, ID} ->

@@ -3,6 +3,7 @@
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 
 -behaviour(capi_handler).
+
 -export([process_request/3]).
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
@@ -194,7 +195,7 @@ create_invoice(PartyID, #{<<"externalID">> := ExternalID} = InvoiceParams, Conte
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2(InvoiceParams),
     Schema = capi_feature_schemas:invoice(),
-    {Features, _} = capi_idemp_features:read(Schema, InvoiceParams),
+    Features = capi_idemp_features:read(Schema, InvoiceParams),
     BenderParams = {Hash, Features},
     case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
         {ok, ID} ->
