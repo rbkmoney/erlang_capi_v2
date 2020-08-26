@@ -438,10 +438,16 @@ compare_invoices_features_test(_) ->
     %% Feature was add
     ?assert(capi_idemp_features:compare(Invoice2, InvoiceWithFullCart)),
     % %% When second request didn't contain feature, this situation detected as conflict.
-    ?assertMatch({false, #{<<"cart">> := ?DIFFERENCE}}, capi_idemp_features:compare(Invoice1#{<<"cart">> => undefined}, Invoice1)),
+    ?assertMatch(
+        {false, #{<<"cart">> := ?DIFFERENCE}},
+        capi_idemp_features:compare(Invoice1#{<<"cart">> => undefined}, Invoice1)
+    ),
 
     {false, Diff} = capi_idemp_features:compare(Invoice1, InvoiceChg1),
-    ?assertEqual([<<"cart.0.price">>, <<"cart.0.taxMode.rate">>], capi_idemp_features:list_diff_fields(Schema, Diff)),
+    ?assertEqual(
+        [<<"cart.0.price">>, <<"cart.0.taxMode.rate">>],
+        capi_idemp_features:list_diff_fields(Schema, Diff)
+    ),
     ?assert(capi_idemp_features:compare(Invoice1, Invoice1#{<<"cart">> => undefined})).
 
 -spec create_payment_ok_test(config()) ->
@@ -841,12 +847,9 @@ response_error(409, EID, ID) ->
         <<"message">> => <<"This 'externalID' has been used by another request">>
     }}}.
 
-handler() ->
-    {capi_ct_handler_event, undefined}.
-
 read_features(Schema, Request) ->
     capi_ct_handler_event:create_acc(),
-    Features = capi_idemp_features:read(handler(), Schema, Request),
+    Features = capi_idemp_features:read({capi_ct_handler_event, undefined}, Schema, Request),
     UnusedParams = capi_ct_handler_event:get_unused_params(),
     capi_ct_handler_event:del_storage(),
     {Features, UnusedParams}.
