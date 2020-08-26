@@ -1,6 +1,6 @@
 -module(capi_ct_handler_event).
 
--export([handle_event/1]).
+-export([handle_event/2]).
 -export([create_acc/0]).
 -export([del_storage/0]).
 -export([get_unused_params/0]).
@@ -21,18 +21,18 @@ del_storage() ->
 get_unused_params() ->
     get_request().
 
--spec handle_event(capi_idemp_features:event()) ->
+-spec handle_event(capi_idemp_features:event(), capi_idemp_features:options()) ->
     ok.
 
-handle_event({invalid_schema_fragment, Key, Request}) ->
+handle_event({invalid_schema_fragment, Key, Request}, _Opts) ->
     throw({extact_idemp_feature, Key, Request});
-handle_event({request_visited, {request, Req}}) ->
+handle_event({request_visited, {request, Req}}, _Opts) ->
     save_request(Req),
     ok;
-handle_event({request_key_index_visit, N}) ->
+handle_event({request_key_index_visit, N}, _Opts) ->
     push_path({key_index, N}),
     ok;
-handle_event({request_key_index_visited, _N}) ->
+handle_event({request_key_index_visited, _N}, _Opts) ->
     %% delete  key_index from stack
     pop_path(),
     {Key, List} = pop_path(),
@@ -43,10 +43,10 @@ handle_event({request_key_index_visited, _N}) ->
     end, [], List),
     push_path({Key, List2}),
     ok;
-handle_event({request_key_visit, {key, Key, SubReq}}) ->
+handle_event({request_key_visit, {key, Key, SubReq}}, _Opts) ->
     push_path({Key, SubReq}),
     ok;
-handle_event({request_key_visited, {key, Key}}) ->
+handle_event({request_key_visited, {key, Key}}, _Opts) ->
     Path = get_path(),
     [{Key, SubReq} | Tail] = Path,
     delete_subpath(Key, SubReq, Tail),

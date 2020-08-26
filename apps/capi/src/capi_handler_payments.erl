@@ -3,20 +3,11 @@
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 
 -behaviour(capi_handler).
--behaviour(capi_idemp_features).
 
 -export([process_request/3]).
--export([handle_event/1]).
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -define(DEFAULT_PROCESSING_DEADLINE, <<"30m">>).
-
--spec handle_event(capi_idemp_features:event()) ->
-    capi_idemp_features:feature_value().
-
-handle_event({invalid_schema_fragment, Key, Request}) ->
-    logger:warning("Unable to extract idemp feature with schema: ~p from client request subset: ~p", [Key, Request]),
-    undefined.
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),

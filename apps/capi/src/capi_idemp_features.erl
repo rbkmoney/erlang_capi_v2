@@ -8,7 +8,7 @@
 -type feature_name()    :: binary().
 -type feature_value()   :: integer() | features() | [features()] | undefined.
 -type features()        :: #{feature_name() := feature_value()}.
--type schema()          :: #{binary() := [binary() | schema() | [schema()]]}.
+-type schema()          :: #{binary() := [binary() | schema() | {set, schema()}]}.
 
 -type event()           :: {invalid_schema_fragment, feature_name(), request()} |
                            {request_visited, {request, request()}} |
@@ -16,6 +16,11 @@
                            {request_key_index_visited, integer()} |
                            {request_key_visit, {key, integer(), request()}} |
                            {request_key_visited, {key, integer()}}.
+
+-type options()         :: term().
+-type handler()         :: {module(), options()} | undefined.
+
+-export_type([handler/0]).
 -export_type([event/0]).
 -export_type([schema/0]).
 -export_type([request/0]).
@@ -24,27 +29,33 @@
 -export_type([feature_name/0]).
 -export_type([feature_value/0]).
 
--export([read/2]).
+-export([read/2, read/3]).
 -export([compare/2]).
 -export([list_diff_fields/2]).
 
--callback handle_event(event()) -> ok | feature_value().
+-callback handle_event(event(), options()) -> ok | feature_value().
 
 -spec read(schema(), request()) ->
     features().
 
 read(Schema, Request) ->
-    handle_event(get_event_handler(), {request_visited, {request, Request}}),
-    read_(Schema, Request).
+    read(undefined, Schema, Request).
 
-read_(Schema, Request) ->
+-spec read(handler(), schema(), request()) ->
+    features().
+
+read(Handler, Schema, Request) ->
+    handle_event(get_event_handler(Handler), {request_visited, {request, Request}}),
+    read_(Schema, Request, Handler).
+
+read_(Schema, Request, Handler) ->
     Result = maps:fold(
         fun
             (Name, Fs, Acc) when is_map(Fs) ->
-                Value = read_(Fs, Request),
+                Value = read_(Fs, Request, Handler),
                 Acc#{Name => Value};
             (Name, Accessor, Acc) when is_list(Accessor) ->
-                FeatureValue = read_request_value(Accessor, Request),
+                FeatureValue = read_request_value(Accessor, Request, Handler),
                 Acc#{Name => FeatureValue};
             (_Name, 'reserved', Acc) ->
                 Acc
@@ -54,44 +65,45 @@ read_(Schema, Request) ->
     ),
     Result.
 
-read_request_value([], undefined) ->
+read_request_value([], undefined, _) ->
     undefined;
-read_request_value([], Value) ->
+read_request_value([], Value, _) ->
     hash(Value);
-read_request_value([Schema = #{}], Request = #{}) ->
-    read_(Schema, Request);
-read_request_value([{set, Schema = #{}}], List) when is_list(List) ->
+read_request_value([Schema = #{}], Request = #{}, Handler) ->
+    read_(Schema, Request, Handler);
+read_request_value([{set, Schema = #{}}], List, Handler) when is_list(List) ->
     {_, ListIndex} = lists:foldl(fun(Item, {N, Acc}) -> {N + 1, [{N, Item} | Acc]} end, {0, []}, List),
-    ListSorted = lists:sort(fun({_, A}, {_, B}) -> A < B end, ListIndex),
+    ListSorted = lists:keysort(2, ListIndex),
     {_, Result} = lists:foldl(fun({Index, Req}, {N, Acc}) ->
-        handle_event(get_event_handler(), {request_key_index_visit, Index}),
-        Value = read_(Schema, Req),
-        handle_event(get_event_handler(), {request_key_index_visited, Index}),
+        handle_event(get_event_handler(Handler), {request_key_index_visit, Index}),
+        Value = read_(Schema, Req, Handler),
+        handle_event(get_event_handler(Handler), {request_key_index_visited, Index}),
         {N + 1, Acc#{N => [Index, Value]}}
     end, {0, #{}}, ListSorted),
     Result;
-read_request_value([Key | Rest], Request = #{}) when is_binary(Key) ->
+read_request_value([Key | Rest], Request = #{}, Handler) when is_binary(Key) ->
     SubRequest = maps:get(Key, Request, undefined),
-    handle_event(get_event_handler(), {request_key_visit, {key, Key, SubRequest}}),
-    Value = read_request_value(Rest, SubRequest),
-    handle_event(get_event_handler(), {request_key_visited, {key, Key}}),
+    handle_event(get_event_handler(Handler), {request_key_visit, {key, Key, SubRequest}}),
+    Value = read_request_value(Rest, SubRequest, Handler),
+    handle_event(get_event_handler(Handler), {request_key_visited, {key, Key}}),
     Value;
-read_request_value(_, undefined) ->
+read_request_value(_, undefined, _) ->
     undefined;
-read_request_value(Key, Request) ->
-    Handler = get_event_handler(),
-    handle_event(Handler, {invalid_schema_fragment, Key, Request}).
+read_request_value(Key, Request, Handler) ->
+    handle_event(get_event_handler(Handler), {invalid_schema_fragment, Key, Request}).
 
 handle_event(undefined, {invalid_schema_fragment, Key, Request}) ->
     logger:warning("Unable to extract idemp feature with schema: ~p from client request subset: ~p", [Key, Request]),
     undefined;
 handle_event(undefined, _Event) ->
     ok;
-handle_event(Mod, Event) ->
-    Mod:handle_event(Event).
+handle_event({Mod, Opts}, Event) ->
+    Mod:handle_event(Event, Opts).
 
-get_event_handler() ->
-    genlib_app:env(capi, idempotence_event_handler).
+get_event_handler({Mod, Options}) ->
+    {Mod, Options};
+get_event_handler(undefined) ->
+    undefined.
 
 hash(V) ->
     erlang:phash2(V).
@@ -205,332 +217,3 @@ zipfold(Fun, Acc, M1, M2) ->
         Acc,
         M1
     ).
-
-%%
-%% TESTS
-%%
-
--ifdef(TEST).
-
--include_lib("eunit/include/eunit.hrl").
-
--define(PAYER, #{
-    <<"payer">> => #{
-        <<"type">>        => undefined,
-        <<"recurrent">>   => undefined,
-        <<"customer">>    => undefined,
-        <<"tool">>        => #{}
-    }
-}).
--define(INVOICE, #{
-    <<"shop_id">>   => undefined,
-    <<"amount">>    => undefined,
-    <<"currency">>  => undefined,
-    <<"product">>   => undefined,
-    <<"cart">>      => undefined
-}).
--define(PRODUCT, #{
-    <<"product">>  => undefined,
-    <<"quantity">> => undefined,
-    <<"price">>    => undefined,
-    <<"tax">>      => undefined
-}).
-
-%% Test helpers
-
-deep_merge(M1, M2) ->
-    maps:fold(
-        fun (K, V, MAcc) when is_map(V) ->
-                Value = deep_merge(maps:get(K, MAcc, #{}), V),
-                MAcc#{K => Value};
-            (K, V, MAcc) ->
-                MAcc#{K => V}
-        end, M1, M2).
-
--spec test() -> _.
-
--spec read_payment_features_value_test() -> _.
-read_payment_features_value_test() ->
-    PayerType   = <<"PaymentResourcePayer">>,
-    ToolType    = <<"bank_card">>,
-    Token       = <<"cds token">>,
-    CardHolder  = <<"0x42">>,
-    Category    = <<"BUSINESS">>,
-    ExpDate     = {exp_date, 02, 2022},
-    Request = #{
-        <<"flow">> => #{
-            <<"type">> => <<"PaymentFlowHold">>
-        },
-        <<"payer">> => #{
-            <<"payerType">>   => PayerType,
-            <<"paymentTool">> => #{
-                <<"type">>            => ToolType,
-                <<"token">>           => Token,
-                <<"exp_date">>        => ExpDate,
-                <<"cardholder_name">> => CardHolder,
-                <<"category">>        => Category
-            }
-    }},
-
-    Payer = #{
-        <<"payer">> => #{
-            <<"type">> => hash(PayerType),
-            <<"customer">> => undefined,
-            <<"recurrent">> => undefined,
-            <<"tool">> => #{
-                <<"$type">> => hash(ToolType),
-                <<"bank_card">> => #{
-                    <<"expdate">>    => hash(ExpDate),
-                    <<"token">>      => hash(Token)},
-                <<"crypto">> => #{<<"currency">> => undefined},
-                <<"mobile_commerce">> => #{
-                    <<"operator">> => undefined,
-                    <<"phone">>    => undefined},
-                <<"terminal">> => #{<<"terminal_type">> => undefined},
-                <<"wallet">> => #{
-                    <<"id">>        => undefined,
-                    <<"provider">>  => undefined,
-                    <<"token">>     => hash(Token)}
-            }
-        }
-    },
-    Features = read(capi_feature_schemas:payment(), Request),
-    ?assertEqual(Payer, Features).
-
--spec read_payment_customer_features_value_test() -> _.
-read_payment_customer_features_value_test() ->
-    PayerType = <<"CustomerPayer">>,
-    CustomerID = <<"some customer id">>,
-    Request = #{
-        <<"payer">> => #{
-            <<"payerType">>  => PayerType,
-            <<"customerID">> => CustomerID
-        }
-    },
-    Payer = #{
-        <<"payer">> => #{
-            <<"type">>       => hash(PayerType),
-            <<"customer">>   => hash(CustomerID),
-            <<"recurrent">>  => undefined,
-            <<"tool">>       => undefined
-        }
-    },
-    ?assertMatch(Payer, read(capi_feature_schemas:payment(), Request)).
-
--spec compare_payment_bank_card_test() -> _.
-compare_payment_bank_card_test() ->
-    PayerType   = <<"PaymentResourcePayer">>,
-    ToolType    = <<"bank_card">>,
-    Token1      = <<"cds token">>,
-    Token2      = <<"cds token 2">>,
-    CardHolder1 = <<"0x42">>,
-    CardHolder2 = <<"Cake">>,
-    ExpDate     = {exp_date, 02, 2022},
-    Request1 = #{
-        <<"payer">> => #{
-            <<"payerType">>   => PayerType,
-            <<"paymentTool">> => #{
-                <<"type">>            => ToolType,
-                <<"token">>           => Token1,
-                <<"exp_date">>        => ExpDate,
-                <<"cardholder_name">> => CardHolder1
-            }
-    }},
-    Request2 = deep_merge(Request1, #{<<"payer">> => #{
-        <<"paymentTool">> => #{
-            <<"token">> => Token2,
-            <<"cardholder_name">> => CardHolder2
-        }
-    }}),
-    Schema = capi_feature_schemas:payment(),
-    F1 = read(Schema, Request1),
-    F2 = read(Schema, Request2),
-    ?assertEqual(true, compare(F1, F1)),
-    {false, Diff} = compare(F1, F2),
-    ?assertEqual([
-        <<"payer.paymentTool.token">>
-    ], list_diff_fields(Schema, Diff)).
-
--spec feature_multi_accessor_test() -> _.
-feature_multi_accessor_test() ->
-    PayerType   = <<"PaymentResourcePayer">>,
-    ToolType    = <<"bank_card">>,
-    Token1      = <<"cds token">>,
-    Token2      = <<"cds token 2">>,
-    CardHolder1 = <<"0x42">>,
-    CardHolder2 = <<"Cake">>,
-    ExpDate     = {exp_date, 02, 2022},
-    Request1 = #{
-        <<"payer">> => #{
-            <<"payerType">>   => PayerType,
-            <<"paymentTool">> => #{<<"wrapper">> => #{
-                <<"type">>            => ToolType,
-                <<"token">>           => Token1,
-                <<"exp_date">>        => ExpDate,
-                <<"cardholder_name">> => CardHolder1
-            }
-        }
-    }},
-    Request2 = deep_merge(Request1, #{<<"payer">> => #{
-        <<"paymentTool">> => #{<<"wrapper">> => #{
-            <<"token">> => Token2,
-            <<"cardholder_name">> => CardHolder2
-        }}
-    }}),
-    Schema = #{
-        <<"payer">> => [<<"payer">>, #{
-            <<"type">> => [<<"payerType">>],
-            <<"tool">> => [<<"paymentTool">>, <<"wrapper">>, #{
-                <<"$type">> => [<<"type">>],
-                <<"bank_card">> => #{
-                    <<"token">>      => [<<"token">>],
-                    <<"expdate">>    => [<<"exp_date">>]
-                }
-            }]
-        }]
-    },
-    F1 = read(Schema, Request1),
-    F2 = read(Schema, Request2),
-    ?assertEqual(true, compare(F1, F1)),
-    {false, Diff} = compare(F1, F2),
-    ?assertEqual([<<"payer.paymentTool.wrapper.token">>], list_diff_fields(Schema, Diff)).
-
--spec compare_different_payment_tool_test() -> _.
-compare_different_payment_tool_test() ->
-    PayerType   = <<"PaymentResourcePayer">>,
-    ToolType1   = <<"bank_card">>,
-    ToolType2   = <<"wallet">>,
-    Token1      = <<"cds token">>,
-    Token2      = <<"wallet token">>,
-    CardHolder  = <<"0x42">>,
-    ExpDate     = {exp_date, 02, 2022},
-    Request1 = #{
-        <<"payer">> => #{
-            <<"payerType">>   => PayerType,
-            <<"paymentTool">> => #{
-                <<"type">>            => ToolType1,
-                <<"token">>           => Token1,
-                <<"exp_date">>        => ExpDate,
-                <<"cardholder_name">> => CardHolder
-            }
-    }},
-    Request2 = #{
-        <<"payer">> => #{
-            <<"payerType">>   => PayerType,
-            <<"paymentTool">> => #{
-                <<"type">>  => ToolType2,
-                <<"token">> => Token2
-            }
-        }
-    },
-
-    Schema = capi_feature_schemas:payment(),
-    F1 = read(Schema, Request1),
-    F2 = read(Schema, Request2),
-    ?assertEqual(true, compare(F1, F1)),
-    {false, Diff} = compare(F1, F2),
-    ?assertEqual([<<"payer.paymentTool">>], list_diff_fields(Schema, Diff)).
-
--spec read_invoice_features_value_test() -> _.
-read_invoice_features_value_test() ->
-    ShopID      = <<"shopus">>,
-    Cur         = <<"XXX">>,
-    Prod1       = <<"yellow duck">>,
-    Prod2       = <<"blue duck">>,
-    Price1      = 10000,
-    Price2      = 20000,
-    Quantity    = 1,
-    Product = deep_merge(?PRODUCT, #{
-        <<"product">>   => hash(Prod1),
-        <<"quantity">>  => hash(Quantity),
-        <<"price">>     => hash(Price1)
-    }),
-    Product2 = Product#{
-        <<"product">> => hash(Prod2),
-        <<"price">> => hash(Price2)
-    },
-    Invoice = #{
-        <<"amount">>    => undefined,
-        <<"product">>   => undefined,
-        <<"shop_id">>   => hash(ShopID),
-        <<"currency">>  => hash(Cur),
-        <<"cart">>      => #{
-            0 => [0, Product2],
-            1 => [1, Product]
-        }
-    },
-    Request = #{
-        <<"externalID">>  => <<"externalID">>,
-        <<"dueDate">>     => <<"2019-08-24T14:15:22Z">>,
-        <<"shopID">>      => ShopID,
-        <<"currency">>    => Cur,
-        <<"description">> => <<"Wild birds.">>,
-        <<"cart">> => [
-            #{<<"product">> => Prod2, <<"quantity">> => 1, <<"price">> => Price2},
-            #{<<"product">> => Prod1, <<"quantity">> => 1, <<"price">> => Price1, <<"not feature">> => <<"hmm">>}
-        ],
-        <<"metadata">> => #{}
-    },
-    Features = read(capi_feature_schemas:invoice(), Request),
-    ?assertEqual(Invoice, Features).
-
--spec compare_invoices_test() -> _.
-compare_invoices_test() ->
-    ShopID      = <<"shopus">>,
-    Cur         = <<"RUB">>,
-    Prod1       = <<"yellow duck">>,
-    Prod2       = <<"blue duck">>,
-    Price1      = 10000,
-    Price2      = 20000,
-    Product = #{
-        <<"product">> => Prod1,
-        <<"quantity">> => 1,
-        <<"price">> => Price1,
-        <<"taxMode">> => #{
-            <<"type">> => <<"InvoiceLineTaxVAT">>,
-            <<"rate">> => <<"10%">>
-        }
-    },
-    Request1 = #{
-        <<"shopID">> => ShopID,
-        <<"currency">> => Cur,
-        <<"cart">> => [Product]
-    },
-    Request2 = deep_merge(Request1, #{
-        <<"cart">> => [#{<<"product">> => Prod2, <<"price">> => Price2}]
-    }),
-    Request3 = deep_merge(Request1, #{
-        <<"cart">> => [#{<<"product">> => Prod2, <<"price">> => Price2, <<"quantity">> => undefined}]
-    }),
-    Schema = capi_feature_schemas:invoice(),
-    Invoice1 = read(Schema, Request1),
-    InvoiceChg1 = read(Schema, Request1#{<<"cart">> => [
-        Product#{
-            <<"price">> => Price2,
-            <<"taxMode">> => #{
-                <<"rate">> => <<"18%">>
-            }}
-    ]}),
-    Invoice2 = read(Schema, Request2),
-    InvoiceWithFullCart = read(Schema, Request3),
-
-    ?assertEqual({false, #{<<"cart">> => #{
-        0 => #{
-            <<"price">>     => ?DIFFERENCE,
-            <<"product">>   => ?DIFFERENCE,
-            <<"quantity">>  => ?DIFFERENCE,
-            <<"tax">>       => ?DIFFERENCE
-    }}}}, compare(Invoice2, Invoice1)),
-    ?assert(compare(Invoice1, Invoice1)),
-    %% Feature was deleted
-    ?assert(compare(InvoiceWithFullCart, Invoice2)),
-    %% Feature was add
-    ?assert(compare(Invoice2, InvoiceWithFullCart)),
-    % %% When second request didn't contain feature, this situation detected as conflict.
-    ?assertMatch({false, #{<<"cart">> := ?DIFFERENCE}}, compare(Invoice1#{<<"cart">> => undefined}, Invoice1)),
-
-    {false, Diff} = compare(Invoice1, InvoiceChg1),
-    ?assertEqual([<<"cart.0.price">>, <<"cart.0.taxMode.rate">>], list_diff_fields(Schema, Diff)),
-    ?assert(compare(Invoice1, Invoice1#{<<"cart">> => undefined})).
-
--endif.

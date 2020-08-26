@@ -18,6 +18,13 @@
 
 -export([init/1]).
 
+-export([read_payment_features_test/1]).
+-export([compare_payment_bank_card_test/1]).
+-export([feature_multi_accessor_test/1]).
+-export([compare_different_payment_tool_test/1]).
+-export([read_invoice_features_test/1]).
+-export([read_payment_customer_features_value_test/1]).
+-export([compare_invoices_features_test/1]).
 -export([create_payment_ok_test/1]).
 -export([create_payment_fail_test/1]).
 -export([different_payment_tools_test/1]).
@@ -35,6 +42,8 @@
 -type config()          :: [{atom(), any()}].
 -type group_name()      :: atom().
 
+-define(DIFFERENCE, -1).
+
 -behaviour(supervisor).
 
 -spec init([]) ->
@@ -46,15 +55,25 @@ init([]) ->
     [test_case_name()].
 all() ->
     [
-        {group, payment_creation},
-        {group, invoice_creation},
-        {group, refund_creation}
+        {group, idempotence_features}
+        % {group, payment_creation},
+        % {group, invoice_creation},
+        % {group, refund_creation}
     ].
 
 -spec groups() ->
     [{group_name(), list(), [test_case_name()]}].
 groups() ->
     [
+        {idempotence_features, [], [
+            read_payment_features_test,
+            compare_payment_bank_card_test,
+            feature_multi_accessor_test,
+            compare_different_payment_tool_test,
+            read_invoice_features_test,
+            read_payment_customer_features_value_test,
+            compare_invoices_features_test
+        ]},
         {payment_creation, [], [
             create_payment_ok_test,
             create_payment_fail_test,
@@ -81,8 +100,7 @@ groups() ->
 -spec init_per_suite(config()) ->
     config().
 init_per_suite(Config) ->
-    ExtraEnv = [{idempotence_event_handler, capi_ct_handler_event}],
-    capi_ct_helper:init_suite(?MODULE, Config, ExtraEnv).
+    capi_ct_helper:init_suite(?MODULE, Config).
 
 -spec end_per_suite(config()) ->
     _.
@@ -156,6 +174,275 @@ end_per_testcase(_Name, C) ->
     ok.
 
 %% TESTS
+
+-spec read_payment_features_test(config()) ->
+    _.
+read_payment_features_test(_Config) ->
+    PaymentTool = payment_tool(),
+    UnusedPaymentTool = maps:without([<<"token">>, <<"exp_date">>, <<"type">>], PaymentTool),
+    Req = payment_params(<<"external id">>, <<"JWE TOKEN">>, #{}, false),
+    Request = deep_merge(Req, #{<<"payer">> => #{<<"paymentTool">> => PaymentTool}}),
+    Payer = maps:without([<<"payerType">>], maps:get(<<"payer">>, Request)),
+    UnusedRequest = Request#{<<"payer">> => Payer#{<<"paymentTool">> => UnusedPaymentTool}},
+    {Features, UnusedParams} = read_features(capi_feature_schemas:payment(), Request),
+    ?assertMatch(#{
+        <<"payer">> := #{
+            <<"type">> := PayerType,
+            <<"customer">> := undefined,
+            <<"recurrent">> := undefined,
+            <<"tool">> := #{
+                <<"$type">> := ToolType,
+                <<"bank_card">> := #{
+                    <<"expdate">> := Date,
+                    <<"token">> := Token
+                },
+                <<"crypto">> := #{
+                    <<"currency">> := undefined
+                },
+                <<"mobile_commerce">> := #{
+                    <<"operator">> := undefined,
+                    <<"phone">> := undefined
+                },
+                <<"terminal">> := #{
+                    <<"terminal_type">> := undefined
+                },
+                <<"wallet">> := #{
+                    <<"id">> := undefined,
+                    <<"provider">> := undefined,
+                    <<"token">> := Token
+                }
+            }
+        }
+    }
+    when is_integer(Token)
+    and is_integer(Date)
+    and is_integer(ToolType)
+    and is_integer(PayerType), Features),
+    ?assertEqual(UnusedRequest, UnusedParams).
+
+-spec compare_payment_bank_card_test(config()) ->
+    _.
+compare_payment_bank_card_test(_) ->
+    PayerType   = <<"PaymentResourcePayer">>,
+    ToolType    = <<"bank_card">>,
+    Token1      = <<"cds token">>,
+    Token2      = <<"cds token 2">>,
+    CardHolder1 = <<"0x42">>,
+    CardHolder2 = <<"Cake">>,
+    ExpDate     = {exp_date, 02, 2022},
+    Request1 = #{
+        <<"payer">> => #{
+            <<"payerType">>   => PayerType,
+            <<"paymentTool">> => #{
+                <<"type">>            => ToolType,
+                <<"token">>           => Token1,
+                <<"exp_date">>        => ExpDate,
+                <<"cardholder_name">> => CardHolder1
+            }
+    }},
+    Request2 = deep_merge(Request1, #{<<"payer">> => #{
+        <<"paymentTool">> => #{
+            <<"token">> => Token2,
+            <<"cardholder_name">> => CardHolder2
+        }
+    }}),
+    Schema = capi_feature_schemas:payment(),
+    {F1, _} = read_features(Schema, Request1),
+    {F2, _} = read_features(Schema, Request2),
+    ?assertEqual(true, capi_idemp_features:compare(F1, F1)),
+    {false, Diff} = capi_idemp_features:compare(F1, F2),
+    ?assertEqual([
+        <<"payer.paymentTool.token">>
+    ], capi_idemp_features:list_diff_fields(Schema, Diff)).
+
+-spec feature_multi_accessor_test(config()) ->
+    _.
+feature_multi_accessor_test(_) ->
+    PayerType   = <<"PaymentResourcePayer">>,
+    ToolType    = <<"bank_card">>,
+    Token1      = <<"cds token">>,
+    Token2      = <<"cds token 2">>,
+    CardHolder1 = <<"0x42">>,
+    CardHolder2 = <<"Cake">>,
+    ExpDate     = {exp_date, 02, 2022},
+    Request1 = #{
+        <<"payer">> => #{
+            <<"payerType">>   => PayerType,
+            <<"paymentTool">> => #{<<"wrapper">> => #{
+                <<"type">>            => ToolType,
+                <<"token">>           => Token1,
+                <<"exp_date">>        => ExpDate,
+                <<"cardholder_name">> => CardHolder1
+            }
+        }
+    }},
+    Request2 = deep_merge(Request1, #{<<"payer">> => #{
+        <<"paymentTool">> => #{<<"wrapper">> => #{
+            <<"token">> => Token2,
+            <<"cardholder_name">> => CardHolder2
+        }}
+    }}),
+    Schema = #{
+        <<"payer">> => [<<"payer">>, #{
+            <<"type">> => [<<"payerType">>],
+            <<"tool">> => [<<"paymentTool">>, <<"wrapper">>, #{
+                <<"$type">> => [<<"type">>],
+                <<"bank_card">> => #{
+                    <<"token">>      => [<<"token">>],
+                    <<"expdate">>    => [<<"exp_date">>]
+                }
+            }]
+        }]
+    },
+    {F1, _} = read_features(Schema, Request1),
+    {F2, _} = read_features(Schema, Request2),
+    ?assertEqual(true, capi_idemp_features:compare(F1, F1)),
+    {false, Diff} = capi_idemp_features:compare(F1, F2),
+    ?assertEqual([<<"payer.paymentTool.wrapper.token">>], capi_idemp_features:list_diff_fields(Schema, Diff)).
+
+-spec compare_different_payment_tool_test(config()) -> _.
+compare_different_payment_tool_test(_) ->
+    PayerType   = <<"PaymentResourcePayer">>,
+    ToolType1   = <<"bank_card">>,
+    ToolType2   = <<"wallet">>,
+    Token1      = <<"cds token">>,
+    Token2      = <<"wallet token">>,
+    CardHolder  = <<"0x42">>,
+    ExpDate     = {exp_date, 02, 2022},
+    Request1 = #{
+        <<"payer">> => #{
+            <<"payerType">>   => PayerType,
+            <<"paymentTool">> => #{
+                <<"type">>            => ToolType1,
+                <<"token">>           => Token1,
+                <<"exp_date">>        => ExpDate,
+                <<"cardholder_name">> => CardHolder
+            }
+    }},
+    Request2 = #{
+        <<"payer">> => #{
+            <<"payerType">>   => PayerType,
+            <<"paymentTool">> => #{
+                <<"type">>  => ToolType2,
+                <<"token">> => Token2
+            }
+        }
+    },
+
+    Schema = capi_feature_schemas:payment(),
+    F1 = capi_idemp_features:read(Schema, Request1),
+    F2 = capi_idemp_features:read(Schema, Request2),
+    ?assertEqual(true, capi_idemp_features:compare(F1, F1)),
+    {false, Diff} = capi_idemp_features:compare(F1, F2),
+    ?assertEqual([<<"payer.paymentTool">>], capi_idemp_features:list_diff_fields(Schema, Diff)).
+
+-spec read_payment_customer_features_value_test(config()) ->
+    _.
+read_payment_customer_features_value_test(_) ->
+    Req = payment_params(<<"external id">>, undefined),
+    Request = Req#{
+        <<"payer">> => #{
+            <<"payerType">>  => <<"CustomerPayer">>,
+            <<"customerID">> => <<"some customer id">>
+        }
+    },
+    ReqUnused = maps:without([<<"payer">>], Request),
+    {Features, Unused} = read_features(capi_feature_schemas:payment(), Request),
+    ?assertMatch(#{
+        <<"payer">> := #{
+            <<"type">>      := PayerType,
+            <<"customer">>  := CustomerID,
+            <<"recurrent">> := undefined,
+            <<"tool">>      := undefined
+        }
+    } when is_integer(PayerType) and is_integer(CustomerID), Features),
+    ?assertEqual(ReqUnused, Unused).
+
+-spec read_invoice_features_test(config()) ->
+    _.
+read_invoice_features_test(_) ->
+    Prod1 = <<"blue duck">>,
+    Prod2 = <<"yellow duck">>,
+    Price = 1,
+    {Invoice, Unused} = invoice_params(<<"external id">>),
+    Request = Invoice#{<<"cart">> => [
+        #{<<"product">> => Prod2, <<"quantity">> => 1, <<"price">> => Price},
+        #{<<"product">> => Prod1, <<"quantity">> => 1, <<"price">> => Price, <<"not feature">> => <<"hmm">>}
+    ]},
+    {Features, UnusedParams} = read_features(capi_feature_schemas:invoice(), Request),
+    ?assertMatch(#{
+        <<"amount">>    := Amount,
+        <<"currency">>  := Cur,
+        <<"shop_id">>   := ID,
+        <<"product">>   := Prod,
+        <<"cart">>      := Cart
+    }
+    when is_integer(Amount)
+    and is_integer(Cur)
+    and is_integer(ID)
+    and is_integer(Prod)
+    and is_map(Cart), Features),
+    ?assertMatch(Unused, UnusedParams).
+
+-spec compare_invoices_features_test(config()) ->
+    _.
+compare_invoices_features_test(_) ->
+    ShopID  = <<"shopus">>,
+    Cur     = <<"RUB">>,
+    Prod1   = <<"yellow duck">>,
+    Prod2   = <<"blue duck">>,
+    Price1  = 10000,
+    Price2  = 20000,
+    Product = #{
+        <<"product">> => Prod1,
+        <<"quantity">> => 1,
+        <<"price">> => Price1,
+        <<"taxMode">> => #{
+            <<"type">> => <<"InvoiceLineTaxVAT">>,
+            <<"rate">> => <<"10%">>
+        }
+    },
+    Request1 = #{
+        <<"shopID">> => ShopID,
+        <<"currency">> => Cur,
+        <<"cart">> => [Product]
+    },
+    Request2 = deep_merge(Request1, #{
+        <<"cart">> => [#{<<"product">> => Prod2, <<"price">> => Price2}]
+    }),
+    Request3 = deep_merge(Request1, #{
+        <<"cart">> => [#{<<"product">> => Prod2, <<"price">> => Price2, <<"quantity">> => undefined}]
+    }),
+    Schema = capi_feature_schemas:invoice(),
+    {Invoice1, _} = read_features(Schema, Request1),
+    {InvoiceChg1, _} = read_features(Schema, Request1#{<<"cart">> => [
+        Product#{
+            <<"price">> => Price2,
+            <<"taxMode">> => #{
+                <<"rate">> => <<"18%">>
+            }}
+    ]}),
+    {Invoice2, _} = read_features(Schema, Request2),
+    {InvoiceWithFullCart, _} = read_features(Schema, Request3),
+
+    ?assertEqual({false, #{<<"cart">> => #{
+        0 => #{
+            <<"price">>     => ?DIFFERENCE,
+            <<"product">>   => ?DIFFERENCE,
+            <<"quantity">>  => ?DIFFERENCE,
+            <<"tax">>       => ?DIFFERENCE
+    }}}}, capi_idemp_features:compare(Invoice2, Invoice1)),
+    ?assert(capi_idemp_features:compare(Invoice1, Invoice1)),
+    %% Feature was deleted
+    ?assert(capi_idemp_features:compare(InvoiceWithFullCart, Invoice2)),
+    %% Feature was add
+    ?assert(capi_idemp_features:compare(Invoice2, InvoiceWithFullCart)),
+    % %% When second request didn't contain feature, this situation detected as conflict.
+    ?assertMatch({false, #{<<"cart">> := ?DIFFERENCE}}, capi_idemp_features:compare(Invoice1#{<<"cart">> => undefined}, Invoice1)),
+
+    {false, Diff} = capi_idemp_features:compare(Invoice1, InvoiceChg1),
+    ?assertEqual([<<"cart.0.price">>, <<"cart.0.taxMode.rate">>], capi_idemp_features:list_diff_fields(Schema, Diff)),
+    ?assert(capi_idemp_features:compare(Invoice1, Invoice1#{<<"cart">> => undefined})).
 
 -spec create_payment_ok_test(config()) ->
     _.
@@ -488,20 +775,36 @@ create_refund_(Req, Config) ->
     {Res, UnusedParams}.
 
 
-payment_params(ExternalID, Jwe, ContactInfo, MakeRecurrent) ->
+payment_params(ExternalID, MakeRecurrent) ->
     genlib_map:compact(#{
         <<"externalID">> => ExternalID,
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
+        <<"makeRecurrent">> => MakeRecurrent,
+        <<"metadata">> => ?JSON,
+        <<"processingDeadline">> => <<"5m">>
+    }).
+payment_params(ExternalID, Jwe, ContactInfo, MakeRecurrent) ->
+    Params = payment_params(ExternalID, MakeRecurrent),
+    genlib_map:compact(Params#{
         <<"payer">> => #{
             <<"payerType">> => <<"PaymentResourcePayer">>,
             <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
             <<"paymentToolToken">> => Jwe,
             <<"contactInfo">> => ContactInfo
-        },
-        <<"makeRecurrent">> => MakeRecurrent,
-        <<"metadata">> => ?JSON,
-        <<"processingDeadline">> => <<"5m">>
+        }
     }).
+
+payment_tool() ->
+    #{
+        <<"type">> => <<"bank_card">>,
+        <<"token">> => <<"cds token">>,
+        <<"payment_system">> => <<"visa">>,
+        <<"bin">> => <<"411111">>,
+        <<"last_digits">> => <<"1111">>,
+        <<"exp_date">> => {exp_date, 02, 2022},
+        <<"cardholder_name">> => <<"Degus Degusovich">>,
+        <<"is_cvv_empty">> => false
+    }.
 
 invoice_params(EID) ->
     Unused = #{
@@ -539,3 +842,22 @@ response_error(409, EID, ID) ->
         <<"id">> => ID,
         <<"message">> => <<"This 'externalID' has been used by another request">>
     }}}.
+
+handler() ->
+    {capi_ct_handler_event, undefined}.
+
+read_features(Schema, Request) ->
+    capi_ct_handler_event:create_acc(),
+    Features = capi_idemp_features:read(handler(), Schema, Request),
+    UnusedParams = capi_ct_handler_event:get_unused_params(),
+    capi_ct_handler_event:del_storage(),
+    {Features, UnusedParams}.
+
+deep_merge(M1, M2) ->
+    maps:fold(
+        fun (K, V, MAcc) when is_map(V) ->
+                Value = deep_merge(maps:get(K, MAcc, #{}), V),
+                MAcc#{K => Value};
+            (K, V, MAcc) ->
+                MAcc#{K => V}
+        end, M1, M2).
