@@ -3,7 +3,7 @@
 -define(DIFFERENCE, -1).
 
 -type request()         :: #{binary() := request_value()}.
--type request_value()   :: integer() | binary() | request() | [request()] | undefined.
+-type request_value()   :: integer() | binary() | request() | [request()].
 -type difference()      :: features().
 -type feature_name()    :: binary().
 -type feature_value()   :: integer() | features() | [features()] | undefined.
@@ -33,13 +33,13 @@
 -export([compare/2]).
 -export([list_diff_fields/2]).
 
--callback handle_event(event(), options()) -> ok | feature_value().
+-callback handle_event(event(), options()) -> ok.
 
 -spec read(schema(), request()) ->
     features().
 
 read(Schema, Request) ->
-    read(undefined, Schema, Request).
+    read(get_event_handler(), Schema, Request).
 
 -spec read(handler(), schema(), request()) ->
     features().
@@ -74,13 +74,12 @@ read_request_value([Schema = #{}], Request = #{}, Handler) ->
 read_request_value([{set, Schema = #{}}], List, Handler) when is_list(List) ->
     {_, ListIndex} = lists:foldl(fun(Item, {N, Acc}) -> {N + 1, [{N, Item} | Acc]} end, {0, []}, List),
     ListSorted = lists:keysort(2, ListIndex),
-    {_, Result} = lists:foldl(fun({Index, Req}, {N, Acc}) ->
+    lists:foldl(fun({Index, Req}, Acc) ->
         handle_event(get_event_handler(Handler), {request_key_index_visit, Index}),
         Value = read_(Schema, Req, Handler),
         handle_event(get_event_handler(Handler), {request_key_index_visited, Index}),
-        {N + 1, Acc#{N => [Index, Value]}}
-    end, {0, #{}}, ListSorted),
-    Result;
+        [[Index, Value] | Acc]
+    end, [], ListSorted);
 read_request_value([Key | Rest], Request = #{}, Handler) when is_binary(Key) ->
     SubRequest = maps:get(Key, Request, undefined),
     handle_event(get_event_handler(Handler), {request_key_visit, {key, Key, SubRequest}}),
@@ -100,6 +99,9 @@ handle_event(undefined, _Event) ->
 handle_event({Mod, Opts}, Event) ->
     Mod:handle_event(Event, Opts).
 
+get_event_handler() ->
+    genlib_app:env(capi, idempotence_event_handler).
+
 get_event_handler({Mod, Options}) ->
     {Mod, Options};
 get_event_handler(undefined) ->
@@ -112,7 +114,7 @@ hash(V) ->
     [binary()].
 
 list_diff_fields(Schema, Diff) ->
-    ConvertedDiff = list_diff_fields_(Diff, Schema),
+    {ConvertedDiff, _} = list_diff_fields_(Diff, Schema, {[], []}),
     lists:foldl(fun(Keys, AccIn) ->
         KeysBin = lists:map(fun genlib:to_binary/1, Keys),
         Item = list_to_binary(lists:join(<<".">>, KeysBin)),
@@ -124,36 +126,31 @@ list_diff_fields(Schema, Diff) ->
         end
     end, [], ConvertedDiff).
 
-list_diff_fields_(Diff, Schema) ->
+list_diff_fields_(Diffs, {set, Schema}, Acc) when is_map(Schema) ->
+    maps:fold(
+        fun (I, Diff, {PathsAcc, PathRev}) ->
+            list_diff_fields_(Diff, Schema, {PathsAcc, [I | PathRev]})
+        end,
+        Acc,
+        Diffs
+    );
+list_diff_fields_(Diff, Schema, Acc) when is_map(Schema) ->
     zipfold(
         fun
-            (_Feature, ?DIFFERENCE, [Key, _SchemaPart], AccIn)  ->
-                [[Key] | AccIn];
-            (_Feature, Value, [Key | SchemaPart], AccIn) when is_list(SchemaPart) and is_map(Value) ->
-                list_diff_fields_(Value, SchemaPart, {[Key], AccIn});
-            (_Feature, _Value, [Key], AccIn) when is_binary(Key) ->
-                [[Key] | AccIn];
-            (_Feature, Value, SchemaPart, AccIn) when is_map(SchemaPart) ->
-                Result = list_diff_fields_(Value, SchemaPart),
-                Result ++ AccIn
+            (_Feature, ?DIFFERENCE, [Key | _SchemaPart], {PathsAcc, PathRev}) ->
+                Path = lists:reverse([Key | PathRev]),
+                {[Path | PathsAcc], PathRev};
+            (_Feature, DiffPart, SchemaPart, AccIn) ->
+                list_diff_fields_(DiffPart, SchemaPart, AccIn)
         end,
-        [],
+        Acc,
         Diff,
-        Schema).
+        Schema);
+list_diff_fields_(Diff, [Schema], Acc) ->
+    list_diff_fields_(Diff, Schema, Acc);
+list_diff_fields_(Diff, [Key | Schema], {PathsAcc, PathRev}) ->
+    list_diff_fields_(Diff, Schema, {PathsAcc, [Key | PathRev]}).
 
-list_diff_fields_(Value, [SchemaPart], {PrefixIn, AccIn}) when is_map(SchemaPart) ->
-    Prefix = lists:reverse(PrefixIn),
-    Result = [Prefix ++ List || List <- list_diff_fields_(Value, SchemaPart)],
-    Result ++ AccIn;
-list_diff_fields_(Values, [{set, SchemaPart}], {PrefixIn, AccIn}) when is_map(SchemaPart) and is_map(Values) ->
-    Result = maps:fold(fun(Index, Value, Acc) ->
-        Prefix = lists:reverse([Index | PrefixIn]),
-        List = [Prefix ++ L || L <- list_diff_fields_(Value, SchemaPart)],
-        List ++ Acc
-    end, [], Values),
-    Result ++ AccIn;
-list_diff_fields_(Value, [Key | SchemaPart], {Prefix, Acc}) ->
-    list_diff_fields_(Value, SchemaPart, {[Key | Prefix], Acc}).
 
 -spec compare(features(), features()) ->
     true | {false, difference()}.
@@ -169,9 +166,9 @@ compare(Features, FeaturesWith) ->
 compare_features(Fs, FsWith) ->
     zipfold(
         fun
-            (Key, [Index1, Value], [_, ValueWith], Diff) when
-            is_integer(Key), is_map(ValueWith), is_map(Value) ->
-                compare_features_(Index1, Value, ValueWith, Diff);
+            (Key, Values, ValuesWith, Diff) when
+            is_list(ValuesWith), is_list(Values) ->
+                compare_list_features(Key, Values, ValuesWith, Diff);
             (Key, Value, ValueWith, Diff) when
             is_map(ValueWith) and is_map(Value) ->
                 compare_features_(Key, Value, ValueWith, Diff);
@@ -191,7 +188,26 @@ compare_features(Fs, FsWith) ->
         FsWith
     ).
 
-compare_features_(Key, Value, ValueWith, Diff) ->
+
+compare_list_features(Key, L1, L2, Diff) when
+length(L1) =/= length(L2) ->
+    Diff#{Key => ?DIFFERENCE};
+compare_list_features(Key, L1, L2, Acc) ->
+    case compare_list_features_(L1, L2, #{}) of
+        Diff when map_size(Diff) > 0 ->
+            Acc#{Key => Diff};
+        #{} ->
+            Acc
+    end.
+
+compare_list_features_([], [], Diff) ->
+    Diff;
+compare_list_features_([[Index, V1] | Values], [[_, V2] | ValuesWith], Acc) ->
+    Diff = compare_features_(Index, V1, V2, Acc),
+    compare_list_features_(Values, ValuesWith, Diff).
+
+compare_features_(Key, Value, ValueWith, Diff) when
+is_map(Value) and is_map(ValueWith) ->
     case compare_features(Value, ValueWith) of
         ValueWith ->
             Diff#{Key => ?DIFFERENCE}; % different everywhere

@@ -55,10 +55,10 @@ init([]) ->
     [test_case_name()].
 all() ->
     [
-        {group, idempotence_features}
-        % {group, payment_creation},
-        % {group, invoice_creation},
-        % {group, refund_creation}
+        {group, idempotence_features},
+        {group, payment_creation},
+        {group, invoice_creation},
+        {group, refund_creation}
     ].
 
 -spec groups() ->
@@ -100,7 +100,8 @@ groups() ->
 -spec init_per_suite(config()) ->
     config().
 init_per_suite(Config) ->
-    capi_ct_helper:init_suite(?MODULE, Config).
+    ExtraEnv = [{idempotence_event_handler, {capi_ct_handler_event, #{}}}],
+    capi_ct_helper:init_suite(?MODULE, Config, ExtraEnv).
 
 -spec end_per_suite(config()) ->
     _.
@@ -330,8 +331,8 @@ compare_different_payment_tool_test(_) ->
     },
 
     Schema = capi_feature_schemas:payment(),
-    F1 = capi_idemp_features:read(Schema, Request1),
-    F2 = capi_idemp_features:read(Schema, Request2),
+    {F1, _} = read_features(Schema, Request1),
+    {F2, _} = read_features(Schema, Request2),
     ?assertEqual(true, capi_idemp_features:compare(F1, F1)),
     {false, Diff} = capi_idemp_features:compare(F1, F2),
     ?assertEqual([<<"payer.paymentTool">>], capi_idemp_features:list_diff_fields(Schema, Diff)).
@@ -381,7 +382,7 @@ read_invoice_features_test(_) ->
     and is_integer(Cur)
     and is_integer(ID)
     and is_integer(Prod)
-    and is_map(Cart), Features),
+    and is_list(Cart), Features),
     ?assertMatch(Unused, UnusedParams).
 
 -spec compare_invoices_features_test(config()) ->
@@ -424,7 +425,6 @@ compare_invoices_features_test(_) ->
     ]}),
     {Invoice2, _} = read_features(Schema, Request2),
     {InvoiceWithFullCart, _} = read_features(Schema, Request3),
-
     ?assertEqual({false, #{<<"cart">> => #{
         0 => #{
             <<"price">>     => ?DIFFERENCE,
@@ -485,8 +485,6 @@ create_payment_fail_test(Config) ->
     Req1 = payment_params(ExternalID, Jwe1, #{}, undefined),
     Req2 = payment_params(ExternalID, Jwe2, #{}, false),
     {{{ok, _}, _}, {Response, _}} = create_payment(BenderKey, Req1, Req2, Config),
-    % create_payment(BenderKey, Req1, Req2, Config),
-    % ok.
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response).
 
 -spec different_payment_tools_test(config()) ->
