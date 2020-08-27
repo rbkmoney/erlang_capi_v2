@@ -6,7 +6,7 @@
 -type request_value()   :: integer() | binary() | request() | [request()].
 -type difference()      :: features().
 -type feature_name()    :: binary().
--type feature_value()   :: integer() | features() | [features()] | undefined.
+-type feature_value()   :: integer() | features() | [feature_value()] | undefined.
 -type features()        :: #{feature_name() := feature_value()}.
 -type schema()          :: #{binary() := [binary() | schema() | {set, schema()}]}.
 

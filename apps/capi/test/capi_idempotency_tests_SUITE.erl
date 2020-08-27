@@ -504,7 +504,7 @@ different_payment_tools_test(Config) ->
     Req1 = payment_params(ExternalID, Jwe1, ContactInfo, undefined),
     Req2 = payment_params(ExternalID, Jwe2, ContactInfo, false),
     {{{ok, _}, _}, {Response2, Unused}} = create_payment(BenderKey, Req1, Req2, Config),
-      ?assertMatch(#{
+    ?assertMatch(#{
         <<"externalID">> := <<"merch_id">>,
         <<"flow">> := #{<<"type">> := <<"PaymentFlowInstant">>},
         <<"makeRecurrent">> := false,
