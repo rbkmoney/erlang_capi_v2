@@ -27,7 +27,7 @@
     create_payment_ok_test/1,
     create_payment_qiwi_access_token_ok_test/1,
     create_payment_with_empty_cvv_ok_test/1,
-    create_payment_with_googlepay_plain_ok_test/1,
+    create_payment_with_googlepay_encrypt_ok_test/1,
     get_payments_ok_test/1,
     get_payment_by_id_ok_test/1,
     get_client_payment_status_test/1,
@@ -72,7 +72,7 @@ invoice_access_token_tests() ->
         create_payment_ok_test,
         create_payment_qiwi_access_token_ok_test,
         create_payment_with_empty_cvv_ok_test,
-        create_payment_with_googlepay_plain_ok_test,
+        create_payment_with_googlepay_encrypt_ok_test,
         get_payments_ok_test,
         get_client_payment_status_test,
         get_payment_by_id_ok_test,
@@ -102,8 +102,7 @@ groups() ->
 -spec init_per_suite(config()) ->
     config().
 init_per_suite(Config) ->
-    ExtraEnv = [{idempotence_event_handler, undefined}],
-    capi_ct_helper:init_suite(?MODULE, Config, ExtraEnv).
+    capi_ct_helper:init_suite(?MODULE, Config).
 
 -spec end_per_suite(config()) ->
     _.
@@ -316,9 +315,9 @@ create_payment_qiwi_access_token_ok_test(Config) ->
     },
     {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req, ?STRING).
 
--spec create_payment_with_googlepay_plain_ok_test(_) ->
+-spec create_payment_with_googlepay_encrypt_ok_test(_) ->
     _.
-create_payment_with_googlepay_plain_ok_test(Config) ->
+create_payment_with_googlepay_encrypt_ok_test(Config) ->
     capi_ct_helper:mock_services([
         {invoicing, fun
                 ('StartPayment', [_UserInfo, _InvoiceID,

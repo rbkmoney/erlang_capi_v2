@@ -1,19 +1,21 @@
--module(capi_ct_handler_event).
+-module(capi_ct_features_reader_event_handler).
 
 -export([handle_event/2]).
--export([create_acc/0]).
--export([del_storage/0]).
+-export([create_storage/0]).
+-export([delete_storage/0]).
 -export([get_unused_params/0]).
 %%
 
--spec create_acc() -> _.
+-spec create_storage() ->
+    capi_idemp_features:event_handler().
 
-create_acc() ->
+create_storage() ->
     ets:new(?MODULE, [set, public, named_table]).
 
--spec del_storage() -> _.
+-spec delete_storage() ->
+    _.
 
-del_storage() ->
+delete_storage() ->
     ets:delete(?MODULE).
 
 -spec get_unused_params() -> _.

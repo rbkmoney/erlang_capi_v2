@@ -18,9 +18,9 @@
                            {request_key_visited, {key, integer()}}.
 
 -type options()         :: term().
--type handler()         :: {module(), options()} | undefined.
+-type event_handler()   :: {module(), options()} | undefined.
 
--export_type([handler/0]).
+-export_type([event_handler/0]).
 -export_type([event/0]).
 -export_type([schema/0]).
 -export_type([request/0]).
@@ -41,7 +41,7 @@
 read(Schema, Request) ->
     read(get_event_handler(), Schema, Request).
 
--spec read(handler(), schema(), request()) ->
+-spec read(event_handler(), schema(), request()) ->
     features().
 
 read(Handler, Schema, Request) ->

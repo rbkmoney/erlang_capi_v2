@@ -48,6 +48,7 @@ invoice() -> #{
     <<"amount">>      => [<<"amount">>],
     <<"currency">>    => [<<"currency">>],
     <<"product">>     => [<<"product">>],
+    <<"dueDate">>     => [<<"dueDate">>],
     <<"cart">>        => [<<"cart">>, {set, cart_line_schema()}]
 }.
 
