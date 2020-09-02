@@ -223,13 +223,13 @@ compare_payment_bank_card_test(_) ->
     Token2      = <<"cds token 2">>,
     CardHolder2 = <<"Cake">>,
 
-    {PaymentTool1, Unused} = bank_card_payment_tool(),
+    PaymentTool1 = bank_card_payment_tool(),
     PaymentTool2 = PaymentTool1#{
         <<"token">> => Token2,
         <<"cardholder_name">> => CardHolder2
     },
-    {Request1, _} = payment_params({PaymentTool1, Unused}),
-    {Request2, _} = payment_params({PaymentTool2, Unused}),
+    {Request1, _} = payment_params(PaymentTool1),
+    {Request2, _} = payment_params(PaymentTool2),
 
     Schema = capi_feature_schemas:payment(),
     {F1, _} = read_features(Schema, Request1),
@@ -289,13 +289,13 @@ feature_multi_accessor_test(_) ->
 compare_different_payment_tool_test(_) ->
     ToolType2   = <<"wallet">>,
     Token2      = <<"wallet token">>,
-    {PaymentTool1, Unused} = bank_card_payment_tool(),
+    PaymentTool1= bank_card_payment_tool(),
     PaymentTool2 = #{
         <<"type">>  => ToolType2,
         <<"token">> => Token2
     },
-    {Request1, _} = payment_params({PaymentTool1, Unused}),
-    {Request2, _} = payment_params({PaymentTool2, #{}}),
+    {Request1, _} = payment_params(PaymentTool1),
+    {Request2, _} = payment_params(PaymentTool2),
     Schema = capi_feature_schemas:payment(),
     {F1, _} = read_features(Schema, Request1),
     {F2, _} = read_features(Schema, Request2),
@@ -313,7 +313,12 @@ read_payment_customer_features_value_test(_) ->
             <<"customerID">> => <<"some customer id">>
         }
     },
-    ReqUnused = maps:without([<<"payer">>], Request),
+    ReqUnused = [
+        [<<"externalID">>],
+        [<<"flow">>, <<"type">>],
+        [<<"metadata">>, <<"bla">>],
+        [<<"processingDeadline">>]
+    ],
     {Features, Unused} = read_features(capi_feature_schemas:payment(), Request),
     ?assertMatch(#{
         <<"payer">> := #{
@@ -432,21 +437,18 @@ create_payment_ok_test(Config) ->
         {{ok, Response1}, Unused1},
         {{ok, Response2}, _}
     ] = create_payment(BenderKey, [Req1, Req2], Config),
-    ?assertMatch(#{
-        <<"externalID">> := <<"merch_id">>,
-        <<"flow">> := #{<<"type">> := <<"PaymentFlowInstant">>},
-        <<"metadata">> := #{<<"bla">> := "*"},
-        <<"payer">> := #{
-            <<"contactInfo">> := #{},
-            <<"paymentSession">> := PS,
-            <<"paymentTool">> := #{
-                <<"bin">> := <<"411111">>,
-                <<"cardholder_name">> := <<"Degus Degusovich">>,
-                <<"masked_pan">> := <<"1111">>,
-                <<"payment_system">> := visa
-            }
-        }
-    } when is_binary(PS), Unused1),
+    ?assertEqual([
+        [<<"externalID">>],
+        [<<"flow">>, <<"type">>],
+        [<<"metadata">>, <<"bla">>],
+        [<<"payer">>, <<"paymentSession">>],
+        [<<"payer">>, <<"paymentTool">>, <<"bin">>],
+        [<<"payer">>, <<"paymentTool">>, <<"cardholder_name">>],
+        [<<"payer">>, <<"paymentTool">>, <<"masked_pan">>],
+        [<<"payer">>, <<"paymentTool">>, <<"payment_system">>],
+        [<<"payer">>, <<"paymentToolToken">>],
+        [<<"processingDeadline">>]
+    ], Unused1),
     ?assertEqual(Response1, Response2).
 
 -spec create_payment_fail_test(config()) ->
@@ -478,18 +480,15 @@ different_payment_tools_test(Config) ->
         {{ok, _}, _},
         {Response2, Unused}
     ] = create_payment(BenderKey, [Req1, Req2], Config),
-    ?assertMatch(#{
-        <<"externalID">> := <<"merch_id">>,
-        <<"flow">> := #{<<"type">> := <<"PaymentFlowInstant">>},
-        <<"makeRecurrent">> := false,
-        <<"metadata">> := #{<<"bla">> := "*"},
-        <<"payer">> := #{
-            <<"contactInfo">> := #{},
-            <<"paymentSession">> := PS,
-            <<"paymentToolToken">> := PT
-        },
-        <<"processingDeadline">> := <<"5m">>
-    } when is_binary(PS) and is_binary(PT), Unused),
+    ?assertEqual([
+        [<<"externalID">>],
+        [<<"flow">>, <<"type">>],
+        [<<"makeRecurrent">>],
+        [<<"metadata">>, <<"bla">>],
+        [<<"payer">>, <<"paymentSession">>],
+        [<<"payer">>, <<"paymentToolToken">>],
+        [<<"processingDeadline">>]
+    ], Unused),
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response2).
 
 -spec second_request_without_idempotent_feature_test(config()) ->
@@ -534,8 +533,7 @@ create_invoice_ok_test(Config) ->
         end},
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
     ], Config),
-    {Params, Unused} = invoice_params(ExternalID),
-    Req = maps:merge(Params, Unused),
+    {Req, Unused} = invoice_params(ExternalID),
     {{ok, #{<<"invoice">> := Invoice1}}, Unused1} = create_invoice_(Req, Config),
     {{ok, #{<<"invoice">> := Invoice2}}, Unused2} = create_invoice_(Req, Config),
 
@@ -550,8 +548,7 @@ create_invoice_ok_test(Config) ->
 create_invoice_legacy_fail_test(Config) ->
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
-    {Params, Unused} = invoice_params(ExternalID),
-    Req = maps:merge(Params, Unused),
+    {Req, Unused} = invoice_params(ExternalID),
     Req2 = Req#{<<"product">> => <<"test_product2">>},
     Ctx = capi_msgp_marshalling:marshal(#{<<"version">> => 1, <<"params_hash">> => erlang:phash2(Req)}),
     capi_ct_helper:mock_services([
@@ -571,8 +568,7 @@ create_invoice_legacy_fail_test(Config) ->
 create_invoice_fail_test(Config) ->
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
-    {Params, Unused} = invoice_params(ExternalID),
-    Req1 = maps:merge(Params, Unused),
+    {Req1, _Unused} = invoice_params(ExternalID),
     Req2 = Req1#{<<"product">> => <<"test_product2">>},
     [
         {{ok, #{<<"invoice">> := #{<<"id">> := InvoiceID}}}, _},
@@ -671,13 +667,13 @@ create_refund_idemp_fail_test(Config) ->
         ]
     },
     [{{ok, _Refund1}, Unused1}, {Response2, Unused2}] = create_refunds(BenderKey, [Req1, Req2], Config),
-    Unused = #{
-        <<"externalID">> => <<"merch_id">>,
-        <<"id">> => <<"TEST">>,
-        <<"invoiceID">> => <<"TEST">>,
-        <<"paymentID">> => <<"TEST">>,
-        <<"reason">> => <<"TEST">>
-    },
+    Unused = [
+        [<<"externalID">>],
+        [<<"id">>],
+        [<<"invoiceID">>],
+        [<<"paymentID">>],
+        [<<"reason">>]
+    ],
     ?assertEqual(Unused, Unused1),
     ?assertEqual(Unused, Unused2),
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response2).
@@ -775,15 +771,27 @@ payment_params(ExternalID, Jwe, ContactInfo, MakeRecurrent) ->
         }
     }).
 
-payment_params({PaymentTool, UnusedPaymentTool}) ->
+payment_params(PaymentTool) ->
+    Unused = [
+        [<<"externalID">>],
+        [<<"flow">>, <<"type">>],
+        [<<"makeRecurrent">>],
+        [<<"metadata">>, <<"bla">>],
+        [<<"payer">>, <<"paymentSession">>],
+        [<<"payer">>, <<"paymentTool">>, <<"bin">>],
+        [<<"payer">>, <<"paymentTool">>, <<"cardholder_name">>],
+        [<<"payer">>, <<"paymentTool">>, <<"is_cvv_empty">>],
+        [<<"payer">>, <<"paymentTool">>, <<"last_digits">>],
+        [<<"payer">>, <<"paymentTool">>, <<"payment_system">>],
+        [<<"payer">>, <<"paymentToolToken">>],
+        [<<"processingDeadline">>]
+    ],
     Params = payment_params(<<"EID">>, <<"Jwe">>, #{}, false),
     PaymentParams = deep_merge(Params, #{<<"payer">> => #{<<"paymentTool">> => PaymentTool}}),
-    Payer = maps:without([<<"payerType">>], maps:get(<<"payer">>, PaymentParams)),
-    UnusedParams = PaymentParams#{<<"payer">> => Payer#{<<"paymentTool">> => UnusedPaymentTool}},
-    {PaymentParams, UnusedParams}.
+    {PaymentParams, Unused}.
 
 bank_card_payment_tool() ->
-    PaymentTool = #{
+    #{
         <<"type">> => <<"bank_card">>,
         <<"token">> => <<"cds token">>,
         <<"payment_system">> => <<"visa">>,
@@ -792,22 +800,24 @@ bank_card_payment_tool() ->
         <<"exp_date">> => {exp_date, 02, 2022},
         <<"cardholder_name">> => <<"Degus Degusovich">>,
         <<"is_cvv_empty">> => false
-    },
-    {PaymentTool, maps:without([<<"token">>, <<"exp_date">>, <<"type">>], PaymentTool)}.
+    }.
 
 invoice_params(EID) ->
-    Unused = #{
+    Unused = [
+        [<<"description">>],
+        [<<"externalID">>],
+        [<<"metadata">>, <<"invoice_dummy_metadata">>]
+    ],
+    {#{
         <<"metadata">>    => #{<<"invoice_dummy_metadata">> => <<"test_value">>},
         <<"description">> => <<"test_invoice_description">>,
-        <<"externalID">>  => EID
-    },
-    {genlib_map:compact(maps:merge(Unused, #{
+        <<"externalID">>  => EID,
         <<"shopID">>      => ?STRING,
         <<"dueDate">>     => ?TIMESTAMP,
         <<"amount">>      => ?INTEGER,
         <<"currency">>    => ?RUB,
         <<"product">>     => <<"test_product">>
-    })), Unused}.
+    }, Unused}.
 
 get_encrypted_token(PS, ExpDate) ->
     get_encrypted_token(PS, ExpDate, undefined).

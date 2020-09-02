@@ -22,7 +22,7 @@
 -export([mock_services/2]).
 -export([mock_services_/2]).
 -export([get_lifetime/0]).
-
+-export([map_to_flat/1]).
 -define(CAPI_IP                     , "::").
 -define(CAPI_PORT                   , 8080).
 -define(CAPI_HOST_NAME              , "localhost").
@@ -275,3 +275,21 @@ get_lifetime(YY, MM, DD) ->
        <<"months">> => MM,
        <<"days">>   => DD
     }.
+
+-spec map_to_flat(#{}) -> FlatRepresentation :: #{}.
+
+map_to_flat(Value) ->
+    Prefix = [],
+    Acc = #{},
+    {_, FlatMap} = maps:fold(fun to_flat/3, {Prefix, Acc}, Value),
+    FlatMap.
+
+to_flat(Key, #{} = Value, {Prefix, Acc}) ->
+    {_Prefix2, AccOut} = maps:fold(fun to_flat/3, {[Key | Prefix], Acc}, Value),
+    {Prefix, AccOut};
+to_flat(Key, Value, {Prefix, Acc}) ->
+    add_prefix(Key, Value, {Prefix, Acc}).
+
+add_prefix(Key, Value, {Prefix, Acc}) ->
+    FlatKey = lists:reverse([Key | Prefix]),
+    {Prefix, Acc#{FlatKey => Value}}.

@@ -21,7 +21,8 @@ delete_storage() ->
 -spec get_unused_params() -> _.
 
 get_unused_params() ->
-    get_request().
+    Req = get_request(),
+    maps:keys(capi_ct_helper:map_to_flat(Req)).
 
 -spec handle_event(capi_idemp_features:event(), capi_idemp_features:options()) ->
     ok.
