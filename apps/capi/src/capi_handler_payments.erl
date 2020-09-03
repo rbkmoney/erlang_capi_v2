@@ -404,7 +404,8 @@ process_request(_OperationID, _Req, _Context) ->
 create_payment(InvoiceID, PartyID, #{<<"externalID">> := ExternalID} = PaymentParams, Context, BenderPrefix) ->
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
-    PaymentParamsDecrypted = PaymentParams#{<<"payer">> => Payer},
+    PaymentParamsFull = PaymentParams#{<<"invoiceID">> => InvoiceID},
+    PaymentParamsDecrypted = PaymentParamsFull#{<<"payer">> => Payer},
     Hash = erlang:phash2(PaymentParams),
     Schema = capi_feature_schemas:payment(),
     Features = capi_idemp_features:read(Schema, PaymentParamsDecrypted),
@@ -435,10 +436,11 @@ start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThri
 
 decrypt_payer(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer) ->
     #{<<"paymentToolToken">> := Token} = Payer,
+    Payer2 = maps:without([<<"paymentToolToken">>], Payer),
     case capi_crypto:decrypt_payment_tool_token(Token) of
         {ok, PaymentToolThrift} ->
             PaymentTool = capi_handler_decoder_party:decode_payment_tool(PaymentToolThrift),
-            {Payer#{<<"paymentTool">> => PaymentTool}, PaymentToolThrift};
+            {Payer2#{<<"paymentTool">> => PaymentTool}, PaymentToolThrift};
         {error, {decryption_failed, Error}} ->
             logger:warning("Payment tool token decryption failed: ~p", [Error]),
             erlang:throw(invalid_token)

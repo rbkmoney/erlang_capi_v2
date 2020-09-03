@@ -180,7 +180,19 @@ end_per_testcase(_Name, C) ->
 -spec read_payment_features_test(config()) ->
     _.
 read_payment_features_test(_Config) ->
-    {Request, UnusedRequest} = payment_params(bank_card_payment_tool()),
+    UnusedRequest = [
+        [<<"externalID">>],
+        [<<"metadata">>, <<"bla">>],
+        [<<"payer">>, <<"paymentSession">>],
+        [<<"payer">>, <<"paymentTool">>, <<"bin">>],
+        [<<"payer">>, <<"paymentTool">>, <<"cardholder_name">>],
+        [<<"payer">>, <<"paymentTool">>, <<"is_cvv_empty">>],
+        [<<"payer">>, <<"paymentTool">>, <<"last_digits">>],
+        [<<"payer">>, <<"paymentTool">>, <<"payment_system">>],
+        [<<"payer">>, <<"paymentToolToken">>],
+        [<<"processingDeadline">>]
+    ],
+    Request = payment_params(bank_card_payment_tool()),
     {Features, UnusedParams} = read_features(capi_feature_schemas:payment(), Request),
     ?assertMatch(#{
         <<"payer">> := #{
@@ -228,8 +240,8 @@ compare_payment_bank_card_test(_) ->
         <<"token">> => Token2,
         <<"cardholder_name">> => CardHolder2
     },
-    {Request1, _} = payment_params(PaymentTool1),
-    {Request2, _} = payment_params(PaymentTool2),
+    Request1 = payment_params(PaymentTool1),
+    Request2 = payment_params(PaymentTool2),
 
     Schema = capi_feature_schemas:payment(),
     {F1, _} = read_features(Schema, Request1),
@@ -294,8 +306,8 @@ compare_different_payment_tool_test(_) ->
         <<"type">>  => ToolType2,
         <<"token">> => Token2
     },
-    {Request1, _} = payment_params(PaymentTool1),
-    {Request2, _} = payment_params(PaymentTool2),
+    Request1 = payment_params(PaymentTool1),
+    Request2 = payment_params(PaymentTool2),
     Schema = capi_feature_schemas:payment(),
     {F1, _} = read_features(Schema, Request1),
     {F2, _} = read_features(Schema, Request2),
@@ -315,7 +327,6 @@ read_payment_customer_features_value_test(_) ->
     },
     ReqUnused = [
         [<<"externalID">>],
-        [<<"flow">>, <<"type">>],
         [<<"metadata">>, <<"bla">>],
         [<<"processingDeadline">>]
     ],
@@ -439,14 +450,13 @@ create_payment_ok_test(Config) ->
     ] = create_payment(BenderKey, [Req1, Req2], Config),
     ?assertEqual([
         [<<"externalID">>],
-        [<<"flow">>, <<"type">>],
+        [<<"invoiceID">>],
         [<<"metadata">>, <<"bla">>],
         [<<"payer">>, <<"paymentSession">>],
         [<<"payer">>, <<"paymentTool">>, <<"bin">>],
         [<<"payer">>, <<"paymentTool">>, <<"cardholder_name">>],
         [<<"payer">>, <<"paymentTool">>, <<"masked_pan">>],
         [<<"payer">>, <<"paymentTool">>, <<"payment_system">>],
-        [<<"payer">>, <<"paymentToolToken">>],
         [<<"processingDeadline">>]
     ], Unused1),
     ?assertEqual(Response1, Response2).
@@ -482,11 +492,9 @@ different_payment_tools_test(Config) ->
     ] = create_payment(BenderKey, [Req1, Req2], Config),
     ?assertEqual([
         [<<"externalID">>],
-        [<<"flow">>, <<"type">>],
-        [<<"makeRecurrent">>],
+        [<<"invoiceID">>],
         [<<"metadata">>, <<"bla">>],
         [<<"payer">>, <<"paymentSession">>],
-        [<<"payer">>, <<"paymentToolToken">>],
         [<<"processingDeadline">>]
     ], Unused),
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response2).
@@ -656,7 +664,6 @@ create_refund_idemp_fail_test(Config) ->
     Req1 = #{
         <<"reason">> => ?STRING,
         <<"externalID">>  => ExternalID,
-        <<"id">> => ?STRING,
         <<"currency">> => <<"RUB">>,
         <<"cart">> => [#{<<"product">> => <<"dog">>, <<"quantity">> => 1, <<"price">> => 500}]
     },
@@ -669,7 +676,6 @@ create_refund_idemp_fail_test(Config) ->
     [{{ok, _Refund1}, Unused1}, {Response2, Unused2}] = create_refunds(BenderKey, [Req1, Req2], Config),
     Unused = [
         [<<"externalID">>],
-        [<<"id">>],
         [<<"invoiceID">>],
         [<<"paymentID">>],
         [<<"reason">>]
@@ -772,23 +778,9 @@ payment_params(ExternalID, Jwe, ContactInfo, MakeRecurrent) ->
     }).
 
 payment_params(PaymentTool) ->
-    Unused = [
-        [<<"externalID">>],
-        [<<"flow">>, <<"type">>],
-        [<<"makeRecurrent">>],
-        [<<"metadata">>, <<"bla">>],
-        [<<"payer">>, <<"paymentSession">>],
-        [<<"payer">>, <<"paymentTool">>, <<"bin">>],
-        [<<"payer">>, <<"paymentTool">>, <<"cardholder_name">>],
-        [<<"payer">>, <<"paymentTool">>, <<"is_cvv_empty">>],
-        [<<"payer">>, <<"paymentTool">>, <<"last_digits">>],
-        [<<"payer">>, <<"paymentTool">>, <<"payment_system">>],
-        [<<"payer">>, <<"paymentToolToken">>],
-        [<<"processingDeadline">>]
-    ],
     Params = payment_params(<<"EID">>, <<"Jwe">>, #{}, false),
     PaymentParams = deep_merge(Params, #{<<"payer">> => #{<<"paymentTool">> => PaymentTool}}),
-    {PaymentParams, Unused}.
+    PaymentParams.
 
 bank_card_payment_tool() ->
     #{
