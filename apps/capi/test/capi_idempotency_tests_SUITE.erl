@@ -450,7 +450,6 @@ create_payment_ok_test(Config) ->
     ] = create_payment(BenderKey, [Req1, Req2], Config),
     ?assertEqual([
         [<<"externalID">>],
-        [<<"invoiceID">>],
         [<<"metadata">>, <<"bla">>],
         [<<"payer">>, <<"paymentSession">>],
         [<<"payer">>, <<"paymentTool">>, <<"bin">>],
@@ -492,7 +491,6 @@ different_payment_tools_test(Config) ->
     ] = create_payment(BenderKey, [Req1, Req2], Config),
     ?assertEqual([
         [<<"externalID">>],
-        [<<"invoiceID">>],
         [<<"metadata">>, <<"bla">>],
         [<<"payer">>, <<"paymentSession">>],
         [<<"processingDeadline">>]

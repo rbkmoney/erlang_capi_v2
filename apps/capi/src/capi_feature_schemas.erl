@@ -9,6 +9,7 @@
 -spec payment() -> schema().
 
 payment() -> #{
+    <<"invoice_id">> => [<<"invoiceID">>],
     <<"make_recurrent">> => [<<"makeRecurrent">>],
     <<"flow">> => [<<"flow">>, #{
         <<"type">> => [<<"type">>],

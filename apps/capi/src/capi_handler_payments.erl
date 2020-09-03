@@ -411,6 +411,7 @@ create_payment(InvoiceID, PartyID, #{<<"externalID">> := ExternalID} = PaymentPa
     Features = capi_idemp_features:read(Schema, PaymentParamsDecrypted),
     Params = {Hash, Features},
     #{woody_context := WoodyCtx} = Context,
+    %% invoice_id use in fun get_payment_by_external_id()
     CtxData = #{<<"invoice_id">> => InvoiceID},
     case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Params, WoodyCtx, CtxData) of
         {ok, ID} ->
