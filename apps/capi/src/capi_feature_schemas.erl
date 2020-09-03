@@ -11,7 +11,8 @@
 payment() -> #{
     <<"make_recurrent">> => [<<"makeRecurrent">>],
     <<"flow">> => [<<"flow">>, #{
-        <<"type">> => [<<"type">>]
+        <<"type">> => [<<"type">>],
+        <<"hold_exp">> => [<<"onHoldExpiration">>]
     }],
     <<"payer">> => [<<"payer">>, #{
         <<"type">> => [<<"payerType">>],
