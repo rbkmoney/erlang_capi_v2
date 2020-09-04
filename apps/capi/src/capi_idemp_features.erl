@@ -9,7 +9,7 @@
 -type feature_name()    :: integer().
 -type feature_value()   :: integer() | features() | [feature_value()] | undefined.
 -type features()        :: #{feature_name() := feature_value()}.
--type schema()          :: #{binary() := [binary() | schema() | {set, schema()}]}.
+-type schema()          :: #{feature_name() := [binary() | schema() | {set, schema()}]}.
 
 -type event()           :: {invalid_schema_fragment, feature_name(), request()} |
                            {request_visited, {request, request()}} |
