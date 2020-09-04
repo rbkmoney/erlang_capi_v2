@@ -347,7 +347,12 @@ read_invoice_features_test(_) ->
     Prod1 = <<"blue duck">>,
     Prod2 = <<"yellow duck">>,
     Price = 1,
-    {Invoice, Unused} = invoice_params(<<"external id">>),
+    Invoice = invoice_params(<<"external id">>),
+    Unused = [
+        [<<"description">>],
+        [<<"externalID">>],
+        [<<"metadata">>, <<"invoice_dummy_metadata">>]
+    ],
     Request = Invoice#{<<"cart">> => [
         #{<<"product">> => Prod2, <<"quantity">> => 1, <<"price">> => Price},
         #{<<"product">> => Prod1, <<"quantity">> => 1, <<"price">> => Price, <<"not feature">> => <<"hmm">>}
@@ -539,7 +544,12 @@ create_invoice_ok_test(Config) ->
         end},
         {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
     ], Config),
-    {Req, Unused} = invoice_params(ExternalID),
+    Req = invoice_params(ExternalID),
+    Unused = [
+        [<<"description">>],
+        [<<"externalID">>],
+        [<<"metadata">>, <<"invoice_dummy_metadata">>]
+    ],
     {{ok, #{<<"invoice">> := Invoice1}}, Unused1} = create_invoice_(Req, Config),
     {{ok, #{<<"invoice">> := Invoice2}}, Unused2} = create_invoice_(Req, Config),
 
@@ -554,7 +564,12 @@ create_invoice_ok_test(Config) ->
 create_invoice_legacy_fail_test(Config) ->
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
-    {Req, Unused} = invoice_params(ExternalID),
+    Req = invoice_params(ExternalID),
+    Unused = [
+        [<<"description">>],
+        [<<"externalID">>],
+        [<<"metadata">>, <<"invoice_dummy_metadata">>]
+    ],
     Req2 = Req#{<<"product">> => <<"test_product2">>},
     Ctx = capi_msgp_marshalling:marshal(#{<<"version">> => 1, <<"params_hash">> => erlang:phash2(Req)}),
     capi_ct_helper:mock_services([
@@ -574,7 +589,7 @@ create_invoice_legacy_fail_test(Config) ->
 create_invoice_fail_test(Config) ->
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
-    {Req1, _Unused} = invoice_params(ExternalID),
+    Req1 = invoice_params(ExternalID),
     Req2 = Req1#{<<"product">> => <<"test_product2">>},
     [
         {{ok, #{<<"invoice">> := #{<<"id">> := InvoiceID}}}, _},
@@ -587,7 +602,12 @@ create_invoice_fail_test(Config) ->
 create_invoice_idemp_cart_ok_test(Config) ->
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
-    {Params, Unused} = invoice_params(ExternalID),
+    Params = invoice_params(ExternalID),
+    Unused = [
+        [<<"description">>],
+        [<<"externalID">>],
+        [<<"metadata">>, <<"invoice_dummy_metadata">>]
+    ],
     Req1 = Params#{
         <<"amount">> => 10000,
         <<"cart">> => [
@@ -611,7 +631,12 @@ create_invoice_idemp_cart_ok_test(Config) ->
 create_invoice_idemp_cart_fail_test(Config) ->
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
-    {Req, Unused} = invoice_params(ExternalID),
+    Req = invoice_params(ExternalID),
+    Unused = [
+        [<<"description">>],
+        [<<"externalID">>],
+        [<<"metadata">>, <<"invoice_dummy_metadata">>]
+    ],
     Req1 = Req#{<<"cart">> => [#{
         <<"product">> => <<"product#1">>,
         <<"quantity">> => 1,
@@ -793,12 +818,7 @@ bank_card_payment_tool() ->
     }.
 
 invoice_params(EID) ->
-    Unused = [
-        [<<"description">>],
-        [<<"externalID">>],
-        [<<"metadata">>, <<"invoice_dummy_metadata">>]
-    ],
-    {#{
+    #{
         <<"metadata">>    => #{<<"invoice_dummy_metadata">> => <<"test_value">>},
         <<"description">> => <<"test_invoice_description">>,
         <<"externalID">>  => EID,
@@ -807,7 +827,7 @@ invoice_params(EID) ->
         <<"amount">>      => ?INTEGER,
         <<"currency">>    => ?RUB,
         <<"product">>     => <<"test_product">>
-    }, Unused}.
+    }.
 
 get_encrypted_token(PS, ExpDate) ->
     get_encrypted_token(PS, ExpDate, undefined).
