@@ -10,6 +10,7 @@
     capi_idemp_features:event_handler().
 
 create_storage() ->
+    %% TODO delete named_table. Make opportunity for concurrent tests.
     ets:new(?MODULE, [set, public, named_table]).
 
 -spec delete_storage() ->
