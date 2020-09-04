@@ -1,11 +1,12 @@
 -module(capi_idemp_features).
 
 -define(DIFFERENCE, -1).
+-include("capi_feature_schemas.hrl").
 
 -type request()         :: #{binary() := request_value()}.
 -type request_value()   :: integer() | binary() | request() | [request()].
 -type difference()      :: features().
--type feature_name()    :: binary().
+-type feature_name()    :: integer().
 -type feature_value()   :: integer() | features() | [feature_value()] | undefined.
 -type features()        :: #{feature_name() := feature_value()}.
 -type schema()          :: #{binary() := [binary() | schema() | {set, schema()}]}.
@@ -211,7 +212,7 @@ is_map(Value) and is_map(ValueWith) ->
     case compare_features(Value, ValueWith) of
         ValueWith ->
             Diff#{Key => ?DIFFERENCE}; % different everywhere
-        #{<<"$type">> := _} ->
+        #{?_type_ := _} ->
             % Different with regard to _type_, semantically same as different everywhere.
             Diff#{Key => ?DIFFERENCE};
         Diff1 when map_size(Diff1) > 0 ->

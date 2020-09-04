@@ -7,6 +7,8 @@
 -include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 
+-include("capi_feature_schemas.hrl").
+
 -export([all/0]).
 -export([groups/0]).
 -export([init_per_suite/1]).
@@ -195,30 +197,30 @@ read_payment_features_test(_Config) ->
     Request = payment_params(bank_card_payment_tool()),
     {Features, UnusedParams} = read_features(capi_feature_schemas:payment(), Request),
     ?assertMatch(#{
-        <<"payer">> := #{
-            <<"type">> := PayerType,
-            <<"customer">> := undefined,
-            <<"recurrent">> := undefined,
-            <<"tool">> := #{
-                <<"$type">> := ToolType,
-                <<"bank_card">> := #{
-                    <<"expdate">> := Date,
-                    <<"token">> := Token
+        ?payer := #{
+            ?type := PayerType,
+            ?customer := undefined,
+            ?recurrent := undefined,
+            ?tool := #{
+                ?_type_ := ToolType,
+                ?bank_card := #{
+                    ?expdate := Date,
+                    ?token := Token
                 },
-                <<"crypto">> := #{
-                    <<"currency">> := undefined
+                ?crypto := #{
+                    ?currency := undefined
                 },
-                <<"mobile_commerce">> := #{
-                    <<"operator">> := undefined,
-                    <<"phone">> := undefined
+                ?mobile_commerce := #{
+                    ?operator := undefined,
+                    ?phone := undefined
                 },
-                <<"terminal">> := #{
-                    <<"terminal_type">> := undefined
+                ?terminal := #{
+                    ?terminal_type := undefined
                 },
-                <<"wallet">> := #{
-                    <<"id">> := undefined,
-                    <<"provider">> := undefined,
-                    <<"token">> := Token
+                ?wallet := #{
+                    ?id := undefined,
+                    ?provider := undefined,
+                    ?token := Token
                 }
             }
         }
@@ -332,11 +334,11 @@ read_payment_customer_features_value_test(_) ->
     ],
     {Features, Unused} = read_features(capi_feature_schemas:payment(), Request),
     ?assertMatch(#{
-        <<"payer">> := #{
-            <<"type">>      := PayerType,
-            <<"customer">>  := CustomerID,
-            <<"recurrent">> := undefined,
-            <<"tool">>      := undefined
+        ?payer := #{
+            ?type      := PayerType,
+            ?customer  := CustomerID,
+            ?recurrent := undefined,
+            ?tool      := undefined
         }
     } when is_integer(PayerType) and is_integer(CustomerID), Features),
     ?assertEqual(ReqUnused, Unused).
@@ -359,12 +361,12 @@ read_invoice_features_test(_) ->
     ]},
     {Features, UnusedParams} = read_features(capi_feature_schemas:invoice(), Request),
     ?assertMatch(#{
-        <<"amount">>    := Amount,
-        <<"currency">>  := Cur,
-        <<"shop_id">>   := ID,
-        <<"product">>   := Prod,
-        <<"cart">>      := Cart,
-        <<"dueDate">>   := Date
+        ?amount    := Amount,
+        ?currency  := Cur,
+        ?shop_id   := ID,
+        ?product   := Prod,
+        ?cart      := Cart,
+        ?due_date  := Date
     }
     when is_integer(Amount)
     and is_integer(Cur)
@@ -414,22 +416,22 @@ compare_invoices_features_test(_) ->
     ]}),
     {Invoice2, _} = read_features(Schema, Request2),
     {InvoiceWithFullCart, _} = read_features(Schema, Request3),
-    ?assertEqual({false, #{<<"cart">> => #{
+    ?assertEqual({false, #{?cart => #{
         0 => #{
-            <<"price">>     => ?DIFFERENCE,
-            <<"product">>   => ?DIFFERENCE,
-            <<"quantity">>  => ?DIFFERENCE,
-            <<"tax">>       => ?DIFFERENCE
+            ?price     => ?DIFFERENCE,
+            ?product   => ?DIFFERENCE,
+            ?quantity  => ?DIFFERENCE,
+            ?tax       => ?DIFFERENCE
     }}}}, capi_idemp_features:compare(Invoice2, Invoice1)),
     ?assert(capi_idemp_features:compare(Invoice1, Invoice1)),
     %% Feature was deleted
     ?assert(capi_idemp_features:compare(InvoiceWithFullCart, Invoice2)),
     %% Feature was add
     ?assert(capi_idemp_features:compare(Invoice2, InvoiceWithFullCart)),
-    % %% When second request didn't contain feature, this situation detected as conflict.
+    %% When second request didn't contain feature, this situation detected as conflict.
     ?assertMatch(
-        {false, #{<<"cart">> := ?DIFFERENCE}},
-        capi_idemp_features:compare(Invoice1#{<<"cart">> => undefined}, Invoice1)
+        {false, #{?cart := ?DIFFERENCE}},
+        capi_idemp_features:compare(Invoice1#{?cart => undefined}, Invoice1)
     ),
 
     {false, Diff} = capi_idemp_features:compare(Invoice1, InvoiceChg1),
@@ -437,7 +439,7 @@ compare_invoices_features_test(_) ->
         [<<"cart.0.price">>, <<"cart.0.taxMode.rate">>],
         capi_idemp_features:list_diff_fields(Schema, Diff)
     ),
-    ?assert(capi_idemp_features:compare(Invoice1, Invoice1#{<<"cart">> => undefined})).
+    ?assert(capi_idemp_features:compare(Invoice1, Invoice1#{?cart => undefined})).
 
 -spec create_payment_ok_test(config()) ->
     _.
