@@ -14,11 +14,11 @@ payment() -> #{
     ?invoice_id => [<<"invoiceID">>],
     ?make_recurrent => [<<"makeRecurrent">>],
     ?flow => [<<"flow">>, #{
-        ?type => [<<"type">>],
+        ?_type_ => [<<"type">>],
         ?hold_exp => [<<"onHoldExpiration">>]
     }],
     ?payer => [<<"payer">>, #{
-        ?type => [<<"payerType">>],
+        ?_type_ => [<<"payerType">>],
         ?tool => [<<"paymentTool">>, #{
             ?_type_ => [<<"type">>],
             ?bank_card => #{
@@ -26,7 +26,7 @@ payment() -> #{
                 ?expdate => [<<"exp_date">>]
             },
             ?terminal => #{
-                ?terminal_type => [<<"terminal_type">>]
+                ?_type_ => [<<"terminal_type">>]
             },
             ?wallet => #{
                 ?provider => [<<"provider">>],
@@ -76,7 +76,7 @@ cart_line_schema() ->
         ?quantity => [<<"quantity">>],
         ?price    => [<<"price">>],
         ?tax      => [<<"taxMode">>, #{
-            ?type =>[<<"type">>],
+            ?_type_ =>[<<"type">>],
             ?rate => [<<"rate">>]
         }]
     }.

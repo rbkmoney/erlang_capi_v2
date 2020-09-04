@@ -234,3 +234,65 @@ zipfold(Fun, Acc, M1, M2) ->
         Acc,
         M1
     ).
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+-spec test() -> _.
+
+-spec read_payment_features_test() ->
+    _.
+
+read_payment_features_test() ->
+    % UnusedRequest = [
+    %     [<<"externalID">>],
+    %     [<<"metadata">>, <<"bla">>],
+    %     [<<"payer">>, <<"paymentSession">>],
+    %     [<<"payer">>, <<"paymentTool">>, <<"bin">>],
+    %     [<<"payer">>, <<"paymentTool">>, <<"cardholder_name">>],
+    %     [<<"payer">>, <<"paymentTool">>, <<"is_cvv_empty">>],
+    %     [<<"payer">>, <<"paymentTool">>, <<"last_digits">>],
+    %     [<<"payer">>, <<"paymentTool">>, <<"payment_system">>],
+    %     [<<"payer">>, <<"paymentToolToken">>],
+    %     [<<"processingDeadline">>]
+    % ],
+    Request = payment_params(bank_card_payment_tool()),
+    {Features, UnusedParams} = read_features(capi_feature_schemas:payment(), Request),
+    ?assertMatch(#{
+        ?payer := #{
+            ?type := PayerType,
+            ?customer := undefined,
+            ?recurrent := undefined,
+            ?tool := #{
+                ?_type_ := ToolType,
+                ?bank_card := #{
+                    ?expdate := Date,
+                    ?token := Token
+                },
+                ?crypto := #{
+                    ?currency := undefined
+                },
+                ?mobile_commerce := #{
+                    ?operator := undefined,
+                    ?phone := undefined
+                },
+                ?terminal := #{
+                    ?terminal_type := undefined
+                },
+                ?wallet := #{
+                    ?id := undefined,
+                    ?provider := undefined,
+                    ?token := Token
+                }
+            }
+        }
+    }
+    when is_integer(Token)
+    and is_integer(Date)
+    and is_integer(ToolType)
+    and is_integer(PayerType), Features),
+    ?assertEqual(UnusedRequest, UnusedParams).
+
+
+
+-endif.
