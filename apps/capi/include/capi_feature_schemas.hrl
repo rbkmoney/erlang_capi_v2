@@ -1,8 +1,9 @@
 -ifndef(__capi_feature_schemas__).
 -define(__capi_feature_schemas__, 42).
 
--define(_type_,           0).
--define(type,             1).
+%% macros with special semantic _MACRO_,
+%% use in idempotent features algorithm.
+-define(_type_,           1). % affect on compare feature algorithm
 -define(invoice_id,       2).
 -define(make_recurrent,   3).
 -define(flow,             4).
