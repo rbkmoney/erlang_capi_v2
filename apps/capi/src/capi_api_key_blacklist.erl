@@ -65,7 +65,13 @@ start_link() ->
 -spec child_spec() -> supervisor:child_spec().
 
 child_spec() ->
-    #{id => ?MODULE, start => {?MODULE, start_link, []}, restart => permanent}.
+    #{
+        id => ?MODULE,
+        start => {?MODULE, start_link, []},
+        type => worker,
+        restart => permanent
+    }.
+
 %%
 
 -spec init(any()) -> {ok, state(), 0}.

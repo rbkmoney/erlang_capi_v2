@@ -308,12 +308,3 @@ get_consumer(Claims) ->
         <<"client"  >> -> client;
         <<"provider">> -> provider
     end.
-
-check_blacklist(Context, ApiKey) ->
-    case capi_api_key_blacklist:check(ApiKey) of
-        true ->
-            _ = lager:warning("Blacklisted API Key usage detected for subject_id: ~p", [get_subject_id(Context)]),
-            false;
-        false ->
-            {true, Context}
-    end.
