@@ -36,7 +36,7 @@
 authorize_api_key(OperationID, ApiKey, _HandlerOpts) ->
     case uac:authorize_api_key(ApiKey, get_verification_options()) of
         {ok, Context} ->
-            {true, Context};
+            check_blacklist(ApiKey, Context);
         {error, Error} ->
             _ = logger:info("API Key authorization failed for ~p due to ~p", [OperationID, Error]),
             false
@@ -263,3 +263,13 @@ get_verification_options() ->
     #{
         domains_to_decode => [?DOMAIN]
     }.
+
+check_blacklist(ApiKey, Context) ->
+    case capi_api_key_blacklist:check(ApiKey) of
+        true ->
+            SubjectId = uac_authorizer_jwt:get_subject_id(Context),
+            _ = logger:warning("Blacklisted API Key usage detected for subject_id: ~p", [SubjectId]),
+            false;
+        false ->
+            {true, Context}
+    end.

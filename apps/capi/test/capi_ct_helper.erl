@@ -85,6 +85,8 @@ start_capi(Config) ->
 start_capi(Config, ExtraEnv) ->
     JwkPublSource = {json, {file, get_keysource("keys/local/jwk.publ.json", Config)}},
     JwkPrivSource = {json, {file, get_keysource("keys/local/jwk.priv.json", Config)}},
+    BlacklistedKeysDir = get_blacklisted_keys_dir(Config),
+    file:make_dir(BlacklistedKeysDir),
     CapiEnv = ExtraEnv ++ [
         {ip, ?CAPI_IP},
         {port, ?CAPI_PORT},
@@ -95,6 +97,10 @@ start_capi(Config, ExtraEnv) ->
                     capi => {pem_file, get_keysource("keys/local/private.pem", Config)}
                 }
             }
+        }},
+        {api_key_blacklist, #{
+            update_interval => 50000, % milliseconds
+            blacklisted_keys_dir => BlacklistedKeysDir
         }},
         {lechiffre_opts,  #{
             encryption_source => JwkPublSource,
@@ -293,3 +299,6 @@ to_flat(Key, Value, {Prefix, Acc}) ->
 add_prefix(Key, Value, {Prefix, Acc}) ->
     FlatKey = lists:reverse([Key | Prefix]),
     {Prefix, Acc#{FlatKey => Value}}.
+
+get_blacklisted_keys_dir(Config) ->
+    filename:join(?config(data_dir, Config), "blacklisted_keys").
