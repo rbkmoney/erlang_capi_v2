@@ -213,8 +213,8 @@ is_map(Value) and is_map(ValueWith) ->
     case compare_features(Value, ValueWith) of
         ValueWith ->
             Diff#{Key => ?DIFFERENCE}; % different everywhere
-        #{?_type_ := _} ->
-            % Different with regard to _type_, semantically same as different everywhere.
+        #{?descriminator := _} ->
+            % Different with regard to descriminator, semantically same as different everywhere.
             Diff#{Key => ?DIFFERENCE};
         Diff1 when map_size(Diff1) > 0 ->
             Diff#{Key => Diff1};
@@ -279,15 +279,15 @@ read_payment_features_test() ->
         ?invoice_id => undefined,
         ?make_recurrent => undefined,
         ?flow => #{
-            ?_type_ => hash(Flow),
+            ?descriminator => hash(Flow),
             ?hold_exp => undefined
         },
         ?payer => #{
-            ?_type_ => hash(PayerType),
+            ?descriminator => hash(PayerType),
             ?customer => undefined,
             ?recurrent => undefined,
             ?tool => #{
-                ?_type_ => hash(ToolType),
+                ?descriminator => hash(ToolType),
                 ?bank_card => #{
                     ?expdate    => hash(ExpDate),
                     ?token      => hash(Token)},
@@ -295,7 +295,7 @@ read_payment_features_test() ->
                 ?mobile_commerce => #{
                     ?operator => undefined,
                     ?phone    => undefined},
-                ?terminal => #{?_type_ => undefined},
+                ?terminal => #{?descriminator => undefined},
                 ?wallet => #{
                     ?id        => undefined,
                     ?provider  => undefined,
@@ -404,7 +404,7 @@ read_payment_customer_features_value_test() ->
         ?make_recurrent => undefined,
         ?flow => undefined,
         ?payer => #{
-            ?_type_      => hash(PayerType),
+            ?descriminator => hash(PayerType),
             ?customer  => hash(CustomerID),
             ?recurrent => undefined,
             ?tool      => undefined
