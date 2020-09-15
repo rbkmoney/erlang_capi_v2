@@ -83,6 +83,8 @@ start_capi(Config) ->
     [app_name()].
 
 start_capi(Config, ExtraEnv) ->
+    BlacklistedKeysDir = get_blacklisted_keys_dir(Config),
+    file:make_dir(BlacklistedKeysDir),
     JwkPath = get_keysource("keys/local/jwk.json", Config),
     CapiEnv = ExtraEnv ++ [
         {ip, ?CAPI_IP},
@@ -94,6 +96,10 @@ start_capi(Config, ExtraEnv) ->
                     capi => {pem_file, get_keysource("keys/local/private.pem", Config)}
                 }
             }
+        }},
+        {api_key_blacklist, #{
+            update_interval => 50000, % milliseconds
+            blacklisted_keys_dir => BlacklistedKeysDir
         }},
         {lechiffre_opts,  #{
             encryption_key_path => JwkPath,
@@ -263,3 +269,6 @@ get_lifetime(YY, MM, DD) ->
        <<"months">> => MM,
        <<"days">>   => DD
     }.
+
+get_blacklisted_keys_dir(Config) ->
+    filename:join(?config(data_dir, Config), "blacklisted_keys").

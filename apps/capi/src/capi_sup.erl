@@ -30,11 +30,12 @@ init([]) ->
     HealthRoutes = [{'_', [erl_health_handle:get_route(HealthCheck)]}],
     SwaggerHandlerOpts = genlib_app:env(?APP, swagger_handler_opts, #{}),
     SwaggerSpec = capi_swagger_server:child_spec({HealthRoutes, LogicHandler, SwaggerHandlerOpts}),
+    BlacklistSpecs = capi_api_key_blacklist:child_spec(),
     UacConf = get_uac_config(),
     ok = uac:configure(UacConf),
     {ok, {
         {one_for_all, 0, 1},
-            [LechiffreSpec] ++ LogicHandlerSpecs ++ [SwaggerSpec]
+            [LechiffreSpec] ++ LogicHandlerSpecs ++ [SwaggerSpec] ++ [BlacklistSpecs]
     }}.
 
 -spec get_logic_handler_info() -> {Handler :: atom(), [Spec :: supervisor:child_spec()] | []} .
