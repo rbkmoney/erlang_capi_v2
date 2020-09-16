@@ -4,6 +4,7 @@
 
 -include("capi_feature_schemas.hrl").
 
+-define(id,               1).
 -define(invoice_id,       2).
 -define(make_recurrent,   3).
 -define(flow,             4).
@@ -17,25 +18,24 @@
 -define(terminal_type,   12).
 -define(wallet,          13).
 -define(provider,        14).
--define(id,              15).
--define(crypto,          16).
--define(currency,        17).
--define(mobile_commerce, 18).
--define(operator,        19).
--define(phone,           20).
--define(customer,        21).
--define(recurrent,       22).
--define(invoice,         23).
--define(payment,         24).
--define(shop_id,         25).
--define(amount,          26).
--define(product,         27).
--define(due_date,        28).
--define(cart,            29).
--define(quantity,        30).
--define(price,           31).
--define(tax,             32).
--define(rate,            33).
+-define(crypto,          15).
+-define(currency,        16).
+-define(mobile_commerce, 17).
+-define(operator,        18).
+-define(phone,           19).
+-define(customer,        20).
+-define(recurrent,       21).
+-define(invoice,         22).
+-define(payment,         23).
+-define(shop_id,         24).
+-define(amount,          25).
+-define(product,         26).
+-define(due_date,        27).
+-define(cart,            28).
+-define(quantity,        29).
+-define(price,           30).
+-define(tax,             31).
+-define(rate,            32).
 
 -export([payment/0]).
 -export([invoice/0]).
@@ -391,8 +391,8 @@ compare_invoices_features_test() ->
     %% Feature was add
     ?assert(capi_idemp_features:compare(Invoice2, InvoiceWithFullCart)),
     %% When second request didn't contain feature, this situation detected as conflict.
-    ?assertMatch(
-        {false, #{?cart := ?difference}},
+    ?assertEqual(
+        {false, #{?cart => ?difference}},
         capi_idemp_features:compare(Invoice1#{?cart => undefined}, Invoice1)
     ),
 

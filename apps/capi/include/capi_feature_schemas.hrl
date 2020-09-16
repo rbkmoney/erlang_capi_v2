@@ -3,7 +3,7 @@
 
 % Marking some feature as `discriminator` will make featureset comparator consider two sets with different
 % `discriminator` values as _different everywhere_ which usually helps with diff readability.
--define(discriminator,    1).
--define(difference,      -1).
+-define(discriminator,   -1).
+-define(difference,      -2).
 
 -endif.
