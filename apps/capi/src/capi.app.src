@@ -17,6 +17,7 @@
         lechiffre,
         reporter_proto,
         bender_proto,
+        bender_client,
         dmt_client,
         swag_server,
         jose,

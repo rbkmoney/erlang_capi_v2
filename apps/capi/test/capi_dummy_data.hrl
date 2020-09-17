@@ -133,10 +133,31 @@
     bin = <<"411111">>,
     last_digits = <<"411111******1111">>
 }).
+-define(BANK_CARD(PS, ExpDate, CardHolder), ?BANK_CARD(PS, ExpDate, CardHolder, undefined)).
+-define(BANK_CARD(PS, ExpDate, CardHolder, Category), #domain_BankCard{
+    token = ?TEST_PAYMENT_TOKEN(PS),
+    payment_system = PS,
+    exp_date = ExpDate,
+    cardholder_name = CardHolder,
+    category = Category,
+    bin = <<"411111">>,
+    last_digits = <<"1111">>
+}).
+
+-define(DIGITAL_WALLET(Phone, TokenID), #domain_DigitalWallet{
+    provider = qiwi,
+    id = Phone,
+    token = TokenID
+}).
 
 -define(CONTACT_INFO, #domain_ContactInfo{
         phone_number = ?STRING,
         email = <<"test@test.ru">>
+    }).
+
+-define(EXP_DATE(Month, Year), #domain_BankCardExpDate{
+        month = Month,
+        year = Year
     }).
 
 -define(DISP_PAYMENT_RESOURCE, #domain_DisposablePaymentResource{

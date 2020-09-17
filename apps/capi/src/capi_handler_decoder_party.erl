@@ -17,9 +17,10 @@
 -export([decode_disposable_payment_resource/1]).
 -export([decode_payout_tool_params/2]).
 -export([decode_payout_tool_details/1]).
--export([decode_payment_tool_token/1]).
+-export([decode_payment_tool/1]).
 -export([decode_payment_tool_details/1]).
 
+-export([wrap_payment_tool_token/1]).
 %%
 
 -spec decode_shop_location(capi_handler_encoder:encode_data()) ->
@@ -189,46 +190,102 @@ decode_residence(Residence) when is_atom(Residence) ->
 decode_payment_institution_ref(#domain_PaymentInstitutionRef{id = Ref}) ->
     Ref.
 
--spec decode_payment_tool_token(capi_handler_encoder:encode_data()) ->
-    binary().
+-spec decode_payment_tool(capi_handler_encoder:encode_data()) ->
+    capi_handler_decoder_utils:decode_data().
 
-decode_payment_tool_token({bank_card, BankCard}) ->
+decode_payment_tool({bank_card, BankCard}) ->
     decode_bank_card(BankCard);
-decode_payment_tool_token({payment_terminal, PaymentTerminal}) ->
+decode_payment_tool({payment_terminal, PaymentTerminal}) ->
     decode_payment_terminal(PaymentTerminal);
-decode_payment_tool_token({digital_wallet, DigitalWallet}) ->
+decode_payment_tool({digital_wallet, DigitalWallet}) ->
     decode_digital_wallet(DigitalWallet);
-decode_payment_tool_token({crypto_currency, CryptoCurrency}) ->
+decode_payment_tool({crypto_currency, CryptoCurrency}) ->
     decode_crypto_wallet(CryptoCurrency);
-decode_payment_tool_token({mobile_commerce, MobileCommerce}) ->
+decode_payment_tool({mobile_commerce, MobileCommerce}) ->
     decode_mobile_commerce(MobileCommerce).
 
+-spec wrap_payment_tool_token(capi_handler_decoder_utils:decode_data()) ->
+    binary().
+
+wrap_payment_tool_token(#{<<"type">> := <<"bank_card">>} = BankCard) ->
+    Fields = [
+        <<"token">>,
+        <<"payment_system">>,
+        <<"bin">>,
+        <<"masked_pan">>,
+        <<"token_provider">>,
+        <<"issuer_country">>,
+        <<"bank_name">>,
+        <<"metadata">>,
+        <<"is_cvv_empty">>],
+    BankCard1 = maps:with(Fields, BankCard),
+    capi_utils:map_to_base64url(BankCard1);
+wrap_payment_tool_token(#{<<"type">> := <<"payment_terminal">>} = PaymentTerminal) ->
+    capi_utils:map_to_base64url(PaymentTerminal);
+wrap_payment_tool_token(#{<<"type">> := <<"digital_wallet">>} = DigitalWallet) ->
+    capi_utils:map_to_base64url(DigitalWallet);
+wrap_payment_tool_token(#{<<"type">> := <<"crypto_currency">>} = CryptoCurrency) ->
+    capi_utils:map_to_base64url(CryptoCurrency);
+wrap_payment_tool_token(#{<<"type">> := <<"mobile_commerce">>} =  MobileCommerce) ->
+    capi_utils:map_to_base64url(MobileCommerce).
+
 decode_bank_card(#domain_BankCard{
-    'token'               = Token,
-    'payment_system'      = PaymentSystem,
-    'bin'                 = Bin,
-    'last_digits'         = LastDigits,
-    'token_provider'      = TokenProvider,
-    'issuer_country'      = IssuerCountry,
-    'bank_name'           = BankName,
-    'metadata'            = Metadata,
-    'is_cvv_empty'        = IsCVVEmpty
+    'token'          = Token,
+    'payment_system' = PaymentSystem,
+    'bin'            = Bin,
+    'last_digits'    = LastDigits,
+    'token_provider' = TokenProvider,
+    'issuer_country' = IssuerCountry,
+    'bank_name'      = BankName,
+    'metadata'       = Metadata,
+    'is_cvv_empty'   = IsCVVEmpty,
+    'exp_date'       = ExpDate,
+    'cardholder_name' = CardHolder
     % 'tokenization_method' = TokenizationMethod
 }) ->
-    capi_utils:map_to_base64url(genlib_map:compact(#{
-        <<"type"          >>      => <<"bank_card">>,
-        <<"token"         >>      => Token,
-        <<"payment_system">>      => PaymentSystem,
-        <<"bin"           >>      => Bin,
-        <<"masked_pan"    >>      => LastDigits,
-        <<"token_provider">>      => TokenProvider,
-        <<"issuer_country">>      => IssuerCountry,
-        <<"bank_name"     >>      => BankName,
-        <<"metadata"      >>      => decode_bank_card_metadata(Metadata),
-        <<"is_cvv_empty"  >>      => decode_bank_card_cvv_flag(IsCVVEmpty)
+    genlib_map:compact(#{
+        <<"type"          >> => <<"bank_card">>,
+        <<"token"         >> => Token,
+        <<"payment_system">> => PaymentSystem,
+        <<"bin"           >> => Bin,
+        <<"masked_pan"    >> => LastDigits,
+        <<"token_provider">> => TokenProvider,
+        <<"issuer_country">> => IssuerCountry,
+        <<"bank_name"     >> => BankName,
+        <<"metadata"      >> => decode_bank_card_metadata(Metadata),
+        <<"is_cvv_empty"  >> => decode_bank_card_cvv_flag(IsCVVEmpty),
+        <<"exp_date"      >> => ExpDate,
+        <<"cardholder_name">> => CardHolder
         % TODO: Uncomment or delete this when we negotiate deploying non-breaking changes
         % <<"tokenization_method">> => TokenizationMethod
-    })).
+    }).
+% =======
+%     'token'               = Token,
+%     'payment_system'      = PaymentSystem,
+%     'bin'                 = Bin,
+%     'last_digits'         = LastDigits,
+%     'token_provider'      = TokenProvider,
+%     'issuer_country'      = IssuerCountry,
+%     'bank_name'           = BankName,
+%     'metadata'            = Metadata,
+%     'is_cvv_empty'        = IsCVVEmpty
+%     % 'tokenization_method' = TokenizationMethod
+% }) ->
+%     capi_utils:map_to_base64url(genlib_map:compact(#{
+%         <<"type"          >>      => <<"bank_card">>,
+%         <<"token"         >>      => Token,
+%         <<"payment_system">>      => PaymentSystem,
+%         <<"bin"           >>      => Bin,
+%         <<"masked_pan"    >>      => LastDigits,
+%         <<"token_provider">>      => TokenProvider,
+%         <<"issuer_country">>      => IssuerCountry,
+%         <<"bank_name"     >>      => BankName,
+%         <<"metadata"      >>      => decode_bank_card_metadata(Metadata),
+%         <<"is_cvv_empty"  >>      => decode_bank_card_cvv_flag(IsCVVEmpty)
+%         % TODO: Uncomment or delete this when we negotiate deploying non-breaking changes
+%         % <<"tokenization_method">> => TokenizationMethod
+%     })).
+% >>>>>>> master
 
 decode_bank_card_cvv_flag(undefined) ->
     undefined;
@@ -243,38 +300,38 @@ decode_bank_card_metadata(Meta) ->
 decode_payment_terminal(#domain_PaymentTerminal{
     terminal_type = Type
 }) ->
-    capi_utils:map_to_base64url(#{
+    #{
         <<"type"         >> => <<"payment_terminal">>,
         <<"terminal_type">> => Type
-    }).
+    }.
 
 decode_digital_wallet(#domain_DigitalWallet{
     provider = Provider,
     id = ID,
     token = undefined
 }) ->
-    capi_utils:map_to_base64url(#{
+    #{
         <<"type"    >> => <<"digital_wallet">>,
         <<"provider">> => atom_to_binary(Provider, utf8),
         <<"id"      >> => ID
-    });
+    };
 decode_digital_wallet(#domain_DigitalWallet{
     provider = Provider,
     id = ID,
     token = Token
 }) ->
-    capi_utils:map_to_base64url(#{
+    #{
         <<"type"    >> => <<"digital_wallet">>,
         <<"provider">> => atom_to_binary(Provider, utf8),
         <<"id"      >> => ID,
         <<"token"   >> => Token
-    }).
+    }.
 
 decode_crypto_wallet(CryptoCurrency) ->
-    capi_utils:map_to_base64url(#{
+    #{
         <<"type"           >> => <<"crypto_wallet">>,
         <<"crypto_currency">> => capi_handler_decoder_utils:convert_crypto_currency_to_swag(CryptoCurrency)
-    }).
+    }.
 
 decode_mobile_commerce(MobileCommerce) ->
     #domain_MobileCommerce{
@@ -285,11 +342,11 @@ decode_mobile_commerce(MobileCommerce) ->
         }
     } = MobileCommerce,
     Phone = #{<<"cc">> => Cc, <<"ctn">> => Ctn},
-    capi_utils:map_to_base64url(#{
+    #{
        <<"type">> => <<"mobile_commerce">>,
        <<"phone">> => Phone,
        <<"operator">> => atom_to_binary(Operator, utf8)
-    }).
+    }.
 
 -spec decode_payment_tool_details(capi_handler_encoder:encode_data()) ->
     capi_handler_decoder_utils:decode_data().
@@ -353,8 +410,9 @@ mask_phone_number(PhoneNumber) ->
 decode_disposable_payment_resource(Resource) ->
     #domain_DisposablePaymentResource{payment_tool = PaymentTool, payment_session_id = SessionID} = Resource,
     ClientInfo = decode_client_info(Resource#domain_DisposablePaymentResource.client_info),
+    PaymentToolSwag = decode_payment_tool(PaymentTool),
     #{
-        <<"paymentToolToken"  >> => decode_payment_tool_token(PaymentTool),
+        <<"paymentToolToken"  >> => wrap_payment_tool_token(PaymentToolSwag),
         <<"paymentSession"    >> => capi_handler_utils:wrap_payment_session(ClientInfo, SessionID),
         <<"paymentToolDetails">> => decode_payment_tool_details(PaymentTool),
         <<"clientInfo"        >> => ClientInfo

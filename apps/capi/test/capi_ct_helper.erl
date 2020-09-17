@@ -22,7 +22,7 @@
 -export([mock_services/2]).
 -export([mock_services_/2]).
 -export([get_lifetime/0]).
-
+-export([map_to_flat/1]).
 -define(CAPI_IP                     , "::").
 -define(CAPI_PORT                   , 8080).
 -define(CAPI_HOST_NAME              , "localhost").
@@ -83,9 +83,10 @@ start_capi(Config) ->
     [app_name()].
 
 start_capi(Config, ExtraEnv) ->
+    JwkPublSource = {json, {file, get_keysource("keys/local/jwk.publ.json", Config)}},
+    JwkPrivSource = {json, {file, get_keysource("keys/local/jwk.priv.json", Config)}},
     BlacklistedKeysDir = get_blacklisted_keys_dir(Config),
     file:make_dir(BlacklistedKeysDir),
-    JwkPath = get_keysource("keys/local/jwk.json", Config),
     CapiEnv = ExtraEnv ++ [
         {ip, ?CAPI_IP},
         {port, ?CAPI_PORT},
@@ -102,8 +103,8 @@ start_capi(Config, ExtraEnv) ->
             blacklisted_keys_dir => BlacklistedKeysDir
         }},
         {lechiffre_opts,  #{
-            encryption_key_path => JwkPath,
-            decryption_key_paths => [JwkPath]
+            encryption_source => JwkPublSource,
+            decryption_sources => [JwkPrivSource]
         }}
     ],
     start_app(capi, CapiEnv).
@@ -199,7 +200,14 @@ stop_mocked_service_sup(SupPid) ->
     _.
 
 mock_services(Services, SupOrConfig) ->
-    start_woody_client(mock_services_(Services, SupOrConfig)).
+    {BenderClientServices, WoodyServices} = lists:partition(fun({ServiceName, _}) ->
+        ServiceName == generator
+    end, Services),
+    start_bender_client(mock_services_(BenderClientServices, SupOrConfig)),
+    start_woody_client(mock_services_(WoodyServices, SupOrConfig)).
+
+start_bender_client(Services) ->
+    start_app(bender_client, [{services, Services}]).
 
 start_woody_client(Services) ->
     start_app(capi_woody_client, [{services, Services}]).
@@ -234,11 +242,15 @@ mock_services_(Services, SupPid) when is_pid(SupPid) ->
         Services
     ).
 
+get_service_name({generator, _}) ->
+    'Generator';
 get_service_name({ServiceName, _Fun}) ->
     ServiceName;
 get_service_name({ServiceName, _WoodyService, _Fun}) ->
     ServiceName.
 
+mock_service_handler({generator, Fun}) ->
+    mock_service_handler('Generator', {bender_thrift, 'Generator'}, Fun);
 mock_service_handler({ServiceName, Fun}) ->
     mock_service_handler(ServiceName, capi_woody_client:get_service_modname(ServiceName), Fun);
 mock_service_handler({ServiceName, WoodyService, Fun}) ->
@@ -269,6 +281,24 @@ get_lifetime(YY, MM, DD) ->
        <<"months">> => MM,
        <<"days">>   => DD
     }.
+
+-spec map_to_flat(#{}) -> FlatRepresentation :: #{}.
+
+map_to_flat(Value) ->
+    Prefix = [],
+    Acc = #{},
+    {_, FlatMap} = maps:fold(fun to_flat/3, {Prefix, Acc}, Value),
+    FlatMap.
+
+to_flat(Key, #{} = Value, {Prefix, Acc}) ->
+    {_Prefix2, AccOut} = maps:fold(fun to_flat/3, {[Key | Prefix], Acc}, Value),
+    {Prefix, AccOut};
+to_flat(Key, Value, {Prefix, Acc}) ->
+    add_prefix(Key, Value, {Prefix, Acc}).
+
+add_prefix(Key, Value, {Prefix, Acc}) ->
+    FlatKey = lists:reverse([Key | Prefix]),
+    {Prefix, Acc#{FlatKey => Value}}.
 
 get_blacklisted_keys_dir(Config) ->
     filename:join(?config(data_dir, Config), "blacklisted_keys").

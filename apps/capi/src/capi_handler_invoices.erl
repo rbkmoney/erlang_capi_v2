@@ -3,6 +3,7 @@
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 
 -behaviour(capi_handler).
+
 -export([process_request/3]).
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
@@ -189,17 +190,29 @@ process_request('GetInvoicePaymentMethods', Req, Context) ->
 process_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
-create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context, BenderPrefix) ->
-    ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
+create_invoice(PartyID, #{<<"externalID">> := ExternalID} = InvoiceParams, Context, BenderPrefix) ->
+    #{woody_context := WoodyCtx} = Context,
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     Hash = erlang:phash2(InvoiceParams),
-    case capi_bender:gen_by_snowflake(IdempotentKey, Hash, WoodyCtx) of
+    Schema = capi_feature_schemas:invoice(),
+    Features = capi_idemp_features:read(Schema, InvoiceParams),
+    BenderParams = {Hash, Features},
+    case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
         {ok, ID} ->
             Call = {invoicing, 'Create', [encode_invoice_params(ID, PartyID, InvoiceParams)]},
             capi_handler_utils:service_call_with([user_info, party_creation], Call, Context);
-        {error, {external_id_conflict, ID}} ->
+        {error, {external_id_conflict, ID, undefined}} ->
+            logger:warning("This externalID: ~p, used in another request.~n", [ID]),
+            throw({external_id_conflict, ID, ExternalID});
+        {error, {external_id_conflict, ID, Difference}} ->
+            ReadableDiff = capi_idemp_features:list_diff_fields(Schema, Difference),
+            logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, ReadableDiff]),
             throw({external_id_conflict, ID, ExternalID})
-    end.
+    end;
+create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context, _) ->
+    {ok, {ID, _}} = bender_generator_client:gen_snowflake(WoodyCtx),
+    Call = {invoicing, 'Create', [encode_invoice_params(ID, PartyID, InvoiceParams)]},
+    capi_handler_utils:service_call_with([user_info, party_creation], Call, Context).
 
 encode_invoice_params(ID, PartyID, InvoiceParams) ->
     Amount = genlib_map:get(<<"amount">>, InvoiceParams),
