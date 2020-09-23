@@ -1,6 +1,7 @@
 -module(capi_client_shops).
 
 -export([get_shops/1]).
+-export([get_party_shops/1]).
 -export([get_shop_by_id/2]).
 -export([suspend_shop/2]).
 -export([activate_shop/2]).
@@ -9,6 +10,12 @@
 
 -spec get_shops(context()) -> {ok, term()} | {error, term()}.
 get_shops(Context) ->
+    {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, #{}),
+    Response = swag_client_shops_api:get_shops(Url, PreparedParams, Opts),
+    capi_client_lib:handle_response(Response).
+
+-spec get_party_shops(context()) -> {ok, term()} | {error, term()}.
+get_party_shops(Context) ->
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, #{}),
     Response = swag_client_shops_api:get_shops(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
