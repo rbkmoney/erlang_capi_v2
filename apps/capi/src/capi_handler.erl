@@ -122,7 +122,6 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
         ok = set_request_meta(OperationID, Req),
         _ = logger:info("Processing request ~p", [OperationID]),
         OperationACL = capi_auth:get_operation_access(OperationID, Req),
-        % ct:print("AuthContext: ~p~nOperationACL: ~p~n", [AuthContext, OperationACL]),
         case uac:authorize_operation(OperationACL, AuthContext) of
             ok ->
                 WoodyContext = attach_deadline(Req, create_woody_context(RpcID, AuthContext)),

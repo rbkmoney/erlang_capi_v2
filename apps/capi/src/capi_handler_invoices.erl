@@ -15,12 +15,13 @@
     {ok | error, capi_handler:response() | noimpl}.
 
 process_request('CreateInvoice' = OperationID, Req, Context) ->
-    PartyID = capi_handler_utils:get_party_id(Context),
+    UserID = capi_handler_utils:get_user_id(Context),
+    PartyID = maps:get('partyID', Req, UserID),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     InvoiceParams = maps:get('InvoiceParams', Req),
     try create_invoice(PartyID, InvoiceParams, Context, OperationID) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, PartyID, ExtraProperties)}};
+            {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, UserID, PartyID, ExtraProperties)}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->
@@ -45,13 +46,15 @@ process_request('CreateInvoice' = OperationID, Req, Context) ->
     end;
 
 process_request('CreateInvoiceAccessToken', Req, Context) ->
+    UserID = capi_handler_utils:get_user_id(Context),
     InvoiceID = maps:get(invoiceID, Req),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
-        {ok, #'payproc_Invoice'{}} ->
+        {ok, #'payproc_Invoice'{invoice = Invoice}} ->
+            #'domain_Invoice'{owner_id = PartyID} = Invoice,
             Response =  capi_handler_utils:issue_access_token(
-                capi_handler_utils:get_party_id(Context),
-                {invoice, InvoiceID},
+                UserID,
+                {invoice, {PartyID, InvoiceID}},
                 ExtraProperties
             ),
             {ok, {201, #{}, Response}};

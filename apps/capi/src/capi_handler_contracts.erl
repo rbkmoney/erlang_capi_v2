@@ -50,6 +50,50 @@ process_request('GetContractAdjustmentByID', Req, Context) ->
             {ok, general_error(404, <<"Contract not found">>)}
     end;
 
+%% TODO[refactor] avoid code duplicate
+process_request('GetContractsForParty', Req, Context) ->
+    PartyID = maps:get('partyID', Req),
+    Party = capi_utils:unwrap(capi_handler_utils:get_my_party(PartyID, Context)),
+    {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
+
+% process_request('GetContractByIDForParty', Req, Context) ->
+%     ContractID = maps:get('contractID', Req),
+%     PartyID = maps:get('partyID', Req),
+%     Party = capi_utils:unwrap(capi_handler_utils:get_my_party(PartyID, Context)),
+%     case genlib_map:get(ContractID, Party#domain_Party.contracts) of
+%         undefined ->
+%             {ok, general_error(404, <<"Contract not found">>)};
+%         Contract ->
+%             {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}}
+%     end;
+
+process_request('GetContractAdjustmentsForParty', Req, Context) ->
+    PartyID = maps:get('partyID', Req),
+    ContractID = maps:get('contractID', Req),
+    case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
+        {ok, #domain_Contract{adjustments = Adjustments}} ->
+            Resp = [decode_contract_adjustment(A) || A <- Adjustments],
+            {ok, {200, #{}, Resp}};
+        {exception, #payproc_ContractNotFound{}} ->
+            {ok, general_error(404, <<"Contract not found">>)}
+    end;
+
+process_request('getContractAdjustmentByIDForParty', Req, Context) ->
+    PartyID = maps:get('partyID', Req),
+    ContractID = maps:get('contractID', Req),
+    case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
+        {ok, #domain_Contract{adjustments = Adjustments}} ->
+            AdjustmentID = maps:get('adjustmentID', Req),
+            case lists:keyfind(AdjustmentID, #domain_ContractAdjustment.id, Adjustments) of
+                #domain_ContractAdjustment{} = A ->
+                    {ok, {200, #{}, decode_contract_adjustment(A)}};
+                false ->
+                    {ok, general_error(404, <<"Adjustment not found">>)}
+            end;
+        {exception, #payproc_ContractNotFound{}} ->
+            {ok, general_error(404, <<"Contract not found">>)}
+    end;
+
 %%
 
 process_request(_OperationID, _Req, _Context) ->

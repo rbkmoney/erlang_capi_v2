@@ -20,6 +20,7 @@
 -export([construct_payment_methods/3]).
 -export([make_invoice_and_token/2]).
 -export([make_invoice_and_token/3]).
+-export([make_invoice_and_token/4]).
 
 -type processing_context() :: capi_handler:processing_context().
 
@@ -525,6 +526,19 @@ make_invoice_and_token(Invoice, PartyID, ExtraProperties) ->
         <<"invoiceAccessToken">> => capi_handler_utils:issue_access_token(
             PartyID,
             {invoice, Invoice#domain_Invoice.id},
+            ExtraProperties
+        )
+    }.
+
+-spec make_invoice_and_token(capi_handler_encoder:encode_data(), binary(), binary(), map()) ->
+    capi_handler_decoder_utils:decode_data().
+
+make_invoice_and_token(Invoice, UserID, PartyID, ExtraProperties) ->
+    #{
+        <<"invoice"           >> => decode_invoice(Invoice),
+        <<"invoiceAccessToken">> => capi_handler_utils:issue_access_token(
+            UserID,
+            {invoice, {PartyID, Invoice#domain_Invoice.id}},
             ExtraProperties
         )
     }.

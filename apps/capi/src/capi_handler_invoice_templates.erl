@@ -15,7 +15,8 @@
     {ok | error, capi_handler:response() | noimpl}.
 
 process_request('CreateInvoiceTemplate', Req, Context) ->
-    PartyID = capi_handler_utils:get_party_id(Context),
+    UserID = capi_handler_utils:get_user_id(Context),
+    PartyID = maps:get('partyID', Req, UserID),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     try
         CallArgs = [encode_invoice_tpl_create_params(PartyID, maps:get('InvoiceTemplateCreateParams', Req))],
@@ -63,7 +64,7 @@ process_request('UpdateInvoiceTemplate', Req, Context) ->
     try
         Params = encode_invoice_tpl_update_params(maps:get('InvoiceTemplateUpdateParams', Req)),
         Call = {invoice_templating, 'Update', [maps:get('invoiceTemplateID', Req), Params]},
-        capi_handler_utils:service_call_with([user_info, party_creation], Call, Context)
+        capi_handler_utils:service_call_with([user_info], Call, Context)
     of
         {ok, InvoiceTpl} ->
             {ok, {200, #{}, decode_invoice_tpl(InvoiceTpl)}};
@@ -98,7 +99,7 @@ process_request('UpdateInvoiceTemplate', Req, Context) ->
 
 process_request('DeleteInvoiceTemplate', Req, Context) ->
     Call = {invoice_templating, 'Delete', [maps:get('invoiceTemplateID', Req)]},
-    case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
+    case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _R} ->
             {ok, {204, #{}, undefined}};
         {exception, Exception} ->
@@ -117,14 +118,16 @@ process_request('DeleteInvoiceTemplate', Req, Context) ->
     end;
 
 process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
+    %% TODO get partyID from InvoiceTemplate?
     PartyID = capi_handler_utils:get_party_id(Context),
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
     InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     try create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, OperationID) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
+            % #'domain_Invoice'{owner_id = PartyID} = Invoice,
             {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(
-                Invoice, capi_handler_utils:get_party_id(Context), ExtraProperties)
+                Invoice, PartyID, ExtraProperties)
             }};
         {exception, Exception} ->
             case Exception of
@@ -189,7 +192,7 @@ create_invoice(PartyID, InvoiceTplID, #{<<"externalID">> := ExternalID} = Invoic
         {ok, InvoiceID} ->
             Params = [encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams)],
             Call = {invoicing, 'CreateWithTemplate', Params},
-            capi_handler_utils:service_call_with([user_info, party_creation], Call, Context);
+            capi_handler_utils:service_call_with([user_info], Call, Context);
         {error, {external_id_conflict, ID, undefined}} ->
             throw({external_id_conflict, ID, ExternalID});
         {error, {external_id_conflict, ID, Difference}} ->
@@ -202,7 +205,7 @@ create_invoice(_PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCt
     InvoiceParamsWithEID = InvoiceParams#{<<"externalID">> => undefined},
     Params = [encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParamsWithEID)],
     Call = {invoicing, 'CreateWithTemplate', Params},
-    capi_handler_utils:service_call_with([user_info, party_creation], Call, Context).
+    capi_handler_utils:service_call_with([user_info], Call, Context).
 
 encode_invoice_tpl_create_params(PartyID, Params) ->
     Details = encode_invoice_tpl_details(genlib_map:get(<<"details">>, Params)),

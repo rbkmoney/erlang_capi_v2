@@ -11,7 +11,9 @@
 -export([service_call/2]).
 
 -export([get_my_party/1]).
+-export([get_my_party/2]).
 -export([get_auth_context/1]).
+-export([get_user_id/1]).
 -export([get_party_id/1]).
 -export([get_extra_properties/1]).
 
@@ -29,6 +31,8 @@
 -export([get_payment_by_id/3]).
 -export([get_refund_by_id/4]).
 -export([get_contract_by_id/2]).
+-export([get_contract_by_id/3]).
+
 
 -export([create_dsl/3]).
 
@@ -132,15 +136,28 @@ get_auth_context(#{swagger_context := #{auth_context := AuthContext}}) ->
 
 get_user_info(Context) ->
     #payproc_UserInfo{
-        id = get_party_id(Context),
+        id = get_user_id(Context),
         type = {external_user, #payproc_ExternalUser{}}
     }.
+
+-spec get_user_id(processing_context()) ->
+    binary().
+
+get_user_id(Context) ->
+    uac_authorizer_jwt:get_subject_id(get_auth_context(Context)).
 
 -spec get_party_id(processing_context()) ->
     binary().
 
 get_party_id(Context) ->
-    uac_authorizer_jwt:get_subject_id(get_auth_context(Context)).
+    case capi_auth:get_party_id(uac_authorizer_jwt:get_claims(get_auth_context(Context))) of
+        undefined ->
+            %% Deprecated InvoiceAccessToken(live 3 days) doesn't contain claims.party_id
+            %% used user_id as party_id
+            get_user_id(Context);
+        PartyID ->
+            PartyID
+    end.
 
 -spec get_extra_properties(processing_context()) ->
     map().
@@ -158,6 +175,13 @@ get_my_party(Context) ->
     Call = {party_management, 'Get', []},
     service_call_with([user_info, party_id, party_creation], Call, Context).
 
+-spec get_my_party(binary(), processing_context()) ->
+    woody:result().
+
+get_my_party(PartyID, Context) ->
+    Call = {party_management, 'Get', [PartyID]},
+    service_call_with([user_info, party_creation], Call, Context).
+
 %% Utils
 
 -spec issue_access_token(binary(), tuple()) ->
@@ -169,8 +193,8 @@ issue_access_token(PartyID, TokenSpec) ->
 -spec issue_access_token(binary(), tuple(), map()) ->
     map().
 
-issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
-    #{<<"payload">> => capi_auth:issue_access_token(PartyID, TokenSpec, ExtraProperties)}.
+issue_access_token(UserID, TokenSpec, ExtraProperties) ->
+    #{<<"payload">> => capi_auth:issue_access_token(UserID, TokenSpec, ExtraProperties)}.
 
 -spec merge_and_compact(map(), map()) ->
     map().
@@ -321,6 +345,14 @@ get_refund_by_id(InvoiceID, PaymentID, RefundID, Context) ->
 get_contract_by_id(ContractID, Context) ->
     Call = {party_management, 'GetContract', [ContractID]},
     service_call_with([user_info, party_id, party_creation], Call, Context).
+
+-spec get_contract_by_id(binary(), binary(), processing_context()) ->
+    woody:result().
+
+get_contract_by_id(PartyID, ContractID, Context) ->
+    Call = {party_management, 'GetContract', [PartyID, ContractID]},
+    service_call_with([user_info, party_creation], Call, Context).
+
 
 -spec create_dsl(atom(), map(), map()) ->
     map().

@@ -14,7 +14,8 @@
     {ok | error, capi_handler:response() | noimpl}.
 
 process_request('CreateCustomer', Req, Context) ->
-    PartyID = capi_handler_utils:get_party_id(Context),
+    UserID = capi_handler_utils:get_user_id(Context),
+    PartyID = maps:get('partyID', Req, UserID),
     Call = {customer_management, 'Create', [encode_customer_params(PartyID, maps:get('Customer', Req))]},
     case capi_handler_utils:service_call_with([party_creation], Call, Context) of
         {ok, Customer} ->
@@ -72,9 +73,9 @@ process_request('DeleteCustomer', Req, Context) ->
 process_request('CreateCustomerAccessToken', Req, Context) ->
     CustomerID = maps:get(customerID, Req),
     case get_customer_by_id(CustomerID, Context) of
-        {ok, #payproc_Customer{}} ->
+        {ok, #payproc_Customer{owner_id = PartyID}} ->
             Response = capi_handler_utils:issue_access_token(
-                capi_handler_utils:get_party_id(Context),
+                PartyID,
                 {customer, CustomerID}
             ),
             {ok, {201, #{}, Response}};

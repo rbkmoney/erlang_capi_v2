@@ -51,8 +51,10 @@ process_request('GetPayout', Req, Context) ->
     end;
 
 process_request('CreatePayout', Req, Context) ->
+    UserID = capi_handler_utils:get_user_id(Context),
+    PartyID = maps:get('partyID', Req, UserID),
     CreateRequest = encode_payout_params(
-        capi_handler_utils:get_party_id(Context),
+        PartyID,
         maps:get('PayoutParams', Req)
     ),
     case capi_handler_utils:service_call({payouts, 'CreatePayout', [CreateRequest]}, Context) of
@@ -76,6 +78,34 @@ process_request('GetScheduleByRef', Req, Context) ->
             {ok, {200, #{}, decode_business_schedule(Schedule)}};
         {error, not_found} ->
             {ok, general_error(404, <<"Schedule not found">>)}
+    end;
+
+%%
+
+process_request('GetPayoutToolsForParty', Req, Context) ->
+    ContractID = maps:get('contractID', Req),
+    PartyID = maps:get('partyID', Req),
+    case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
+        {ok, #domain_Contract{payout_tools = PayoutTools}} ->
+            {ok, {200, #{}, [decode_payout_tool(P) || P <- PayoutTools]}};
+        {exception, #payproc_ContractNotFound{}} ->
+            {ok, general_error(404, <<"Contract not found">>)}
+    end;
+
+process_request('GetPayoutToolByIDForParty', Req, Context) ->
+    ContractID = maps:get('contractID', Req),
+    PartyID = maps:get('partyID', Req),
+    case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
+        {ok, #domain_Contract{payout_tools = PayoutTools}} ->
+            PayoutToolID = maps:get('payoutToolID', Req),
+            case lists:keyfind(PayoutToolID, #domain_PayoutTool.id, PayoutTools) of
+                #domain_PayoutTool{} = P ->
+                    {ok, {200, #{}, decode_payout_tool(P)}};
+                false ->
+                    {ok, general_error(404, <<"PayoutTool not found">>)}
+            end;
+        {exception, #payproc_ContractNotFound{}} ->
+            {ok, general_error(404, <<"Contract not found">>)}
     end;
 
 %%

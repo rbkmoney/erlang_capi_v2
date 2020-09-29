@@ -15,7 +15,9 @@
     {ok | error, capi_handler:response() | noimpl}.
 
 process_request('CreateWebhook', Req, Context) ->
-    WebhookParams = encode_webhook_params(capi_handler_utils:get_party_id(Context), maps:get('Webhook', Req)),
+    UserID = capi_handler_utils:get_user_id(Context),
+    PartyID = maps:get('partyID', Req, UserID),
+    WebhookParams = encode_webhook_params(PartyID, maps:get('Webhook', Req)),
     ShopID = validate_webhook_params(WebhookParams),
     Call = {party_management, 'GetShop', [ShopID]},
     case capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context) of
@@ -88,9 +90,8 @@ encode_webhook_id(WebhookID) ->
     end.
 
 get_webhook(WebhookID, Context) ->
-    PartyID = capi_handler_utils:get_party_id(Context),
     case capi_handler_utils:service_call({webhook_manager, 'Get', [WebhookID]}, Context) of
-        {ok, Webhook = #webhooker_Webhook{party_id = PartyID}} ->
+        {ok, Webhook = #webhooker_Webhook{}} ->
             {ok, Webhook};
         {ok, _Webhook} ->
             {exception, #webhooker_WebhookNotFound{}};
