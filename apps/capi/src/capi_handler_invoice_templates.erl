@@ -119,17 +119,22 @@ process_request('DeleteInvoiceTemplate', Req, Context) ->
 
 process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
     %% TODO get partyID from InvoiceTemplate?
-    PartyID = capi_handler_utils:get_party_id(Context),
+    ct:print("COntext ~p", [Context]),
+    UserID = capi_handler_utils:get_party_id(Context),
+    PartyID = UserID,
+    ct:print("PartyID ~p", [UserID]),
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
     InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     try create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, OperationID) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
+            ct:print("ok"),
             % #'domain_Invoice'{owner_id = PartyID} = Invoice,
             {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(
-                Invoice, PartyID, ExtraProperties)
+                Invoice, UserID, PartyID, ExtraProperties)
             }};
         {exception, Exception} ->
+            ct:print("exception"),
             case Exception of
                 #payproc_InvalidUser{} ->
                     {ok, general_error(404, <<"Invoice Template not found">>)};
