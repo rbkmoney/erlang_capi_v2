@@ -21,28 +21,23 @@
 -export_type([encode_data/0]).
 
 -type request_data() :: capi_handler:request_data().
--type encode_data()  :: tuple().
+-type encode_data() :: tuple().
 
--spec encode_contact_info(request_data()) ->
-    encode_data().
-
+-spec encode_contact_info(request_data()) -> encode_data().
 encode_contact_info(ContactInfo) ->
     #domain_ContactInfo{
         phone_number = genlib_map:get(<<"phoneNumber">>, ContactInfo),
-        email        = genlib_map:get(<<"email">>, ContactInfo)
+        email = genlib_map:get(<<"email">>, ContactInfo)
     }.
 
--spec encode_client_info(request_data()) ->
-    encode_data().
+-spec encode_client_info(request_data()) -> encode_data().
 encode_client_info(ClientInfo) ->
     #domain_ClientInfo{
         fingerprint = maps:get(<<"fingerprint">>, ClientInfo),
-        ip_address  = maps:get(<<"ip"         >>, ClientInfo)
+        ip_address = maps:get(<<"ip">>, ClientInfo)
     }.
 
--spec encode_payment_tool(request_data()) ->
-    encode_data().
-
+-spec encode_payment_tool(request_data()) -> encode_data().
 encode_payment_tool(PaymentTool) ->
     case PaymentTool of
         #{<<"type">> := <<"bank_card">>} = Encoded ->
@@ -59,15 +54,15 @@ encode_payment_tool(PaymentTool) ->
 
 encode_bank_card(BankCard) ->
     {bank_card, #domain_BankCard{
-        token          = maps:get(<<"token">>, BankCard),
+        token = maps:get(<<"token">>, BankCard),
         payment_system = encode_payment_system(maps:get(<<"payment_system">>, BankCard)),
-        bin            = maps:get(<<"bin">>, BankCard, <<>>),
-        last_digits    = maps:get(<<"masked_pan">>, BankCard),
+        bin = maps:get(<<"bin">>, BankCard, <<>>),
+        last_digits = maps:get(<<"masked_pan">>, BankCard),
         token_provider = encode_token_provider(genlib_map:get(<<"token_provider">>, BankCard)),
         issuer_country = encode_residence(genlib_map:get(<<"issuer_country">>, BankCard)),
-        bank_name      = genlib_map:get(<<"bank_name">>, BankCard),
-        metadata       = encode_bank_card_metadata(genlib_map:get(<<"metadata">>, BankCard)),
-        is_cvv_empty   = encode_bank_card_cvv_flag(genlib_map:get(<<"is_cvv_empty">>, BankCard)),
+        bank_name = genlib_map:get(<<"bank_name">>, BankCard),
+        metadata = encode_bank_card_metadata(genlib_map:get(<<"metadata">>, BankCard)),
+        is_cvv_empty = encode_bank_card_cvv_flag(genlib_map:get(<<"is_cvv_empty">>, BankCard)),
         tokenization_method = genlib_map:get(<<"tokenization_method">>, BankCard)
     }}.
 
@@ -89,9 +84,7 @@ encode_token_provider(TokenProvider) when TokenProvider /= undefined ->
 encode_token_provider(undefined) ->
     undefined.
 
--spec encode_residence(binary() | undefined) ->
-    atom().
-
+-spec encode_residence(binary() | undefined) -> atom().
 encode_residence(undefined) ->
     undefined;
 encode_residence(Residence) when is_binary(Residence) ->
@@ -110,8 +103,8 @@ encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
 encode_digital_wallet(#{<<"provider">> := Provider, <<"id">> := ID} = Wallet) ->
     {digital_wallet, #domain_DigitalWallet{
         provider = binary_to_existing_atom(Provider, utf8),
-        id       = ID,
-        token    = maps:get(<<"token">>, Wallet, undefined)
+        id = ID,
+        token = maps:get(<<"token">>, Wallet, undefined)
     }}.
 
 encode_crypto_wallet(#{<<"crypto_currency">> := CryptoCurrency}) ->
@@ -127,34 +120,26 @@ encode_mobile_commerce(#{<<"phoneNumber">> := PhoneNumber, <<"operator">> := Ope
         }
     }}.
 
--spec encode_cash(request_data()) ->
-    encode_data().
-
+-spec encode_cash(request_data()) -> encode_data().
 encode_cash(Params) ->
-    Amount   = genlib_map:get(<<"amount"  >>, Params),
+    Amount = genlib_map:get(<<"amount">>, Params),
     Currency = genlib_map:get(<<"currency">>, Params),
     encode_cash(Amount, Currency).
 
--spec encode_cash(integer(), binary()) ->
-    encode_data().
-
+-spec encode_cash(integer(), binary()) -> encode_data().
 encode_cash(Amount, Currency) ->
     #domain_Cash{
-        amount   = Amount,
+        amount = Amount,
         currency = encode_currency(Currency)
     }.
 
--spec encode_currency(binary()) ->
-    encode_data().
-
+-spec encode_currency(binary()) -> encode_data().
 encode_currency(SymbolicCode) ->
     #domain_CurrencyRef{symbolic_code = SymbolicCode}.
 
--spec encode_invoice_cart(request_data()) ->
-    encode_data().
-
+-spec encode_invoice_cart(request_data()) -> encode_data().
 encode_invoice_cart(Params) ->
-    Cart     = genlib_map:get(<<"cart"    >>, Params),
+    Cart = genlib_map:get(<<"cart">>, Params),
     Currency = genlib_map:get(<<"currency">>, Params),
     encode_invoice_cart(Cart, Currency).
 
@@ -171,14 +156,13 @@ encode_invoice_line(Line, Currency) ->
     Metadata = encode_invoice_line_meta(Line),
     Price = encode_cash(genlib_map:get(<<"price">>, Line), Currency),
     #domain_InvoiceLine{
-        product  = genlib_map:get(<<"product" >>, Line),
+        product = genlib_map:get(<<"product">>, Line),
         quantity = genlib_map:get(<<"quantity">>, Line),
-        price    = Price,
+        price = Price,
         metadata = Metadata
     }.
 
--spec encode_invoice_line_meta(request_data()) ->
-    #{binary() => {str, _}}.
+-spec encode_invoice_line_meta(request_data()) -> #{binary() => {str, _}}.
 
 -define(DEFAULT_INVOICE_LINE_META, #{}).
 
@@ -191,16 +175,14 @@ encode_invoice_line_meta(Line) ->
             ?DEFAULT_INVOICE_LINE_META
     end.
 
-encode_invoice_line_tax_mode(#{<<"type">> := <<"InvoiceLineTaxVAT">>} = TaxMode)  ->
+encode_invoice_line_tax_mode(#{<<"type">> := <<"InvoiceLineTaxVAT">>} = TaxMode) ->
     %% for more info about taxMode look here:
     %% https://github.com/rbkmoney/starrys/blob/master/docs/settings.md
     genlib_map:get(<<"rate">>, TaxMode).
 
 -define(DEFAULT_INVOICE_META, #{}).
 
--spec encode_invoice_context(request_data()) ->
-    encode_data().
-
+-spec encode_invoice_context(request_data()) -> encode_data().
 encode_invoice_context(Params) ->
     encode_invoice_context(Params, ?DEFAULT_INVOICE_META).
 
@@ -208,35 +190,26 @@ encode_invoice_context(Params, DefaultMeta) ->
     Context = genlib_map:get(<<"metadata">>, Params, DefaultMeta),
     encode_content(json, Context).
 
--spec encode_payment_context(request_data()) ->
-    encode_data() | undefined.
-
+-spec encode_payment_context(request_data()) -> encode_data() | undefined.
 encode_payment_context(#{<<"metadata">> := Context}) ->
     encode_content(json, Context);
 encode_payment_context(#{}) ->
     undefined.
 
--spec encode_content(json, term()) ->
-    encode_data().
-
+-spec encode_content(json, term()) -> encode_data().
 encode_content(json, Data) ->
     #'Content'{
         type = <<"application/json">>,
         data = jsx:encode(Data)
     }.
 
--spec encode_stat_request(map() | binary()) ->
-    encode_data().
-
+-spec encode_stat_request(map() | binary()) -> encode_data().
 encode_stat_request(Dsl) ->
     encode_stat_request(Dsl, undefined).
 
--spec encode_stat_request(map() | binary(), binary() | undefined) ->
-    encode_data().
-
+-spec encode_stat_request(map() | binary(), binary() | undefined) -> encode_data().
 encode_stat_request(Dsl, ContinuationToken) when is_map(Dsl) ->
     encode_stat_request(jsx:encode(Dsl), ContinuationToken);
-
 encode_stat_request(Dsl, ContinuationToken) when is_binary(Dsl) ->
     #merchstat_StatRequest{
         dsl = Dsl,

@@ -25,67 +25,56 @@
     query_param_validation/1
 ]).
 
--type test_case_name()  :: atom().
--type config()          :: [{atom(), any()}].
--type group_name()      :: atom().
+-type test_case_name() :: atom().
+-type config() :: [{atom(), any()}].
+-type group_name() :: atom().
 
 -behaviour(supervisor).
 
 -define(OOPS_BODY, filename:join(?config(data_dir, Config), "cutest_cat_alive")).
 
--spec init([]) ->
-    {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
+-spec init([]) -> {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
     {ok, {#{strategy => one_for_all, intensity => 1, period => 1}, []}}.
 
--spec all() ->
-    [test_case_name()].
+-spec all() -> [test_case_name()].
 all() ->
     [
         {group, stream_handler_tests},
         {group, validation_tests}
     ].
 
--spec groups() ->
-    [{group_name(), list(), [test_case_name()]}].
+-spec groups() -> [{group_name(), list(), [test_case_name()]}].
 groups() ->
     [
-        {stream_handler_tests, [],
-            [
-                oops_body_test
-            ]
-        },
-        {validation_tests, [],
-            [
-                schema_param_validation,
-                query_param_validation
-            ]
-        }
+        {stream_handler_tests, [], [
+            oops_body_test
+        ]},
+        {validation_tests, [], [
+            schema_param_validation,
+            query_param_validation
+        ]}
     ].
 
 %%
 %% starting/stopping
 %%
--spec init_per_suite(config()) ->
-    config().
+-spec init_per_suite(config()) -> config().
 init_per_suite(Config) ->
-    capi_ct_helper:init_suite(?MODULE, Config, [{oops_bodies, #{
-        500 => ?OOPS_BODY
-    }}]).
+    capi_ct_helper:init_suite(?MODULE, Config, [
+        {oops_bodies, #{
+            500 => ?OOPS_BODY
+        }}
+    ]).
 
--spec end_per_suite(config()) ->
-    _.
+-spec end_per_suite(config()) -> _.
 end_per_suite(C) ->
     _ = capi_ct_helper:stop_mocked_service_sup(?config(suite_test_sup, C)),
     [application:stop(App) || App <- proplists:get_value(apps, C)],
     ok.
 
--spec init_per_group(group_name(), config()) ->
-    config().
-init_per_group(GroupName, Config) when
-    stream_handler_tests =:= GroupName;
-    validation_tests =:= GroupName
-->
+-spec init_per_group(group_name(), config()) -> config().
+init_per_group(GroupName, Config) when stream_handler_tests =:= GroupName; validation_tests =:= GroupName ->
     BasePermissions = [
         {[invoices], write},
         {[invoices], read},
@@ -100,31 +89,25 @@ init_per_group(GroupName, Config) when
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
     Context = capi_ct_helper:get_context(Token),
     [{context, Context} | Config];
-
 init_per_group(_, Config) ->
     Config.
 
--spec end_per_group(group_name(), config()) ->
-    _.
+-spec end_per_group(group_name(), config()) -> _.
 end_per_group(_Group, _C) ->
     ok.
 
--spec init_per_testcase(test_case_name(), config()) ->
-    config().
+-spec init_per_testcase(test_case_name(), config()) -> config().
 init_per_testcase(_Name, C) ->
     [{test_sup, capi_ct_helper:start_mocked_service_sup(?MODULE)} | C].
 
--spec end_per_testcase(test_case_name(), config()) ->
-    config().
+-spec end_per_testcase(test_case_name(), config()) -> config().
 end_per_testcase(_Name, C) ->
     capi_ct_helper:stop_mocked_service_sup(?config(test_sup, C)),
     ok.
 
 %%% Tests
 
--spec oops_body_test(config()) ->
-    _.
-
+-spec oops_body_test(config()) -> _.
 oops_body_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, "spanish inquisition"} end}], Config),
     Context = ?config(context, Config),
@@ -142,13 +125,15 @@ oops_body_test(Config) ->
     ),
     {ok, OopsBody} = file:read_file(?OOPS_BODY).
 
--spec schema_param_validation(config()) ->
-    _.
+-spec schema_param_validation(config()) -> _.
 schema_param_validation(Config) ->
-    capi_ct_helper:mock_services([
-        {invoicing, fun('Create', _)     -> {ok, ?PAYPROC_INVOICE} end},
-        {bender,    fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"key">>)} end}
-    ], Config),
+    capi_ct_helper:mock_services(
+        [
+            {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end},
+            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"key">>)} end}
+        ],
+        Config
+    ),
     Req0 = #{
         <<"shopID">> => ?STRING,
         <<"amount">> => <<"vry much">>,
@@ -161,13 +146,15 @@ schema_param_validation(Config) ->
     {error, {request_validation_failed, _}} =
         capi_client_invoices:create_invoice(?config(context, Config), Req0).
 
--spec query_param_validation(config()) ->
-    _.
+-spec query_param_validation(config()) -> _.
 query_param_validation(Config) ->
-    capi_ct_helper:mock_services([
-        {merchant_stat, fun('GetInvoices', _) -> {ok, ?STAT_RESPONSE_INVOICES} end},
-        {geo_ip_service, fun('GetLocationName', _) -> {ok, #{123 => ?STRING}} end}
-    ], Config),
+    capi_ct_helper:mock_services(
+        [
+            {merchant_stat, fun('GetInvoices', _) -> {ok, ?STAT_RESPONSE_INVOICES} end},
+            {geo_ip_service, fun('GetLocationName', _) -> {ok, #{123 => ?STRING}} end}
+        ],
+        Config
+    ),
     Query0 = [
         {payerEmail, <<"te%^st@test.ru">>}
     ],

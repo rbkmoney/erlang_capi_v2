@@ -4,16 +4,16 @@
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 
 -behaviour(capi_handler).
+
 -export([process_request/3]).
+
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
-    Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context()
-) ->
-    {ok | error, capi_handler:response() | noimpl}.
-
+    Req :: capi_handler:request_data(),
+    Context :: capi_handler:processing_context()
+) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('CreateInvoiceTemplate', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
@@ -45,20 +45,16 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
         throw:zero_invoice_lifetime ->
             {ok, logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}
     end;
-
 process_request('GetInvoiceTemplateByID', Req, Context) ->
     Call = {invoice_templating, 'Get', [maps:get('invoiceTemplateID', Req)]},
     case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
         {ok, InvoiceTpl} ->
             {ok, {200, #{}, decode_invoice_tpl(InvoiceTpl)}};
         {exception, E} when
-            E == #payproc_InvalidUser{};
-            E == #payproc_InvoiceTemplateNotFound{};
-            E == #payproc_InvoiceTemplateRemoved{}
+            E == #payproc_InvalidUser{}; E == #payproc_InvoiceTemplateNotFound{}; E == #payproc_InvoiceTemplateRemoved{}
         ->
             {ok, general_error(404, <<"Invoice template not found">>)}
     end;
-
 process_request('UpdateInvoiceTemplate', Req, Context) ->
     try
         Params = encode_invoice_tpl_update_params(maps:get('InvoiceTemplateUpdateParams', Req)),
@@ -95,7 +91,6 @@ process_request('UpdateInvoiceTemplate', Req, Context) ->
         throw:zero_invoice_lifetime ->
             {ok, logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}
     end;
-
 process_request('DeleteInvoiceTemplate', Req, Context) ->
     Call = {invoice_templating, 'Delete', [maps:get('invoiceTemplateID', Req)]},
     case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
@@ -115,7 +110,6 @@ process_request('DeleteInvoiceTemplate', Req, Context) ->
                     {ok, general_error(404, <<"Invoice Template not found">>)}
             end
     end;
-
 process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
@@ -123,9 +117,13 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     try create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, OperationID) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(
-                Invoice, capi_handler_utils:get_party_id(Context), ExtraProperties)
-            }};
+            {ok,
+                {201, #{},
+                    capi_handler_decoder_invoicing:make_invoice_and_token(
+                        Invoice,
+                        capi_handler_utils:get_party_id(Context),
+                        ExtraProperties
+                    )}};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -152,7 +150,6 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
         throw:{external_id_conflict, InvoiceID, ExternalID} ->
             {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
     end;
-
 process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
     InvoiceTemplateID = maps:get('invoiceTemplateID', Req),
     Timestamp = genlib_rfc3339:format_relaxed(erlang:system_time(microsecond), microsecond),
@@ -164,13 +161,10 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
             PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
             {ok, {200, #{}, PaymentMethods}};
         {exception, E} when
-            E == #payproc_InvalidUser{};
-            E == #payproc_InvoiceTemplateNotFound{};
-            E == #payproc_InvoiceTemplateRemoved{}
+            E == #payproc_InvalidUser{}; E == #payproc_InvoiceTemplateNotFound{}; E == #payproc_InvoiceTemplateRemoved{}
         ->
             {ok, general_error(404, <<"Invoice template not found">>)}
     end;
-
 %%
 
 process_request(_OperationID, _Req, _Context) ->
@@ -208,13 +202,13 @@ encode_invoice_tpl_create_params(PartyID, Params) ->
     Details = encode_invoice_tpl_details(genlib_map:get(<<"details">>, Params)),
     Product = get_product_from_tpl_details(Details),
     #payproc_InvoiceTemplateCreateParams{
-        party_id         = PartyID,
-        shop_id          = genlib_map:get(<<"shopID">>, Params),
+        party_id = PartyID,
+        shop_id = genlib_map:get(<<"shopID">>, Params),
         invoice_lifetime = encode_lifetime(Params),
-        product          = Product,
-        description      = genlib_map:get(<<"description">>, Params),
-        details          = Details,
-        context          = capi_handler_encoder:encode_invoice_context(Params)
+        product = Product,
+        description = genlib_map:get(<<"description">>, Params),
+        details = Details,
+        context = capi_handler_encoder:encode_invoice_context(Params)
     }.
 
 encode_invoice_tpl_update_params(Params) ->
@@ -222,15 +216,15 @@ encode_invoice_tpl_update_params(Params) ->
     Product = get_product_from_tpl_details(Details),
     #payproc_InvoiceTemplateUpdateParams{
         invoice_lifetime = encode_lifetime(Params),
-        product          = Product,
-        description      = genlib_map:get(<<"description">>, Params),
-        details          = Details,
-        context          = encode_optional_context(Params)
+        product = Product,
+        description = genlib_map:get(<<"description">>, Params),
+        details = Details,
+        context = encode_optional_context(Params)
     }.
 
 make_invoice_tpl_and_token(InvoiceTpl, PartyID, ExtraProperties) ->
     #{
-        <<"invoiceTemplate"           >> => decode_invoice_tpl(InvoiceTpl),
+        <<"invoiceTemplate">> => decode_invoice_tpl(InvoiceTpl),
         <<"invoiceTemplateAccessToken">> =>
             capi_handler_utils:issue_access_token(
                 PartyID,
@@ -272,18 +266,18 @@ encode_lifetime(0, 0, 0) ->
     throw(zero_invoice_lifetime);
 encode_lifetime(DD, MM, YY) ->
     #domain_LifetimeInterval{
-        days   = DD,
+        days = DD,
         months = MM,
-        years  = YY
-      }.
+        years = YY
+    }.
 
 encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams) ->
     #payproc_InvoiceWithTemplateParams{
-        id          = InvoiceID,
+        id = InvoiceID,
         external_id = genlib_map:get(<<"externalID">>, InvoiceParams),
         template_id = InvoiceTplID,
-        cost        = encode_optional_invoice_cost(InvoiceParams),
-        context     = encode_optional_context(InvoiceParams)
+        cost = encode_optional_invoice_cost(InvoiceParams),
+        context = encode_optional_context(InvoiceParams)
     }.
 
 encode_invoice_tpl_product(Details) ->
@@ -314,45 +308,48 @@ encode_invoice_tpl_line_cost(<<"InvoiceTemplateLineCostFixed">>, Cost) ->
 encode_invoice_tpl_line_cost(<<"InvoiceTemplateLineCostRange">>, Cost) ->
     Range = genlib_map:get(<<"range">>, Cost),
     {range, #domain_CashRange{
-        lower = {inclusive, capi_handler_encoder:encode_cash(
-            Cost#{<<"amount">> => genlib_map:get(<<"lowerBound">>, Range)}
-        )},
-        upper = {inclusive, capi_handler_encoder:encode_cash(
-            Cost#{<<"amount">> => genlib_map:get(<<"upperBound">>, Range)}
-        )}
+        lower =
+            {inclusive,
+                capi_handler_encoder:encode_cash(
+                    Cost#{<<"amount">> => genlib_map:get(<<"lowerBound">>, Range)}
+                )},
+        upper =
+            {inclusive,
+                capi_handler_encoder:encode_cash(
+                    Cost#{<<"amount">> => genlib_map:get(<<"upperBound">>, Range)}
+                )}
     }}.
 
 decode_invoice_tpl(InvoiceTpl) ->
     #domain_LifetimeInterval{days = DD, months = MM, years = YY} = InvoiceTpl#domain_InvoiceTemplate.invoice_lifetime,
     genlib_map:compact(#{
-        <<"id"         >> => InvoiceTpl#domain_InvoiceTemplate.id,
-        <<"shopID"     >> => InvoiceTpl#domain_InvoiceTemplate.shop_id,
+        <<"id">> => InvoiceTpl#domain_InvoiceTemplate.id,
+        <<"shopID">> => InvoiceTpl#domain_InvoiceTemplate.shop_id,
         <<"description">> => InvoiceTpl#domain_InvoiceTemplate.description,
-        <<"lifetime"   >> =>
-            #{
-                <<"days"  >> => undef_to_zero(DD),
-                <<"months">> => undef_to_zero(MM),
-                <<"years" >> => undef_to_zero(YY)
-            },
-        <<"details"    >> => decode_invoice_tpl_details(InvoiceTpl#domain_InvoiceTemplate.details),
-        <<"metadata"   >> => capi_handler_decoder_utils:decode_context(InvoiceTpl#domain_InvoiceTemplate.context)
+        <<"lifetime">> => #{
+            <<"days">> => undef_to_zero(DD),
+            <<"months">> => undef_to_zero(MM),
+            <<"years">> => undef_to_zero(YY)
+        },
+        <<"details">> => decode_invoice_tpl_details(InvoiceTpl#domain_InvoiceTemplate.details),
+        <<"metadata">> => capi_handler_decoder_utils:decode_context(InvoiceTpl#domain_InvoiceTemplate.context)
     }).
 
 undef_to_zero(undefined) -> 0;
-undef_to_zero(Int      ) -> Int.
+undef_to_zero(Int) -> Int.
 
 decode_invoice_tpl_details({cart, Cart}) ->
     #{
         <<"templateType">> => <<"InvoiceTemplateMultiLine">>,
-        <<"currency"    >> => get_currency_from_cart(Cart),
-        <<"cart"        >> => capi_handler_decoder_invoicing:decode_invoice_cart(Cart)
+        <<"currency">> => get_currency_from_cart(Cart),
+        <<"cart">> => capi_handler_decoder_invoicing:decode_invoice_cart(Cart)
     };
 decode_invoice_tpl_details({product, Product}) ->
     genlib_map:compact(#{
         <<"templateType">> => <<"InvoiceTemplateSingleLine">>,
-        <<"product"     >> => Product#domain_InvoiceTemplateProduct.product,
-        <<"price"       >> => decode_invoice_tpl_line_cost(Product#domain_InvoiceTemplateProduct.price),
-        <<"taxMode"     >> => capi_handler_decoder_invoicing:decode_invoice_line_tax_mode(
+        <<"product">> => Product#domain_InvoiceTemplateProduct.product,
+        <<"price">> => decode_invoice_tpl_line_cost(Product#domain_InvoiceTemplateProduct.price),
+        <<"taxMode">> => capi_handler_decoder_invoicing:decode_invoice_line_tax_mode(
             Product#domain_InvoiceTemplateProduct.metadata
         )
     }).
@@ -365,14 +362,12 @@ decode_invoice_tpl_line_cost({unlim, _}) ->
     #{
         <<"costType">> => <<"InvoiceTemplateLineCostUnlim">>
     };
-
 decode_invoice_tpl_line_cost({fixed, #domain_Cash{amount = Amount, currency = Currency}}) ->
     #{
         <<"costType">> => <<"InvoiceTemplateLineCostFixed">>,
         <<"currency">> => capi_handler_decoder_utils:decode_currency(Currency),
         <<"amount">> => Amount
     };
-
 decode_invoice_tpl_line_cost({range, #domain_CashRange{upper = {_, UpperCashBound}, lower = {_, LowerCashBound}}}) ->
     #domain_Cash{amount = UpperBound, currency = Currency} = UpperCashBound,
     #domain_Cash{amount = LowerBound, currency = Currency} = LowerCashBound,

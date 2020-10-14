@@ -16,11 +16,13 @@
 
 -export([get_unique_id/0]).
 
--define(MAX_REQUEST_DEADLINE_TIME, timer:minutes(1)). % 1 min
+% 1 min
+-define(MAX_REQUEST_DEADLINE_TIME, timer:minutes(1)).
 
 -spec base64url_to_map(binary()) -> map() | no_return().
 base64url_to_map(Base64) when is_binary(Base64) ->
-    try jsx:decode(base64url:decode(Base64), [return_maps])
+    try
+        jsx:decode(base64url:decode(Base64), [return_maps])
     catch
         Class:Reason ->
             _ = logger:debug("decoding base64 ~p to map failed with ~p:~p", [Base64, Class, Reason]),
@@ -29,7 +31,8 @@ base64url_to_map(Base64) when is_binary(Base64) ->
 
 -spec map_to_base64url(map()) -> binary() | no_return().
 map_to_base64url(Map) when is_map(Map) ->
-    try base64url:encode(jsx:encode(Map))
+    try
+        base64url:encode(jsx:encode(Map))
     catch
         Class:Reason ->
             _ = logger:debug("encoding map ~p to base64 failed with ~p:~p", [Map, Class, Reason]),
@@ -56,8 +59,7 @@ to_universal_time(Timestamp) ->
     Micros = genlib_rfc3339:parse(Timestamp, microsecond),
     genlib_rfc3339:format_relaxed(Micros, microsecond).
 
--spec unwrap(ok | {ok, Value} | {error, _Error}) ->
-    Value | no_return().
+-spec unwrap(ok | {ok, Value} | {error, _Error}) -> Value | no_return().
 unwrap(ok) ->
     ok;
 unwrap({ok, Value}) ->
@@ -82,6 +84,7 @@ parse_deadline(DeadlineStr) ->
         fun try_parse_relative/1
     ],
     try_parse_deadline(DeadlineStr, Parsers).
+
 %%
 %% Internals
 %%
@@ -94,6 +97,7 @@ try_parse_deadline(DeadlineStr, [P | Parsers]) ->
         {error, bad_deadline} ->
             try_parse_deadline(DeadlineStr, Parsers)
     end.
+
 try_parse_woody_default(DeadlineStr) ->
     try
         Deadline = woody_deadline:from_binary(to_universal_time(DeadlineStr)),
@@ -107,6 +111,7 @@ try_parse_woody_default(DeadlineStr) ->
         error:deadline_reached ->
             {error, bad_deadline}
     end.
+
 try_parse_relative(DeadlineStr) ->
     %% deadline string like '1ms', '30m', '2.6h' etc
     case re:split(DeadlineStr, <<"^(\\d+\\.\\d+|\\d+)([a-z]+)$">>) of
@@ -116,6 +121,7 @@ try_parse_relative(DeadlineStr) ->
         _Other ->
             {error, bad_deadline}
     end.
+
 try_parse_relative(Number, Unit) ->
     case unit_factor(Unit) of
         {ok, Factor} ->
@@ -124,6 +130,7 @@ try_parse_relative(Number, Unit) ->
         {error, _Reason} ->
             {error, bad_deadline}
     end.
+
 unit_factor(<<"ms">>) ->
     {ok, 1};
 unit_factor(<<"s">>) ->
@@ -133,7 +140,7 @@ unit_factor(<<"m">>) ->
 unit_factor(_Other) ->
     {error, unknown_unit}.
 
-clamp_max_request_deadline(Value) when is_integer(Value)->
+clamp_max_request_deadline(Value) when is_integer(Value) ->
     MaxDeadline = genlib_app:env(capi, max_request_deadline, ?MAX_REQUEST_DEADLINE_TIME),
     case Value > MaxDeadline of
         true ->
@@ -143,7 +150,6 @@ clamp_max_request_deadline(Value) when is_integer(Value)->
     end.
 
 -spec deduplicate_payment_methods(list()) -> list().
-
 deduplicate_payment_methods(Methods) ->
     F = fun(Value, AccIn) ->
         EqFun = fun(V) ->
@@ -160,14 +166,16 @@ deduplicate_payment_methods(Methods) ->
 
 % payment methods are considered equivalent if they have the same method and token provider
 % in case there no token provider method equality is enough
-payment_methods_equivalent(#{
+payment_methods_equivalent(
+    #{
         <<"method">> := M,
         <<"tokenProviders">> := P
     },
     #{
         <<"method">> := M,
         <<"tokenProviders">> := P
-    }) ->
+    }
+) ->
     true;
 payment_methods_equivalent(#{<<"method">> := M} = M1, #{<<"method">> := M} = M2) ->
     maps:get(<<"tokenProviders">>, M1, undefined) =:= maps:get(<<"tokenProviders">>, M2, undefined);
@@ -196,6 +204,7 @@ do_merge_payment_methods(MergableField, Method1, Method2) ->
 get_unique_id() ->
     <<ID:64>> = snowflake:new(),
     genlib_format:format_int_base(ID, 62).
+
 %%
 
 -ifdef(TEST).
@@ -204,8 +213,9 @@ get_unique_id() ->
 -spec test() -> _.
 
 -spec to_universal_time_test() -> _.
+
 to_universal_time_test() ->
-    ?assertEqual(<<"2017-04-19T13:56:07Z">>,        to_universal_time(<<"2017-04-19T13:56:07Z">>)),
+    ?assertEqual(<<"2017-04-19T13:56:07Z">>, to_universal_time(<<"2017-04-19T13:56:07Z">>)),
     ?assertEqual(<<"2017-04-19T13:56:07.530Z">>, to_universal_time(<<"2017-04-19T13:56:07.53Z">>)),
     ?assertEqual(<<"2017-04-19T10:36:07.530Z">>, to_universal_time(<<"2017-04-19T13:56:07.53+03:20">>)),
     ?assertEqual(<<"2017-04-19T17:16:07.530Z">>, to_universal_time(<<"2017-04-19T13:56:07.53-03:20">>)).
@@ -214,7 +224,7 @@ to_universal_time_test() ->
 redact_test() ->
     P1 = <<"^\\+\\d(\\d{1,10}?)\\d{2,4}$">>,
     ?assertEqual(<<"+7******3210">>, redact(<<"+79876543210">>, P1)),
-    ?assertEqual(       <<"+1*11">>, redact(<<"+1111">>, P1)).
+    ?assertEqual(<<"+1*11">>, redact(<<"+1111">>, P1)).
 
 -spec parse_deadline_test() -> _.
 parse_deadline_test() ->
@@ -230,7 +240,7 @@ parse_deadline_test() ->
 no_deduplication_test() ->
     Methods = [
         #{
-            <<"method">> =>"BankCard",
+            <<"method">> => "BankCard",
             <<"paymentSystems">> => [
                 <<"mastercard">>,
                 <<"visa">>
