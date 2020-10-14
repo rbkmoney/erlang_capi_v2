@@ -4,16 +4,16 @@
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 
 -behaviour(capi_handler).
+
 -export([process_request/3]).
+
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
-    Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context()
-) ->
-    {ok | error, capi_handler:response() | noimpl}.
-
+    Req :: capi_handler:request_data(),
+    Context :: capi_handler:processing_context()
+) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('CreateWebhook', Req, Context) ->
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get('partyID', Req, UserID),
@@ -31,13 +31,11 @@ process_request('CreateWebhook', Req, Context) ->
         {exception, #payproc_ShopNotFound{}} ->
             {ok, logic_error(invalidShopID, <<"Shop not found">>)}
     end;
-
 process_request('GetWebhooks', _Req, Context) ->
     Webhooks = capi_utils:unwrap(
         capi_handler_utils:service_call_with([party_id], {webhook_manager, 'GetList', []}, Context)
     ),
     {ok, {200, #{}, [decode_webhook(V) || V <- Webhooks]}};
-
 process_request('GetWebhookByID', Req, Context) ->
     case encode_webhook_id(maps:get(webhookID, Req)) of
         {ok, WebhookID} ->
@@ -50,7 +48,6 @@ process_request('GetWebhookByID', Req, Context) ->
         error ->
             {ok, general_error(404, <<"Webhook not found">>)}
     end;
-
 process_request('DeleteWebhookByID', Req, Context) ->
     case encode_webhook_id(maps:get(webhookID, Req)) of
         {ok, WebhookID} ->
@@ -63,7 +60,6 @@ process_request('DeleteWebhookByID', Req, Context) ->
         error ->
             {ok, general_error(404, <<"Webhook not found">>)}
     end;
-
 %%
 
 process_request(_OperationID, _Req, _Context) ->
@@ -74,7 +70,6 @@ validate_webhook_params(#webhooker_WebhookParams{event_filter = EventFilter}) ->
 
 validate_event_filter({invoice, #webhooker_InvoiceEventFilter{shop_id = ShopID}}) ->
     validate_event_filter_shop(ShopID);
-
 validate_event_filter({customer, #webhooker_CustomerEventFilter{shop_id = ShopID}}) ->
     validate_event_filter_shop(ShopID).
 
@@ -111,42 +106,42 @@ delete_webhook(WebhookID, Context) ->
 
 encode_webhook_params(PartyID, #{<<"scope">> := Scope, <<"url">> := URL}) ->
     #webhooker_WebhookParams{
-        party_id     = PartyID,
-        url          = URL,
+        party_id = PartyID,
+        url = URL,
         event_filter = encode_webhook_scope(Scope)
     }.
 
 encode_webhook_scope(#{<<"topic">> := <<"InvoicesTopic">>, <<"shopID">> := ShopID, <<"eventTypes">> := EventTypes}) ->
     {invoice, #webhooker_InvoiceEventFilter{
         shop_id = ShopID,
-        types   = ordsets:from_list([
-            encode_invoice_event_type(V) || V <- EventTypes
-        ])
+        types = ordsets:from_list([encode_invoice_event_type(V) || V <- EventTypes])
     }};
 encode_webhook_scope(#{<<"topic">> := <<"CustomersTopic">>, <<"shopID">> := ShopID, <<"eventTypes">> := EventTypes}) ->
     {customer, #webhooker_CustomerEventFilter{
         shop_id = ShopID,
-        types   = ordsets:from_list([
-            encode_customer_event_type(V) || V <- EventTypes
-        ])
+        types = ordsets:from_list([encode_customer_event_type(V) || V <- EventTypes])
     }}.
 
--define(invpaid()      , {paid, #webhooker_InvoicePaid{}}).
--define(invcancelled() , {cancelled, #webhooker_InvoiceCancelled{}}).
--define(invfulfilled() , {fulfilled, #webhooker_InvoiceFulfilled{}}).
+-define(invpaid(), {paid, #webhooker_InvoicePaid{}}).
+-define(invcancelled(), {cancelled, #webhooker_InvoiceCancelled{}}).
+-define(invfulfilled(), {fulfilled, #webhooker_InvoiceFulfilled{}}).
 
--define(pmtprocessed() , {processed, #webhooker_InvoicePaymentProcessed{}}).
--define(pmtcaptured()  , {captured, #webhooker_InvoicePaymentCaptured{}}).
--define(pmtcancelled() , {cancelled, #webhooker_InvoicePaymentCancelled{}}).
--define(pmtrefunded()  , {refunded, #webhooker_InvoicePaymentRefunded{}}).
--define(pmtfailed()    , {failed, #webhooker_InvoicePaymentFailed{}}).
+-define(pmtprocessed(), {processed, #webhooker_InvoicePaymentProcessed{}}).
+-define(pmtcaptured(), {captured, #webhooker_InvoicePaymentCaptured{}}).
+-define(pmtcancelled(), {cancelled, #webhooker_InvoicePaymentCancelled{}}).
+-define(pmtrefunded(), {refunded, #webhooker_InvoicePaymentRefunded{}}).
+-define(pmtfailed(), {failed, #webhooker_InvoicePaymentFailed{}}).
 
--define(pmtrfndcreated()     , {invoice_payment_refund_created, #webhooker_InvoicePaymentRefundCreated{}}).
--define(pmtrfndstatus(Value) , {
-    invoice_payment_refund_status_changed,
-    #webhooker_InvoicePaymentRefundStatusChanged{value = Value}}).
--define(pmtrfndfailed()      , {failed, #webhooker_InvoicePaymentRefundFailed{}}).
--define(pmtrfndsucceeded()   , {succeeded, #webhooker_InvoicePaymentRefundSucceeded{}}).
+-define(pmtrfndcreated(), {invoice_payment_refund_created, #webhooker_InvoicePaymentRefundCreated{}}).
+-define(pmtrfndstatus(Value),
+    {
+        invoice_payment_refund_status_changed,
+        #webhooker_InvoicePaymentRefundStatusChanged{value = Value}
+    }
+).
+
+-define(pmtrfndfailed(), {failed, #webhooker_InvoicePaymentRefundFailed{}}).
+-define(pmtrfndsucceeded(), {succeeded, #webhooker_InvoicePaymentRefundSucceeded{}}).
 
 encode_invoice_event_type(<<"InvoiceCreated">>) ->
     {created, #webhooker_InvoiceCreated{}};
@@ -192,23 +187,23 @@ encode_customer_event_type(<<"CustomerBindingFailed">>) ->
 
 decode_webhook(Hook) ->
     #{
-        <<"id"       >> => integer_to_binary(Hook#webhooker_Webhook.id),
-        <<"active"   >> => Hook#webhooker_Webhook.enabled,
-        <<"scope"    >> => decode_event_filter(Hook#webhooker_Webhook.event_filter),
-        <<"url"      >> => Hook#webhooker_Webhook.url,
+        <<"id">> => integer_to_binary(Hook#webhooker_Webhook.id),
+        <<"active">> => Hook#webhooker_Webhook.enabled,
+        <<"scope">> => decode_event_filter(Hook#webhooker_Webhook.event_filter),
+        <<"url">> => Hook#webhooker_Webhook.url,
         <<"publicKey">> => Hook#webhooker_Webhook.pub_key
     }.
 
 decode_event_filter({invoice, #webhooker_InvoiceEventFilter{shop_id = ShopID, types = EventTypes}}) ->
     genlib_map:compact(#{
-        <<"topic"     >> => <<"InvoicesTopic">>,
-        <<"shopID"    >> => ShopID,
+        <<"topic">> => <<"InvoicesTopic">>,
+        <<"shopID">> => ShopID,
         <<"eventTypes">> => lists:flatmap(fun decode_invoice_event_type/1, ordsets:to_list(EventTypes))
     });
 decode_event_filter({customer, #webhooker_CustomerEventFilter{shop_id = ShopID, types = EventTypes}}) ->
     genlib_map:compact(#{
-        <<"topic"     >> => <<"CustomersTopic">>,
-        <<"shopID"    >> => ShopID,
+        <<"topic">> => <<"CustomersTopic">>,
+        <<"shopID">> => ShopID,
         <<"eventTypes">> => lists:map(fun decode_customer_event_type/1, ordsets:to_list(EventTypes))
     }).
 
@@ -216,24 +211,30 @@ decode_invoice_event_type({created, #webhooker_InvoiceCreated{}}) ->
     [<<"InvoiceCreated">>];
 decode_invoice_event_type({status_changed, #webhooker_InvoiceStatusChanged{value = undefined}}) ->
     % TODO seems unmaintainable
-    [decode_invoice_status_event_type(V) || V <- [
-        ?invpaid(),
-        ?invcancelled(),
-        ?invfulfilled()
-    ]];
+    [
+        decode_invoice_status_event_type(V)
+        || V <- [
+               ?invpaid(),
+               ?invcancelled(),
+               ?invfulfilled()
+           ]
+    ];
 decode_invoice_event_type({status_changed, #webhooker_InvoiceStatusChanged{value = Value}}) ->
     [decode_invoice_status_event_type(Value)];
 decode_invoice_event_type({payment, {created, #webhooker_InvoicePaymentCreated{}}}) ->
     [<<"PaymentStarted">>];
 decode_invoice_event_type({payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = undefined}}}) ->
     % TODO seems unmaintainable
-    [decode_payment_status_event_type(V) || V <- [
-        ?pmtprocessed(),
-        ?pmtcaptured(),
-        ?pmtcancelled(),
-        ?pmtrefunded(),
-        ?pmtfailed()
-    ]];
+    [
+        decode_payment_status_event_type(V)
+        || V <- [
+               ?pmtprocessed(),
+               ?pmtcaptured(),
+               ?pmtcancelled(),
+               ?pmtrefunded(),
+               ?pmtfailed()
+           ]
+    ];
 decode_invoice_event_type({payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = Value}}}) ->
     [decode_payment_status_event_type(Value)];
 decode_invoice_event_type({payment, {invoice_payment_refund_change, ?pmtrfndcreated()}}) ->
@@ -241,15 +242,15 @@ decode_invoice_event_type({payment, {invoice_payment_refund_change, ?pmtrfndcrea
 decode_invoice_event_type({payment, {invoice_payment_refund_change, ?pmtrfndstatus(Value)}}) ->
     [decode_payment_refund_status_event_type(Value)].
 
-decode_invoice_status_event_type(?invpaid())      -> <<"InvoicePaid">>;
+decode_invoice_status_event_type(?invpaid()) -> <<"InvoicePaid">>;
 decode_invoice_status_event_type(?invcancelled()) -> <<"InvoiceCancelled">>;
 decode_invoice_status_event_type(?invfulfilled()) -> <<"InvoiceFulfilled">>.
 
 decode_payment_status_event_type(?pmtprocessed()) -> <<"PaymentProcessed">>;
-decode_payment_status_event_type(?pmtcaptured())  -> <<"PaymentCaptured">>;
+decode_payment_status_event_type(?pmtcaptured()) -> <<"PaymentCaptured">>;
 decode_payment_status_event_type(?pmtcancelled()) -> <<"PaymentCancelled">>;
-decode_payment_status_event_type(?pmtrefunded())  -> <<"PaymentRefunded">>;
-decode_payment_status_event_type(?pmtfailed())    -> <<"PaymentFailed">>.
+decode_payment_status_event_type(?pmtrefunded()) -> <<"PaymentRefunded">>;
+decode_payment_status_event_type(?pmtfailed()) -> <<"PaymentFailed">>.
 
 decode_payment_refund_status_event_type(?pmtrfndfailed()) -> <<"PaymentRefundFailed">>;
 decode_payment_refund_status_event_type(?pmtrfndsucceeded()) -> <<"PaymentRefundSucceeded">>.

@@ -21,7 +21,7 @@ get_payments(Context, InvoiceID) ->
         binding => #{
             <<"invoiceID">> => InvoiceID
         }
-     },
+    },
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
     Response = swag_client_payments_api:get_payments(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
@@ -77,8 +77,7 @@ cancel_payment(Context, InvoiceID, PaymentID, Reason) ->
         {error, Error} -> {error, Error}
     end.
 
--spec capture_payment(context(), map(), integer(), integer()) ->
-    ok | {error, term()}.
+-spec capture_payment(context(), map(), integer(), integer()) -> ok | {error, term()}.
 capture_payment(Context, Request, InvoiceID, PaymentID) ->
     Params = #{
         binding => #{
@@ -112,7 +111,7 @@ get_refund_by_id(Context, InvoiceID, PaymentID, RefundID) ->
         binding => #{
             <<"invoiceID">> => InvoiceID,
             <<"paymentID">> => PaymentID,
-            <<"refundID">>  => RefundID
+            <<"refundID">> => RefundID
         }
     },
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),

@@ -4,18 +4,19 @@
 -include_lib("reporter_proto/include/reporter_reports_thrift.hrl").
 
 -behaviour(capi_handler).
+
 -export([process_request/3]).
+
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
--define(DEFAULT_URL_LIFETIME, 60). % seconds
+% seconds
+-define(DEFAULT_URL_LIFETIME, 60).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
-    Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context()
-) ->
-    {ok | error, capi_handler:response() | noimpl}.
-
+    Req :: capi_handler:request_data(),
+    Context :: capi_handler:processing_context()
+) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('GetReports', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     get_reports(PartyID, Req, Context);
@@ -55,11 +56,10 @@ create_report(PartyID, Req, Context) ->
     ReportRequest = #reports_ReportRequest{
         party_id   = PartyID,
         shop_id    = ShopID,
-        time_range =
-            #reports_ReportTimeRange{
-                from_time = capi_handler_utils:get_time(<<"fromTime">>, ReportParams),
-                to_time   = capi_handler_utils:get_time(<<"toTime">>  , ReportParams)
-            }
+        time_range = #reports_ReportTimeRange{
+            from_time = capi_handler_utils:get_time(<<"fromTime">>, ReportParams),
+            to_time   = capi_handler_utils:get_time(<<"toTime">>  , ReportParams)
+        }
     },
     ReportType = encode_report_type(maps:get(<<"reportType">>, ReportParams)),
     case capi_handler_utils:service_call({reporting, 'CreateReport', [ReportRequest, ReportType]}, Context) of
@@ -155,13 +155,13 @@ generate_report_presigned_url(FileID, Context) ->
                 #reporter_base_InvalidRequest{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)};
-                #reports_FileNotFound{}->
+                #reports_FileNotFound{} ->
                     {ok, general_error(404, <<"File not found">>)}
             end
     end.
 
 get_default_url_lifetime() ->
-    Now      = erlang:system_time(second),
+    Now = erlang:system_time(second),
     Lifetime = application:get_env(capi, reporter_url_lifetime, ?DEFAULT_URL_LIFETIME),
     genlib_rfc3339:format_relaxed(Now + Lifetime, second).
 
@@ -175,13 +175,13 @@ encode_report_type(<<"paymentRegistry">>) -> <<"payment_registry">>.
 decode_report(Report) ->
     #reports_ReportTimeRange{from_time = FromTime, to_time = ToTime} = Report#reports_Report.time_range,
     #{
-        <<"id"       >> => Report#reports_Report.report_id,
+        <<"id">> => Report#reports_Report.report_id,
         <<"createdAt">> => Report#reports_Report.created_at,
-        <<"fromTime" >> => FromTime,
-        <<"toTime"   >> => ToTime,
-        <<"status"   >> => decode_report_status(Report#reports_Report.status),
-        <<"type"     >> => decode_report_type(Report#reports_Report.report_type),
-        <<"files"    >> => [decode_report_file(F) || F <- Report#reports_Report.files]
+        <<"fromTime">> => FromTime,
+        <<"toTime">> => ToTime,
+        <<"status">> => decode_report_status(Report#reports_Report.status),
+        <<"type">> => decode_report_type(Report#reports_Report.report_type),
+        <<"files">> => [decode_report_file(F) || F <- Report#reports_Report.files]
     }.
 
 decode_report_status(pending) -> <<"pending">>;
@@ -192,8 +192,8 @@ decode_report_type(<<"payment_registry">>) -> <<"paymentRegistry">>.
 
 decode_report_file(#reports_FileMeta{file_id = ID, filename = Filename, signature = Signature}) ->
     #{
-        <<"id"        >> => ID,
-        <<"filename"  >> => Filename,
+        <<"id">> => ID,
+        <<"filename">> => Filename,
         <<"signatures">> => decode_report_file_signature(Signature)
     }.
 

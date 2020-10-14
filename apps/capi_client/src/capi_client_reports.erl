@@ -34,8 +34,7 @@ get_report(Context, ShopID, ReportID) ->
     Response = swag_client_reports_api:get_report(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 
--spec create_report(context(), binary(), binary(), binary(), binary()) ->
-    {ok, list()} | {error, term()}.
+-spec create_report(context(), binary(), binary(), binary(), binary()) -> {ok, list()} | {error, term()}.
 create_report(Context, ShopID, ReportType, FromTime, ToTime) ->
     Params = #{
         binding => #{
@@ -63,4 +62,3 @@ download_file(Context, ShopID, ReportID, FileID) ->
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
     Response = swag_client_reports_api:download_file(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
-

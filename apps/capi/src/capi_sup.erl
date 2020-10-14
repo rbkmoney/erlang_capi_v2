@@ -2,9 +2,11 @@
 %% @end
 
 -module(capi_sup).
+
 -behaviour(supervisor).
 
 -define(APP, capi).
+
 %% API
 -export([start_link/0]).
 
@@ -14,14 +16,12 @@
 %%
 
 -spec start_link() -> {ok, pid()} | {error, {already_started, pid()}}.
-
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 %%
 
 -spec init([]) -> {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
-
 init([]) ->
     LechiffreOpts = genlib_app:env(capi, lechiffre_opts),
     LechiffreSpec = lechiffre:child_spec(lechiffre, LechiffreOpts),
@@ -35,11 +35,10 @@ init([]) ->
     ok = uac:configure(UacConf),
     {ok, {
         {one_for_all, 0, 1},
-            [LechiffreSpec] ++ LogicHandlerSpecs ++ [SwaggerSpec] ++ [BlacklistSpecs]
+        [LechiffreSpec] ++ LogicHandlerSpecs ++ [SwaggerSpec] ++ [BlacklistSpecs]
     }}.
 
--spec get_logic_handler_info() -> {Handler :: atom(), [Spec :: supervisor:child_spec()] | []} .
-
+-spec get_logic_handler_info() -> {Handler :: atom(), [Spec :: supervisor:child_spec()] | []}.
 get_logic_handler_info() ->
     case genlib_app:env(?APP, service_type) of
         real ->
@@ -48,12 +47,10 @@ get_logic_handler_info() ->
             exit(undefined_service_type)
     end.
 
--spec enable_health_logging(erl_health:check()) ->
-    erl_health:check().
-
+-spec enable_health_logging(erl_health:check()) -> erl_health:check().
 enable_health_logging(Check) ->
     EvHandler = {erl_health_event_handler, []},
-    maps:map(fun (_, V = {_, _, _}) -> #{runner => V, event_handler => EvHandler} end, Check).
+    maps:map(fun(_, V = {_, _, _}) -> #{runner => V, event_handler => EvHandler} end, Check).
 
 get_uac_config() ->
     maps:merge(

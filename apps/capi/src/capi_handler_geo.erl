@@ -3,16 +3,16 @@
 -include_lib("damsel/include/dmsl_domain_thrift.hrl").
 
 -behaviour(capi_handler).
+
 -export([process_request/3]).
+
 -import(capi_handler_utils, [logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
-    Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context()
-) ->
-    {ok | error, capi_handler:response() | noimpl}.
-
+    Req :: capi_handler:request_data(),
+    Context :: capi_handler:processing_context()
+) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('GetLocationsNames', Req, Context) ->
     CallArgs = [ordsets:from_list(maps:get('geoIDs', Req)), maps:get('language', Req)],
     Call = {geo_ip_service, 'GetLocationName', CallArgs},

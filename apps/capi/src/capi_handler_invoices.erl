@@ -5,15 +5,14 @@
 -behaviour(capi_handler).
 
 -export([process_request/3]).
+
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
-    Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context()
-) ->
-    {ok | error, capi_handler:response() | noimpl}.
-
+    Req :: capi_handler:request_data(),
+    Context :: capi_handler:processing_context()
+) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('CreateInvoice' = OperationID, Req, Context) ->
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get('partyID', Req, UserID),
@@ -44,7 +43,6 @@ process_request('CreateInvoice' = OperationID, Req, Context) ->
         {external_id_conflict, InvoiceID, ExternalID} ->
             {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
     end;
-
 process_request('CreateInvoiceAccessToken', Req, Context) ->
     UserID = capi_handler_utils:get_user_id(Context),
     InvoiceID = maps:get(invoiceID, Req),
@@ -66,7 +64,6 @@ process_request('CreateInvoiceAccessToken', Req, Context) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-
 process_request('GetInvoiceByID', Req, Context) ->
     case capi_handler_utils:get_invoice_by_id(maps:get(invoiceID, Req), Context) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
@@ -79,13 +76,12 @@ process_request('GetInvoiceByID', Req, Context) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-
 process_request('GetInvoiceByExternalID', Req, Context) ->
     case get_invoice_by_external_id(maps:get(externalID, Req), Context) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             {ok, {200, #{}, capi_handler_decoder_invoicing:decode_invoice(Invoice)}};
         {error, internal_id_not_found} ->
-             {ok, general_error(404, <<"Invoice not found">>)};
+            {ok, general_error(404, <<"Invoice not found">>)};
         {exception, Exception} ->
             case Exception of
                 #payproc_InvalidUser{} ->
@@ -94,7 +90,6 @@ process_request('GetInvoiceByExternalID', Req, Context) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-
 process_request('FulfillInvoice', Req, Context) ->
     Call = {invoicing, 'Fulfill', [maps:get(invoiceID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))]},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
@@ -114,7 +109,6 @@ process_request('FulfillInvoice', Req, Context) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-
 process_request('RescindInvoice', Req, Context) ->
     Call = {invoicing, 'Rescind', [maps:get(invoiceID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))]},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
@@ -137,7 +131,6 @@ process_request('RescindInvoice', Req, Context) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-
 process_request('GetInvoiceEvents', Req, Context) ->
     Result =
         capi_handler_utils:collect_events(
@@ -169,7 +162,6 @@ process_request('GetInvoiceEvents', Req, Context) ->
                     {ok, logic_error(invalidRequest, FormattedErrors)}
             end
     end;
-
 process_request('GetInvoicePaymentMethods', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     Party = capi_utils:unwrap(capi_handler_utils:get_my_party(Context)),
@@ -187,7 +179,6 @@ process_request('GetInvoicePaymentMethods', Req, Context) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-
 %%
 
 process_request(_OperationID, _Req, _Context) ->
@@ -222,13 +213,13 @@ encode_invoice_params(ID, PartyID, InvoiceParams) ->
     Currency = genlib_map:get(<<"currency">>, InvoiceParams),
     Cart = genlib_map:get(<<"cart">>, InvoiceParams),
     #payproc_InvoiceParams{
-        id          = ID,
-        party_id    = PartyID,
-        details     = encode_invoice_details(InvoiceParams),
-        cost        = encode_invoice_cost(Amount, Currency, Cart),
-        due         = capi_handler_utils:get_time(<<"dueDate">>, InvoiceParams),
-        context     = capi_handler_encoder:encode_invoice_context(InvoiceParams),
-        shop_id     = genlib_map:get(<<"shopID">>, InvoiceParams),
+        id = ID,
+        party_id = PartyID,
+        details = encode_invoice_details(InvoiceParams),
+        cost = encode_invoice_cost(Amount, Currency, Cart),
+        due = capi_handler_utils:get_time(<<"dueDate">>, InvoiceParams),
+        context = capi_handler_encoder:encode_invoice_context(InvoiceParams),
+        shop_id = genlib_map:get(<<"shopID">>, InvoiceParams),
         external_id = genlib_map:get(<<"externalID">>, InvoiceParams, undefined)
     }.
 
@@ -249,7 +240,7 @@ encode_invoice_cost(_, _, _) ->
 get_invoice_cart_amount(Cart) ->
     lists:foldl(
         fun(Line, Acc) ->
-            P = genlib_map:get(<<"price"   >>, Line),
+            P = genlib_map:get(<<"price">>, Line),
             Q = genlib_map:get(<<"quantity">>, Line),
             Acc + (P * Q)
         end,
@@ -259,9 +250,9 @@ get_invoice_cart_amount(Cart) ->
 
 encode_invoice_details(Params) ->
     #domain_InvoiceDetails{
-        product     = genlib_map:get(<<"product"    >>, Params),
+        product = genlib_map:get(<<"product">>, Params),
         description = genlib_map:get(<<"description">>, Params),
-        cart        = capi_handler_encoder:encode_invoice_cart(Params)
+        cart = capi_handler_encoder:encode_invoice_cart(Params)
     }.
 
 %%
@@ -272,9 +263,9 @@ decode_invoice_event(Event, Context) ->
     case decode_invoice_changes(InvoiceID, InvoiceChanges, Context) of
         [_Something | _] = Changes ->
             {true, #{
-                <<"id"       >> => Event#payproc_Event.id,
+                <<"id">> => Event#payproc_Event.id,
                 <<"createdAt">> => Event#payproc_Event.created_at,
-                <<"changes"  >> => Changes
+                <<"changes">> => Changes
             }};
         [] ->
             false
@@ -282,31 +273,28 @@ decode_invoice_event(Event, Context) ->
 
 decode_invoice_changes(InvoiceID, InvoiceChanges, Context) ->
     F = fun(Change, Acc) ->
-            case decode_invoice_change(InvoiceID, Change, Context) of
-                #{} = Decoded ->
-                    Acc ++ [Decoded];
-                undefined ->
-                    Acc
-            end
-        end,
+        case decode_invoice_change(InvoiceID, Change, Context) of
+            #{} = Decoded ->
+                Acc ++ [Decoded];
+            undefined ->
+                Acc
+        end
+    end,
     lists:foldl(F, [], InvoiceChanges).
 
 decode_invoice_change(_, {invoice_created, #payproc_InvoiceCreated{invoice = Invoice}}, _Context) ->
     #{
         <<"changeType">> => <<"InvoiceCreated">>,
-        <<"invoice"   >> => capi_handler_decoder_invoicing:decode_invoice(Invoice)
+        <<"invoice">> => capi_handler_decoder_invoicing:decode_invoice(Invoice)
     };
-
 decode_invoice_change(_, {invoice_status_changed, #payproc_InvoiceStatusChanged{status = {Status, _}}}, _Context) ->
     #{
         <<"changeType">> => <<"InvoiceStatusChanged">>,
-        <<"status"    >> => genlib:to_binary(Status)
+        <<"status">> => genlib:to_binary(Status)
     };
-
 decode_invoice_change(InvoiceID, {invoice_payment_change, PaymentChange}, Context) ->
     #payproc_InvoicePaymentChange{id = PaymentID, payload = Change} = PaymentChange,
     decode_payment_change(InvoiceID, PaymentID, Change, Context);
-
 decode_invoice_change(_, _, _) ->
     undefined.
 
@@ -314,35 +302,37 @@ decode_payment_change(InvoiceID, _PaymentID, {invoice_payment_started, PaymentSt
     #payproc_InvoicePaymentStarted{payment = Payment} = PaymentStarted,
     #{
         <<"changeType">> => <<"PaymentStarted">>,
-        <<"payment"   >> => capi_handler_decoder_invoicing:decode_payment(InvoiceID, Payment, Context)
+        <<"payment">> => capi_handler_decoder_invoicing:decode_payment(InvoiceID, Payment, Context)
     };
-
-decode_payment_change(_InvoiceID, PaymentID, {invoice_payment_session_change,
-    #payproc_InvoicePaymentSessionChange{payload = {session_interaction_requested, InteractionRequested}}}, _Context) ->
+decode_payment_change(
+    _InvoiceID,
+    PaymentID,
+    {invoice_payment_session_change, #payproc_InvoicePaymentSessionChange{
+        payload = {session_interaction_requested, InteractionRequested}
+    }},
+    _Context
+) ->
     #payproc_SessionInteractionRequested{interaction = Interaction} = InteractionRequested,
     #{
         <<"changeType">> => <<"PaymentInteractionRequested">>,
         <<"paymentID">> => PaymentID,
         <<"userInteraction">> => capi_handler_decoder_invoicing:decode_user_interaction(Interaction)
     };
-
 decode_payment_change(_InvoiceID, PaymentID, {invoice_payment_status_changed, PaymentStatusChanged}, Context) ->
     #payproc_InvoicePaymentStatusChanged{status = Status} = PaymentStatusChanged,
     capi_handler_utils:merge_and_compact(
         #{
             <<"changeType">> => <<"PaymentStatusChanged">>,
-            <<"paymentID" >> => PaymentID
+            <<"paymentID">> => PaymentID
         },
         capi_handler_decoder_invoicing:decode_payment_status(Status, Context)
     );
-
 decode_payment_change(InvoiceID, PaymentID, {invoice_payment_refund_change, PaymentRefundChange}, Context) ->
     #payproc_InvoicePaymentRefundChange{
-        id      = RefundID,
+        id = RefundID,
         payload = Change
     } = PaymentRefundChange,
     decode_refund_change(InvoiceID, PaymentID, RefundID, Change, Context);
-
 decode_payment_change(_, _, _, _) ->
     undefined.
 
@@ -350,21 +340,19 @@ decode_refund_change(InvoiceID, PaymentID, _RefundID, {invoice_payment_refund_cr
     #payproc_InvoicePaymentRefundCreated{refund = Refund} = Created,
     #{
         <<"changeType">> => <<"RefundStarted">>,
-        <<"paymentID" >> => PaymentID,
-        <<"refund"    >> => decode_refund_for_event(Refund, InvoiceID, PaymentID, Context)
+        <<"paymentID">> => PaymentID,
+        <<"refund">> => decode_refund_for_event(Refund, InvoiceID, PaymentID, Context)
     };
-
 decode_refund_change(_, PaymentID, RefundID, {invoice_payment_refund_status_changed, StatusChanged}, Context) ->
     #payproc_InvoicePaymentRefundStatusChanged{status = Status} = StatusChanged,
     capi_handler_utils:merge_and_compact(
         #{
             <<"changeType">> => <<"RefundStatusChanged">>,
-            <<"paymentID" >> => PaymentID,
-            <<"refundID"  >> => RefundID
+            <<"paymentID">> => PaymentID,
+            <<"refundID">> => RefundID
         },
         capi_handler_decoder_invoicing:decode_refund_status(Status, Context)
     );
-
 decode_refund_change(_, _, _, _, _) ->
     undefined.
 
@@ -377,7 +365,7 @@ decode_refund_for_event(#domain_InvoicePaymentRefund{cash = undefined} = Refund,
     capi_handler_decoder_invoicing:decode_refund(Refund#domain_InvoicePaymentRefund{cash = Cash}, Context).
 
 get_invoice_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
-    PartyID    = capi_handler_utils:get_party_id(Context),
+    PartyID = capi_handler_utils:get_party_id(Context),
     InvoiceKey = capi_bender:get_idempotent_key('CreateInvoice', PartyID, ExternalID),
     case capi_bender:get_internal_id(InvoiceKey, WoodyContext) of
         {ok, InvoiceID, _CtxData} ->

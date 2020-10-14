@@ -26,25 +26,23 @@
     get_customer_events_ok_test/1
 ]).
 
--define(CAPI_PORT                   , 8080).
--define(CAPI_HOST_NAME              , "localhost").
--define(CAPI_URL                    , ?CAPI_HOST_NAME ++ ":" ++ integer_to_list(?CAPI_PORT)).
+-define(CAPI_PORT, 8080).
+-define(CAPI_HOST_NAME, "localhost").
+-define(CAPI_URL, ?CAPI_HOST_NAME ++ ":" ++ integer_to_list(?CAPI_PORT)).
 
 -define(badresp(Code), {error, {invalid_response_code, Code}}).
 
--type test_case_name()  :: atom().
--type config()          :: [{atom(), any()}].
--type group_name()      :: atom().
+-type test_case_name() :: atom().
+-type config() :: [{atom(), any()}].
+-type group_name() :: atom().
 
 -behaviour(supervisor).
 
--spec init([]) ->
-    {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
+-spec init([]) -> {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
     {ok, {#{strategy => one_for_all, intensity => 1, period => 1}, []}}.
 
--spec all() ->
-    [test_case_name()].
+-spec all() -> [test_case_name()].
 all() ->
     [
         {group, operations_by_customer_access_token_after_customer_creation},
@@ -60,35 +58,27 @@ customer_access_token_tests() ->
         get_customer_events_ok_test
     ].
 
--spec groups() ->
-    [{group_name(), list(), [test_case_name()]}].
+-spec groups() -> [{group_name(), list(), [test_case_name()]}].
 groups() ->
     [
-        {operations_by_customer_access_token_after_customer_creation, [],
-            customer_access_token_tests()
-        },
-        {operations_by_customer_access_token_after_token_creation, [],
-            customer_access_token_tests()
-        }
+        {operations_by_customer_access_token_after_customer_creation, [], customer_access_token_tests()},
+        {operations_by_customer_access_token_after_token_creation, [], customer_access_token_tests()}
     ].
 
 %%
 %% starting/stopping
 %%
--spec init_per_suite(config()) ->
-    config().
+-spec init_per_suite(config()) -> config().
 init_per_suite(Config) ->
     capi_ct_helper:init_suite(?MODULE, Config).
 
--spec end_per_suite(config()) ->
-    _.
+-spec end_per_suite(config()) -> _.
 end_per_suite(C) ->
     _ = capi_ct_helper:stop_mocked_service_sup(?config(suite_test_sup, C)),
     [application:stop(App) || App <- proplists:get_value(apps, C)],
     ok.
 
--spec init_per_group(group_name(), config()) ->
-    config().
+-spec init_per_group(group_name(), config()) -> config().
 init_per_group(operations_by_customer_access_token_after_customer_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
     {ok, Token} = capi_ct_helper:issue_token([{[customers], write}], unlimited),
@@ -99,51 +89,44 @@ init_per_group(operations_by_customer_access_token_after_customer_creation, Conf
         <<"metadata">> => #{<<"text">> => [<<"SOMESHIT">>, 42]}
     },
     {ok, #{
-            <<"customerAccessToken">> := #{<<"payload">> := CustAccToken}
-        }
-    } = capi_client_customers:create_customer(capi_ct_helper:get_context(Token), Req),
+        <<"customerAccessToken">> := #{<<"payload">> := CustAccToken}
+    }} = capi_client_customers:create_customer(capi_ct_helper:get_context(Token), Req),
     capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
     [{context, capi_ct_helper:get_context(CustAccToken)} | Config];
-
 init_per_group(operations_by_customer_access_token_after_token_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
     {ok, Token} = capi_ct_helper:issue_token([{[customers], write}], unlimited),
     capi_ct_helper:mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], MockServiceSup),
-    {ok,
-        #{<<"payload">> := CustAccToken}
-    } = capi_client_customers:create_customer_access_token(capi_ct_helper:get_context(Token), ?STRING),
+    {ok, #{<<"payload">> := CustAccToken}} = capi_client_customers:create_customer_access_token(
+        capi_ct_helper:get_context(Token),
+        ?STRING
+    ),
     capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
-    [{context, capi_ct_helper:get_context(CustAccToken)}| Config];
-
+    [{context, capi_ct_helper:get_context(CustAccToken)} | Config];
 init_per_group(_, Config) ->
     Config.
 
--spec end_per_group(group_name(), config()) ->
-    _.
+-spec end_per_group(group_name(), config()) -> _.
 end_per_group(_Group, _C) ->
     ok.
 
--spec init_per_testcase(test_case_name(), config()) ->
-    config().
+-spec init_per_testcase(test_case_name(), config()) -> config().
 init_per_testcase(_Name, C) ->
     [{test_sup, capi_ct_helper:start_mocked_service_sup(?MODULE)} | C].
 
--spec end_per_testcase(test_case_name(), config()) ->
-    config().
+-spec end_per_testcase(test_case_name(), config()) -> config().
 end_per_testcase(_Name, C) ->
     capi_ct_helper:stop_mocked_service_sup(?config(test_sup, C)),
     ok.
 
 %%% Tests
 
--spec get_customer_ok_test(config()) ->
-    _.
+-spec get_customer_ok_test(config()) -> _.
 get_customer_ok_test(Config) ->
     capi_ct_helper:mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], Config),
     {ok, _} = capi_client_customers:get_customer_by_id(?config(context, Config), ?STRING).
 
--spec create_binding_ok_test(config()) ->
-    _.
+-spec create_binding_ok_test(config()) -> _.
 create_binding_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
@@ -161,21 +144,17 @@ create_binding_ok_test(Config) ->
     },
     {ok, _} = capi_client_customers:create_binding(?config(context, Config), ?STRING, Req2).
 
-
--spec get_bindings_ok_test(config()) ->
-    _.
+-spec get_bindings_ok_test(config()) -> _.
 get_bindings_ok_test(Config) ->
     capi_ct_helper:mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], Config),
     {ok, _} = capi_client_customers:get_bindings(?config(context, Config), ?STRING).
 
--spec get_binding_ok_test(config()) ->
-    _.
+-spec get_binding_ok_test(config()) -> _.
 get_binding_ok_test(Config) ->
     capi_ct_helper:mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], Config),
     {ok, _} = capi_client_customers:get_binding(?config(context, Config), ?STRING, ?STRING).
 
--spec get_customer_events_ok_test(config()) ->
-    _.
+-spec get_customer_events_ok_test(config()) -> _.
 get_customer_events_ok_test(Config) ->
     capi_ct_helper:mock_services([{customer_management, fun('GetEvents', _) -> {ok, []} end}], Config),
     {ok, _} = capi_client_customers:get_customer_events(?config(context, Config), ?STRING, 10).

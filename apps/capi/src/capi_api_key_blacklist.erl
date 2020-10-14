@@ -1,4 +1,5 @@
 -module(capi_api_key_blacklist).
+
 -behaviour(gen_server).
 
 %% interface
@@ -43,7 +44,6 @@
 %%
 
 -spec check(key()) -> boolean().
-
 check(Token) ->
     case ets:lookup(?TABLE, clean_token(Token)) of
         [#rec{}] ->
@@ -53,17 +53,14 @@ check(Token) ->
     end.
 
 -spec update() -> ok.
-
 update() ->
     gen_server:call(?SERVER, update).
 
 -spec start_link() -> {ok, pid()}.
-
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
 -spec child_spec() -> supervisor:child_spec().
-
 child_spec() ->
     #{
         id => ?MODULE,
@@ -75,7 +72,6 @@ child_spec() ->
 %%
 
 -spec init(any()) -> {ok, state(), 0}.
-
 init(_Args) ->
     EtsOpts = [
         named_table,
@@ -88,24 +84,19 @@ init(_Args) ->
     {ok, #state{}, 0}.
 
 -spec handle_call(term(), {pid(), term()}, state()) -> {reply, term(), state()}.
-
 handle_call(update, _From, State) ->
     {reply, update_blacklist(), restart_timer(State)};
-
 handle_call(_Msg, _From, State) ->
     {noreply, State}.
 
 -spec handle_cast(term(), state()) -> {noreply, state()}.
-
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
 -spec handle_info(term(), state()) -> {noreply, state()}.
-
 handle_info(timeout, State) ->
     _Result = update_blacklist(),
     {noreply, restart_timer(State)};
-
 handle_info(_Msg, State) ->
     {noreply, State}.
 
@@ -120,16 +111,13 @@ code_change(_OldVsn, _State, _Extra) ->
 %%
 
 -spec restart_timer(state()) -> state().
-
 restart_timer(State = #state{timer = undefined}) ->
     start_timer(State);
-
 restart_timer(State = #state{timer = TimerRef}) ->
     _ = erlang:cancel_timer(TimerRef),
     start_timer(State#state{timer = undefined}).
 
 -spec start_timer(state()) -> state().
-
 start_timer(State = #state{timer = undefined}) ->
     Interval = get_update_interval(),
     State#state{timer = erlang:send_after(Interval, self(), timeout)}.

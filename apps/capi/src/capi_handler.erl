@@ -19,10 +19,9 @@
 
 -callback process_request(
     OperationID :: operation_id(),
-    Req         :: request_data(),
-    Context     :: processing_context()
-) ->
-    {ok | error, response() | noimpl}.
+    Req :: request_data(),
+    Context :: processing_context()
+) -> {ok | error, response() | noimpl}.
 
 -import(capi_handler_utils, [logic_error/2, server_error/1]).
 
@@ -32,7 +31,6 @@
 
 -spec authorize_api_key(swag_server:operation_id(), swag_server:api_key(), handler_opts()) ->
     Result :: false | {true, capi_auth:context()}.
-
 authorize_api_key(OperationID, ApiKey, _HandlerOpts) ->
     case uac:authorize_api_key(ApiKey, get_verification_options()) of
         {ok, Context} ->
@@ -42,35 +40,33 @@ authorize_api_key(OperationID, ApiKey, _HandlerOpts) ->
             false
     end.
 
--spec map_error(error_type(), swag_server_validation:error()) ->
-    swag_server:error_reason().
-
+-spec map_error(error_type(), swag_server_validation:error()) -> swag_server:error_reason().
 map_error(validation_error, Error) ->
     Type = genlib:to_binary(maps:get(type, Error)),
     Name = genlib:to_binary(maps:get(param_name, Error)),
-    Message = case maps:get(description, Error, undefined) of
-        undefined ->
-            <<"Request parameter: ", Name/binary, ", error type: ", Type/binary>>;
-        Description ->
-            DescriptionBin = genlib:to_binary(Description),
-            <<"Request parameter: ", Name/binary,
-            ", error type: ", Type/binary,
-            ", description: ", DescriptionBin/binary>>
-    end,
+    Message =
+        case maps:get(description, Error, undefined) of
+            undefined ->
+                <<"Request parameter: ", Name/binary, ", error type: ", Type/binary>>;
+            Description ->
+                DescriptionBin = genlib:to_binary(Description),
+                <<"Request parameter: ", Name/binary, ", error type: ", Type/binary, ", description: ",
+                    DescriptionBin/binary>>
+        end,
     jsx:encode(#{
         <<"code">> => <<"invalidRequest">>,
         <<"message">> => Message
     }).
 
--type request_data()        :: #{atom() | binary() => term()}.
+-type request_data() :: #{atom() | binary() => term()}.
 
--type operation_id()        :: swag_server:operation_id().
--type request_context()     :: swag_server:request_context().
--type response()            :: swag_server:response().
--type handler_opts()        :: swag_server:handler_opts(_).
--type processing_context()  :: #{
+-type operation_id() :: swag_server:operation_id().
+-type request_context() :: swag_server:request_context().
+-type response() :: swag_server:response().
+-type handler_opts() :: swag_server:handler_opts(_).
+-type processing_context() :: #{
     swagger_context := swag_server:request_context(),
-    woody_context   := woody_context:ctx()
+    woody_context := woody_context:ctx()
 }.
 
 get_handlers() ->
@@ -96,12 +92,10 @@ get_handlers() ->
 
 -spec handle_request(
     OperationID :: operation_id(),
-    Req         :: request_data(),
+    Req :: request_data(),
     SwagContext :: request_context(),
     HandlerOpts :: handler_opts()
-) ->
-    {ok | error,   response()}.
-
+) -> {ok | error, response()}.
 handle_request(OperationID, Req, SwagContext, HandlerOpts) ->
     scoper:scope(swagger, fun() ->
         handle_function_(OperationID, Req, SwagContext, HandlerOpts)
@@ -109,12 +103,10 @@ handle_request(OperationID, Req, SwagContext, HandlerOpts) ->
 
 -spec handle_function_(
     OperationID :: operation_id(),
-    Req         :: request_data(),
+    Req :: request_data(),
     SwagContext :: request_context(),
     HandlerOpts :: handler_opts()
-) ->
-    {ok | error,   response()}.
-
+) -> {ok | error, response()}.
 handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext}, _HandlerOpts) ->
     try
         RpcID = create_rpc_id(Req),
@@ -148,12 +140,10 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
 
 -spec process_request(
     OperationID :: operation_id(),
-    Req         :: request_data(),
-    Context     :: processing_context(),
-    Handlers    :: list(module())
-) ->
-    {ok | error,   response()}.
-
+    Req :: request_data(),
+    Context :: processing_context(),
+    Handlers :: list(module())
+) -> {ok | error, response()}.
 process_request(OperationID, _Req, _Context, []) ->
     erlang:throw({handler_function_clause, OperationID});
 process_request(OperationID, Req, Context, [Handler | Rest]) ->
@@ -168,7 +158,7 @@ process_request(OperationID, Req, Context, [Handler | Rest]) ->
 
 create_processing_context(SwaggerContext, WoodyContext) ->
     #{
-        woody_context   => WoodyContext,
+        woody_context => WoodyContext,
         swagger_context => SwaggerContext
     }.
 
@@ -182,10 +172,10 @@ create_woody_context(RpcID, AuthContext) ->
 
 collect_user_identity(AuthContext) ->
     genlib_map:compact(#{
-        id       => uac_authorizer_jwt:get_subject_id(AuthContext),
-        realm    => ?REALM,
-        email    => uac_authorizer_jwt:get_claim(<<"email">>, AuthContext, undefined),
-        username => uac_authorizer_jwt:get_claim(<<"name">> , AuthContext, undefined)
+        id => uac_authorizer_jwt:get_subject_id(AuthContext),
+        realm => ?REALM,
+        email => uac_authorizer_jwt:get_claim(<<"email">>, AuthContext, undefined),
+        username => uac_authorizer_jwt:get_claim(<<"name">>, AuthContext, undefined)
     }).
 
 attach_deadline(#{'X-Request-Deadline' := undefined}, Context) ->
@@ -198,22 +188,24 @@ attach_deadline(#{'X-Request-Deadline' := Header}, Context) ->
             throw({bad_deadline, Header})
     end.
 
-process_woody_error(_Source, result_unexpected   , _Details) ->
+process_woody_error(_Source, result_unexpected, _Details) ->
     {error, server_error(500)};
 process_woody_error(_Source, resource_unavailable, _Details) ->
     {error, server_error(503)};
-process_woody_error(_Source, result_unknown      , _Details) ->
+process_woody_error(_Source, result_unknown, _Details) ->
     {error, server_error(504)}.
 
 process_general_error(Class, Reason, Stacktrace, Req, SwagContext) ->
     _ = logger:error(
         "Operation failed due to ~p:~p given req: ~p and context: ~p",
         [Class, Reason, Req, SwagContext],
-        #{error => #{
-            class       => genlib:to_binary(Class),
-            reason      => genlib:format(Reason),
-            stack_trace => genlib_format:format_stacktrace(Stacktrace)
-        }}
+        #{
+            error => #{
+                class => genlib:to_binary(Class),
+                reason => genlib:format(Reason),
+                stack_trace => genlib_format:format_stacktrace(Stacktrace)
+            }
+        }
     ),
     {error, server_error(500)}.
 

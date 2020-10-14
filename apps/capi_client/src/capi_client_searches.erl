@@ -20,7 +20,8 @@ search_invoices(Context, ShopID, Query) ->
     case capi_client_lib:handle_response(Response) of
         {ok, #{<<"totalCount">> := TotalCount, <<"result">> := Invoices}} ->
             {ok, TotalCount, Invoices};
-        {error, Error} -> {error, Error}
+        {error, Error} ->
+            {error, Error}
     end.
 
 -spec search_payments(context(), binary(), search_query()) -> {ok, term(), term()} | {error, term()}.
@@ -35,7 +36,8 @@ search_payments(Context, ShopID, Query) ->
     case capi_client_lib:handle_response(Response) of
         {ok, #{<<"totalCount">> := TotalCount, <<"result">> := Payments}} ->
             {ok, TotalCount, Payments};
-        {error, Error} -> {error, Error}
+        {error, Error} ->
+            {error, Error}
     end.
 
 -spec search_refunds(context(), binary(), search_query()) -> {ok, term(), term()} | {error, term()}.
@@ -50,7 +52,8 @@ search_refunds(Context, ShopID, Query) ->
     case capi_client_lib:handle_response(Response) of
         {ok, #{<<"totalCount">> := TotalCount, <<"result">> := Payments}} ->
             {ok, TotalCount, Payments};
-        {error, Error} -> {error, Error}
+        {error, Error} ->
+            {error, Error}
     end.
 
 -spec search_payouts(context(), binary(), search_query()) -> {ok, term(), term()} | {error, term()}.
@@ -65,5 +68,6 @@ search_payouts(Context, ShopID, Query) ->
     case capi_client_lib:handle_response(Response) of
         {ok, #{<<"totalCount">> := TotalCount, <<"result">> := Payments}} ->
             {ok, TotalCount, Payments};
-        {error, Error} -> {error, Error}
+        {error, Error} ->
+            {error, Error}
     end.
