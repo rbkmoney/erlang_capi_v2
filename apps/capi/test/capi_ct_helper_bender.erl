@@ -24,8 +24,8 @@
 -spec get_result(binary(), msgpack_thrift:'Value'() | undefined) -> bender_thrift:bender_GenerationResult().
 -spec get_internal_id_result(binary(), msgpack_thrift:'Value'() | undefined) ->
     bender_thrift:bender_GetInternalIDResult().
--spec no_internal_id() -> bender_thrift:'InternalIDNotFound'().
 
+-spec no_internal_id() -> bender_thrift:'InternalIDNotFound'().
 
 create_storage() ->
     ets:new(bender_storage, [set, public]).
@@ -36,9 +36,12 @@ del_storage(Tid) ->
 get_internal_id(Tid, IdempotentKey, MsgPack) ->
     case ets:lookup(Tid, IdempotentKey) of
         [] ->
-            ets:insert(Tid, {IdempotentKey, #{
-                ctx => MsgPack
-            }}),
+            ets:insert(
+                Tid,
+                {IdempotentKey, #{
+                    ctx => MsgPack
+                }}
+            ),
             {ok, get_result(IdempotentKey)};
         [{IdempotentKey, #{ctx := Ctx}}] ->
             {ok, get_result(IdempotentKey, Ctx)}
@@ -55,8 +58,8 @@ get_result(ID) ->
 get_result(ID, Context) ->
     #bender_GenerationResult{
         internal_id = ID,
-        context     = Context
-}.
+        context = Context
+    }.
 
 get_internal_id_result(ID, Ctx) ->
     #bender_GetInternalIDResult{

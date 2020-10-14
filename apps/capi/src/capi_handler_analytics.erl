@@ -3,33 +3,28 @@
 -include_lib("damsel/include/dmsl_merch_stat_thrift.hrl").
 
 -behaviour(capi_handler).
+
 -export([process_request/3]).
+
 -import(capi_handler_utils, [logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
-    Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context()
-) ->
-    {ok | error, capi_handler:response() | noimpl}.
-
+    Req :: capi_handler:request_data(),
+    Context :: capi_handler:processing_context()
+) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('GetPaymentConversionStats', Req, Context) ->
     process_merchant_stat(payments_conversion_stat, Req, Context);
-
 process_request('GetPaymentRevenueStats', Req, Context) ->
     process_merchant_stat(payments_turnover, Req, Context);
-
 process_request('GetPaymentGeoStats', Req, Context) ->
     process_merchant_stat(payments_geo_stat, Req, Context);
-
 process_request('GetPaymentRateStats', Req, Context) ->
     process_merchant_stat(customers_rate_stat, Req, Context);
-
 process_request('GetPaymentMethodStats', Req, Context) ->
-    bankCard =  maps:get(paymentMethod, Req),
+    bankCard = maps:get(paymentMethod, Req),
     StatType = payments_pmt_cards_stat,
     process_merchant_stat(StatType, Req, Context);
-
 %%
 
 process_request(_OperationID, _Req, _Context) ->
@@ -37,7 +32,7 @@ process_request(_OperationID, _Req, _Context) ->
 
 create_stat_dsl(StatType, Req, Context) ->
     FromTime = capi_handler_utils:get_time('fromTime', Req),
-    ToTime   = capi_handler_utils:get_time('toTime'  , Req),
+    ToTime = capi_handler_utils:get_time('toTime', Req),
     SplitInterval =
         case StatType of
             customers_rate_stat ->
@@ -48,10 +43,10 @@ create_stat_dsl(StatType, Req, Context) ->
                 capi_handler_utils:get_split_interval(SplitSize, SplitUnit)
         end,
     Query = #{
-        <<"merchant_id"   >> => capi_handler_utils:get_party_id(Context),
-        <<"shop_id"       >> => genlib_map:get('shopID', Req),
-        <<"from_time"     >> => FromTime,
-        <<"to_time"       >> => ToTime,
+        <<"merchant_id">> => capi_handler_utils:get_party_id(Context),
+        <<"shop_id">> => genlib_map:get('shopID', Req),
+        <<"from_time">> => FromTime,
+        <<"to_time">> => ToTime,
         <<"split_interval">> => SplitInterval
     },
     capi_handler_utils:create_dsl(StatType, Query, #{}).
@@ -67,11 +62,10 @@ process_merchant_stat(StatType, Req, Context) ->
 process_merchant_stat_result(customers_rate_stat = StatType, {ok, #merchstat_StatResponse{data = {records, Stats}}}) ->
     Resp =
         case Stats of
-            [            ] -> #{<<"uniqueCount">> => 0};
+            [] -> #{<<"uniqueCount">> => 0};
             [StatResponse] -> decode_stat_info(StatType, StatResponse)
         end,
     {ok, {200, #{}, Resp}};
-
 process_merchant_stat_result(StatType, Result) ->
     case Result of
         {ok, #merchstat_StatResponse{data = {'records', Stats}}} ->
@@ -86,40 +80,37 @@ process_merchant_stat_result(StatType, Result) ->
 
 decode_stat_info(payments_conversion_stat, Response) ->
     #{
-        <<"offset"         >> => genlib:to_int(maps:get(<<"offset">>, Response)),
+        <<"offset">> => genlib:to_int(maps:get(<<"offset">>, Response)),
         <<"successfulCount">> => genlib:to_int(maps:get(<<"successful_count">>, Response)),
-        <<"totalCount"     >> => genlib:to_int(maps:get(<<"total_count">>, Response)),
-        <<"conversion"     >> => genlib:to_float(maps:get(<<"conversion">>, Response))
+        <<"totalCount">> => genlib:to_int(maps:get(<<"total_count">>, Response)),
+        <<"conversion">> => genlib:to_float(maps:get(<<"conversion">>, Response))
     };
-
 decode_stat_info(payments_geo_stat, Response) ->
     #{
-        <<"offset"  >> => genlib:to_int(maps:get(<<"offset">>, Response)),
-        <<"geoID"   >> => genlib:to_int(maps:get(<<"city_id">>, Response)),
+        <<"offset">> => genlib:to_int(maps:get(<<"offset">>, Response)),
+        <<"geoID">> => genlib:to_int(maps:get(<<"city_id">>, Response)),
         <<"currency">> => maps:get(<<"currency_symbolic_code">>, Response),
-        <<"profit"  >> => genlib:to_int(maps:get(<<"amount_with_fee">>, Response)),
-        <<"revenue" >> => genlib:to_int(maps:get(<<"amount_without_fee">>, Response))
+        <<"profit">> => genlib:to_int(maps:get(<<"amount_with_fee">>, Response)),
+        <<"revenue">> => genlib:to_int(maps:get(<<"amount_without_fee">>, Response))
     };
-
 decode_stat_info(payments_turnover, Response) ->
     #{
-        <<"offset"  >> => genlib:to_int(maps:get(<<"offset">>, Response)),
+        <<"offset">> => genlib:to_int(maps:get(<<"offset">>, Response)),
         <<"currency">> => maps:get(<<"currency_symbolic_code">>, Response),
-        <<"profit"  >> => genlib:to_int(maps:get(<<"amount_with_fee">>, Response)),
-        <<"revenue" >> => genlib:to_int(maps:get(<<"amount_without_fee">>, Response))
+        <<"profit">> => genlib:to_int(maps:get(<<"amount_with_fee">>, Response)),
+        <<"revenue">> => genlib:to_int(maps:get(<<"amount_without_fee">>, Response))
     };
-
 decode_stat_info(customers_rate_stat, Response) ->
     #{
         <<"uniqueCount">> => genlib:to_int(maps:get(<<"unic_count">>, Response))
     };
-
 decode_stat_info(payments_pmt_cards_stat, Response) ->
     #{
-        <<"statType"     >> => <<"PaymentMethodBankCardStat">>, %% @TODO deal with nested responses decoding
-        <<"offset"       >> => genlib:to_int(maps:get(<<"offset">>, Response)),
-        <<"totalCount"   >> => genlib:to_int(maps:get(<<"total_count">>, Response)),
+        %% @TODO deal with nested responses decoding
+        <<"statType">> => <<"PaymentMethodBankCardStat">>,
+        <<"offset">> => genlib:to_int(maps:get(<<"offset">>, Response)),
+        <<"totalCount">> => genlib:to_int(maps:get(<<"total_count">>, Response)),
         <<"paymentSystem">> => maps:get(<<"payment_system">>, Response),
-        <<"profit"       >> => genlib:to_int(maps:get(<<"amount_with_fee">>, Response)),
-        <<"revenue"      >> => genlib:to_int(maps:get(<<"amount_without_fee">>, Response))
+        <<"profit">> => genlib:to_int(maps:get(<<"amount_with_fee">>, Response)),
+        <<"revenue">> => genlib:to_int(maps:get(<<"amount_without_fee">>, Response))
     }.

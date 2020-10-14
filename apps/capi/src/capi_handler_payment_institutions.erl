@@ -3,19 +3,18 @@
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 
 -behaviour(capi_handler).
+
 -export([process_request/3]).
+
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
--define(payment_institution_ref(PaymentInstitutionID),
-    #domain_PaymentInstitutionRef{id = PaymentInstitutionID}).
+-define(payment_institution_ref(PaymentInstitutionID), #domain_PaymentInstitutionRef{id = PaymentInstitutionID}).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
-    Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context()
-) ->
-    {ok | error, capi_handler:response() | noimpl}.
-
+    Req :: capi_handler:request_data(),
+    Context :: capi_handler:processing_context()
+) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('GetPaymentInstitutions', Req, #{woody_context := WoodyContext}) ->
     try
         Residence = capi_handler_encoder:encode_residence(genlib_map:get(residence, Req)),
@@ -38,7 +37,6 @@ process_request('GetPaymentInstitutions', Req, #{woody_context := WoodyContext})
         throw:{encode_residence, invalid_residence} ->
             {ok, logic_error(invalidRequest, <<"Invalid residence">>)}
     end;
-
 process_request('GetPaymentInstitutionByRef', Req, #{woody_context := WoodyContext}) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
     case capi_domain:get({payment_institution, ?payment_institution_ref(PaymentInstitutionID)}, WoodyContext) of
@@ -47,7 +45,6 @@ process_request('GetPaymentInstitutionByRef', Req, #{woody_context := WoodyConte
         {error, not_found} ->
             {ok, general_error(404, <<"Payment institution not found">>)}
     end;
-
 process_request('GetPaymentInstitutionPaymentTerms', Req, Context) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
     case compute_payment_institution_terms(PaymentInstitutionID, #payproc_Varset{}, Context) of
@@ -56,7 +53,6 @@ process_request('GetPaymentInstitutionPaymentTerms', Req, Context) ->
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
             {ok, general_error(404, <<"Payment institution not found">>)}
     end;
-
 process_request('GetPaymentInstitutionPayoutMethods', Req, Context) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
     case compute_payment_institution_terms(PaymentInstitutionID, prepare_varset(Req), Context) of
@@ -67,7 +63,6 @@ process_request('GetPaymentInstitutionPayoutMethods', Req, Context) ->
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
             {ok, general_error(404, <<"Payment institution not found">>)}
     end;
-
 process_request('GetPaymentInstitutionPayoutSchedules', Req, Context) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
     case compute_payment_institution_terms(PaymentInstitutionID, prepare_varset(Req), Context) of
@@ -78,7 +73,6 @@ process_request('GetPaymentInstitutionPayoutSchedules', Req, Context) ->
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
             {ok, general_error(404, <<"Payment institution not found">>)}
     end;
-
 %%
 
 process_request(_OperationID, _Req, _Context) ->
@@ -108,7 +102,7 @@ compute_payment_institution_terms(PaymentInstitutionID, VS, Context) ->
 
 prepare_varset(Req) ->
     #payproc_Varset{
-        currency      = encode_optional_currency     (genlib_map:get(currency    , Req)),
+        currency = encode_optional_currency(genlib_map:get(currency, Req)),
         payout_method = encode_optional_payout_method(genlib_map:get(payoutMethod, Req))
     }.
 
@@ -123,7 +117,7 @@ encode_optional_payout_method('Wallet') ->
 encode_optional_payout_method(undefined) ->
     undefined.
 
-encode_optional_currency(undefined   ) -> undefined;
+encode_optional_currency(undefined) -> undefined;
 encode_optional_currency(SymbolicCode) -> capi_handler_encoder:encode_currency(SymbolicCode).
 
 %
@@ -134,16 +128,15 @@ decode_payment_institution_obj(#domain_PaymentInstitutionObject{ref = Ref, data 
         <<"name">> => Data#domain_PaymentInstitution.name,
         <<"description">> => Data#domain_PaymentInstitution.description,
         <<"realm">> => genlib:to_binary(Data#domain_PaymentInstitution.realm),
-        <<"residences">> =>
-            [
-                capi_handler_decoder_party:decode_residence(R) ||
-                R <- ordsets:to_list(Data#domain_PaymentInstitution.residences)
-            ]
+        <<"residences">> => [
+            capi_handler_decoder_party:decode_residence(R)
+            || R <- ordsets:to_list(Data#domain_PaymentInstitution.residences)
+        ]
     }).
 
 decode_payment_terms(#domain_PaymentsServiceTerms{currencies = Currencies, categories = Categories}) ->
     genlib_map:compact(#{
-        <<"currencies">> => decode_payment_terms(fun capi_handler_decoder_utils:decode_currency    /1, Currencies),
+        <<"currencies">> => decode_payment_terms(fun capi_handler_decoder_utils:decode_currency/1, Currencies),
         <<"categories">> => decode_payment_terms(fun capi_handler_decoder_utils:decode_category_ref/1, Categories)
     });
 decode_payment_terms(undefined) ->

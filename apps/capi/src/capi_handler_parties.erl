@@ -3,15 +3,14 @@
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 
 -behaviour(capi_handler).
+
 -export([process_request/3]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
-    Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context()
-) ->
-    {ok | error, capi_handler:response() | noimpl}.
-
+    Req :: capi_handler:request_data(),
+    Context :: capi_handler:processing_context()
+) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('GetMyParty', _Req, Context) ->
     Party = capi_utils:unwrap(capi_handler_utils:get_my_party(Context)),
     {ok, {200, #{}, capi_handler_decoder_party:decode_party(Party)}};
@@ -31,7 +30,6 @@ process_request('SuspendMyParty', _Req, Context) ->
         {exception, #payproc_InvalidPartyStatus{status = {suspension, {suspended, _}}}} ->
             {ok, {204, #{}, undefined}}
     end;
-
 %%
 
 process_request(_OperationID, _Req, _Context) ->

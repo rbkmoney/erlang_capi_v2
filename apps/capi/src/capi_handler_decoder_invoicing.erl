@@ -25,14 +25,12 @@
 
 %%
 
--spec decode_user_interaction({atom(), _}) ->
-    capi_handler_decoder_utils:decode_data().
-
+-spec decode_user_interaction({atom(), _}) -> capi_handler_decoder_utils:decode_data().
 decode_user_interaction({payment_terminal_reciept, TerminalReceipt}) ->
     #{
         <<"interactionType">> => <<"PaymentTerminalReceipt">>,
-        <<"shortPaymentID" >> => TerminalReceipt#'PaymentTerminalReceipt'.short_payment_id,
-        <<"dueDate"        >> => TerminalReceipt#'PaymentTerminalReceipt'.due
+        <<"shortPaymentID">> => TerminalReceipt#'PaymentTerminalReceipt'.short_payment_id,
+        <<"dueDate">> => TerminalReceipt#'PaymentTerminalReceipt'.due
     };
 decode_user_interaction({redirect, BrowserRequest}) ->
     #{
@@ -72,9 +70,9 @@ decode_crypto_symcode(#'CryptoCurrencyTransferRequest'{crypto_cash = Cash}) ->
 
 decode_crypto_amount(#'CryptoCurrencyTransferRequest'{crypto_cash = Cash}) ->
     % apparently Q is always a power of ten
-    Amount     = Cash#'CryptoCash'.crypto_amount,
-    ok         = ensure_correct_exponent(Amount),
-    Integral   = decode_integral_part(Amount),
+    Amount = Cash#'CryptoCash'.crypto_amount,
+    ok = ensure_correct_exponent(Amount),
+    Integral = decode_integral_part(Amount),
     Fractional = decode_fractional_part(Amount),
     build_decoded_crypto_amount(Integral, Fractional).
 
@@ -82,7 +80,7 @@ ensure_correct_exponent(#'Rational'{q = Q}) ->
     Log = math:log10(Q),
     case Log - trunc(Log) of
         0.0 -> ok;
-        _   -> error('expected a power of 10 denominator')
+        _ -> error('expected a power of 10 denominator')
     end.
 
 decode_integral_part(#'Rational'{p = P, q = Q}) ->
@@ -113,9 +111,7 @@ build_decoded_crypto_amount(Integral, <<>>) ->
 build_decoded_crypto_amount(Integral, Fractional) ->
     <<Integral/binary, ".", Fractional/binary>>.
 
--spec decode_user_interaction_form(map()) ->
-    capi_handler_decoder_utils:decode_data().
-
+-spec decode_user_interaction_form(map()) -> capi_handler_decoder_utils:decode_data().
 decode_user_interaction_form(Form) ->
     maps:fold(
         fun(K, V, Acc) ->
@@ -131,68 +127,71 @@ decode_user_interaction_form(Form) ->
 
 -spec decode_payment(binary(), capi_handler_encoder:encode_data(), processing_context()) ->
     capi_handler_decoder_utils:decode_data().
-
 decode_payment(InvoiceID, Payment, Context) ->
     #domain_Cash{
-        amount   = Amount,
+        amount = Amount,
         currency = Currency
     } = Payment#domain_InvoicePayment.cost,
     capi_handler_utils:merge_and_compact(
         #{
-            <<"id"           >> => Payment#domain_InvoicePayment.id,
-            <<"externalID"   >> => Payment#domain_InvoicePayment.external_id,
-            <<"invoiceID"    >> => InvoiceID,
-            <<"createdAt"    >> => Payment#domain_InvoicePayment.created_at,
+            <<"id">> => Payment#domain_InvoicePayment.id,
+            <<"externalID">> => Payment#domain_InvoicePayment.external_id,
+            <<"invoiceID">> => InvoiceID,
+            <<"createdAt">> => Payment#domain_InvoicePayment.created_at,
             % TODO whoops, nothing to get it from yet
-            <<"flow"         >> => decode_flow(Payment#domain_InvoicePayment.flow),
-            <<"amount"       >> => Amount,
-            <<"currency"     >> => capi_handler_decoder_utils:decode_currency(Currency),
-            <<"payer"        >> => decode_payer(Payment#domain_InvoicePayment.payer),
+            <<"flow">> => decode_flow(Payment#domain_InvoicePayment.flow),
+            <<"amount">> => Amount,
+            <<"currency">> => capi_handler_decoder_utils:decode_currency(Currency),
+            <<"payer">> => decode_payer(Payment#domain_InvoicePayment.payer),
             <<"makeRecurrent">> => decode_make_recurrent(Payment#domain_InvoicePayment.make_recurrent),
-            <<"metadata"     >> => capi_handler_decoder_utils:decode_context(Payment#domain_InvoicePayment.context)
+            <<"metadata">> => capi_handler_decoder_utils:decode_context(Payment#domain_InvoicePayment.context)
         },
         decode_payment_status(Payment#domain_InvoicePayment.status, Context)
     ).
 
-decode_payer({customer, #domain_CustomerPayer{
-    payment_tool = PaymentTool,
-    customer_id  = ID
-}}) ->
+decode_payer(
+    {customer, #domain_CustomerPayer{
+        payment_tool = PaymentTool,
+        customer_id = ID
+    }}
+) ->
     PaymentToolSwag = capi_handler_decoder_party:decode_payment_tool(PaymentTool),
     #{
-        <<"payerType" >> => <<"CustomerPayer">>,
+        <<"payerType">> => <<"CustomerPayer">>,
         <<"customerID">> => ID,
-        <<"paymentToolToken"  >> => capi_handler_decoder_party:wrap_payment_tool_token(PaymentToolSwag),
+        <<"paymentToolToken">> => capi_handler_decoder_party:wrap_payment_tool_token(PaymentToolSwag),
         <<"paymentToolDetails">> => capi_handler_decoder_party:decode_payment_tool_details(PaymentTool)
     };
-decode_payer({recurrent, #domain_RecurrentPayer{
-    payment_tool     = PaymentTool,
-    recurrent_parent = RecurrentParent,
-    contact_info     = ContactInfo
-}}) ->
+decode_payer(
+    {recurrent, #domain_RecurrentPayer{
+        payment_tool = PaymentTool,
+        recurrent_parent = RecurrentParent,
+        contact_info = ContactInfo
+    }}
+) ->
     PaymentToolSwag = capi_handler_decoder_party:decode_payment_tool(PaymentTool),
     #{
-        <<"payerType"             >> => <<"RecurrentPayer">>,
-        <<"paymentToolToken"      >> => capi_handler_decoder_party:wrap_payment_tool_token(PaymentToolSwag),
-        <<"paymentToolDetails"    >> => capi_handler_decoder_party:decode_payment_tool_details(PaymentTool),
-        <<"contactInfo"           >> => capi_handler_decoder_party:decode_contact_info(ContactInfo),
+        <<"payerType">> => <<"RecurrentPayer">>,
+        <<"paymentToolToken">> => capi_handler_decoder_party:wrap_payment_tool_token(PaymentToolSwag),
+        <<"paymentToolDetails">> => capi_handler_decoder_party:decode_payment_tool_details(PaymentTool),
+        <<"contactInfo">> => capi_handler_decoder_party:decode_contact_info(ContactInfo),
         <<"recurrentParentPayment">> => decode_recurrent_parent(RecurrentParent)
     };
-decode_payer({payment_resource, #domain_PaymentResourcePayer{
-    resource     = Resource,
-    contact_info = ContactInfo
-}}) ->
+decode_payer(
+    {payment_resource, #domain_PaymentResourcePayer{
+        resource = Resource,
+        contact_info = ContactInfo
+    }}
+) ->
     capi_handler_utils:merge_and_compact(
         #{
-            <<"payerType"  >> => <<"PaymentResourcePayer">>,
+            <<"payerType">> => <<"PaymentResourcePayer">>,
             <<"contactInfo">> => capi_handler_decoder_party:decode_contact_info(ContactInfo)
         },
         capi_handler_decoder_party:decode_disposable_payment_resource(Resource)
     ).
 
--spec decode_payment_status({atom(), _}, processing_context()) ->
-    capi_handler_decoder_utils:decode_data().
-
+-spec decode_payment_status({atom(), _}, processing_context()) -> capi_handler_decoder_utils:decode_data().
 decode_payment_status({Status, StatusInfo}, Context) ->
     Error =
         case StatusInfo of
@@ -203,12 +202,10 @@ decode_payment_status({Status, StatusInfo}, Context) ->
         end,
     #{
         <<"status">> => genlib:to_binary(Status),
-        <<"error" >> => Error
+        <<"error">> => Error
     }.
 
--spec decode_payment_operation_failure({atom(), _}, processing_context()) ->
-    capi_handler_decoder_utils:decode_data().
-
+-spec decode_payment_operation_failure({atom(), _}, processing_context()) -> capi_handler_decoder_utils:decode_data().
 decode_payment_operation_failure({operation_timeout, _}, _) ->
     payment_error(<<"timeout">>);
 decode_payment_operation_failure({failure, Failure}, Context) ->
@@ -223,34 +220,29 @@ decode_payment_operation_failure({failure, Failure}, Context) ->
             )
     end.
 
-decode_payment_operation_failure_([H|T]) ->
+decode_payment_operation_failure_([H | T]) ->
     R = payment_error(H),
     case T of
         [] -> R;
-        _  -> R#{<<"subError">> => decode_payment_operation_failure_(T)}
+        _ -> R#{<<"subError">> => decode_payment_operation_failure_(T)}
     end.
 
 decode_flow({instant, _}) ->
     #{<<"type">> => <<"PaymentFlowInstant">>};
-
 decode_flow({hold, #domain_InvoicePaymentFlowHold{on_hold_expiration = OnHoldExpiration, held_until = HeldUntil}}) ->
     #{
-        <<"type"            >> => <<"PaymentFlowHold">>,
+        <<"type">> => <<"PaymentFlowHold">>,
         <<"onHoldExpiration">> => atom_to_binary(OnHoldExpiration, utf8),
-        <<"heldUntil"       >> => HeldUntil
+        <<"heldUntil">> => HeldUntil
     }.
 
--spec decode_make_recurrent(undefined | boolean()) ->
-    boolean().
-
+-spec decode_make_recurrent(undefined | boolean()) -> boolean().
 decode_make_recurrent(undefined) ->
     false;
 decode_make_recurrent(Value) when is_boolean(Value) ->
     Value.
 
--spec decode_recurrent_parent(capi_handler_encoder:encode_data()) ->
-    capi_handler_decoder_utils:decode_data().
-
+-spec decode_recurrent_parent(capi_handler_encoder:encode_data()) -> capi_handler_decoder_utils:decode_data().
 decode_recurrent_parent(#domain_RecurrentParentPayment{invoice_id = InvoiceID, payment_id = PaymentID}) ->
     #{
         <<"invoiceID">> => InvoiceID,
@@ -267,9 +259,8 @@ payment_error(Code) ->
 
 %% client error mapping
 %% @see https://github.com/petrkozorezov/swag/blob/master/spec/definitions/PaymentError.yaml
--spec payment_error_client_maping(capi_handler_encoder:encode_data()) ->
-    binary().
-payment_error_client_maping({preauthorization_failed, _})->
+-spec payment_error_client_maping(capi_handler_encoder:encode_data()) -> binary().
+payment_error_client_maping({preauthorization_failed, _}) ->
     <<"PreauthorizationFailed">>;
 payment_error_client_maping({authorization_failed, {account_blocked, _}}) ->
     <<"RejectedByIssuer">>;
@@ -288,24 +279,21 @@ payment_error_client_maping(_) ->
 
 -spec decode_refund(capi_handler_encoder:encode_data(), processing_context()) ->
     capi_handler_decoder_utils:decode_data().
-
 decode_refund(Refund, Context) ->
     #domain_Cash{amount = Amount, currency = Currency} = Refund#domain_InvoicePaymentRefund.cash,
     capi_handler_utils:merge_and_compact(
         #{
-            <<"id"        >> => Refund#domain_InvoicePaymentRefund.id,
-            <<"createdAt" >> => Refund#domain_InvoicePaymentRefund.created_at,
-            <<"reason"    >> => Refund#domain_InvoicePaymentRefund.reason,
-            <<"amount"    >> => Amount,
-            <<"currency"  >> => capi_handler_decoder_utils:decode_currency(Currency),
+            <<"id">> => Refund#domain_InvoicePaymentRefund.id,
+            <<"createdAt">> => Refund#domain_InvoicePaymentRefund.created_at,
+            <<"reason">> => Refund#domain_InvoicePaymentRefund.reason,
+            <<"amount">> => Amount,
+            <<"currency">> => capi_handler_decoder_utils:decode_currency(Currency),
             <<"externalID">> => Refund#domain_InvoicePaymentRefund.external_id
         },
         decode_refund_status(Refund#domain_InvoicePaymentRefund.status, Context)
     ).
 
--spec decode_refund_status({atom(), _}, processing_context()) ->
-    capi_handler_decoder_utils:decode_data().
-
+-spec decode_refund_status({atom(), _}, processing_context()) -> capi_handler_decoder_utils:decode_data().
 decode_refund_status({Status, StatusInfo}, Context) ->
     Error =
         case StatusInfo of
@@ -316,12 +304,11 @@ decode_refund_status({Status, StatusInfo}, Context) ->
         end,
     #{
         <<"status">> => genlib:to_binary(Status),
-        <<"error" >> => Error
+        <<"error">> => Error
     }.
 
 -spec decode_chargeback(capi_handler_encoder:encode_data(), processing_context()) ->
     capi_handler_decoder_utils:decode_data().
-
 decode_chargeback(#payproc_InvoicePaymentChargeback{chargeback = Chargeback}, Context) ->
     decode_chargeback(Chargeback, Context);
 decode_chargeback(#domain_InvoicePaymentChargeback{} = Chargeback, _Context) ->
@@ -329,13 +316,13 @@ decode_chargeback(#domain_InvoicePaymentChargeback{} = Chargeback, _Context) ->
     #domain_Cash{amount = Levy, currency = Currency} = Chargeback#domain_InvoicePaymentChargeback.levy,
     capi_handler_utils:merge_and_compact(
         #{
-            <<"id"         >> => Chargeback#domain_InvoicePaymentChargeback.id,
-            <<"createdAt"  >> => Chargeback#domain_InvoicePaymentChargeback.created_at,
-            <<"status"     >> => decode_chargeback_status(Chargeback#domain_InvoicePaymentChargeback.status),
-            <<"stage"      >> => decode_chargeback_stage(Chargeback#domain_InvoicePaymentChargeback.stage),
-            <<"body"       >> => Body,
-            <<"levy"       >> => Levy,
-            <<"currency"   >> => capi_handler_decoder_utils:decode_currency(Currency)
+            <<"id">> => Chargeback#domain_InvoicePaymentChargeback.id,
+            <<"createdAt">> => Chargeback#domain_InvoicePaymentChargeback.created_at,
+            <<"status">> => decode_chargeback_status(Chargeback#domain_InvoicePaymentChargeback.status),
+            <<"stage">> => decode_chargeback_stage(Chargeback#domain_InvoicePaymentChargeback.stage),
+            <<"body">> => Body,
+            <<"levy">> => Levy,
+            <<"currency">> => capi_handler_decoder_utils:decode_currency(Currency)
         },
         decode_chargeback_reason_code(Chargeback#domain_InvoicePaymentChargeback.reason)
     ).
@@ -359,27 +346,28 @@ decode_chargeback_stage({arbitration, _StageDetails}) ->
 decode_chargeback_reason_code(#domain_InvoicePaymentChargebackReason{code = Code}) ->
     #{<<"reasonCode">> => Code}.
 
--spec decode_invoice(capi_handler_encoder:encode_data()) ->
-    capi_handler_decoder_utils:decode_data().
-
+-spec decode_invoice(capi_handler_encoder:encode_data()) -> capi_handler_decoder_utils:decode_data().
 decode_invoice(Invoice) ->
     #domain_Cash{amount = Amount, currency = Currency} = Invoice#domain_Invoice.cost,
     #domain_InvoiceDetails{product = Product, description = Description, cart = Cart} =
         Invoice#domain_Invoice.details,
-    capi_handler_utils:merge_and_compact(#{
-        <<"id"               >> => Invoice#domain_Invoice.id,
-        <<"externalID"       >> => Invoice#domain_Invoice.external_id,
-        <<"shopID"           >> => Invoice#domain_Invoice.shop_id,
-        <<"createdAt"        >> => Invoice#domain_Invoice.created_at,
-        <<"dueDate"          >> => Invoice#domain_Invoice.due,
-        <<"amount"           >> => Amount,
-        <<"currency"         >> => capi_handler_decoder_utils:decode_currency(Currency),
-        <<"metadata"         >> => capi_handler_decoder_utils:decode_context(Invoice#domain_Invoice.context),
-        <<"product"          >> => Product,
-        <<"description"      >> => Description,
-        <<"cart"             >> => decode_invoice_cart(Cart),
-        <<"invoiceTemplateID">> => Invoice#domain_Invoice.template_id
-    }, decode_invoice_status(Invoice#domain_Invoice.status)).
+    capi_handler_utils:merge_and_compact(
+        #{
+            <<"id">> => Invoice#domain_Invoice.id,
+            <<"externalID">> => Invoice#domain_Invoice.external_id,
+            <<"shopID">> => Invoice#domain_Invoice.shop_id,
+            <<"createdAt">> => Invoice#domain_Invoice.created_at,
+            <<"dueDate">> => Invoice#domain_Invoice.due,
+            <<"amount">> => Amount,
+            <<"currency">> => capi_handler_decoder_utils:decode_currency(Currency),
+            <<"metadata">> => capi_handler_decoder_utils:decode_context(Invoice#domain_Invoice.context),
+            <<"product">> => Product,
+            <<"description">> => Description,
+            <<"cart">> => decode_invoice_cart(Cart),
+            <<"invoiceTemplateID">> => Invoice#domain_Invoice.template_id
+        },
+        decode_invoice_status(Invoice#domain_Invoice.status)
+    ).
 
 decode_invoice_status({Status, StatusInfo}) ->
     Reason =
@@ -395,7 +383,6 @@ decode_invoice_status({Status, StatusInfo}) ->
 
 -spec decode_invoice_cart(capi_handler_encoder:encode_data() | undefined) ->
     capi_handler_decoder_utils:decode_data() | undefined.
-
 decode_invoice_cart(#domain_InvoiceCart{lines = Lines}) ->
     [decode_invoice_line(L) || L <- Lines];
 decode_invoice_cart(undefined) ->
@@ -403,29 +390,25 @@ decode_invoice_cart(undefined) ->
 
 decode_invoice_line(InvoiceLine = #domain_InvoiceLine{quantity = Quantity, price = #domain_Cash{amount = Price}}) ->
     genlib_map:compact(#{
-        <<"product" >> => InvoiceLine#domain_InvoiceLine.product,
+        <<"product">> => InvoiceLine#domain_InvoiceLine.product,
         <<"quantity">> => Quantity,
-        <<"price"   >> => Price,
-        <<"cost"    >> => Price * Quantity,
-        <<"taxMode" >> => decode_invoice_line_tax_mode(InvoiceLine#domain_InvoiceLine.metadata)
+        <<"price">> => Price,
+        <<"cost">> => Price * Quantity,
+        <<"taxMode">> => decode_invoice_line_tax_mode(InvoiceLine#domain_InvoiceLine.metadata)
     }).
 
--spec decode_invoice_line_tax_mode(map()) ->
-    capi_handler_decoder_utils:decode_data() | undefined.
-
+-spec decode_invoice_line_tax_mode(map()) -> capi_handler_decoder_utils:decode_data() | undefined.
 decode_invoice_line_tax_mode(#{<<"TaxMode">> := {str, TM}}) ->
     %% for more info about taxMode look here:
     %% https://github.com/rbkmoney/starrys/blob/master/docs/settings.md
     #{
-       <<"type">> => <<"InvoiceLineTaxVAT">>,
-       <<"rate">> => TM
+        <<"type">> => <<"InvoiceLineTaxVAT">>,
+        <<"rate">> => TM
     };
 decode_invoice_line_tax_mode(_) ->
     undefined.
 
--spec construct_payment_methods(atom(), list(), processing_context()) ->
-    {ok, list()} | woody:result().
-
+-spec construct_payment_methods(atom(), list(), processing_context()) -> {ok, list()} | woody:result().
 construct_payment_methods(ServiceName, Args, Context) ->
     case compute_terms(ServiceName, Args, Context) of
         {ok, #domain_TermSet{payments = undefined}} ->
@@ -462,31 +445,37 @@ decode_payment_method(tokenized_bank_card_deprecated, TokenizedBankCards) ->
 decode_payment_method(bank_card, Cards) ->
     {Regular, Tokenized} =
         lists:partition(fun(#domain_BankCardPaymentMethod{token_provider = TP}) -> TP =:= undefined end, Cards),
-    [#{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun decode_bank_card/1, Regular)}
-        | decode_tokenized_bank_cards(Tokenized)];
+    [
+        #{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun decode_bank_card/1, Regular)}
+        | decode_tokenized_bank_cards(Tokenized)
+    ];
 decode_payment_method(payment_terminal, Providers) ->
     [#{<<"method">> => <<"PaymentTerminal">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}];
 decode_payment_method(digital_wallet, Providers) ->
     [#{<<"method">> => <<"DigitalWallet">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}];
 decode_payment_method(crypto_currency, CryptoCurrencies) ->
     Decoder = fun capi_handler_decoder_utils:convert_crypto_currency_to_swag/1,
-    [#{
-        <<"method">> => <<"CryptoWallet">>,
-        <<"cryptoCurrencies">> => lists:map(Decoder, CryptoCurrencies)
-    }];
+    [
+        #{
+            <<"method">> => <<"CryptoWallet">>,
+            <<"cryptoCurrencies">> => lists:map(Decoder, CryptoCurrencies)
+        }
+    ];
 decode_payment_method(mobile, MobileOperators) ->
     [#{<<"method">> => <<"MobileCommerce">>, <<"operators">> => lists:map(fun genlib:to_binary/1, MobileOperators)}].
 
 decode_bank_card(#domain_BankCardPaymentMethod{payment_system = PS}) -> genlib:to_binary(PS).
 
-decode_tokenized_bank_cards([#domain_BankCardPaymentMethod{} | _ ] = TokenizedBankCards) ->
+decode_tokenized_bank_cards([#domain_BankCardPaymentMethod{} | _] = TokenizedBankCards) ->
     PropTokenizedBankCards = [
-        {TP, PS} || #domain_BankCardPaymentMethod{payment_system = PS, token_provider = TP} <- TokenizedBankCards
+        {TP, PS}
+        || #domain_BankCardPaymentMethod{payment_system = PS, token_provider = TP} <- TokenizedBankCards
     ],
     do_decode_tokenized_bank_cards(PropTokenizedBankCards);
-decode_tokenized_bank_cards([#domain_TokenizedBankCard{} | _ ] = TokenizedBankCards) ->
+decode_tokenized_bank_cards([#domain_TokenizedBankCard{} | _] = TokenizedBankCards) ->
     PropTokenizedBankCards = [
-        {TP, PS} || #domain_TokenizedBankCard{payment_system = PS, token_provider = TP} <- TokenizedBankCards
+        {TP, PS}
+        || #domain_TokenizedBankCard{payment_system = PS, token_provider = TP} <- TokenizedBankCards
     ],
     do_decode_tokenized_bank_cards(PropTokenizedBankCards).
 
@@ -499,7 +488,6 @@ do_decode_tokenized_bank_cards(PropTokenizedBankCards) ->
         proplists:get_keys(PropTokenizedBankCards)
     ).
 
-
 decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
     #{
         <<"method">> => <<"BankCard">>,
@@ -510,18 +498,15 @@ decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
 compute_terms(ServiceName, Args, Context) ->
     capi_handler_utils:service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
 
--spec make_invoice_and_token(capi_handler_encoder:encode_data(), binary()) ->
-    capi_handler_decoder_utils:decode_data().
-
+-spec make_invoice_and_token(capi_handler_encoder:encode_data(), binary()) -> capi_handler_decoder_utils:decode_data().
 make_invoice_and_token(Invoice, PartyID) ->
     make_invoice_and_token(Invoice, PartyID, #{}).
 
 -spec make_invoice_and_token(capi_handler_encoder:encode_data(), binary(), map()) ->
     capi_handler_decoder_utils:decode_data().
-
 make_invoice_and_token(Invoice, PartyID, ExtraProperties) ->
     #{
-        <<"invoice"           >> => decode_invoice(Invoice),
+        <<"invoice">> => decode_invoice(Invoice),
         <<"invoiceAccessToken">> => capi_handler_utils:issue_access_token(
             PartyID,
             {invoice, Invoice#domain_Invoice.id},
@@ -538,14 +523,15 @@ make_invoice_and_token(Invoice, PartyID, ExtraProperties) ->
 -spec test() -> _.
 
 -spec crypto_amount_decoder_test() -> _.
+
 crypto_amount_decoder_test() ->
     ?assertError('expected a power of 10 denominator', decode_crypto_amount(build_request(1, 2))),
-    ?assertEqual(<<"1100000007" >>, decode_crypto_amount(build_request(1100000007, 1        ))),
-    ?assertEqual(<< "1"         >>, decode_crypto_amount(build_request(100000000 , 100000000))),
-    ?assertEqual(<< "1.1"       >>, decode_crypto_amount(build_request(110000000 , 100000000))),
+    ?assertEqual(<<"1100000007">>, decode_crypto_amount(build_request(1100000007, 1))),
+    ?assertEqual(<<"1">>, decode_crypto_amount(build_request(100000000, 100000000))),
+    ?assertEqual(<<"1.1">>, decode_crypto_amount(build_request(110000000, 100000000))),
     ?assertEqual(<<"11.00000007">>, decode_crypto_amount(build_request(1100000007, 100000000))),
-    ?assertEqual(<< "0.11000007">>, decode_crypto_amount(build_request(11000007  , 100000000))),
-    ?assertEqual(<< "0.110007"  >>, decode_crypto_amount(build_request(11000700  , 100000000))).
+    ?assertEqual(<<"0.11000007">>, decode_crypto_amount(build_request(11000007, 100000000))),
+    ?assertEqual(<<"0.110007">>, decode_crypto_amount(build_request(11000700, 100000000))).
 
 build_request(P, Q) ->
     Amount = #'Rational'{p = P, q = Q},

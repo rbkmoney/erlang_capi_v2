@@ -1,19 +1,19 @@
-    -module(capi_handler_payouts).
+-module(capi_handler_payouts).
 
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("damsel/include/dmsl_payout_processing_thrift.hrl").
 
 -behaviour(capi_handler).
+
 -export([process_request/3]).
+
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
-    Req         :: capi_handler:request_data(),
-    Context     :: capi_handler:processing_context()
-) ->
-    {ok | error, capi_handler:response() | noimpl}.
-
+    Req :: capi_handler:request_data(),
+    Context :: capi_handler:processing_context()
+) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('GetPayoutTools', Req, Context) ->
     case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
         {ok, #domain_Contract{payout_tools = PayoutTools}} ->
@@ -21,7 +21,6 @@ process_request('GetPayoutTools', Req, Context) ->
         {exception, #payproc_ContractNotFound{}} ->
             {ok, general_error(404, <<"Contract not found">>)}
     end;
-
 process_request('GetPayoutToolByID', Req, Context) ->
     case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
         {ok, #domain_Contract{payout_tools = PayoutTools}} ->
@@ -35,7 +34,6 @@ process_request('GetPayoutToolByID', Req, Context) ->
         {exception, #payproc_ContractNotFound{}} ->
             {ok, general_error(404, <<"Contract not found">>)}
     end;
-
 process_request('GetPayout', Req, Context) ->
     PayoutID = maps:get(payoutID, Req),
     case capi_handler_utils:service_call({payouts, 'Get', [PayoutID]}, Context) of
@@ -49,7 +47,6 @@ process_request('GetPayout', Req, Context) ->
         {exception, #'payout_processing_PayoutNotFound'{}} ->
             {ok, general_error(404, <<"Payout not found">>)}
     end;
-
 process_request('CreatePayout', Req, Context) ->
     CreateRequest = encode_payout_params(
         capi_handler_utils:get_party_id(Context),
@@ -69,7 +66,6 @@ process_request('CreatePayout', Req, Context) ->
                     {ok, logic_error(invalidRequest, FormattedErrors)}
             end
     end;
-
 process_request('GetScheduleByRef', Req, Context) ->
     case get_schedule_by_id(genlib:to_int(maps:get(scheduleID, Req)), Context) of
         {ok, Schedule} ->
@@ -77,7 +73,6 @@ process_request('GetScheduleByRef', Req, Context) ->
         {error, not_found} ->
             {ok, general_error(404, <<"Schedule not found">>)}
     end;
-
 %%
 
 process_request(_OperationID, _Req, _Context) ->
@@ -126,21 +121,24 @@ decode_payout_tool(#domain_PayoutTool{id = ID, currency = Currency, payout_tool_
     ).
 
 decode_payout(Payout) ->
-    capi_handler_utils:merge_and_compact(#{
-        <<"id"               >> => Payout#payout_processing_Payout.id,
-        <<"shopID"           >> => Payout#payout_processing_Payout.shop_id,
-        <<"createdAt"        >> => Payout#payout_processing_Payout.created_at,
-        <<"amount"           >> => Payout#payout_processing_Payout.amount,
-        <<"fee"              >> => Payout#payout_processing_Payout.fee,
-        <<"currency"         >> => capi_handler_decoder_utils:decode_currency(Payout#payout_processing_Payout.currency),
-        <<"payoutToolDetails">> => decode_payout_tool_details(Payout#payout_processing_Payout.type),
-        <<"payoutSummary"    >> => decode_payout_summary(Payout#payout_processing_Payout.summary),
-        <<"metadata"         >> => decode_metadata(Payout#payout_processing_Payout.metadata)
-    }, decode_payout_status(Payout#payout_processing_Payout.status)).
+    capi_handler_utils:merge_and_compact(
+        #{
+            <<"id">> => Payout#payout_processing_Payout.id,
+            <<"shopID">> => Payout#payout_processing_Payout.shop_id,
+            <<"createdAt">> => Payout#payout_processing_Payout.created_at,
+            <<"amount">> => Payout#payout_processing_Payout.amount,
+            <<"fee">> => Payout#payout_processing_Payout.fee,
+            <<"currency">> => capi_handler_decoder_utils:decode_currency(Payout#payout_processing_Payout.currency),
+            <<"payoutToolDetails">> => decode_payout_tool_details(Payout#payout_processing_Payout.type),
+            <<"payoutSummary">> => decode_payout_summary(Payout#payout_processing_Payout.summary),
+            <<"metadata">> => decode_metadata(Payout#payout_processing_Payout.metadata)
+        },
+        decode_payout_status(Payout#payout_processing_Payout.status)
+    ).
 
 decode_payout_status({cancelled, #payout_processing_PayoutCancelled{details = Details}}) ->
     #{
-        <<"status"             >> => <<"cancelled">>,
+        <<"status">> => <<"cancelled">>,
         <<"cancellationDetails">> => genlib:to_binary(Details)
     };
 decode_payout_status({Status, _}) ->
@@ -170,13 +168,13 @@ decode_payout_summary(undefined) ->
 
 decode_payout_summary_item(PayoutSummary) ->
     genlib_map:compact(#{
-        <<"amount"  >> => PayoutSummary#payout_processing_PayoutSummaryItem.amount,
-        <<"fee"     >> => PayoutSummary#payout_processing_PayoutSummaryItem.fee,
+        <<"amount">> => PayoutSummary#payout_processing_PayoutSummaryItem.amount,
+        <<"fee">> => PayoutSummary#payout_processing_PayoutSummaryItem.fee,
         <<"currency">> => PayoutSummary#payout_processing_PayoutSummaryItem.currency_symbolic_code,
-        <<"count"   >> => PayoutSummary#payout_processing_PayoutSummaryItem.count,
+        <<"count">> => PayoutSummary#payout_processing_PayoutSummaryItem.count,
         <<"fromTime">> => PayoutSummary#payout_processing_PayoutSummaryItem.from_time,
-        <<"toTime"  >> => PayoutSummary#payout_processing_PayoutSummaryItem.to_time,
-        <<"type"    >> => genlib:to_binary(PayoutSummary#payout_processing_PayoutSummaryItem.operation_type)
+        <<"toTime">> => PayoutSummary#payout_processing_PayoutSummaryItem.to_time,
+        <<"type">> => genlib:to_binary(PayoutSummary#payout_processing_PayoutSummaryItem.operation_type)
     }).
 
 decode_metadata(undefined) ->
@@ -189,7 +187,7 @@ decode_msgpack_value(_Key, Value) ->
 
 decode_business_schedule(#domain_BusinessScheduleObject{ref = Ref, data = Data}) ->
     genlib_map:compact(#{
-        <<"scheduleID" >> => Ref#domain_BusinessScheduleRef.id,
-        <<"name"       >> => Data#domain_BusinessSchedule.name,
+        <<"scheduleID">> => Ref#domain_BusinessScheduleRef.id,
+        <<"name">> => Data#domain_BusinessSchedule.name,
         <<"description">> => Data#domain_BusinessSchedule.description
     }).

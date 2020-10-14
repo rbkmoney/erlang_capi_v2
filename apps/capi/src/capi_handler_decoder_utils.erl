@@ -20,41 +20,32 @@
 
 -type decode_data() :: #{binary() => term()}.
 
--spec decode_map(map(), fun((_) -> any())) ->
-    [any()].
-
+-spec decode_map(map(), fun((_) -> any())) -> [any()].
 decode_map(Items, Fun) ->
     lists:map(Fun, maps:values(Items)).
 
--spec decode_currency(capi_handler_encoder:encode_data()) ->
-    binary().
-
-decode_currency(#domain_Currency   {symbolic_code = SymbolicCode}) -> SymbolicCode;
+-spec decode_currency(capi_handler_encoder:encode_data()) -> binary().
+decode_currency(#domain_Currency{symbolic_code = SymbolicCode}) -> SymbolicCode;
 decode_currency(#domain_CurrencyRef{symbolic_code = SymbolicCode}) -> SymbolicCode.
 
--spec decode_business_schedule_ref(capi_handler_encoder:encode_data()) ->
-    binary() | undefined.
-
+-spec decode_business_schedule_ref(capi_handler_encoder:encode_data()) -> binary() | undefined.
 decode_business_schedule_ref(#domain_BusinessScheduleRef{id = ID}) when ID /= undefined ->
     ID;
 decode_business_schedule_ref(undefined) ->
     undefined.
 
--spec decode_bank_card_bin(binary()) ->
-    binary() | undefined.
-
+-spec decode_bank_card_bin(binary()) -> binary() | undefined.
 decode_bank_card_bin(<<>>) ->
     undefined;
 decode_bank_card_bin(Bin) when byte_size(Bin) > 6 ->
-    binary:part(Bin, {0, 6}); %%backwards compatibility with old data
+    %%backwards compatibility with old data
+    binary:part(Bin, {0, 6});
 decode_bank_card_bin(Bin) ->
     Bin.
 
 -define(PAN_LENGTH, 16).
 
--spec decode_masked_pan(binary() | undefined, binary()) ->
-    binary().
-
+-spec decode_masked_pan(binary() | undefined, binary()) -> binary().
 decode_masked_pan(undefined, LastDigits) ->
     decode_masked_pan(<<>>, LastDigits);
 decode_masked_pan(Bin, LastDigits) ->
@@ -63,17 +54,13 @@ decode_masked_pan(Bin, LastDigits) ->
 
 -define(MASKED_PAN_MAX_LENGTH, 4).
 
--spec decode_last_digits(binary()) ->
-    binary().
-
+-spec decode_last_digits(binary()) -> binary().
 decode_last_digits(MaskedPan) when byte_size(MaskedPan) > ?MASKED_PAN_MAX_LENGTH ->
     binary:part(MaskedPan, {byte_size(MaskedPan), -?MASKED_PAN_MAX_LENGTH});
 decode_last_digits(MaskedPan) ->
     MaskedPan.
 
--spec decode_operation_failure(_, _) ->
-    decode_data().
-
+-spec decode_operation_failure(_, _) -> decode_data().
 decode_operation_failure({operation_timeout, _}, _) ->
     logic_error(timeout, <<"timeout">>);
 decode_operation_failure({failure, #domain_Failure{code = Code, reason = Reason}}, _) ->
@@ -82,40 +69,31 @@ decode_operation_failure({failure, #domain_Failure{code = Code, reason = Reason}
 logic_error(Code, Message) ->
     #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)}.
 
--spec decode_category_ref(capi_handler_encoder:encode_data()) ->
-    integer().
-
+-spec decode_category_ref(capi_handler_encoder:encode_data()) -> integer().
 decode_category_ref(#domain_CategoryRef{id = CategoryRef}) ->
     CategoryRef.
 
--spec decode_context(capi_handler_encoder:encode_data()) ->
-    decode_data() | undefined.
-
+-spec decode_context(capi_handler_encoder:encode_data()) -> decode_data() | undefined.
 decode_context(#'Content'{type = <<"application/json">>, data = InvoiceContext}) ->
     % @TODO deal with non json contexts
-    jsx:decode(InvoiceContext,  [return_maps]);
+    jsx:decode(InvoiceContext, [return_maps]);
 decode_context(undefined) ->
     undefined.
 
--spec decode_optional(any() | undefined, fun((any()) -> decode_data())) ->
-    decode_data().
-
+-spec decode_optional(any() | undefined, fun((any()) -> decode_data())) -> decode_data().
 decode_optional(Arg, DecodeFun) when Arg /= undefined ->
     DecodeFun(Arg);
 decode_optional(undefined, _) ->
     undefined.
 
 -spec convert_crypto_currency_from_swag(binary()) -> atom().
-
 convert_crypto_currency_from_swag(<<"bitcoinCash">>) ->
     bitcoin_cash;
 convert_crypto_currency_from_swag(CryptoCurrency) when is_binary(CryptoCurrency) ->
     binary_to_existing_atom(CryptoCurrency, utf8).
 
 -spec convert_crypto_currency_to_swag(atom()) -> binary().
-
 convert_crypto_currency_to_swag(bitcoin_cash) ->
     <<"bitcoinCash">>;
 convert_crypto_currency_to_swag(CryptoCurrency) when is_atom(CryptoCurrency) ->
     atom_to_binary(CryptoCurrency, utf8).
-

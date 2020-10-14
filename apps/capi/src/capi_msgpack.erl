@@ -4,6 +4,7 @@
 %%% Copy from machinery
 
 -module(capi_msgpack).
+
 -include_lib("damsel/include/dmsl_msgpack_thrift.hrl").
 
 %% API
@@ -18,15 +19,16 @@
 %%
 
 -spec wrap
-    (null              ) -> t();
-    (boolean()         ) -> t();
-    (integer()         ) -> t();
-    (float()           ) -> t();
-    (binary()          ) -> t(); %% string
-    ({binary, binary()}) -> t(); %% binary
-    ([t()]             ) -> t();
-    (#{t() => t()}     ) -> t().
-
+    (null) -> t();
+    (boolean()) -> t();
+    (integer()) -> t();
+    (float()) -> t();
+    %% string
+    (binary()) -> t();
+    %% binary
+    ({binary, binary()}) -> t();
+    ([t()]) -> t();
+    (#{t() => t()}) -> t().
 wrap(null) ->
     {nl, #msgpack_Nil{}};
 wrap(V) when is_boolean(V) ->
@@ -46,15 +48,16 @@ wrap(V) when is_map(V) ->
     {obj, maps:fold(fun(Key, Value, Map) -> Map#{wrap(Key) => wrap(Value)} end, #{}, V)}.
 
 -spec unwrap(t()) ->
-    null               |
-    boolean()          |
-    integer()          |
-    float()            |
-    binary()           | %% string
-    {binary, binary()} | %% binary
-    [t()]              |
-    #{t() => t()}      .
-
+    null
+    | boolean()
+    | integer()
+    | float()
+    %% string
+    | binary()
+    %% binary
+    | {binary, binary()}
+    | [t()]
+    | #{t() => t()}.
 unwrap({nl, #msgpack_Nil{}}) ->
     null;
 unwrap({b, V}) when is_boolean(V) ->

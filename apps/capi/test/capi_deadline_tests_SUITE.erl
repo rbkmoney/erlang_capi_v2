@@ -23,60 +23,52 @@
     deadline_relative_ok_test/1
 ]).
 
--define(CAPI_PORT                   , 8080).
--define(CAPI_HOST_NAME              , "localhost").
--define(CAPI_URL                    , ?CAPI_HOST_NAME ++ ":" ++ integer_to_list(?CAPI_PORT)).
+-define(CAPI_PORT, 8080).
+-define(CAPI_HOST_NAME, "localhost").
+-define(CAPI_URL, ?CAPI_HOST_NAME ++ ":" ++ integer_to_list(?CAPI_PORT)).
 
 -define(badresp(Code), {error, {invalid_response_code, Code}}).
 
--type test_case_name()  :: atom().
--type config()          :: [{atom(), any()}].
--type group_name()      :: atom().
+-type test_case_name() :: atom().
+-type config() :: [{atom(), any()}].
+-type group_name() :: atom().
 
 -behaviour(supervisor).
 
--spec init([]) ->
-    {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
+-spec init([]) -> {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
     {ok, {#{strategy => one_for_all, intensity => 1, period => 1}, []}}.
 
--spec all() ->
-    [test_case_name()].
+-spec all() -> [test_case_name()].
 all() ->
     [
         {group, deadline_header}
     ].
 
--spec groups() ->
-    [{group_name(), list(), [test_case_name()]}].
+-spec groups() -> [{group_name(), list(), [test_case_name()]}].
 groups() ->
     [
-        {deadline_header, [],
-            [
-                deadline_error_test,
-                deadline_absolute_ok_test,
-                deadline_relative_ok_test
-            ]
-        }
+        {deadline_header, [], [
+            deadline_error_test,
+            deadline_absolute_ok_test,
+            deadline_relative_ok_test
+        ]}
     ].
 
 %%
 %% starting/stopping
 %%
--spec init_per_suite(config()) ->
-    config().
+-spec init_per_suite(config()) -> config().
 init_per_suite(Config) ->
     capi_ct_helper:init_suite(?MODULE, Config).
 
--spec end_per_suite(config()) ->
-    _.
+-spec end_per_suite(config()) -> _.
 end_per_suite(C) ->
     _ = capi_ct_helper:stop_mocked_service_sup(?config(suite_test_sup, C)),
     [application:stop(App) || App <- proplists:get_value(apps, C)],
     ok.
 
--spec init_per_group(group_name(), config()) ->
-    config().
+-spec init_per_group(group_name(), config()) -> config().
 init_per_group(deadline_header, Config) ->
     BasePermissions = [
         {[invoices], write},
@@ -94,41 +86,42 @@ init_per_group(deadline_header, Config) ->
     Context = capi_ct_helper:get_context(Token),
     Config2 = [{context_with_relative_deadline, get_context(Token2, <<"3s">>)} | Config],
     [{context_with_absolute_deadline, Context} | Config2];
-
 init_per_group(_, Config) ->
     Config.
 
--spec end_per_group(group_name(), config()) ->
-    _.
+-spec end_per_group(group_name(), config()) -> _.
 end_per_group(_Group, _C) ->
     ok.
 
--spec init_per_testcase(test_case_name(), config()) ->
-    config().
+-spec init_per_testcase(test_case_name(), config()) -> config().
 init_per_testcase(_Name, C) ->
     [{test_sup, capi_ct_helper:start_mocked_service_sup(?MODULE)} | C].
 
--spec end_per_testcase(test_case_name(), config()) ->
-    config().
+-spec end_per_testcase(test_case_name(), config()) -> config().
 end_per_testcase(_Name, C) ->
     capi_ct_helper:stop_mocked_service_sup(?config(test_sup, C)),
     ok.
 
 %%% Tests
 
--spec deadline_error_test(config()) ->
-    _.
+-spec deadline_error_test(config()) -> _.
 deadline_error_test(_Config) ->
-    {ok, Token} = capi_ct_helper:issue_token([], {deadline, 4102444800}), % 01/01/2100 @ 12:00am (UTC)
+    % 01/01/2100 @ 12:00am (UTC)
+    {ok, Token} = capi_ct_helper:issue_token([], {deadline, 4102444800}),
     {error, {400, _}} = capi_client_categories:get_categories(get_context(Token, <<"blabla">>)).
 
--spec deadline_absolute_ok_test(config()) ->
-    _.
+-spec deadline_absolute_ok_test(config()) -> _.
 deadline_absolute_ok_test(Config) ->
     Context = ?config(context_with_absolute_deadline, Config),
-    _ = capi_ct_helper:mock_services([
-        {party_management, fun('Get', _) -> timer:sleep(5000), {ok, ?PARTY} end}
-    ], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {party_management, fun('Get', _) ->
+                timer:sleep(5000),
+                {ok, ?PARTY}
+            end}
+        ],
+        Config
+    ),
     Deadline = woody_deadline:from_timeout(3000),
     BinDeadline = woody_deadline:to_binary(Deadline),
     ?badresp(504) = capi_client_parties:get_my_party(Context#{deadline => BinDeadline}),
@@ -136,13 +129,18 @@ deadline_absolute_ok_test(Config) ->
     BinDeadline2 = woody_deadline:to_binary(Deadline2),
     {ok, _} = capi_client_categories:get_categories(Context#{deadline => BinDeadline2}).
 
--spec deadline_relative_ok_test(config()) ->
-    _.
+-spec deadline_relative_ok_test(config()) -> _.
 deadline_relative_ok_test(Config) ->
     Context = ?config(context_with_relative_deadline, Config),
-    _ = capi_ct_helper:mock_services([
-        {party_management, fun('Get', _) -> timer:sleep(10000), {ok, ?PARTY} end}
-    ], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {party_management, fun('Get', _) ->
+                timer:sleep(10000),
+                {ok, ?PARTY}
+            end}
+        ],
+        Config
+    ),
     ?badresp(504) = capi_client_parties:get_my_party(Context),
     {ok, _} = capi_client_categories:get_categories(Context).
 
