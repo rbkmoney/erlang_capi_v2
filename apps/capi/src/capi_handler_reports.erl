@@ -23,28 +23,24 @@ process_request('GetReports', Req, Context) ->
 process_request('GetReportsForParty', Req, Context) ->
     PartyID = maps:get(partyID, Req),
     get_reports(PartyID, Req, Context);
-
 process_request('GetReport', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     get_report(PartyID, Req, Context);
 process_request('GetReportForParty', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     get_report(PartyID, Req, Context);
-
 process_request('CreateReport', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     create_report(PartyID, Req, Context);
 process_request('CreateReportForParty', Req, Context) ->
     PartyID = maps:get(partyID, Req),
     create_report(PartyID, Req, Context);
-
 process_request('DownloadFile', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     download_file(PartyID, Req, Context);
 process_request('DownloadFileForParty', Req, Context) ->
     PartyID = maps:get(partyID, Req),
     download_file(PartyID, Req, Context);
-
 %%
 
 process_request(_OperationID, _Req, _Context) ->
@@ -54,11 +50,11 @@ create_report(PartyID, Req, Context) ->
     ShopID = maps:get(shopID, Req),
     ReportParams = maps:get('ReportParams', Req),
     ReportRequest = #reports_ReportRequest{
-        party_id   = PartyID,
-        shop_id    = ShopID,
+        party_id = PartyID,
+        shop_id = ShopID,
         time_range = #reports_ReportTimeRange{
             from_time = capi_handler_utils:get_time(<<"fromTime">>, ReportParams),
-            to_time   = capi_handler_utils:get_time(<<"toTime">>  , ReportParams)
+            to_time = capi_handler_utils:get_time(<<"toTime">>, ReportParams)
         }
     },
     ReportType = encode_report_type(maps:get(<<"reportType">>, ReportParams)),
@@ -80,7 +76,7 @@ create_report(PartyID, Req, Context) ->
     end.
 
 get_report(PartyID, Req, Context) ->
-    ShopID   = maps:get(shopID, Req),
+    ShopID = maps:get(shopID, Req),
     ReportID = maps:get(reportID, Req),
     Call = {reporting, 'GetReport', [ReportID]},
     case capi_handler_utils:service_call(Call, Context) of
@@ -97,13 +93,12 @@ get_reports(PartyID, Req, Context) ->
     FromTime = capi_handler_utils:get_time('fromTime', Req),
     ToTime = capi_handler_utils:get_time('toTime', Req),
     ReportRequest = #reports_ReportRequest{
-        party_id   = PartyID,
-        shop_id    = ShopID,
-        time_range =
-            #reports_ReportTimeRange{
-                from_time = FromTime,
-                to_time   = ToTime
-            }
+        party_id = PartyID,
+        shop_id = ShopID,
+        time_range = #reports_ReportTimeRange{
+            from_time = FromTime,
+            to_time = ToTime
+        }
     },
     StatReportRequest = #reports_StatReportRequest{
         request = ReportRequest

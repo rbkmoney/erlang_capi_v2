@@ -14,8 +14,7 @@
 get_payout_tools(Context, ContractID) ->
     get_payout_tools(Context, undefined, ContractID).
 
--spec get_payout_tools(context(), binary() | undefined, binary()) ->
-    {ok, term()} | {error, term()}.
+-spec get_payout_tools(context(), binary() | undefined, binary()) -> {ok, term()} | {error, term()}.
 get_payout_tools(Context, PartyID, ContractID) ->
     Params = #{
         binding => genlib_map:compact(#{

@@ -33,7 +33,6 @@
 -export([get_contract_by_id/2]).
 -export([get_contract_by_id/3]).
 
-
 -export([create_dsl/3]).
 
 -type processing_context() :: capi_handler:processing_context().
@@ -157,9 +156,7 @@ get_my_party(Context) ->
     Call = {party_management, 'Get', []},
     service_call_with([user_info, party_id, party_creation], Call, Context).
 
--spec get_my_party(binary(), processing_context()) ->
-    woody:result().
-
+-spec get_my_party(binary(), processing_context()) -> woody:result().
 get_my_party(PartyID, Context) ->
     Call = {party_management, 'Get', [PartyID]},
     service_call_with([user_info, party_creation], Call, Context).
@@ -306,7 +303,6 @@ get_contract_by_id(ContractID, Context) ->
 get_contract_by_id(PartyID, ContractID, Context) ->
     Call = {party_management, 'GetContract', [PartyID, ContractID]},
     service_call_with([user_info, party_creation], Call, Context).
-
 
 -spec create_dsl(atom(), map(), map()) -> map().
 create_dsl(QueryType, QueryBody, QueryParams) ->

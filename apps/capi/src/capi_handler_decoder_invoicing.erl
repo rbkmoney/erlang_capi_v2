@@ -18,8 +18,6 @@
 -export([decode_make_recurrent/1]).
 
 -export([construct_payment_methods/3]).
--export([make_invoice_and_token/2]).
--export([make_invoice_and_token/3]).
 -export([make_invoice_and_token/4]).
 
 -type processing_context() :: capi_handler:processing_context().
@@ -499,28 +497,11 @@ decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
 compute_terms(ServiceName, Args, Context) ->
     capi_handler_utils:service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
 
--spec make_invoice_and_token(capi_handler_encoder:encode_data(), binary()) -> capi_handler_decoder_utils:decode_data().
-make_invoice_and_token(Invoice, PartyID) ->
-    make_invoice_and_token(Invoice, PartyID, #{}).
-
--spec make_invoice_and_token(capi_handler_encoder:encode_data(), binary(), map()) ->
-    capi_handler_decoder_utils:decode_data().
-make_invoice_and_token(Invoice, UserID, ExtraProperties) ->
-    #{
-        <<"invoice">> => decode_invoice(Invoice),
-        <<"invoiceAccessToken">> => capi_handler_utils:issue_access_token(
-            UserID,
-            {invoice, Invoice#domain_Invoice.id},
-            ExtraProperties
-        )
-    }.
-
 -spec make_invoice_and_token(capi_handler_encoder:encode_data(), binary(), binary(), map()) ->
     capi_handler_decoder_utils:decode_data().
-
 make_invoice_and_token(Invoice, UserID, PartyID, ExtraProperties) ->
     #{
-        <<"invoice"           >> => decode_invoice(Invoice),
+        <<"invoice">> => decode_invoice(Invoice),
         <<"invoiceAccessToken">> => capi_handler_utils:issue_access_token(
             UserID,
             {invoice, {PartyID, Invoice#domain_Invoice.id}},

@@ -50,12 +50,10 @@ process_request('GetShopByID', Req, Context) ->
         {exception, #payproc_ShopNotFound{}} ->
             {ok, general_error(404, <<"Shop not found">>)}
     end;
-
 process_request('GetShopsForParty', Req, Context) ->
     PartyID = maps:get(partyID, Req),
     Party = capi_utils:unwrap(capi_handler_utils:get_my_party(PartyID, Context)),
     {ok, {200, #{}, decode_shops_map(Party#domain_Party.shops)}};
-
 process_request('GetShopByIDForParty', Req, Context) ->
     PartyID = maps:get(partyID, Req),
     ShopID = maps:get(shopID, Req),
@@ -66,7 +64,6 @@ process_request('GetShopByIDForParty', Req, Context) ->
         {exception, #payproc_ShopNotFound{}} ->
             {ok, general_error(404, <<"Shop not found">>)}
     end;
-
 process_request('ActivateShopForParty', Req, Context) ->
     PartyID = maps:get(partyID, Req),
     ShopID = maps:get(shopID, Req),
@@ -82,7 +79,6 @@ process_request('ActivateShopForParty', Req, Context) ->
                     {ok, {204, #{}, undefined}}
             end
     end;
-
 process_request('SuspendShopForParty', Req, Context) ->
     PartyID = maps:get(partyID, Req),
     ShopID = maps:get(shopID, Req),
@@ -98,7 +94,6 @@ process_request('SuspendShopForParty', Req, Context) ->
                     {ok, {204, #{}, undefined}}
             end
     end;
-
 %%
 
 process_request(_OperationID, _Req, _Context) ->

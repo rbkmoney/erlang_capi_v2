@@ -32,8 +32,7 @@ get_shops(Context, PartyID) ->
 get_shop_by_id(Context, ShopID) ->
     get_shop_by_id(Context, undefined, ShopID).
 
--spec get_shop_by_id(context(), binary() | undefined, binary()) ->
-    {ok, term()} | {error, term()}.
+-spec get_shop_by_id(context(), binary() | undefined, binary()) -> {ok, term()} | {error, term()}.
 get_shop_by_id(Context, PartyID, ShopID) ->
     Params = #{
         binding => genlib_map:compact(#{
@@ -49,8 +48,7 @@ get_shop_by_id(Context, PartyID, ShopID) ->
 suspend_shop(Context, ShopID) ->
     suspend_shop(Context, undefined, ShopID).
 
--spec suspend_shop(context(), binary() | undefined, binary()) ->
-    ok | {error, term()}.
+-spec suspend_shop(context(), binary() | undefined, binary()) -> ok | {error, term()}.
 suspend_shop(Context, PartyID, ShopID) ->
     Params = #{
         binding => #{
@@ -69,8 +67,7 @@ suspend_shop(Context, PartyID, ShopID) ->
 activate_shop(Context, ShopID) ->
     activate_shop(Context, undefined, ShopID).
 
--spec activate_shop(context(), binary() | undefined, binary()) ->
-    ok | {error, term()}.
+-spec activate_shop(context(), binary() | undefined, binary()) -> ok | {error, term()}.
 activate_shop(Context, PartyID, ShopID) ->
     Params = #{
         binding => genlib_map:compact(#{

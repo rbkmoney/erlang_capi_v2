@@ -15,8 +15,7 @@
 get_contract_by_id(Context, ContractID) ->
     get_contract_by_id(Context, undefined, ContractID).
 
--spec get_contract_by_id(context(), binary() | undefined, binary()) ->
-    {ok, term()} | {error, term()}.
+-spec get_contract_by_id(context(), binary() | undefined, binary()) -> {ok, term()} | {error, term()}.
 get_contract_by_id(Context, PartyID, ContractID) ->
     Params = #{
         binding => genlib_map:compact(#{

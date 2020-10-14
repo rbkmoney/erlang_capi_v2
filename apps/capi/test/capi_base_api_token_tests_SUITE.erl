@@ -357,7 +357,7 @@ create_invoice_template_ok_test(Config) ->
 -spec create_invoice_with_template_test(config()) -> _.
 create_invoice_with_template_test(Config) ->
     ExternalID = <<"external_id">>,
-    BenderKey  = <<"bender_key">>,
+    BenderKey = <<"bender_key">>,
     capi_ct_helper:mock_services(
         [
             {invoice_templating, fun
@@ -372,7 +372,8 @@ create_invoice_with_template_test(Config) ->
             end},
             {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
         ],
-        Config),
+        Config
+    ),
     ReqTemp = #{
         <<"shopID">> => ?STRING,
         <<"lifetime">> => capi_ct_helper:get_lifetime(),
@@ -707,8 +708,7 @@ get_shop_by_id_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('GetShop', _) -> {ok, ?SHOP} end}], Config),
     {ok, _} = capi_client_shops:get_shop_by_id(?config(context, Config), ?STRING).
 
--spec get_shop_by_id_for_party_ok_test(config()) ->
-    _.
+-spec get_shop_by_id_for_party_ok_test(config()) -> _.
 get_shop_by_id_for_party_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('GetShop', _) -> {ok, ?SHOP} end}], Config),
     {ok, _} = capi_client_shops:get_shop_by_id(?config(context, Config), ?STRING, ?STRING).
@@ -969,7 +969,8 @@ get_contract_adjustment_by_id_ok_test(Config) ->
 get_payout_tools_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
     {ok, _} = capi_client_payouts:get_payout_tools(?config(context, Config), ?STRING),
-        {ok, _} = capi_client_payouts:get_payout_tools(?config(context, Config), ?STRING), ?STRING.
+    {ok, _} = capi_client_payouts:get_payout_tools(?config(context, Config), ?STRING),
+    ?STRING.
 
 -spec get_payout_tool_by_id(config()) -> _.
 get_payout_tool_by_id(Config) ->

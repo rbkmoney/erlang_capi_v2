@@ -46,13 +46,11 @@ process_request('GetContractAdjustmentByID', Req, Context) ->
         {exception, #payproc_ContractNotFound{}} ->
             {ok, general_error(404, <<"Contract not found">>)}
     end;
-
 %% TODO[refactor] avoid code duplicate
 process_request('GetContractsForParty', Req, Context) ->
     PartyID = maps:get('partyID', Req),
     Party = capi_utils:unwrap(capi_handler_utils:get_my_party(PartyID, Context)),
     {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
-
 process_request('GetContractByIDForParty', Req, Context) ->
     ContractID = maps:get('contractID', Req),
     PartyID = maps:get('partyID', Req),
@@ -63,7 +61,6 @@ process_request('GetContractByIDForParty', Req, Context) ->
         Contract ->
             {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}}
     end;
-
 process_request('GetContractAdjustmentsForParty', Req, Context) ->
     PartyID = maps:get('partyID', Req),
     ContractID = maps:get('contractID', Req),
@@ -74,7 +71,6 @@ process_request('GetContractAdjustmentsForParty', Req, Context) ->
         {exception, #payproc_ContractNotFound{}} ->
             {ok, general_error(404, <<"Contract not found">>)}
     end;
-
 process_request('getContractAdjustmentByIDForParty', Req, Context) ->
     PartyID = maps:get('partyID', Req),
     ContractID = maps:get('contractID', Req),
@@ -90,7 +86,6 @@ process_request('getContractAdjustmentByIDForParty', Req, Context) ->
         {exception, #payproc_ContractNotFound{}} ->
             {ok, general_error(404, <<"Contract not found">>)}
     end;
-
 %%
 
 process_request(_OperationID, _Req, _Context) ->

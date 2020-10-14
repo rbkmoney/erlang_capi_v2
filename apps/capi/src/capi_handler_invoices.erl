@@ -20,7 +20,14 @@ process_request('CreateInvoice' = OperationID, Req, Context) ->
     InvoiceParams = maps:get('InvoiceParams', Req),
     try create_invoice(PartyID, InvoiceParams, Context, OperationID) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, UserID, PartyID, ExtraProperties)}};
+            {ok,
+                {201, #{},
+                    capi_handler_decoder_invoicing:make_invoice_and_token(
+                        Invoice,
+                        UserID,
+                        PartyID,
+                        ExtraProperties
+                    )}};
         {exception, Exception} ->
             case Exception of
                 #'InvalidRequest'{errors = Errors} ->

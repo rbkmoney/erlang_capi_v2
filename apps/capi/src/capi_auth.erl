@@ -36,7 +36,7 @@
 -define(DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME, 259200).
 
 -type token_spec() ::
-      {invoice    , {PartyID :: binary(), InvoiceID :: binary()}}
+    {invoice, {PartyID :: binary(), InvoiceID :: binary()}}
     | {invoice_tpl, InvoiceTplID :: binary()}
     | {customer, CustomerID :: binary()}.
 
@@ -50,15 +50,16 @@ issue_access_token(UserID, TokenSpec, ExtraProperties) ->
         ExtraProperties,
         resolve_token_spec(TokenSpec)
     ),
-    capi_utils:unwrap(uac_authorizer_jwt:issue(
-        capi_utils:get_unique_id(),
-        UserID,
-        Claims,
-        ?SIGNEE
-    )).
+    capi_utils:unwrap(
+        uac_authorizer_jwt:issue(
+            capi_utils:get_unique_id(),
+            UserID,
+            Claims,
+            ?SIGNEE
+        )
+    ).
 
--spec resolve_token_spec(token_spec()) ->
-    claims().
+-spec resolve_token_spec(token_spec()) -> claims().
 resolve_token_spec({invoice, {PartyID, InvoiceID}}) ->
     DomainRoles = #{
         <<"common-api">> => uac_acl:from_list([
@@ -189,25 +190,25 @@ get_operation_access('GetAccountByID', _) ->
     [{[party], read}];
 get_operation_access('GetShopByID', _) ->
     [{[party], read}];
-get_operation_access('GetShopsForParty'          , _) ->
+get_operation_access('GetShopsForParty', _) ->
     [{[party], read}];
-get_operation_access('GetShopByIDForParty'       , _) ->
+get_operation_access('GetShopByIDForParty', _) ->
     [{[party], read}];
-get_operation_access('ActivateShopForParty'      , _) ->
+get_operation_access('ActivateShopForParty', _) ->
     [{[party], write}];
-get_operation_access('SuspendShopForParty'       , _) ->
+get_operation_access('SuspendShopForParty', _) ->
     [{[party], write}];
-get_operation_access('GetShops'                  , _) ->
+get_operation_access('GetShops', _) ->
     [{[party], read}];
 get_operation_access('GetPayoutTools', _) ->
     [{[party], read}];
 get_operation_access('GetPayoutToolByID', _) ->
     [{[party], read}];
-get_operation_access('GetPayoutToolsForParty'    , _) ->
+get_operation_access('GetPayoutToolsForParty', _) ->
     [{[party], read}];
-get_operation_access('GetPayoutToolByIDForParty' , _) ->
+get_operation_access('GetPayoutToolByIDForParty', _) ->
     [{[party], read}];
-get_operation_access('GetContracts'              , _) ->
+get_operation_access('GetContracts', _) ->
     [{[party], read}];
 get_operation_access('GetContractByID', _) ->
     [{[party], read}];
@@ -315,7 +316,6 @@ get_consumer(Claims) ->
         <<"provider">> -> provider
     end.
 
--spec get_party_id(claims()) ->
-    binary().
+-spec get_party_id(claims()) -> binary() | undefined.
 get_party_id(Claims) ->
     maps:get(<<"party_id">>, Claims, undefined).

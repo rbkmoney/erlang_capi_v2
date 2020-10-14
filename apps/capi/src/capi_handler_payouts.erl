@@ -86,7 +86,6 @@ process_request('GetPayoutToolsForParty', Req, Context) ->
         {exception, #payproc_ContractNotFound{}} ->
             {ok, general_error(404, <<"Contract not found">>)}
     end;
-
 process_request('GetPayoutToolByIDForParty', Req, Context) ->
     ContractID = maps:get('contractID', Req),
     PartyID = maps:get('partyID', Req),
@@ -102,7 +101,6 @@ process_request('GetPayoutToolByIDForParty', Req, Context) ->
         {exception, #payproc_ContractNotFound{}} ->
             {ok, general_error(404, <<"Contract not found">>)}
     end;
-
 %%
 
 process_request(_OperationID, _Req, _Context) ->
