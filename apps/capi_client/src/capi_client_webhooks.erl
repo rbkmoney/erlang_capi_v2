@@ -5,10 +5,10 @@
 -export([get_webhook_by_id/2]).
 -export([delete_webhook_by_id/2]).
 
--type webhook_id()     :: binary().
+-type webhook_id() :: binary().
 -type webhook_params() :: map().
--type webhook()        :: map().
--type context()        :: capi_client_lib:context().
+-type webhook() :: map().
+-type context() :: capi_client_lib:context().
 
 -spec get_webhooks(context()) -> {ok, [webhook()]} | {error, term()}.
 get_webhooks(Context) ->

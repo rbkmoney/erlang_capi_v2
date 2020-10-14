@@ -9,8 +9,7 @@
 -type context() :: capi_client_lib:context().
 -type search_query() :: capi_client_lib:search_query().
 
--spec get_payment_conversion_stats(context(), binary(), search_query()) ->
-    {ok, term()} | {error, term()}.
+-spec get_payment_conversion_stats(context(), binary(), search_query()) -> {ok, term()} | {error, term()}.
 get_payment_conversion_stats(Context, ShopID, Query) ->
     Qs = capi_client_lib:make_search_query_string(Query),
     Params = #{

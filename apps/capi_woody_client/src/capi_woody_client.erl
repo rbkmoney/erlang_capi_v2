@@ -8,14 +8,12 @@
 
 -type service_name() :: atom().
 -type client_opts() :: #{
-    url            := woody:url(),
+    url := woody:url(),
     %% See hackney:request/5 for available transport options.
     transport_opts => woody_client_thrift_http_transport:transport_options()
 }.
 
--spec call_service(service_name(), woody:func(), [term()], woody_context:ctx()) ->
-    woody:result().
-
+-spec call_service(service_name(), woody:func(), [term()], woody_context:ctx()) -> woody:result().
 call_service(ServiceName, Function, Args, Context0) ->
     Deadline = get_service_deadline(ServiceName),
     Context1 = set_deadline(Deadline, Context0),
@@ -34,16 +32,14 @@ call_service(ServiceName, Function, Args, Context, EventHandler, Retry) ->
             Context
         )
     catch
-        error:{woody_error, {_Source, Class, _Details}} = Error
-        when Class =:= resource_unavailable orelse Class =:= result_unknown
+        error:{woody_error, {_Source, Class, _Details}} = Error when
+            Class =:= resource_unavailable orelse Class =:= result_unknown
         ->
             NextRetry = apply_retry_strategy(Retry, Error, Context),
             call_service(ServiceName, Function, Args, Context, EventHandler, NextRetry)
     end.
 
--spec get_service_options(service_name()) ->
-    client_opts().
-
+-spec get_service_options(service_name()) -> client_opts().
 get_service_options(ServiceName) ->
     construct_opts(maps:get(ServiceName, genlib_app:env(?MODULE, services))).
 
@@ -74,7 +70,6 @@ apply_retry_step({wait, Timeout, Retry}, Deadline0, Error) ->
     end.
 
 -spec get_service_modname(service_name()) -> woody:service().
-
 get_service_modname(invoicing) ->
     {dmsl_payment_processing_thrift, 'Invoicing'};
 get_service_modname(invoice_templating) ->
