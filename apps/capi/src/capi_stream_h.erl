@@ -31,8 +31,7 @@ data(StreamID, IsFin, Data, #{next := Next0} = State) ->
     {Commands0, Next} = cowboy_stream:data(StreamID, IsFin, Data, Next0),
     {Commands0, State#{next => Next}}.
 
--spec info(cowboy_stream:streamid(), any(), State) -> {cowboy_stream:commands(), State} when
-    State :: state().
+-spec info(cowboy_stream:streamid(), any(), State) -> {cowboy_stream:commands(), State} when State :: state().
 info(StreamID, {response, _, _, _} = Info, #{next := Next0} = State) ->
     Resp1 = handle_response(Info),
     {Commands0, Next} = cowboy_stream:info(StreamID, Resp1, Next0),
