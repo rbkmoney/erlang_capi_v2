@@ -48,8 +48,8 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
     end;
 
 process_request('GetInvoiceTemplateByID', Req, Context) ->
-    Call = {invoice_templating, 'Get', [maps:get('invoiceTemplateID', Req)]},
-    case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
+    ID = maps:get('invoiceTemplateID', Req),
+    case get_invoice_template(ID, Context) of
         {ok, InvoiceTpl} ->
             {ok, {200, #{}, decode_invoice_tpl(InvoiceTpl)}};
         {exception, E} when
@@ -118,24 +118,29 @@ process_request('DeleteInvoiceTemplate', Req, Context) ->
     end;
 
 process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
-    %% TODO get partyID from InvoiceTemplate?
-    ct:print("COntext ~p", [Context]),
-    UserID = capi_handler_utils:get_party_id(Context),
-    PartyID = UserID,
-    ct:print("PartyID ~p", [UserID]),
+    UserID = capi_handler_utils:get_user_id(Context),
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
     InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
-    try create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, OperationID) of
+    Result = try
+        case get_invoice_template(InvoiceTplID, Context) of
+            {ok, InvoiceTpl} ->
+                PartyID = InvoiceTpl#domain_InvoiceTemplate.owner_id,
+                create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, OperationID);
+            {exception, _} = Exception ->
+                Exception
+        end
+    catch throw:Error ->
+        {error, Error}
+    end,
+
+    case Result of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            ct:print("ok"),
-            % #'domain_Invoice'{owner_id = PartyID} = Invoice,
             {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(
-                Invoice, UserID, PartyID, ExtraProperties)
+                Invoice, UserID, Invoice#domain_Invoice.owner_id, ExtraProperties)
             }};
-        {exception, Exception} ->
-            ct:print("exception"),
-            case Exception of
+        {exception, Reason} ->
+            case Reason of
                 #payproc_InvalidUser{} ->
                     {ok, general_error(404, <<"Invoice Template not found">>)};
                 #'InvalidRequest'{errors = Errors} ->
@@ -151,13 +156,12 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
                     {ok, general_error(404, <<"Invoice Template not found">>)};
                 #payproc_InvoiceTermsViolated{} ->
                     {ok, logic_error(invoiceTermsViolated, <<"Invoice parameters violate contract terms">>)}
-            end
-    catch
-        throw:{bad_invoice_params, currency_no_amount} ->
+            end;
+        {error, {bad_invoice_params, currency_no_amount}} ->
             {ok, logic_error(invalidRequest, <<"Amount is required for the currency">>)};
-        throw:{bad_invoice_params, amount_no_currency} ->
+        {error, {bad_invoice_params, amount_no_currency}} ->
             {ok, logic_error(invalidRequest, <<"Currency is required for the amount">>)};
-        throw:{external_id_conflict, InvoiceID, ExternalID} ->
+        {error, {external_id_conflict, InvoiceID, ExternalID}} ->
             {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
     end;
 
@@ -211,6 +215,10 @@ create_invoice(_PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCt
     Params = [encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParamsWithEID)],
     Call = {invoicing, 'CreateWithTemplate', Params},
     capi_handler_utils:service_call_with([user_info], Call, Context).
+
+get_invoice_template(ID, Context) ->
+    Call = {invoice_templating, 'Get', [ID]},
+    capi_handler_utils:service_call_with([user_info, party_creation], Call, Context).
 
 encode_invoice_tpl_create_params(PartyID, Params) ->
     Details = encode_invoice_tpl_details(genlib_map:get(<<"details">>, Params)),

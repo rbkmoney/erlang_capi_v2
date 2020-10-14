@@ -52,7 +52,7 @@ process_request('CreateInvoiceAccessToken', Req, Context) ->
     case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             #'domain_Invoice'{owner_id = PartyID} = Invoice,
-            Response =  capi_handler_utils:issue_access_token(
+            Response = capi_handler_utils:issue_access_token(
                 UserID,
                 {invoice, {PartyID, InvoiceID}},
                 ExtraProperties

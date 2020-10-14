@@ -17,53 +17,44 @@
     {ok | error, capi_handler:response() | noimpl}.
 
 process_request('GetReports', Req, Context) ->
-    ReportRequest = #reports_ReportRequest{
-        party_id   = capi_handler_utils:get_party_id(Context),
-        shop_id    = maps:get(shopID, Req),
-        time_range =
-            #reports_ReportTimeRange{
-                from_time = capi_handler_utils:get_time('fromTime', Req),
-                to_time   = capi_handler_utils:get_time('toTime'  , Req)
-            }
-    },
-    StatReportRequest = #reports_StatReportRequest{
-        request = ReportRequest
-    },
-    Call = {reporting, 'GetReports', [StatReportRequest]},
-    case capi_handler_utils:service_call(Call, Context) of
-        {ok, #reports_StatReportResponse{reports = Reports}} ->
-            {ok, {200, #{}, [decode_report(R) || R <- Reports]}};
-        {exception, Exception} ->
-            case Exception of
-                #reporter_base_InvalidRequest{errors = Errors} ->
-                    FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, logic_error(invalidRequest, FormattedErrors)};
-                #reports_DatasetTooBig{limit = Limit} ->
-                    {ok, logic_error(<<"limitExceeded">>, io_lib:format("Max limit: ~p", [Limit]))}
-            end
-    end;
+    PartyID = capi_handler_utils:get_party_id(Context),
+    get_reports(PartyID, Req, Context);
+process_request('GetReportsForParty', Req, Context) ->
+    PartyID = maps:get(partyID, Req),
+    get_reports(PartyID, Req, Context);
 
 process_request('GetReport', Req, Context) ->
-    PartyId  = capi_handler_utils:get_party_id(Context),
-    ShopId   = maps:get(shopID, Req),
-    ReportId = maps:get(reportID, Req),
-    Call = {reporting, 'GetReport', [ReportId]},
-    case capi_handler_utils:service_call(Call, Context) of
-        {ok, Report = #'reports_Report'{party_id = PartyId, shop_id = ShopId}} ->
-            {ok, {200, #{}, decode_report(Report)}};
-        {ok, _WrongReport} ->
-            {ok, general_error(404, <<"Report not found">>)};
-        {exception, #reports_ReportNotFound{}} ->
-            {ok, general_error(404, <<"Report not found">>)}
-    end;
+    PartyID = capi_handler_utils:get_party_id(Context),
+    get_report(PartyID, Req, Context);
+process_request('GetReportForParty', Req, Context) ->
+    PartyID = capi_handler_utils:get_party_id(Context),
+    get_report(PartyID, Req, Context);
 
 process_request('CreateReport', Req, Context) ->
-    PartyId = capi_handler_utils:get_party_id(Context),
-    ShopId = maps:get(shopID, Req),
+    PartyID = capi_handler_utils:get_party_id(Context),
+    create_report(PartyID, Req, Context);
+process_request('CreateReportForParty', Req, Context) ->
+    PartyID = maps:get(partyID, Req),
+    create_report(PartyID, Req, Context);
+
+process_request('DownloadFile', Req, Context) ->
+    PartyID = capi_handler_utils:get_party_id(Context),
+    download_file(PartyID, Req, Context);
+process_request('DownloadFileForParty', Req, Context) ->
+    PartyID = maps:get(partyID, Req),
+    download_file(PartyID, Req, Context);
+
+%%
+
+process_request(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
+
+create_report(PartyID, Req, Context) ->
+    ShopID = maps:get(shopID, Req),
     ReportParams = maps:get('ReportParams', Req),
     ReportRequest = #reports_ReportRequest{
-        party_id   = PartyId,
-        shop_id    = ShopId,
+        party_id   = PartyID,
+        shop_id    = ShopID,
         time_range =
             #reports_ReportTimeRange{
                 from_time = capi_handler_utils:get_time(<<"fromTime">>, ReportParams),
@@ -86,18 +77,60 @@ process_request('CreateReport', Req, Context) ->
                 #reports_ShopNotFound{} ->
                     {ok, logic_error(invalidShopID, <<"Shop not found">>)}
             end
-    end;
+    end.
 
-process_request('DownloadFile', Req, Context) ->
-    PartyId = capi_handler_utils:get_party_id(Context),
-    ShopId = maps:get(shopID, Req),
+get_report(PartyID, Req, Context) ->
+    ShopID   = maps:get(shopID, Req),
+    ReportID = maps:get(reportID, Req),
+    Call = {reporting, 'GetReport', [ReportID]},
+    case capi_handler_utils:service_call(Call, Context) of
+        {ok, Report = #'reports_Report'{party_id = PartyID, shop_id = ShopID}} ->
+            {ok, {200, #{}, decode_report(Report)}};
+        {ok, _WrongReport} ->
+            {ok, general_error(404, <<"Report not found">>)};
+        {exception, #reports_ReportNotFound{}} ->
+            {ok, general_error(404, <<"Report not found">>)}
+    end.
+
+get_reports(PartyID, Req, Context) ->
+    ShopID = maps:get(shopID, Req),
+    FromTime = capi_handler_utils:get_time('fromTime', Req),
+    ToTime = capi_handler_utils:get_time('toTime', Req),
+    ReportRequest = #reports_ReportRequest{
+        party_id   = PartyID,
+        shop_id    = ShopID,
+        time_range =
+            #reports_ReportTimeRange{
+                from_time = FromTime,
+                to_time   = ToTime
+            }
+    },
+    StatReportRequest = #reports_StatReportRequest{
+        request = ReportRequest
+    },
+    Call = {reporting, 'GetReports', [StatReportRequest]},
+    case capi_handler_utils:service_call(Call, Context) of
+        {ok, #reports_StatReportResponse{reports = Reports}} ->
+            {ok, {200, #{}, [decode_report(R) || R <- Reports]}};
+        {exception, Exception} ->
+            case Exception of
+                #reporter_base_InvalidRequest{errors = Errors} ->
+                    FormattedErrors = capi_handler_utils:format_request_errors(Errors),
+                    {ok, logic_error(invalidRequest, FormattedErrors)};
+                #reports_DatasetTooBig{limit = Limit} ->
+                    {ok, logic_error(<<"limitExceeded">>, io_lib:format("Max limit: ~p", [Limit]))}
+            end
+    end.
+
+download_file(PartyID, Req, Context) ->
+    ShopID = maps:get(shopID, Req),
     Call = {
         reporting,
         'GetReport',
         [maps:get(reportID, Req)]
     },
     case capi_handler_utils:service_call(Call, Context) of
-        {ok, #reports_Report{status = created, files = Files, party_id = PartyId, shop_id = ShopId}} ->
+        {ok, #reports_Report{status = created, files = Files, party_id = PartyID, shop_id = ShopID}} ->
             FileID = maps:get(fileID, Req),
             case lists:keymember(FileID, #reports_FileMeta.file_id, Files) of
                 true ->
@@ -109,12 +142,7 @@ process_request('DownloadFile', Req, Context) ->
             {ok, general_error(404, <<"Report not found">>)};
         {exception, #reports_ReportNotFound{}} ->
             {ok, general_error(404, <<"Report not found">>)}
-    end;
-
-%%
-
-process_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
+    end.
 
 generate_report_presigned_url(FileID, Context) ->
     ExpiresAt = get_default_url_lifetime(),

@@ -50,7 +50,6 @@ issue_access_token(UserID, TokenSpec) ->
 -spec issue_access_token(UserID :: binary(), token_spec(), map()) ->
     uac_authorizer_jwt:token().
 issue_access_token(UserID, TokenSpec, ExtraProperties) ->
-    ct:print("TokenSpec: ~p", [TokenSpec]),
     Claims = maps:merge(
         ExtraProperties,
         resolve_token_spec(TokenSpec)

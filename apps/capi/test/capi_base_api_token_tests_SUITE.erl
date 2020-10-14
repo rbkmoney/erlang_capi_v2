@@ -55,9 +55,12 @@
     activate_my_party_ok_test/1,
     get_shop_by_id_ok_test/1,
     get_shops_ok_test/1,
-    get_party_shops_ok_test/1,
     activate_shop_ok_test/1,
     suspend_shop_ok_test/1,
+    get_shop_by_id_for_party_ok_test/1,
+    get_shops_for_party_ok_test/1,
+    suspend_shop_for_party_ok_test/1,
+    activate_shop_for_party_ok_test/1,
     get_claim_by_id_ok_test/1,
     get_claims_ok_test/1,
     revoke_claim_ok_test/1,
@@ -165,9 +168,12 @@ groups() ->
                 activate_my_party_ok_test,
                 get_shop_by_id_ok_test,
                 get_shops_ok_test,
-                get_party_shops_ok_test,
                 activate_shop_ok_test,
                 suspend_shop_ok_test,
+                get_shop_by_id_for_party_ok_test,
+                get_shops_for_party_ok_test,
+                suspend_shop_for_party_ok_test,
+                activate_shop_for_party_ok_test,
                 get_claim_by_id_ok_test,
                 get_claims_ok_test,
                 revoke_claim_ok_test,
@@ -363,7 +369,10 @@ create_invoice_with_template_test(Config) ->
     ExternalID = <<"external_id">>,
     BenderKey  = <<"bender_key">>,
     capi_ct_helper:mock_services([
-        {invoice_templating, fun('Create', _) -> {ok, ?INVOICE_TPL} end},
+        {invoice_templating, fun
+            ('Create', _) -> {ok, ?INVOICE_TPL};
+            ('Get', _) -> {ok, ?INVOICE_TPL}
+        end},
         {invoicing, fun(
             'CreateWithTemplate',
             [_UserInfo, #payproc_InvoiceWithTemplateParams{id = ID, external_id = EID}]
@@ -692,17 +701,23 @@ get_shop_by_id_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('GetShop', _) -> {ok, ?SHOP} end}], Config),
     {ok, _} = capi_client_shops:get_shop_by_id(?config(context, Config), ?STRING).
 
+-spec get_shop_by_id_for_party_ok_test(config()) ->
+    _.
+get_shop_by_id_for_party_ok_test(Config) ->
+    capi_ct_helper:mock_services([{party_management, fun('GetShop', _) -> {ok, ?SHOP} end}], Config),
+    {ok, _} = capi_client_shops:get_shop_by_id(?config(context, Config), ?STRING, ?STRING).
+
 -spec get_shops_ok_test(config()) ->
     _.
 get_shops_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
     {ok, _} = capi_client_shops:get_shops(?config(context, Config)).
 
--spec get_party_shops_ok_test(config()) ->
+-spec get_shops_for_party_ok_test(config()) ->
     _.
-get_party_shops_ok_test(Config) ->
+get_shops_for_party_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
-    {ok, _} = capi_client_shops:get_party_shops(?config(context, Config), ?STRING).
+    {ok, _} = capi_client_shops:get_shops(?config(context, Config), ?STRING).
 
 -spec activate_shop_ok_test(config()) ->
     _.
@@ -710,11 +725,23 @@ activate_shop_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('ActivateShop', _) -> {ok, ok} end}], Config),
     ok = capi_client_shops:activate_shop(?config(context, Config), ?STRING).
 
+-spec activate_shop_for_party_ok_test(config()) ->
+    _.
+activate_shop_for_party_ok_test(Config) ->
+    capi_ct_helper:mock_services([{party_management, fun('ActivateShop', _) -> {ok, ok} end}], Config),
+    ok = capi_client_shops:activate_shop(?config(context, Config), ?STRING, ?STRING).
+
 -spec suspend_shop_ok_test(config()) ->
     _.
 suspend_shop_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('SuspendShop', _) -> {ok, ok} end}], Config),
     ok = capi_client_shops:suspend_shop(?config(context, Config), ?STRING).
+
+-spec suspend_shop_for_party_ok_test(config()) ->
+    _.
+suspend_shop_for_party_ok_test(Config) ->
+    capi_ct_helper:mock_services([{party_management, fun('SuspendShop', _) -> {ok, ok} end}], Config),
+    ok = capi_client_shops:suspend_shop(?config(context, Config), ?STRING, ?STRING).
 
 -spec get_claim_by_id_ok_test(config()) ->
     _.
@@ -910,31 +937,36 @@ create_claim_invalid_residence_test(Config) ->
 get_contract_by_id_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
     {ok, _} = capi_client_contracts:get_contract_by_id(?config(context, Config), ?STRING),
+    {ok, _} = capi_client_contracts:get_contract_by_id(?config(context, Config), ?STRING, ?STRING),
     {ok, _} = capi_client_contracts:get_contract_by_id(?config(context, Config), ?WALLET_CONTRACT_ID).
 
 -spec get_contracts_ok_test(config()) ->
     _.
 get_contracts_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
+    {ok, [_First, _Second]} = capi_client_contracts:get_contracts(?config(context, Config), ?STRING),
     {ok, [_First, _Second]} = capi_client_contracts:get_contracts(?config(context, Config)).
 
 -spec get_contract_adjustments_ok_test(config()) ->
     _.
 get_contract_adjustments_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
-    {ok, _} = capi_client_contracts:get_contract_adjustments(?config(context, Config), ?STRING).
+    {ok, _} = capi_client_contracts:get_contract_adjustments(?config(context, Config), ?STRING),
+    {ok, _} = capi_client_contracts:get_contract_adjustments(?config(context, Config), ?STRING, ?STRING).
 
 -spec get_contract_adjustment_by_id_ok_test(config()) ->
     _.
 get_contract_adjustment_by_id_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
-    {ok, _} = capi_client_contracts:get_contract_adjustment_by_id(?config(context, Config), ?STRING, ?STRING).
+    {ok, _} = capi_client_contracts:get_contract_adjustment_by_id(?config(context, Config), ?STRING, ?STRING),
+    {ok, _} = capi_client_contracts:get_contract_adjustment_by_id(?config(context, Config), ?STRING, ?STRING, ?STRING).
 
 -spec get_payout_tools_ok_test(config()) ->
     _.
 get_payout_tools_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
-    {ok, _} = capi_client_payouts:get_payout_tools(?config(context, Config), ?STRING).
+    {ok, _} = capi_client_payouts:get_payout_tools(?config(context, Config), ?STRING),
+        {ok, _} = capi_client_payouts:get_payout_tools(?config(context, Config), ?STRING), ?STRING.
 
 -spec get_payout_tool_by_id(config()) ->
     _.
@@ -942,7 +974,8 @@ get_payout_tool_by_id(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_RU),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_US),
-    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?WALLET_TOOL).
+    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?WALLET_TOOL),
+    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?STRING, ?WALLET_TOOL).
 
 -spec create_payout(config()) ->
     _.

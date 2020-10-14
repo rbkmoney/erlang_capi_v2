@@ -56,16 +56,16 @@ process_request('GetContractsForParty', Req, Context) ->
     Party = capi_utils:unwrap(capi_handler_utils:get_my_party(PartyID, Context)),
     {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
 
-% process_request('GetContractByIDForParty', Req, Context) ->
-%     ContractID = maps:get('contractID', Req),
-%     PartyID = maps:get('partyID', Req),
-%     Party = capi_utils:unwrap(capi_handler_utils:get_my_party(PartyID, Context)),
-%     case genlib_map:get(ContractID, Party#domain_Party.contracts) of
-%         undefined ->
-%             {ok, general_error(404, <<"Contract not found">>)};
-%         Contract ->
-%             {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}}
-%     end;
+process_request('GetContractByIDForParty', Req, Context) ->
+    ContractID = maps:get('contractID', Req),
+    PartyID = maps:get('partyID', Req),
+    Party = capi_utils:unwrap(capi_handler_utils:get_my_party(PartyID, Context)),
+    case genlib_map:get(ContractID, Party#domain_Party.contracts) of
+        undefined ->
+            {ok, general_error(404, <<"Contract not found">>)};
+        Contract ->
+            {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}}
+    end;
 
 process_request('GetContractAdjustmentsForParty', Req, Context) ->
     PartyID = maps:get('partyID', Req),
