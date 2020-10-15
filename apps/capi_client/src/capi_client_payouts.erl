@@ -1,9 +1,9 @@
 -module(capi_client_payouts).
 
 -export([get_payout_tools/2]).
--export([get_payout_tools/3]).
+-export([get_payout_tools_for_party/3]).
 -export([get_payout_tool_by_id/3]).
--export([get_payout_tool_by_id/4]).
+-export([get_payout_tool_by_id_for_party/4]).
 -export([get_schedule_by_ref/2]).
 -export([create_payout/3]).
 -export([get_payout/2]).
@@ -12,13 +12,8 @@
 
 -spec get_payout_tools(context(), binary()) -> {ok, term()} | {error, term()}.
 get_payout_tools(Context, ContractID) ->
-    get_payout_tools(Context, undefined, ContractID).
-
--spec get_payout_tools(context(), binary() | undefined, binary()) -> {ok, term()} | {error, term()}.
-get_payout_tools(Context, PartyID, ContractID) ->
     Params = #{
         binding => genlib_map:compact(#{
-            <<"partyID">> => PartyID,
             <<"contractID">> => ContractID
         })
     },
@@ -26,12 +21,32 @@ get_payout_tools(Context, PartyID, ContractID) ->
     Response = swag_client_payouts_api:get_payout_tools(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 
+-spec get_payout_tools_for_party(context(), binary(), binary()) -> {ok, term()} | {error, term()}.
+get_payout_tools_for_party(Context, PartyID, ContractID) ->
+    Params = #{
+        binding => genlib_map:compact(#{
+            <<"partyID">> => PartyID,
+            <<"contractID">> => ContractID
+        })
+    },
+    {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
+    Response = swag_client_payouts_api:get_payout_tools_for_party(Url, PreparedParams, Opts),
+    capi_client_lib:handle_response(Response).
+
 -spec get_payout_tool_by_id(context(), binary(), binary()) -> {ok, term()} | {error, term()}.
 get_payout_tool_by_id(Context, ContractID, PayoutToolID) ->
-    get_payout_tool_by_id(Context, undefined, ContractID, PayoutToolID).
+    Params = #{
+        binding => genlib_map:compact(#{
+            <<"contractID">> => ContractID,
+            <<"payoutToolID">> => PayoutToolID
+        })
+    },
+    {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
+    Response = swag_client_payouts_api:get_payout_tool_by_id(Url, PreparedParams, Opts),
+    capi_client_lib:handle_response(Response).
 
--spec get_payout_tool_by_id(context(), binary() | undefined, binary(), binary()) -> {ok, term()} | {error, term()}.
-get_payout_tool_by_id(Context, PartyID, ContractID, PayoutToolID) ->
+-spec get_payout_tool_by_id_for_party(context(), binary(), binary(), binary()) -> {ok, term()} | {error, term()}.
+get_payout_tool_by_id_for_party(Context, PartyID, ContractID, PayoutToolID) ->
     Params = #{
         binding => genlib_map:compact(#{
             <<"partyID">> => PartyID,
@@ -40,7 +55,7 @@ get_payout_tool_by_id(Context, PartyID, ContractID, PayoutToolID) ->
         })
     },
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
-    Response = swag_client_payouts_api:get_payout_tool_by_id(Url, PreparedParams, Opts),
+    Response = swag_client_payouts_api:get_payout_tool_by_id_for_party(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 
 -spec get_schedule_by_ref(context(), term()) -> {ok, term()} | {error, term()}.
