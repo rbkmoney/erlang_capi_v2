@@ -226,10 +226,6 @@ groups() ->
 %%
 -spec init_per_suite(config()) -> config().
 init_per_suite(Config) ->
-    % _ = dbg:tracer(),
-    % _ = dbg:p(all, c),
-    % _ = dbg:tpl({'hackney', 'request', '_'}, x),
-    % _ = dbg:tpl({'swag_server_handler_api', 'populate_request', '_'}, x),
     capi_ct_helper:init_suite(?MODULE, Config).
 
 -spec end_per_suite(config()) -> _.

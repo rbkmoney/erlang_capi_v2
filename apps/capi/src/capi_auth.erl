@@ -216,6 +216,14 @@ get_operation_access('GetContractAdjustments', _) ->
     [{[party], read}];
 get_operation_access('GetContractAdjustmentByID', _) ->
     [{[party], read}];
+get_operation_access('GetContractsForParty', _) ->
+    [{[party], read}];
+get_operation_access('GetContractByIDForParty', _) ->
+    [{[party], read}];
+get_operation_access('GetContractAdjustmentsForParty', _) ->
+    [{[party], read}];
+get_operation_access('GetContractAdjustmentByIDForParty', _) ->
+    [{[party], read}];
 get_operation_access('GetReports', _) ->
     [{[party], read}];
 get_operation_access('GetReport', _) ->
@@ -223,6 +231,14 @@ get_operation_access('GetReport', _) ->
 get_operation_access('CreateReport', _) ->
     [{[party], write}];
 get_operation_access('DownloadFile', _) ->
+    [{[party], read}];
+get_operation_access('GetReportsForParty', _) ->
+    [{[party], read}];
+get_operation_access('GetReportForParty', _) ->
+    [{[party], read}];
+get_operation_access('CreateReportForParty', _) ->
+    [{[party], write}];
+get_operation_access('DownloadFileForParty', _) ->
     [{[party], read}];
 get_operation_access('GetWebhooks', _) ->
     [{[party], read}];
