@@ -707,7 +707,7 @@ get_shop_by_id_ok_test(Config) ->
 -spec get_shop_by_id_for_party_ok_test(config()) -> _.
 get_shop_by_id_for_party_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('GetShop', _) -> {ok, ?SHOP} end}], Config),
-    {ok, _} = capi_client_shops:get_shop_by_id(?config(context, Config), ?STRING, ?STRING).
+    {ok, _} = capi_client_shops:get_shop_by_id_for_party(?config(context, Config), ?STRING, ?STRING).
 
 -spec get_shops_ok_test(config()) -> _.
 get_shops_ok_test(Config) ->
@@ -727,7 +727,7 @@ activate_shop_ok_test(Config) ->
 -spec activate_shop_for_party_ok_test(config()) -> _.
 activate_shop_for_party_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('ActivateShop', _) -> {ok, ok} end}], Config),
-    ok = capi_client_shops:activate_shop(?config(context, Config), ?STRING, ?STRING).
+    ok = capi_client_shops:activate_shop_for_party(?config(context, Config), ?STRING, ?STRING).
 
 -spec suspend_shop_ok_test(config()) -> _.
 suspend_shop_ok_test(Config) ->
@@ -737,7 +737,7 @@ suspend_shop_ok_test(Config) ->
 -spec suspend_shop_for_party_ok_test(config()) -> _.
 suspend_shop_for_party_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('SuspendShop', _) -> {ok, ok} end}], Config),
-    ok = capi_client_shops:suspend_shop(?config(context, Config), ?STRING, ?STRING).
+    ok = capi_client_shops:suspend_shop_for_party(?config(context, Config), ?STRING, ?STRING).
 
 -spec get_claim_by_id_ok_test(config()) -> _.
 get_claim_by_id_ok_test(Config) ->
@@ -1304,7 +1304,7 @@ get_reports_ok_test(Config) ->
 get_report_ok_test(Config) ->
     capi_ct_helper:mock_services([{reporting, fun('GetReport', _) -> {ok, ?REPORT} end}], Config),
     {ok, _} = capi_client_reports:get_report(?config(context, Config), ?STRING, ?INTEGER),
-    {ok, _} = capi_client_reports:get_reports_for_party(?config(context, Config), ?STRING, ?STRING, ?INTEGER).
+    {ok, _} = capi_client_reports:get_report_for_party(?config(context, Config), ?STRING, ?STRING, ?INTEGER).
 
 -spec get_report_not_found_test(config()) -> _.
 get_report_not_found_test(Config) ->

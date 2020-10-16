@@ -71,7 +71,7 @@ process_request('GetContractAdjustmentsForParty', Req, Context) ->
         {exception, #payproc_ContractNotFound{}} ->
             {ok, general_error(404, <<"Contract not found">>)}
     end;
-process_request('getContractAdjustmentByIDForParty', Req, Context) ->
+process_request('GetContractAdjustmentByIDForParty', Req, Context) ->
     PartyID = maps:get('partyID', Req),
     ContractID = maps:get('contractID', Req),
     case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
