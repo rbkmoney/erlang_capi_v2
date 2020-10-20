@@ -352,7 +352,16 @@ create_invoice_template_ok_test(Config) ->
             }
         ]
     },
-    {ok, _} = capi_client_invoice_templates:create(?config(context, Config), Req#{<<"details">> => Details1}).
+    {ok, _} = capi_client_invoice_templates:create(?config(context, Config), Req#{<<"details">> => Details1}),
+    ?assertEqual(
+        {error, {404, <<"">>}},
+        capi_client_invoice_templates:create(
+            ?config(context, Config),
+            Req#{
+                <<"partyID">> => <<"WrongPartyID">>,
+                <<"details">> => Details1
+            })
+    ).
 
 -spec create_invoice_with_template_test(config()) -> _.
 create_invoice_with_template_test(Config) ->
@@ -715,7 +724,10 @@ get_shop_by_id_ok_test(Config) ->
 -spec get_shop_by_id_for_party_ok_test(config()) -> _.
 get_shop_by_id_for_party_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('GetShop', _) -> {ok, ?SHOP} end}], Config),
-    {ok, _} = capi_client_shops:get_shop_by_id_for_party(?config(context, Config), ?STRING, ?STRING).
+    {ok, _} = capi_client_shops:get_shop_by_id_for_party(?config(context, Config), ?STRING, ?STRING),
+    ?assertEqual(
+        {error, {404, #{<<"message">> => <<"Party not found or inaccessible">>}}},
+        capi_client_shops:get_shop_by_id_for_party(?config(context, Config), <<"WrongPartyID">>, ?STRING)).
 
 -spec get_shops_ok_test(config()) -> _.
 get_shops_ok_test(Config) ->
@@ -725,7 +737,10 @@ get_shops_ok_test(Config) ->
 -spec get_shops_for_party_ok_test(config()) -> _.
 get_shops_for_party_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
-    {ok, _} = capi_client_shops:get_shops_for_party(?config(context, Config), ?STRING).
+    {ok, _} = capi_client_shops:get_shops_for_party(?config(context, Config), ?STRING),
+    ?assertEqual(
+        {error, {404, #{<<"message">> => <<"Party not found or inaccessible">>}}},
+        capi_client_shops:get_shops_for_party(?config(context, Config), <<"WrongPartyID">>)).
 
 -spec activate_shop_ok_test(config()) -> _.
 activate_shop_ok_test(Config) ->
@@ -735,7 +750,10 @@ activate_shop_ok_test(Config) ->
 -spec activate_shop_for_party_ok_test(config()) -> _.
 activate_shop_for_party_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('ActivateShop', _) -> {ok, ok} end}], Config),
-    ok = capi_client_shops:activate_shop_for_party(?config(context, Config), ?STRING, ?STRING).
+    ok = capi_client_shops:activate_shop_for_party(?config(context, Config), ?STRING, ?STRING),
+    ?assertEqual(
+        {error, {404, #{<<"message">> => <<"Party not found or inaccessible">>}}},
+        capi_client_shops:activate_shop_for_party(?config(context, Config), <<"WrongPartyID">>, ?STRING)).
 
 -spec suspend_shop_ok_test(config()) -> _.
 suspend_shop_ok_test(Config) ->
@@ -745,7 +763,10 @@ suspend_shop_ok_test(Config) ->
 -spec suspend_shop_for_party_ok_test(config()) -> _.
 suspend_shop_for_party_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('SuspendShop', _) -> {ok, ok} end}], Config),
-    ok = capi_client_shops:suspend_shop_for_party(?config(context, Config), ?STRING, ?STRING).
+    ok = capi_client_shops:suspend_shop_for_party(?config(context, Config), ?STRING, ?STRING),
+    ?assertEqual(
+        {error, {404, #{<<"message">> => <<"Party not found or inaccessible">>}}},
+        capi_client_shops:suspend_shop_for_party(?config(context, Config), <<"WrongPartyID">>, ?STRING)).
 
 -spec get_claim_by_id_ok_test(config()) -> _.
 get_claim_by_id_ok_test(Config) ->
