@@ -14,10 +14,10 @@
     Context :: capi_handler:processing_context()
 ) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('CreateInvoice' = OperationID, Req, Context) ->
-    UserID = capi_handler_utils:get_user_id(Context),
-    PartyID = maps:get('partyID', Req, UserID),
-    ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     InvoiceParams = maps:get('InvoiceParams', Req),
+    UserID = capi_handler_utils:get_user_id(Context),
+    PartyID = maps:get(<<"partyID">>, InvoiceParams, UserID),
+    ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     try
         capi_handler_utils:assert_party_accessible(UserID, PartyID),
         Result = create_invoice(PartyID, InvoiceParams, Context, OperationID),

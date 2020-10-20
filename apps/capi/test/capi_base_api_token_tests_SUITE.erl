@@ -283,6 +283,7 @@ create_invoice_ok_test(Config) ->
     ),
     Req = #{
         <<"shopID">> => ?STRING,
+        <<"partyID">> => ?STRING,
         <<"amount">> => ?INTEGER,
         <<"currency">> => ?RUB,
         <<"metadata">> => #{<<"invoice_dummy_metadata">> => <<"test_value">>},
@@ -290,7 +291,14 @@ create_invoice_ok_test(Config) ->
         <<"product">> => <<"test_product">>,
         <<"description">> => <<"test_invoice_description">>
     },
-    {ok, _} = capi_client_invoices:create_invoice(?config(context, Config), Req).
+    {ok, _} = capi_client_invoices:create_invoice(?config(context, Config), Req),
+    ?assertEqual(
+        {error, {400, #{<<"code">> => <<"invalidPartyID">>, <<"message">> => <<"Party not found or inaccessible">>}}},
+        capi_client_invoices:create_invoice(
+            ?config(context, Config),
+            Req#{<<"partyID">> => <<"WrongPartyID">>}
+        )
+    ).
 
 -spec get_invoice_by_external_id(config()) -> _.
 get_invoice_by_external_id(Config) ->
@@ -354,13 +362,14 @@ create_invoice_template_ok_test(Config) ->
     },
     {ok, _} = capi_client_invoice_templates:create(?config(context, Config), Req#{<<"details">> => Details1}),
     ?assertEqual(
-        {error, {404, <<"">>}},
+        {error, {400, #{<<"code">> => <<"invalidPartyID">>, <<"message">> => <<"Party not found or inaccessible">>}}},
         capi_client_invoice_templates:create(
             ?config(context, Config),
             Req#{
                 <<"partyID">> => <<"WrongPartyID">>,
                 <<"details">> => Details1
-            })
+            }
+        )
     ).
 
 -spec create_invoice_with_template_test(config()) -> _.
@@ -434,7 +443,16 @@ create_customer_ok_test(Config) ->
         <<"contactInfo">> => #{<<"email">> => <<"bla@bla.ru">>},
         <<"metadata">> => #{<<"text">> => [<<"SOMESHIT">>, 42]}
     },
-    {ok, _} = capi_client_customers:create_customer(?config(context, Config), Req).
+    {ok, _} = capi_client_customers:create_customer(?config(context, Config), Req),
+    ?assertEqual(
+        {error, {400, #{<<"code">> => <<"invalidPartyID">>, <<"message">> => <<"Party not found or inaccessible">>}}},
+        capi_client_customers:create_customer(
+            ?config(context, Config),
+            Req#{
+                <<"partyID">> => <<"WrongPartyID">>
+            }
+        )
+    ).
 
 -spec create_customer_access_token_ok_test(config()) -> _.
 create_customer_access_token_ok_test(Config) ->
@@ -727,7 +745,8 @@ get_shop_by_id_for_party_ok_test(Config) ->
     {ok, _} = capi_client_shops:get_shop_by_id_for_party(?config(context, Config), ?STRING, ?STRING),
     ?assertEqual(
         {error, {404, #{<<"message">> => <<"Party not found or inaccessible">>}}},
-        capi_client_shops:get_shop_by_id_for_party(?config(context, Config), <<"WrongPartyID">>, ?STRING)).
+        capi_client_shops:get_shop_by_id_for_party(?config(context, Config), <<"WrongPartyID">>, ?STRING)
+    ).
 
 -spec get_shops_ok_test(config()) -> _.
 get_shops_ok_test(Config) ->
@@ -740,7 +759,8 @@ get_shops_for_party_ok_test(Config) ->
     {ok, _} = capi_client_shops:get_shops_for_party(?config(context, Config), ?STRING),
     ?assertEqual(
         {error, {404, #{<<"message">> => <<"Party not found or inaccessible">>}}},
-        capi_client_shops:get_shops_for_party(?config(context, Config), <<"WrongPartyID">>)).
+        capi_client_shops:get_shops_for_party(?config(context, Config), <<"WrongPartyID">>)
+    ).
 
 -spec activate_shop_ok_test(config()) -> _.
 activate_shop_ok_test(Config) ->
@@ -753,7 +773,8 @@ activate_shop_for_party_ok_test(Config) ->
     ok = capi_client_shops:activate_shop_for_party(?config(context, Config), ?STRING, ?STRING),
     ?assertEqual(
         {error, {404, #{<<"message">> => <<"Party not found or inaccessible">>}}},
-        capi_client_shops:activate_shop_for_party(?config(context, Config), <<"WrongPartyID">>, ?STRING)).
+        capi_client_shops:activate_shop_for_party(?config(context, Config), <<"WrongPartyID">>, ?STRING)
+    ).
 
 -spec suspend_shop_ok_test(config()) -> _.
 suspend_shop_ok_test(Config) ->
@@ -766,7 +787,8 @@ suspend_shop_for_party_ok_test(Config) ->
     ok = capi_client_shops:suspend_shop_for_party(?config(context, Config), ?STRING, ?STRING),
     ?assertEqual(
         {error, {404, #{<<"message">> => <<"Party not found or inaccessible">>}}},
-        capi_client_shops:suspend_shop_for_party(?config(context, Config), <<"WrongPartyID">>, ?STRING)).
+        capi_client_shops:suspend_shop_for_party(?config(context, Config), <<"WrongPartyID">>, ?STRING)
+    ).
 
 -spec get_claim_by_id_ok_test(config()) -> _.
 get_claim_by_id_ok_test(Config) ->
@@ -1021,6 +1043,7 @@ create_payout(Config) ->
     Req = #{
         <<"id">> => ?STRING,
         <<"shopID">> => ?STRING,
+        <<"partyID">> => ?STRING,
         <<"payoutToolID">> => ?WALLET_TOOL,
         <<"amount">> => 2,
         <<"currency">> => <<"RUB">>,
@@ -1037,7 +1060,15 @@ create_payout(Config) ->
             <<"how_about_null">> => null
         }
     },
-    {ok, _} = capi_client_payouts:create_payout(?config(context, Config), Req, ?STRING).
+    {ok, _} = capi_client_payouts:create_payout(?config(context, Config), Req, ?STRING),
+    ?assertEqual(
+        {error, {400, #{<<"code">> => <<"invalidPartyID">>, <<"message">> => <<"Party not found or inaccessible">>}}},
+        capi_client_payouts:create_payout(
+            ?config(context, Config),
+            Req#{<<"partyID">> => <<"WrongPartyID">>},
+            ?STRING
+        )
+    ).
 
 -spec get_payout(config()) -> _.
 get_payout(Config) ->

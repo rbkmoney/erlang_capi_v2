@@ -48,12 +48,10 @@ process_request('GetPayout', Req, Context) ->
             {ok, general_error(404, <<"Payout not found">>)}
     end;
 process_request('CreatePayout', Req, Context) ->
+    PayoutParams = maps:get('PayoutParams', Req),
     UserID = capi_handler_utils:get_user_id(Context),
-    PartyID = maps:get('partyID', Req, UserID),
-    CreateRequest = encode_payout_params(
-        PartyID,
-        maps:get('PayoutParams', Req)
-    ),
+    PartyID = maps:get(<<"partyID">>, PayoutParams, UserID),
+    CreateRequest = encode_payout_params(PartyID, PayoutParams),
     try
         capi_handler_utils:assert_party_accessible(UserID, PartyID),
         case capi_handler_utils:service_call({payouts, 'CreatePayout', [CreateRequest]}, Context) of

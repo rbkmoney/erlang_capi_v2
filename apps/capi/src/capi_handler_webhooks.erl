@@ -15,9 +15,10 @@
     Context :: capi_handler:processing_context()
 ) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('CreateWebhook', Req, Context) ->
+    Params = maps:get('Webhook', Req),
     UserID = capi_handler_utils:get_user_id(Context),
-    PartyID = maps:get('partyID', Req, UserID),
-    WebhookParams = encode_webhook_params(PartyID, maps:get('Webhook', Req)),
+    PartyID = maps:get(<<"partyID">>, Params, UserID),
+    WebhookParams = encode_webhook_params(PartyID, Params),
     ShopID = validate_webhook_params(WebhookParams),
     try
         capi_handler_utils:assert_party_accessible(UserID, PartyID),

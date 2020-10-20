@@ -14,13 +14,14 @@
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) -> {ok | error, capi_handler:response() | noimpl}.
-process_request('CreateInvoiceTemplate', #{'InvoiceTemplateCreateParams' := Params}, Context) ->
+process_request('CreateInvoiceTemplate', Req, Context) ->
+    InvoiceTemplateParams = maps:get('InvoiceTemplateCreateParams', Req),
     UserID = capi_handler_utils:get_user_id(Context),
-    PartyID = maps:get(<<"partyID">>, Params, UserID),
+    PartyID = maps:get(<<"partyID">>, InvoiceTemplateParams, UserID),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     try
         capi_handler_utils:assert_party_accessible(UserID, PartyID),
-        CallArgs = [encode_invoice_tpl_create_params(PartyID, Params)],
+        CallArgs = [encode_invoice_tpl_create_params(PartyID, InvoiceTemplateParams)],
         capi_handler_utils:service_call_with(
             [user_info, party_creation],
             {invoice_templating, 'Create', CallArgs},
