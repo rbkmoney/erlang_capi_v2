@@ -967,7 +967,12 @@ get_contract_adjustments_ok_test(Config) ->
 get_contract_adjustment_by_id_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
     {ok, _} = capi_client_contracts:get_contract_adjustment_by_id(?config(context, Config), ?STRING, ?STRING),
-    {ok, _} = capi_client_contracts:get_contract_adjustment_by_id_for_party(?config(context, Config), ?STRING, ?STRING, ?STRING).
+    {ok, _} = capi_client_contracts:get_contract_adjustment_by_id_for_party(
+        ?config(context, Config),
+        ?STRING,
+        ?STRING,
+        ?STRING
+    ).
 
 -spec get_payout_tools_ok_test(config()) -> _.
 get_payout_tools_ok_test(Config) ->
@@ -1306,7 +1311,13 @@ get_payment_method_stats_ok_test(Config) ->
 get_reports_ok_test(Config) ->
     capi_ct_helper:mock_services([{reporting, fun('GetReports', _) -> {ok, ?FOUND_REPORTS} end}], Config),
     {ok, _} = capi_client_reports:get_reports(?config(context, Config), ?STRING, ?TIMESTAMP, ?TIMESTAMP),
-    {ok, _} = capi_client_reports:get_reports_for_party(?config(context, Config), ?STRING, ?STRING, ?TIMESTAMP, ?TIMESTAMP).
+    {ok, _} = capi_client_reports:get_reports_for_party(
+        ?config(context, Config),
+        ?STRING,
+        ?STRING,
+        ?TIMESTAMP,
+        ?TIMESTAMP
+    ).
 
 -spec get_report_ok_test(config()) -> _.
 get_report_ok_test(Config) ->
@@ -1359,7 +1370,8 @@ download_report_file_ok_test(Config) ->
         Config
     ),
     {ok, _} = capi_client_reports:download_file(?config(context, Config), ?STRING, ?INTEGER, ?STRING),
-    {ok, _} = capi_client_reports:download_file_for_party(?config(context, Config),
+    {ok, _} = capi_client_reports:download_file_for_party(
+        ?config(context, Config),
         ?STRING,
         ?STRING,
         ?INTEGER,

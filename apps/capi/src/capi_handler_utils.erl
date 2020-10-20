@@ -318,6 +318,7 @@ run_if_party_accessible(UserID, PartyID, Fun) ->
     try
         assert_party_accessible(UserID, PartyID),
         Fun()
-    catch throw:party_inaccessible ->
-        {ok, general_error(404, <<"Party not found or inaccessible">>)}
+    catch
+        throw:party_inaccessible ->
+            {ok, general_error(404, <<"Party not found or inaccessible">>)}
     end.

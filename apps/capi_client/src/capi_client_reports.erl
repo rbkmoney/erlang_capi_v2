@@ -83,7 +83,8 @@ create_report(Context, ShopID, ReportType, FromTime, ToTime) ->
     Response = swag_client_reports_api:create_report(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 
--spec create_report_for_party(context(), binary(), binary(), binary(), binary(), binary()) -> {ok, list()} | {error, term()}.
+-spec create_report_for_party(context(), binary(), binary(), binary(), binary(), binary()) ->
+    {ok, list()} | {error, term()}.
 create_report_for_party(Context, PartyID, ShopID, ReportType, FromTime, ToTime) ->
     Params = #{
         binding => #{
