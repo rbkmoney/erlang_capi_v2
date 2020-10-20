@@ -54,19 +54,25 @@ process_request('CreatePayout', Req, Context) ->
         PartyID,
         maps:get('PayoutParams', Req)
     ),
-    case capi_handler_utils:service_call({payouts, 'CreatePayout', [CreateRequest]}, Context) of
-        {ok, Payout} ->
-            {ok, {201, #{}, decode_payout(Payout)}};
-        {exception, Exception} ->
-            case Exception of
-                #'payout_processing_InvalidPayoutTool'{} ->
-                    {ok, logic_error(invalidPayoutTool, <<"Invalid payout tool">>)};
-                #'payout_processing_InsufficientFunds'{} ->
-                    {ok, logic_error(invalidCash, <<"Invalid amount or currency">>)};
-                #'InvalidRequest'{errors = Errors} ->
-                    FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, logic_error(invalidRequest, FormattedErrors)}
-            end
+    try
+        capi_handler_utils:assert_party_accessible(UserID, PartyID),
+        case capi_handler_utils:service_call({payouts, 'CreatePayout', [CreateRequest]}, Context) of
+            {ok, Payout} ->
+                {ok, {201, #{}, decode_payout(Payout)}};
+            {exception, Exception} ->
+                case Exception of
+                    #'payout_processing_InvalidPayoutTool'{} ->
+                        {ok, logic_error(invalidPayoutTool, <<"Invalid payout tool">>)};
+                    #'payout_processing_InsufficientFunds'{} ->
+                        {ok, logic_error(invalidCash, <<"Invalid amount or currency">>)};
+                    #'InvalidRequest'{errors = Errors} ->
+                        FormattedErrors = capi_handler_utils:format_request_errors(Errors),
+                        {ok, logic_error(invalidRequest, FormattedErrors)}
+                end
+        end
+    catch
+        party_inaccessible ->
+            {ok, logic_error(invalidPartyID, <<"Party not found or inaccessible">>)}
     end;
 process_request('GetScheduleByRef', Req, Context) ->
     case get_schedule_by_id(genlib:to_int(maps:get(scheduleID, Req)), Context) of
@@ -79,28 +85,34 @@ process_request('GetScheduleByRef', Req, Context) ->
 
 process_request('GetPayoutToolsForParty', Req, Context) ->
     ContractID = maps:get('contractID', Req),
+    UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get('partyID', Req),
-    case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
-        {ok, #domain_Contract{payout_tools = PayoutTools}} ->
-            {ok, {200, #{}, [decode_payout_tool(P) || P <- PayoutTools]}};
-        {exception, #payproc_ContractNotFound{}} ->
-            {ok, general_error(404, <<"Contract not found">>)}
-    end;
+    capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
+        case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
+            {ok, #domain_Contract{payout_tools = PayoutTools}} ->
+                {ok, {200, #{}, [decode_payout_tool(P) || P <- PayoutTools]}};
+            {exception, #payproc_ContractNotFound{}} ->
+                {ok, general_error(404, <<"Contract not found">>)}
+        end
+    end);
 process_request('GetPayoutToolByIDForParty', Req, Context) ->
     ContractID = maps:get('contractID', Req),
+    UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get('partyID', Req),
-    case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
-        {ok, #domain_Contract{payout_tools = PayoutTools}} ->
-            PayoutToolID = maps:get('payoutToolID', Req),
-            case lists:keyfind(PayoutToolID, #domain_PayoutTool.id, PayoutTools) of
-                #domain_PayoutTool{} = P ->
-                    {ok, {200, #{}, decode_payout_tool(P)}};
-                false ->
-                    {ok, general_error(404, <<"PayoutTool not found">>)}
-            end;
-        {exception, #payproc_ContractNotFound{}} ->
-            {ok, general_error(404, <<"Contract not found">>)}
-    end;
+    capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
+        case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
+            {ok, #domain_Contract{payout_tools = PayoutTools}} ->
+                PayoutToolID = maps:get('payoutToolID', Req),
+                case lists:keyfind(PayoutToolID, #domain_PayoutTool.id, PayoutTools) of
+                    #domain_PayoutTool{} = P ->
+                        {ok, {200, #{}, decode_payout_tool(P)}};
+                    false ->
+                        {ok, general_error(404, <<"PayoutTool not found">>)}
+                end;
+            {exception, #payproc_ContractNotFound{}} ->
+                {ok, general_error(404, <<"Contract not found">>)}
+        end
+    end);
 %%
 
 process_request(_OperationID, _Req, _Context) ->

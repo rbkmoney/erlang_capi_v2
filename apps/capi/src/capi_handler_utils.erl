@@ -7,6 +7,9 @@
 -export([server_error/1]).
 -export([format_request_errors/1]).
 
+-export([assert_party_accessible/2]).
+-export([run_if_party_accessible/3]).
+
 -export([service_call_with/3]).
 -export([service_call/2]).
 
@@ -135,14 +138,7 @@ get_user_id(Context) ->
 
 -spec get_party_id(processing_context()) -> binary().
 get_party_id(Context) ->
-    case capi_auth:get_party_id(uac_authorizer_jwt:get_claims(get_auth_context(Context))) of
-        undefined ->
-            %% Deprecated InvoiceAccessToken(live 3 days) doesn't contain claims.party_id
-            %% used user_id as party_id
-            get_user_id(Context);
-        PartyID ->
-            PartyID
-    end.
+    get_user_id(Context).
 
 -spec get_extra_properties(processing_context()) -> map().
 get_extra_properties(Context) ->
@@ -310,3 +306,18 @@ create_dsl(QueryType, QueryBody, QueryParams) ->
         #{<<"query">> => maps:put(genlib:to_binary(QueryType), genlib_map:compact(QueryBody), #{})},
         QueryParams
     ).
+
+-spec assert_party_accessible(binary(), binary()) -> ok.
+assert_party_accessible(PartyID, PartyID) ->
+    ok;
+assert_party_accessible(_UserID, _PartyID) ->
+    throw(party_inaccessible).
+
+-spec run_if_party_accessible(binary(), binary(), function()) -> woody:result().
+run_if_party_accessible(UserID, PartyID, Fun) ->
+    try
+        assert_party_accessible(UserID, PartyID),
+        Fun()
+    catch throw:party_inaccessible ->
+        {ok, general_error(404, <<"Party not found or inaccessible">>)}
+    end.

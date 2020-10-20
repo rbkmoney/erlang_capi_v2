@@ -18,31 +18,36 @@ process_request('CreateInvoice' = OperationID, Req, Context) ->
     PartyID = maps:get('partyID', Req, UserID),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     InvoiceParams = maps:get('InvoiceParams', Req),
-    try create_invoice(PartyID, InvoiceParams, Context, OperationID) of
-        {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok,
-                {201, #{},
-                    capi_handler_decoder_invoicing:make_invoice_and_token(
-                        Invoice,
-                        UserID,
-                        PartyID,
-                        ExtraProperties
-                    )}};
-        {exception, Exception} ->
-            case Exception of
-                #'InvalidRequest'{errors = Errors} ->
-                    FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, logic_error(invalidRequest, FormattedErrors)};
-                #payproc_ShopNotFound{} ->
-                    {ok, logic_error(invalidShopID, <<"Shop not found">>)};
-                #payproc_InvalidPartyStatus{} ->
-                    {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
-                #payproc_InvalidShopStatus{} ->
-                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
-                #payproc_InvoiceTermsViolated{} ->
-                    {ok, logic_error(invoiceTermsViolated, <<"Invoice parameters violate contract terms">>)}
-            end
+    try
+        capi_handler_utils:assert_party_accessible(UserID, PartyID),
+        Result = create_invoice(PartyID, InvoiceParams, Context, OperationID),
+        case Result of
+            {ok, #'payproc_Invoice'{invoice = Invoice}} ->
+                {ok,
+                    {201, #{},
+                        capi_handler_decoder_invoicing:make_invoice_and_token(
+                            Invoice,
+                            UserID,
+                            ExtraProperties
+                        )}};
+            {exception, Exception} ->
+                case Exception of
+                    #'InvalidRequest'{errors = Errors} ->
+                        FormattedErrors = capi_handler_utils:format_request_errors(Errors),
+                        {ok, logic_error(invalidRequest, FormattedErrors)};
+                    #payproc_ShopNotFound{} ->
+                        {ok, logic_error(invalidShopID, <<"Shop not found or inaccessible">>)};
+                    #payproc_InvalidPartyStatus{} ->
+                        {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
+                    #payproc_InvalidShopStatus{} ->
+                        {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
+                    #payproc_InvoiceTermsViolated{} ->
+                        {ok, logic_error(invoiceTermsViolated, <<"Invoice parameters violate contract terms">>)}
+                end
+        end
     catch
+        party_inaccessible ->
+            {ok, logic_error(invalidPartyID, <<"Party not found or inaccessible">>)};
         invoice_cart_empty ->
             {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
         invalid_invoice_cost ->
@@ -55,11 +60,10 @@ process_request('CreateInvoiceAccessToken', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
-        {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            #'domain_Invoice'{owner_id = PartyID} = Invoice,
+        {ok, #'payproc_Invoice'{invoice = _Invoice}} ->
             Response = capi_handler_utils:issue_access_token(
                 UserID,
-                {invoice, {PartyID, InvoiceID}},
+                {invoice, InvoiceID},
                 ExtraProperties
             ),
             {ok, {201, #{}, Response}};

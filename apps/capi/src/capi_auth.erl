@@ -4,7 +4,6 @@
 -export([issue_access_token/3]).
 
 -export([get_consumer/1]).
--export([get_party_id/1]).
 
 -export([get_operation_access/2]).
 
@@ -36,7 +35,7 @@
 -define(DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME, 259200).
 
 -type token_spec() ::
-    {invoice, {PartyID :: binary(), InvoiceID :: binary()}}
+    {invoice, InvoiceID :: binary()}
     | {invoice_tpl, InvoiceTplID :: binary()}
     | {customer, CustomerID :: binary()}.
 
@@ -60,7 +59,7 @@ issue_access_token(UserID, TokenSpec, ExtraProperties) ->
     ).
 
 -spec resolve_token_spec(token_spec()) -> claims().
-resolve_token_spec({invoice, {PartyID, InvoiceID}}) ->
+resolve_token_spec({invoice, InvoiceID}) ->
     DomainRoles = #{
         <<"common-api">> => uac_acl:from_list([
             {[{invoices, InvoiceID}], read},
@@ -71,7 +70,6 @@ resolve_token_spec({invoice, {PartyID, InvoiceID}}) ->
     },
     Expiration = {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME},
     #{
-        <<"party_id">> => PartyID,
         <<"exp">> => Expiration,
         <<"resource_access">> => DomainRoles,
         % token consumer
@@ -331,7 +329,3 @@ get_consumer(Claims) ->
         <<"client">> -> client;
         <<"provider">> -> provider
     end.
-
--spec get_party_id(claims()) -> binary() | undefined.
-get_party_id(Claims) ->
-    maps:get(<<"party_id">>, Claims, undefined).

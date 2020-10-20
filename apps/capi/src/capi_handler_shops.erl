@@ -51,49 +51,61 @@ process_request('GetShopByID', Req, Context) ->
             {ok, general_error(404, <<"Shop not found">>)}
     end;
 process_request('GetShopsForParty', Req, Context) ->
+    UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(partyID, Req),
-    Party = capi_utils:unwrap(capi_handler_utils:get_my_party(PartyID, Context)),
-    {ok, {200, #{}, decode_shops_map(Party#domain_Party.shops)}};
+    capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
+        Party = capi_utils:unwrap(capi_handler_utils:get_my_party(PartyID, Context)),
+        {ok, {200, #{}, decode_shops_map(Party#domain_Party.shops)}}
+    end);
 process_request('GetShopByIDForParty', Req, Context) ->
+    UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(partyID, Req),
-    ShopID = maps:get(shopID, Req),
-    Call = {party_management, 'GetShop', [PartyID, ShopID]},
-    case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
-        {ok, Shop} ->
-            {ok, {200, #{}, decode_shop(Shop)}};
-        {exception, #payproc_ShopNotFound{}} ->
-            {ok, general_error(404, <<"Shop not found">>)}
-    end;
+    capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
+        ShopID = maps:get(shopID, Req),
+        Call = {party_management, 'GetShop', [PartyID, ShopID]},
+        case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
+            {ok, Shop} ->
+                {ok, {200, #{}, decode_shop(Shop)}};
+            {exception, #payproc_ShopNotFound{}} ->
+                {ok, general_error(404, <<"Shop not found">>)}
+        end
+    end);
 process_request('ActivateShopForParty', Req, Context) ->
+    UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(partyID, Req),
-    ShopID = maps:get(shopID, Req),
-    Call = {party_management, 'ActivateShop', [PartyID, ShopID]},
-    case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
-        {ok, _R} ->
-            {ok, {204, #{}, undefined}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_ShopNotFound{} ->
-                    {ok, general_error(404, <<"Shop not found">>)};
-                #payproc_InvalidShopStatus{status = {suspension, {active, _}}} ->
-                    {ok, {204, #{}, undefined}}
-            end
-    end;
+    capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
+        ShopID = maps:get(shopID, Req),
+        Call = {party_management, 'ActivateShop', [PartyID, ShopID]},
+        case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
+            {ok, _R} ->
+                {ok, {204, #{}, undefined}};
+            {exception, Exception} ->
+                case Exception of
+                    #payproc_ShopNotFound{} ->
+                        {ok, general_error(404, <<"Shop not found">>)};
+                    #payproc_InvalidShopStatus{status = {suspension, {active, _}}} ->
+                        {ok, {204, #{}, undefined}}
+                end
+        end
+    end);
 process_request('SuspendShopForParty', Req, Context) ->
+    UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(partyID, Req),
-    ShopID = maps:get(shopID, Req),
-    Call = {party_management, 'SuspendShop', [PartyID, ShopID]},
-    case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
-        {ok, _R} ->
-            {ok, {204, #{}, undefined}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_ShopNotFound{} ->
-                    {ok, general_error(404, <<"Shop not found">>)};
-                #payproc_InvalidShopStatus{status = {suspension, {suspended, _}}} ->
-                    {ok, {204, #{}, undefined}}
-            end
-    end;
+    capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
+        ShopID = maps:get(shopID, Req),
+        Call = {party_management, 'SuspendShop', [PartyID, ShopID]},
+        case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
+            {ok, _R} ->
+                {ok, {204, #{}, undefined}};
+            {exception, Exception} ->
+                case Exception of
+                    #payproc_ShopNotFound{} ->
+                        {ok, general_error(404, <<"Shop not found">>)};
+                    #payproc_InvalidShopStatus{status = {suspension, {suspended, _}}} ->
+                        {ok, {204, #{}, undefined}}
+                end
+        end
+    end);
 %%
 
 process_request(_OperationID, _Req, _Context) ->

@@ -21,26 +21,38 @@ process_request('GetReports', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     get_reports(PartyID, Req, Context);
 process_request('GetReportsForParty', Req, Context) ->
+    UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(partyID, Req),
-    get_reports(PartyID, Req, Context);
+    capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
+        get_reports(PartyID, Req, Context)
+    end);
 process_request('GetReport', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     get_report(PartyID, Req, Context);
 process_request('GetReportForParty', Req, Context) ->
+    UserID = capi_handler_utils:get_user_id(Context),
     PartyID = capi_handler_utils:get_party_id(Context),
-    get_report(PartyID, Req, Context);
+    capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
+        get_report(PartyID, Req, Context)
+    end);
 process_request('CreateReport', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     create_report(PartyID, Req, Context);
 process_request('CreateReportForParty', Req, Context) ->
+    UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(partyID, Req),
-    create_report(PartyID, Req, Context);
+    capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
+        create_report(PartyID, Req, Context)
+    end);
 process_request('DownloadFile', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     download_file(PartyID, Req, Context);
 process_request('DownloadFileForParty', Req, Context) ->
+    UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(partyID, Req),
-    download_file(PartyID, Req, Context);
+    capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
+        download_file(PartyID, Req, Context)
+    end);
 %%
 
 process_request(_OperationID, _Req, _Context) ->

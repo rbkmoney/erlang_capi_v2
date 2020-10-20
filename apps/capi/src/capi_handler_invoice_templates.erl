@@ -19,6 +19,7 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
     PartyID = maps:get('partyID', Req, UserID),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     try
+        capi_handler_utils:assert_party_accessible(UserID, PartyID),
         CallArgs = [encode_invoice_tpl_create_params(PartyID, maps:get('InvoiceTemplateCreateParams', Req))],
         capi_handler_utils:service_call_with(
             [user_info, party_creation],
@@ -41,6 +42,8 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
                     {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)}
             end
     catch
+        party_inaccessible ->
+            {ok, logic_error(invalidPartyID, <<"Party not found or inaccessible">>)};
         throw:invoice_cart_empty ->
             {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
         throw:zero_invoice_lifetime ->
@@ -137,7 +140,6 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
                     capi_handler_decoder_invoicing:make_invoice_and_token(
                         Invoice,
                         UserID,
-                        Invoice#domain_Invoice.owner_id,
                         ExtraProperties
                     )}};
         {exception, Reason} ->

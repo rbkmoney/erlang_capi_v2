@@ -16,28 +16,34 @@
 process_request('CreateCustomer', Req, Context) ->
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get('partyID', Req, UserID),
-    Call = {customer_management, 'Create', [encode_customer_params(PartyID, maps:get('Customer', Req))]},
-    case capi_handler_utils:service_call_with([party_creation], Call, Context) of
-        {ok, Customer} ->
-            {ok, {201, #{}, make_customer_and_token(Customer, PartyID)}};
-        {exception, Exception} ->
-            case Exception of
-                #'InvalidRequest'{errors = Errors} ->
-                    FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, logic_error(invalidRequest, FormattedErrors)};
-                #payproc_ShopNotFound{} ->
-                    {ok, logic_error(invalidShopID, <<"Shop not found">>)};
-                #payproc_InvalidPartyStatus{} ->
-                    {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
-                #payproc_InvalidShopStatus{} ->
-                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
-                #payproc_OperationNotPermitted{} ->
-                    ErrorResp = logic_error(
-                        operationNotPermitted,
-                        <<"Operation not permitted">>
-                    ),
-                    {ok, ErrorResp}
-            end
+    try
+        capi_handler_utils:assert_party_accessible(UserID, PartyID),
+        Call = {customer_management, 'Create', [encode_customer_params(PartyID, maps:get('Customer', Req))]},
+        case capi_handler_utils:service_call_with([party_creation], Call, Context) of
+            {ok, Customer} ->
+                {ok, {201, #{}, make_customer_and_token(Customer, PartyID)}};
+            {exception, Exception} ->
+                case Exception of
+                    #'InvalidRequest'{errors = Errors} ->
+                        FormattedErrors = capi_handler_utils:format_request_errors(Errors),
+                        {ok, logic_error(invalidRequest, FormattedErrors)};
+                    #payproc_ShopNotFound{} ->
+                        {ok, logic_error(invalidShopID, <<"Shop not found">>)};
+                    #payproc_InvalidPartyStatus{} ->
+                        {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
+                    #payproc_InvalidShopStatus{} ->
+                        {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
+                    #payproc_OperationNotPermitted{} ->
+                        ErrorResp = logic_error(
+                            operationNotPermitted,
+                            <<"Operation not permitted">>
+                        ),
+                        {ok, ErrorResp}
+                end
+        end
+    catch
+        party_inaccessible ->
+            {ok, logic_error(invalidPartyID, <<"Party not found or inaccessible">>)}
     end;
 process_request('GetCustomerById', Req, Context) ->
     case get_customer_by_id(maps:get('customerID', Req), Context) of

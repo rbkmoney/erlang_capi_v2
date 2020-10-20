@@ -130,11 +130,15 @@ init([]) ->
 all() ->
     [
         {group, operations_by_base_api_token}
+        % {group, operations_by_base_api_token}
     ].
 
 -spec groups() -> [{group_name(), list(), [test_case_name()]}].
 groups() ->
     [
+        {operations_by_base_api_token_, [], [
+            create_invoice_with_template_test
+        ]},
         {operations_by_base_api_token, [], [
             create_invoice_ok_test,
             get_invoice_by_external_id,
@@ -397,15 +401,19 @@ create_invoice_with_template_test(Config) ->
         ]
     },
     {ok, Template} = capi_client_invoice_templates:create(?config(context, Config), ReqTemp#{<<"details">> => Details}),
-    #{<<"invoiceTemplate">> := #{<<"id">> := TemplateID}} = Template,
+    #{
+        <<"invoiceTemplate">> := #{<<"id">> := TemplateID},
+        <<"invoiceTemplateAccessToken">> := #{<<"payload">> := Token}
+    } = Template,
     Req = #{
         <<"amount">> => ?INTEGER,
         <<"currency">> => ?RUB,
         <<"metadata">> => #{<<"invoice_dummy_metadata">> => <<"test_value">>},
         <<"externalID">> => ExternalID
     },
+    Ctx = ?config(context, Config),
     {ok, #{<<"invoice">> := Invoice}} =
-        capi_client_invoice_templates:create_invoice(?config(context, Config), TemplateID, Req),
+        capi_client_invoice_templates:create_invoice(Ctx#{token => Token}, TemplateID, Req),
     ?assertEqual(BenderKey, maps:get(<<"id">>, Invoice)),
     ?assertEqual(ExternalID, maps:get(<<"externalID">>, Invoice)).
 
