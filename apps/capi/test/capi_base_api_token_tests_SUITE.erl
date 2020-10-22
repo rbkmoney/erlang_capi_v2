@@ -130,15 +130,11 @@ init([]) ->
 all() ->
     [
         {group, operations_by_base_api_token}
-        % {group, operations_by_base_api_token}
     ].
 
 -spec groups() -> [{group_name(), list(), [test_case_name()]}].
 groups() ->
     [
-        {operations_by_base_api_token_, [], [
-            create_invoice_with_template_test
-        ]},
         {operations_by_base_api_token, [], [
             create_invoice_ok_test,
             get_invoice_by_external_id,
