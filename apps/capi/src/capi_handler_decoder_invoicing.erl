@@ -477,7 +477,9 @@ decode_tokenized_bank_cards([#domain_TokenizedBankCard{} | _] = TokenizedBankCar
         {TP, PS}
         || #domain_TokenizedBankCard{payment_system = PS, token_provider = TP} <- TokenizedBankCards
     ],
-    do_decode_tokenized_bank_cards(PropTokenizedBankCards).
+    do_decode_tokenized_bank_cards(PropTokenizedBankCards);
+decode_tokenized_bank_cards([]) ->
+    [].
 
 do_decode_tokenized_bank_cards(PropTokenizedBankCards) ->
     lists:map(
