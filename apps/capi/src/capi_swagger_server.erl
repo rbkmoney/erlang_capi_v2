@@ -10,12 +10,12 @@
 
 -define(START_TIME_TAG, processing_start_time).
 
--type params() :: {cowboy_router:routes(), module(), swag_server_router:swagger_handler_opts()}.
+-type params() :: {cowboy_router:routes(), cowboy_router:routes(), module(), swag_server_router:swagger_handler_opts()}.
 
 -spec child_spec(params()) -> supervisor:child_spec().
-child_spec({HealthRoutes, LogicHandler, SwaggerHandlerOpts}) ->
+child_spec({HealthRoutes, MetricsRoute, LogicHandler, SwaggerHandlerOpts}) ->
     {Transport, TransportOpts} = get_socket_transport(),
-    CowboyOpts = get_cowboy_config(HealthRoutes, LogicHandler, SwaggerHandlerOpts),
+    CowboyOpts = get_cowboy_config(HealthRoutes, MetricsRoute, LogicHandler, SwaggerHandlerOpts),
     GsTimeout = genlib_app:env(?APP, graceful_shutdown_timeout, 5000),
     Protocol = cowboy_clear,
     cowboy_draining_server:child_spec(
@@ -33,11 +33,12 @@ get_socket_transport() ->
     AcceptorsPool = genlib_app:env(?APP, acceptors_poolsize, ?DEFAULT_ACCEPTORS_POOLSIZE),
     {ranch_tcp, #{socket_opts => [{ip, IP}, {port, Port}], num_acceptors => AcceptorsPool}}.
 
-get_cowboy_config(HealthRoutes, LogicHandler, SwaggerHandlerOpts) ->
+get_cowboy_config(HealthRoutes, MetricsRoute, LogicHandler, SwaggerHandlerOpts) ->
     Dispatch =
         cowboy_router:compile(
             squash_routes(
                 HealthRoutes ++
+                    MetricsRoute ++
                     swag_server_router:get_paths(LogicHandler, SwaggerHandlerOpts)
             )
         ),
