@@ -94,7 +94,7 @@ encode_webhook_id(WebhookID) ->
 get_webhook(WebhookID, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     case capi_handler_utils:service_call({webhook_manager, 'Get', [WebhookID]}, Context) of
-    {ok, Webhook = #webhooker_Webhook{party_id = PartyID}} ->
+        {ok, Webhook = #webhooker_Webhook{party_id = PartyID}} ->
             {ok, Webhook};
         {ok, _Webhook} ->
             {exception, #webhooker_WebhookNotFound{}};
