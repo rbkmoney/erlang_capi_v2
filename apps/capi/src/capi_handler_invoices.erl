@@ -27,7 +27,7 @@ process_request('CreateInvoice' = OperationID, Req, Context) ->
                     {201, #{},
                         capi_handler_decoder_invoicing:make_invoice_and_token(
                             Invoice,
-                            UserID,
+                            PartyID,
                             ExtraProperties
                         )}};
             {exception, Exception} ->
@@ -36,7 +36,7 @@ process_request('CreateInvoice' = OperationID, Req, Context) ->
                         FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                         {ok, logic_error(invalidRequest, FormattedErrors)};
                     #payproc_ShopNotFound{} ->
-                        {ok, logic_error(invalidShopID, <<"Shop not found or inaccessible">>)};
+                        {ok, logic_error(invalidShopID, <<"Shop not found">>)};
                     #payproc_InvalidPartyStatus{} ->
                         {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
                     #payproc_InvalidShopStatus{} ->
@@ -47,7 +47,7 @@ process_request('CreateInvoice' = OperationID, Req, Context) ->
         end
     catch
         party_inaccessible ->
-            {ok, logic_error(invalidPartyID, <<"Party not found or inaccessible">>)};
+            {ok, logic_error(invalidPartyID, <<"Party not found">>)};
         invoice_cart_empty ->
             {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
         invalid_invoice_cost ->
@@ -56,13 +56,13 @@ process_request('CreateInvoice' = OperationID, Req, Context) ->
             {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
     end;
 process_request('CreateInvoiceAccessToken', Req, Context) ->
-    UserID = capi_handler_utils:get_user_id(Context),
     InvoiceID = maps:get(invoiceID, Req),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
-        {ok, #'payproc_Invoice'{invoice = _Invoice}} ->
+        {ok, #'payproc_Invoice'{invoice = Invoice}} ->
+            #'domain_Invoice'{owner_id = PartyID} = Invoice,
             Response = capi_handler_utils:issue_access_token(
-                UserID,
+                PartyID,
                 {invoice, InvoiceID},
                 ExtraProperties
             ),

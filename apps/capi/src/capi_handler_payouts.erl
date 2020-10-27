@@ -70,7 +70,7 @@ process_request('CreatePayout', Req, Context) ->
         end
     catch
         party_inaccessible ->
-            {ok, logic_error(invalidPartyID, <<"Party not found or inaccessible">>)}
+            {ok, logic_error(invalidPartyID, <<"Party not found">>)}
     end;
 process_request('GetScheduleByRef', Req, Context) ->
     case get_schedule_by_id(genlib:to_int(maps:get(scheduleID, Req)), Context) of

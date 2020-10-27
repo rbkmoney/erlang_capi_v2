@@ -289,7 +289,7 @@ create_invoice_ok_test(Config) ->
     },
     {ok, _} = capi_client_invoices:create_invoice(?config(context, Config), Req),
     ?assertEqual(
-        {error, {400, #{<<"code">> => <<"invalidPartyID">>, <<"message">> => <<"Party not found or inaccessible">>}}},
+        {error, {400, #{<<"code">> => <<"invalidPartyID">>}}},
         capi_client_invoices:create_invoice(
             ?config(context, Config),
             Req#{<<"partyID">> => <<"WrongPartyID">>}
@@ -358,7 +358,7 @@ create_invoice_template_ok_test(Config) ->
     },
     {ok, _} = capi_client_invoice_templates:create(?config(context, Config), Req#{<<"details">> => Details1}),
     ?assertEqual(
-        {error, {400, #{<<"code">> => <<"invalidPartyID">>, <<"message">> => <<"Party not found or inaccessible">>}}},
+        {error, {400, #{<<"code">> => <<"invalidPartyID">>}}},
         capi_client_invoice_templates:create(
             ?config(context, Config),
             Req#{
@@ -441,7 +441,7 @@ create_customer_ok_test(Config) ->
     },
     {ok, _} = capi_client_customers:create_customer(?config(context, Config), Req),
     ?assertEqual(
-        {error, {400, #{<<"code">> => <<"invalidPartyID">>, <<"message">> => <<"Party not found or inaccessible">>}}},
+        {error, {400, #{<<"code">> => <<"invalidPartyID">>}}},
         capi_client_customers:create_customer(
             ?config(context, Config),
             Req#{
@@ -739,8 +739,8 @@ get_shop_by_id_ok_test(Config) ->
 get_shop_by_id_for_party_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('GetShop', _) -> {ok, ?SHOP} end}], Config),
     {ok, _} = capi_client_shops:get_shop_by_id_for_party(?config(context, Config), ?STRING, ?STRING),
-    ?assertEqual(
-        {error, {404, #{<<"message">> => <<"Party not found or inaccessible">>}}},
+    ?assertMatch(
+        {error, {404, _}},
         capi_client_shops:get_shop_by_id_for_party(?config(context, Config), <<"WrongPartyID">>, ?STRING)
     ).
 
@@ -753,8 +753,8 @@ get_shops_ok_test(Config) ->
 get_shops_for_party_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
     {ok, _} = capi_client_shops:get_shops_for_party(?config(context, Config), ?STRING),
-    ?assertEqual(
-        {error, {404, #{<<"message">> => <<"Party not found or inaccessible">>}}},
+    ?assertMatch(
+        {error, {404, _}},
         capi_client_shops:get_shops_for_party(?config(context, Config), <<"WrongPartyID">>)
     ).
 
@@ -767,8 +767,8 @@ activate_shop_ok_test(Config) ->
 activate_shop_for_party_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('ActivateShop', _) -> {ok, ok} end}], Config),
     ok = capi_client_shops:activate_shop_for_party(?config(context, Config), ?STRING, ?STRING),
-    ?assertEqual(
-        {error, {404, #{<<"message">> => <<"Party not found or inaccessible">>}}},
+    ?assertMatch(
+        {error, {404, _}},
         capi_client_shops:activate_shop_for_party(?config(context, Config), <<"WrongPartyID">>, ?STRING)
     ).
 
@@ -781,8 +781,8 @@ suspend_shop_ok_test(Config) ->
 suspend_shop_for_party_ok_test(Config) ->
     capi_ct_helper:mock_services([{party_management, fun('SuspendShop', _) -> {ok, ok} end}], Config),
     ok = capi_client_shops:suspend_shop_for_party(?config(context, Config), ?STRING, ?STRING),
-    ?assertEqual(
-        {error, {404, #{<<"message">> => <<"Party not found or inaccessible">>}}},
+    ?assertMatch(
+        {error, {404, _}},
         capi_client_shops:suspend_shop_for_party(?config(context, Config), <<"WrongPartyID">>, ?STRING)
     ).
 
@@ -1058,7 +1058,7 @@ create_payout(Config) ->
     },
     {ok, _} = capi_client_payouts:create_payout(?config(context, Config), Req, ?STRING),
     ?assertEqual(
-        {error, {400, #{<<"code">> => <<"invalidPartyID">>, <<"message">> => <<"Party not found or inaccessible">>}}},
+        {error, {400, #{<<"code">> => <<"invalidPartyID">>}}},
         capi_client_payouts:create_payout(
             ?config(context, Config),
             Req#{<<"partyID">> => <<"WrongPartyID">>},

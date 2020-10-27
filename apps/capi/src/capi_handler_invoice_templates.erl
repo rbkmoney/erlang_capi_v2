@@ -44,7 +44,7 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
             end
     catch
         party_inaccessible ->
-            {ok, logic_error(invalidPartyID, <<"Party not found or inaccessible">>)};
+            {ok, logic_error(invalidPartyID, <<"Party not found">>)};
         throw:invoice_cart_empty ->
             {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
         throw:zero_invoice_lifetime ->
@@ -125,6 +125,7 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
             case get_invoice_template(InvoiceTplID, Context) of
                 {ok, InvoiceTpl} ->
                     PartyID = InvoiceTpl#domain_InvoiceTemplate.owner_id,
+                    capi_handler_utils:assert_party_accessible(UserID, PartyID),
                     create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, OperationID);
                 {exception, _} = Exception ->
                     Exception
@@ -165,6 +166,8 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
             {ok, logic_error(invalidRequest, <<"Amount is required for the currency">>)};
         {error, {bad_invoice_params, amount_no_currency}} ->
             {ok, logic_error(invalidRequest, <<"Currency is required for the amount">>)};
+        {error, party_inaccessible} ->
+            {ok, general_error(404, <<"Invoice Template not found">>)};
         {error, {external_id_conflict, InvoiceID, ExternalID}} ->
             {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
     end;

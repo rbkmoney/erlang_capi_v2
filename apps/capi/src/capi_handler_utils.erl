@@ -164,8 +164,8 @@ issue_access_token(PartyID, TokenSpec) ->
     issue_access_token(PartyID, TokenSpec, #{}).
 
 -spec issue_access_token(binary(), tuple(), map()) -> map().
-issue_access_token(UserID, TokenSpec, ExtraProperties) ->
-    #{<<"payload">> => capi_auth:issue_access_token(UserID, TokenSpec, ExtraProperties)}.
+issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
+    #{<<"payload">> => capi_auth:issue_access_token(PartyID, TokenSpec, ExtraProperties)}.
 
 -spec merge_and_compact(map(), map()) -> map().
 merge_and_compact(M1, M2) ->
@@ -320,5 +320,5 @@ run_if_party_accessible(UserID, PartyID, Fun) ->
         Fun()
     catch
         throw:party_inaccessible ->
-            {ok, general_error(404, <<"Party not found or inaccessible">>)}
+            {ok, general_error(404, <<"Party not found">>)}
     end.

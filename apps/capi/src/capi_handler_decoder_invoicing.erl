@@ -499,11 +499,11 @@ compute_terms(ServiceName, Args, Context) ->
 
 -spec make_invoice_and_token(capi_handler_encoder:encode_data(), binary(), map()) ->
     capi_handler_decoder_utils:decode_data().
-make_invoice_and_token(Invoice, UserID, ExtraProperties) ->
+make_invoice_and_token(Invoice, PartyID, ExtraProperties) ->
     #{
         <<"invoice">> => decode_invoice(Invoice),
         <<"invoiceAccessToken">> => capi_handler_utils:issue_access_token(
-            UserID,
+            PartyID,
             {invoice, Invoice#domain_Invoice.id},
             ExtraProperties
         )

@@ -44,7 +44,7 @@ process_request('CreateCustomer', Req, Context) ->
         end
     catch
         party_inaccessible ->
-            {ok, logic_error(invalidPartyID, <<"Party not found or inaccessible">>)}
+            {ok, logic_error(invalidPartyID, <<"Party not found">>)}
     end;
 process_request('GetCustomerById', Req, Context) ->
     case get_customer_by_id(maps:get('customerID', Req), Context) of
@@ -75,21 +75,28 @@ process_request('DeleteCustomer', Req, Context) ->
             end
     end;
 process_request('CreateCustomerAccessToken', Req, Context) ->
+    UserID = capi_handler_utils:get_user_id(Context),
     CustomerID = maps:get(customerID, Req),
-    case get_customer_by_id(CustomerID, Context) of
-        {ok, #payproc_Customer{owner_id = PartyID}} ->
-            Response = capi_handler_utils:issue_access_token(
-                PartyID,
-                {customer, CustomerID}
-            ),
-            {ok, {201, #{}, Response}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Customer not found">>)};
-                #payproc_CustomerNotFound{} ->
-                    {ok, general_error(404, <<"Customer not found">>)}
-            end
+    try
+        case get_customer_by_id(CustomerID, Context) of
+            {ok, #payproc_Customer{owner_id = PartyID}} ->
+                capi_handler_utils:assert_party_accessible(UserID, PartyID),
+                Response = capi_handler_utils:issue_access_token(
+                    PartyID,
+                    {customer, CustomerID}
+                ),
+                {ok, {201, #{}, Response}};
+            {exception, Exception} ->
+                case Exception of
+                    #payproc_InvalidUser{} ->
+                        {ok, general_error(404, <<"Customer not found">>)};
+                    #payproc_CustomerNotFound{} ->
+                        {ok, general_error(404, <<"Customer not found">>)}
+                end
+        end
+    catch
+        throw:party_inaccessible ->
+            {ok, general_error(404, <<"Customer not found">>)}
     end;
 process_request('CreateBinding', Req, Context) ->
     Result =

@@ -36,7 +36,7 @@ process_request('CreateWebhook', Req, Context) ->
         end
     catch
         party_inaccessible ->
-            {ok, logic_error(invalidPartyID, <<"Party not found or inaccessible">>)}
+            {ok, logic_error(invalidPartyID, <<"Party not found">>)}
     end;
 process_request('GetWebhooks', _Req, Context) ->
     Webhooks = capi_utils:unwrap(
@@ -92,8 +92,9 @@ encode_webhook_id(WebhookID) ->
     end.
 
 get_webhook(WebhookID, Context) ->
+    PartyID = capi_handler_utils:get_party_id(Context),
     case capi_handler_utils:service_call({webhook_manager, 'Get', [WebhookID]}, Context) of
-        {ok, Webhook = #webhooker_Webhook{}} ->
+    {ok, Webhook = #webhooker_Webhook{party_id = PartyID}} ->
             {ok, Webhook};
         {ok, _Webhook} ->
             {exception, #webhooker_WebhookNotFound{}};
