@@ -288,8 +288,8 @@ create_invoice_ok_test(Config) ->
         <<"description">> => <<"test_invoice_description">>
     },
     {ok, _} = capi_client_invoices:create_invoice(?config(context, Config), Req),
-    ?assertEqual(
-        {error, {400, #{<<"code">> => <<"invalidPartyID">>}}},
+    ?assertMatch(
+        {error, {400, #{<<"code">> := <<"invalidPartyID">>}}},
         capi_client_invoices:create_invoice(
             ?config(context, Config),
             Req#{<<"partyID">> => <<"WrongPartyID">>}
@@ -357,8 +357,8 @@ create_invoice_template_ok_test(Config) ->
         ]
     },
     {ok, _} = capi_client_invoice_templates:create(?config(context, Config), Req#{<<"details">> => Details1}),
-    ?assertEqual(
-        {error, {400, #{<<"code">> => <<"invalidPartyID">>}}},
+    ?assertMatch(
+        {error, {400, #{<<"code">> := <<"invalidPartyID">>}}},
         capi_client_invoice_templates:create(
             ?config(context, Config),
             Req#{
@@ -440,8 +440,8 @@ create_customer_ok_test(Config) ->
         <<"metadata">> => #{<<"text">> => [<<"SOMESHIT">>, 42]}
     },
     {ok, _} = capi_client_customers:create_customer(?config(context, Config), Req),
-    ?assertEqual(
-        {error, {400, #{<<"code">> => <<"invalidPartyID">>}}},
+    ?assertMatch(
+        {error, {400, #{<<"code">> := <<"invalidPartyID">>}}},
         capi_client_customers:create_customer(
             ?config(context, Config),
             Req#{
@@ -1057,8 +1057,8 @@ create_payout(Config) ->
         }
     },
     {ok, _} = capi_client_payouts:create_payout(?config(context, Config), Req, ?STRING),
-    ?assertEqual(
-        {error, {400, #{<<"code">> => <<"invalidPartyID">>}}},
+    ?assertMatch(
+        {error, {400, #{<<"code">> := <<"invalidPartyID">>}}},
         capi_client_payouts:create_payout(
             ?config(context, Config),
             Req#{<<"partyID">> => <<"WrongPartyID">>},
