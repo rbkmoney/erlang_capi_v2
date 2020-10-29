@@ -65,7 +65,7 @@ process_request('GetPaymentInstitutionPayoutMethods', Req, Context) ->
     end;
 process_request('GetPaymentInstitutionPayoutSchedules', Req, Context) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
-    case compute_payment_institution_terms(PaymentInstitutionID, prepare_varset(Req), Context) of
+    case compute_payment_institution_terms(PaymentInstitutionID, prepare_varset(Req, Context), Context) of
         {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{payout_schedules = Schedules}}} ->
             {ok, {200, #{}, decode_business_schedules_selector(Schedules)}};
         {ok, #domain_TermSet{payouts = undefined}} ->
