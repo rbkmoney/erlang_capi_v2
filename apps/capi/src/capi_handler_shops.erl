@@ -112,7 +112,6 @@ process_request('SuspendShopForParty', Req, Context) ->
                     {ok, {204, #{}, undefined}}
             end
     end;
-
 %%
 
 process_request(_OperationID, _Req, _Context) ->
