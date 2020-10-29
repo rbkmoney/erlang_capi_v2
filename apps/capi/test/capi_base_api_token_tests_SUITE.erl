@@ -272,7 +272,10 @@ end_per_testcase(_Name, C) ->
 create_invoice_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end},
+            {invoicing, fun
+                ('Create', [_, #payproc_InvoiceParams{party_id=?STRING}]) -> {ok, ?PAYPROC_INVOICE};
+                ('Create', _) -> throw(#payproc_InvalidUser{})
+            end},
             {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
         ],
         Config
@@ -319,7 +322,10 @@ create_invoice_access_token_ok_test(Config) ->
 
 -spec create_invoice_template_ok_test(config()) -> _.
 create_invoice_template_ok_test(Config) ->
-    capi_ct_helper:mock_services([{invoice_templating, fun('Create', _) -> {ok, ?INVOICE_TPL} end}], Config),
+    capi_ct_helper:mock_services([{invoice_templating, fun
+        ('Create', [_, #payproc_InvoiceTemplateCreateParams{party_id = ?STRING}]) -> {ok, ?INVOICE_TPL};
+        ('Create', _) -> throw(#payproc_InvalidUser{})
+    end}], Config),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"lifetime">> => capi_ct_helper:get_lifetime(),
@@ -433,7 +439,10 @@ create_invoice_with_template_test(Config) ->
 
 -spec create_customer_ok_test(config()) -> _.
 create_customer_ok_test(Config) ->
-    capi_ct_helper:mock_services([{customer_management, fun('Create', _) -> {ok, ?CUSTOMER} end}], Config),
+    capi_ct_helper:mock_services([{customer_management, fun
+        ('Create', [#payproc_CustomerParams{party_id = ?STRING}]) -> {ok, ?CUSTOMER};
+        ('Create', _) -> throw(#payproc_InvalidUser{})
+    end}], Config),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"contactInfo">> => #{<<"email">> => <<"bla@bla.ru">>},
@@ -737,7 +746,10 @@ get_shop_by_id_ok_test(Config) ->
 
 -spec get_shop_by_id_for_party_ok_test(config()) -> _.
 get_shop_by_id_for_party_ok_test(Config) ->
-    capi_ct_helper:mock_services([{party_management, fun('GetShop', _) -> {ok, ?SHOP} end}], Config),
+    capi_ct_helper:mock_services([{party_management, fun
+        ('GetShop', [_, ?STRING, _]) -> {ok, ?SHOP};
+        ('GetShop', _) -> throw(#payproc_InvalidUser{})
+    end}], Config),
     {ok, _} = capi_client_shops:get_shop_by_id_for_party(?config(context, Config), ?STRING, ?STRING),
     ?assertMatch(
         {error, {404, _}},
@@ -751,7 +763,10 @@ get_shops_ok_test(Config) ->
 
 -spec get_shops_for_party_ok_test(config()) -> _.
 get_shops_for_party_ok_test(Config) ->
-    capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
+    capi_ct_helper:mock_services([{party_management, fun
+        ('Get', [_, ?STRING]) -> {ok, ?PARTY};
+        ('Get', _) -> throw(#payproc_InvalidUser{})
+    end}], Config),
     {ok, _} = capi_client_shops:get_shops_for_party(?config(context, Config), ?STRING),
     ?assertMatch(
         {error, {404, _}},
@@ -765,7 +780,10 @@ activate_shop_ok_test(Config) ->
 
 -spec activate_shop_for_party_ok_test(config()) -> _.
 activate_shop_for_party_ok_test(Config) ->
-    capi_ct_helper:mock_services([{party_management, fun('ActivateShop', _) -> {ok, ok} end}], Config),
+    capi_ct_helper:mock_services([{party_management, fun
+        ('ActivateShop', [_, ?STRING, _]) -> {ok, ok};
+        ('ActivateShop', _) -> throw(#payproc_InvalidUser{})
+    end}], Config),
     ok = capi_client_shops:activate_shop_for_party(?config(context, Config), ?STRING, ?STRING),
     ?assertMatch(
         {error, {404, _}},
@@ -779,7 +797,10 @@ suspend_shop_ok_test(Config) ->
 
 -spec suspend_shop_for_party_ok_test(config()) -> _.
 suspend_shop_for_party_ok_test(Config) ->
-    capi_ct_helper:mock_services([{party_management, fun('SuspendShop', _) -> {ok, ok} end}], Config),
+    capi_ct_helper:mock_services([{party_management, fun
+        ('SuspendShop', [_, ?STRING, _]) -> {ok, ok};
+        ('SuspendShop', _) -> throw(#payproc_InvalidUser{})
+    end}], Config),
     ok = capi_client_shops:suspend_shop_for_party(?config(context, Config), ?STRING, ?STRING),
     ?assertMatch(
         {error, {404, _}},
