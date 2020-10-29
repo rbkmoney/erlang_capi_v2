@@ -39,12 +39,12 @@
     | {invoice_tpl, InvoiceTplID :: binary()}
     | {customer, CustomerID :: binary()}.
 
--spec issue_access_token(UserID :: binary(), token_spec()) -> uac_authorizer_jwt:token().
-issue_access_token(UserID, TokenSpec) ->
-    issue_access_token(UserID, TokenSpec, #{}).
+-spec issue_access_token(PartyID :: binary(), token_spec()) -> uac_authorizer_jwt:token().
+issue_access_token(PartyID, TokenSpec) ->
+    issue_access_token(PartyID, TokenSpec, #{}).
 
--spec issue_access_token(UserID :: binary(), token_spec(), map()) -> uac_authorizer_jwt:token().
-issue_access_token(UserID, TokenSpec, ExtraProperties) ->
+-spec issue_access_token(PartyID :: binary(), token_spec(), map()) -> uac_authorizer_jwt:token().
+issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
     Claims = maps:merge(
         ExtraProperties,
         resolve_token_spec(TokenSpec)
@@ -52,7 +52,7 @@ issue_access_token(UserID, TokenSpec, ExtraProperties) ->
     capi_utils:unwrap(
         uac_authorizer_jwt:issue(
             capi_utils:get_unique_id(),
-            UserID,
+            PartyID,
             Claims,
             ?SIGNEE
         )

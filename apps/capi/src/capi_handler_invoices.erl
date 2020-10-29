@@ -16,10 +16,11 @@
 process_request('CreateInvoice' = OperationID, Req, Context) ->
     InvoiceParams = maps:get('InvoiceParams', Req),
     UserID = capi_handler_utils:get_user_id(Context),
+    %% Now hellgate checks user's possibility use party.
+    %% After integration with bouncer, we have to remove validation in hellgate.
     PartyID = maps:get(<<"partyID">>, InvoiceParams, UserID),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     try
-        capi_handler_utils:assert_party_accessible(UserID, PartyID),
         Result = create_invoice(PartyID, InvoiceParams, Context, OperationID),
         case Result of
             {ok, #'payproc_Invoice'{invoice = Invoice}} ->
@@ -32,6 +33,8 @@ process_request('CreateInvoice' = OperationID, Req, Context) ->
                         )}};
             {exception, Exception} ->
                 case Exception of
+                    #'payproc_InvalidUser'{} ->
+                        {ok, logic_error(invalidPartyID, <<"Party not found">>)};
                     #'InvalidRequest'{errors = Errors} ->
                         FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                         {ok, logic_error(invalidRequest, FormattedErrors)};
@@ -46,8 +49,6 @@ process_request('CreateInvoice' = OperationID, Req, Context) ->
                 end
         end
     catch
-        party_inaccessible ->
-            {ok, logic_error(invalidPartyID, <<"Party not found">>)};
         invoice_cart_empty ->
             {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
         invalid_invoice_cost ->

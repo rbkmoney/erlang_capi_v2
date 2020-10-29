@@ -155,7 +155,7 @@ get_my_party(Context) ->
 -spec get_my_party(binary(), processing_context()) -> woody:result().
 get_my_party(PartyID, Context) ->
     Call = {party_management, 'Get', [PartyID]},
-    service_call_with([user_info, party_creation], Call, Context).
+    service_call_with([user_info], Call, Context).
 
 %% Utils
 
@@ -298,7 +298,7 @@ get_contract_by_id(ContractID, Context) ->
 -spec get_contract_by_id(binary(), binary(), processing_context()) -> woody:result().
 get_contract_by_id(PartyID, ContractID, Context) ->
     Call = {party_management, 'GetContract', [PartyID, ContractID]},
-    service_call_with([user_info, party_creation], Call, Context).
+    service_call_with([user_info], Call, Context).
 
 -spec create_dsl(atom(), map(), map()) -> map().
 create_dsl(QueryType, QueryBody, QueryParams) ->

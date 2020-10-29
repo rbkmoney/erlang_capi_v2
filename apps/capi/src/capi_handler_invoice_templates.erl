@@ -20,7 +20,6 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
     PartyID = maps:get(<<"partyID">>, InvoiceTemplateParams, UserID),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     try
-        capi_handler_utils:assert_party_accessible(UserID, PartyID),
         CallArgs = [encode_invoice_tpl_create_params(PartyID, InvoiceTemplateParams)],
         capi_handler_utils:service_call_with(
             [user_info, party_creation],
@@ -35,6 +34,8 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)};
+                #payproc_InvalidUser{} ->
+                    {ok, logic_error(invalidPartyID, <<"Party not found">>)};
                 #payproc_ShopNotFound{} ->
                     {ok, logic_error(invalidShopID, <<"Shop not found">>)};
                 #payproc_InvalidPartyStatus{} ->
@@ -43,8 +44,6 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
                     {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)}
             end
     catch
-        party_inaccessible ->
-            {ok, logic_error(invalidPartyID, <<"Party not found">>)};
         throw:invoice_cart_empty ->
             {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
         throw:zero_invoice_lifetime ->
@@ -125,7 +124,6 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
             case get_invoice_template(InvoiceTplID, Context) of
                 {ok, InvoiceTpl} ->
                     PartyID = InvoiceTpl#domain_InvoiceTemplate.owner_id,
-                    capi_handler_utils:assert_party_accessible(UserID, PartyID),
                     create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, OperationID);
                 {exception, _} = Exception ->
                     Exception
@@ -166,8 +164,6 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
             {ok, logic_error(invalidRequest, <<"Amount is required for the currency">>)};
         {error, {bad_invoice_params, amount_no_currency}} ->
             {ok, logic_error(invalidRequest, <<"Currency is required for the amount">>)};
-        {error, party_inaccessible} ->
-            {ok, general_error(404, <<"Invoice Template not found">>)};
         {error, {external_id_conflict, InvoiceID, ExternalID}} ->
             {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
     end;
