@@ -25,6 +25,7 @@
     get_invoice_events_ok_test/1,
     get_invoice_payment_methods_ok_test/1,
     create_payment_ok_test/1,
+    create_payment_expired_test/1,
     create_payment_qiwi_access_token_ok_test/1,
     create_payment_with_empty_cvv_ok_test/1,
     create_payment_with_googlepay_encrypt_ok_test/1,
@@ -68,6 +69,7 @@ invoice_access_token_tests() ->
         get_invoice_events_ok_test,
         get_invoice_payment_methods_ok_test,
         create_payment_ok_test,
+        create_payment_expired_test,
         create_payment_qiwi_access_token_ok_test,
         create_payment_with_empty_cvv_ok_test,
         create_payment_with_googlepay_encrypt_ok_test,
@@ -244,6 +246,28 @@ create_payment_ok_test(Config) ->
         <<"id">> := BenderKey,
         <<"externalID">> := ExternalID
     }} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
+
+-spec create_payment_expired_test(config()) -> _.
+create_payment_expired_test(Config) ->
+    PaymentTool = {bank_card, ?BANK_CARD},
+    ValidUntil = woody_deadline:from_unixtime_ms(0),
+    PaymentToolToken = capi_crypto:create_encrypted_payment_tool_token(PaymentTool, ValidUntil),
+    Req = #{
+        <<"externalID">> => <<"merch_id">>,
+        <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
+        <<"payer">> => #{
+            <<"payerType">> => <<"PaymentResourcePayer">>,
+            <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
+            <<"paymentToolToken">> => PaymentToolToken,
+            <<"contactInfo">> => #{
+                <<"email">> => <<"bla@bla.ru">>
+            }
+        },
+        <<"metadata">> => ?JSON,
+        <<"processingDeadline">> => <<"5m">>
+    },
+    Resp = capi_client_payments:create_payment(?config(context, Config), Req, ?STRING),
+    {error, {400, #{<<"code">> := <<"invalidPaymentToolToken">>}}} = Resp.
 
 -spec create_payment_with_empty_cvv_ok_test(config()) -> _.
 create_payment_with_empty_cvv_ok_test(Config) ->
@@ -519,7 +543,7 @@ get_encrypted_token({qiwi, Phone, TokenID}) ->
             id = Phone,
             token = TokenID
         }},
-    capi_crypto:create_encrypted_payment_tool_token(PaymentTool).
+    capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined).
 
 get_encrypted_token(PS, ExpDate) ->
     get_encrypted_token(PS, ExpDate, undefined).
@@ -535,4 +559,4 @@ get_encrypted_token(PS, ExpDate, IsCvvEmpty) ->
             cardholder_name = <<"Degus Degusovich">>,
             is_cvv_empty = IsCvvEmpty
         }},
-    capi_crypto:create_encrypted_payment_tool_token(PaymentTool).
+    capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined).
