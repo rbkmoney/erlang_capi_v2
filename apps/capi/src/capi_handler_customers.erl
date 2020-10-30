@@ -16,7 +16,7 @@
 process_request('CreateCustomer', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     Call = {customer_management, 'Create', [encode_customer_params(PartyID, maps:get('Customer', Req))]},
-    case capi_handler_utils:service_call_with([party_creation], Call, Context) of
+    case capi_handler_utils:service_call_with([], Call, Context) of
         {ok, Customer} ->
             {ok, {201, #{}, make_customer_and_token(Customer, PartyID)}};
         {exception, Exception} ->

@@ -18,7 +18,7 @@ process_request('CreateWebhook', Req, Context) ->
     WebhookParams = encode_webhook_params(capi_handler_utils:get_party_id(Context), maps:get('Webhook', Req)),
     ShopID = validate_webhook_params(WebhookParams),
     Call = {party_management, 'GetShop', [ShopID]},
-    case capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context) of
+    case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
         {ok, _} ->
             case capi_handler_utils:service_call({webhook_manager, 'Create', [WebhookParams]}, Context) of
                 {ok, Webhook} ->

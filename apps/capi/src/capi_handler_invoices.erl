@@ -191,7 +191,7 @@ create_invoice(PartyID, #{<<"externalID">> := ExternalID} = InvoiceParams, Conte
     case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
         {ok, ID} ->
             Call = {invoicing, 'Create', [encode_invoice_params(ID, PartyID, InvoiceParams)]},
-            capi_handler_utils:service_call_with([user_info, party_creation], Call, Context);
+            capi_handler_utils:service_call_with([user_info], Call, Context);
         {error, {external_id_conflict, ID, undefined}} ->
             logger:warning("This externalID: ~p, used in another request.~n", [ID]),
             throw({external_id_conflict, ID, ExternalID});
@@ -203,7 +203,7 @@ create_invoice(PartyID, #{<<"externalID">> := ExternalID} = InvoiceParams, Conte
 create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context, _) ->
     {ok, {ID, _}} = bender_generator_client:gen_snowflake(WoodyCtx),
     Call = {invoicing, 'Create', [encode_invoice_params(ID, PartyID, InvoiceParams)]},
-    capi_handler_utils:service_call_with([user_info, party_creation], Call, Context).
+    capi_handler_utils:service_call_with([user_info], Call, Context).
 
 encode_invoice_params(ID, PartyID, InvoiceParams) ->
     Amount = genlib_map:get(<<"amount">>, InvoiceParams),

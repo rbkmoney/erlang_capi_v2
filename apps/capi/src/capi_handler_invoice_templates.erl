@@ -20,7 +20,7 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
     try
         CallArgs = [encode_invoice_tpl_create_params(PartyID, maps:get('InvoiceTemplateCreateParams', Req))],
         capi_handler_utils:service_call_with(
-            [user_info, party_creation],
+            [user_info],
             {invoice_templating, 'Create', CallArgs},
             Context
         )
@@ -47,7 +47,7 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
     end;
 process_request('GetInvoiceTemplateByID', Req, Context) ->
     Call = {invoice_templating, 'Get', [maps:get('invoiceTemplateID', Req)]},
-    case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
+    case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, InvoiceTpl} ->
             {ok, {200, #{}, decode_invoice_tpl(InvoiceTpl)}};
         {exception, E} when
@@ -59,7 +59,7 @@ process_request('UpdateInvoiceTemplate', Req, Context) ->
     try
         Params = encode_invoice_tpl_update_params(maps:get('InvoiceTemplateUpdateParams', Req)),
         Call = {invoice_templating, 'Update', [maps:get('invoiceTemplateID', Req), Params]},
-        capi_handler_utils:service_call_with([user_info, party_creation], Call, Context)
+        capi_handler_utils:service_call_with([user_info], Call, Context)
     of
         {ok, InvoiceTpl} ->
             {ok, {200, #{}, decode_invoice_tpl(InvoiceTpl)}};
@@ -93,7 +93,7 @@ process_request('UpdateInvoiceTemplate', Req, Context) ->
     end;
 process_request('DeleteInvoiceTemplate', Req, Context) ->
     Call = {invoice_templating, 'Delete', [maps:get('invoiceTemplateID', Req)]},
-    case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
+    case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _R} ->
             {ok, {204, #{}, undefined}};
         {exception, Exception} ->
@@ -183,7 +183,7 @@ create_invoice(PartyID, InvoiceTplID, #{<<"externalID">> := ExternalID} = Invoic
         {ok, InvoiceID} ->
             Params = [encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams)],
             Call = {invoicing, 'CreateWithTemplate', Params},
-            capi_handler_utils:service_call_with([user_info, party_creation], Call, Context);
+            capi_handler_utils:service_call_with([user_info], Call, Context);
         {error, {external_id_conflict, ID, undefined}} ->
             throw({external_id_conflict, ID, ExternalID});
         {error, {external_id_conflict, ID, Difference}} ->
@@ -196,7 +196,7 @@ create_invoice(_PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCt
     InvoiceParamsWithEID = InvoiceParams#{<<"externalID">> => undefined},
     Params = [encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParamsWithEID)],
     Call = {invoicing, 'CreateWithTemplate', Params},
-    capi_handler_utils:service_call_with([user_info, party_creation], Call, Context).
+    capi_handler_utils:service_call_with([user_info], Call, Context).
 
 encode_invoice_tpl_create_params(PartyID, Params) ->
     Details = encode_invoice_tpl_details(genlib_map:get(<<"details">>, Params)),
