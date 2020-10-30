@@ -443,9 +443,9 @@ decrypt_payer(CustomerOrRecurrentPayer) ->
 decrypt_payment_tool(Token) ->
     case capi_crypto:decrypt_payment_tool_token(Token) of
         {ok, {PaymentToolThrift, ValidUntil}} ->
-            case woody_deadline:is_reached(ValidUntil) of
+            case capi_utils:deadline_is_reached(ValidUntil) of
                 true ->
-                    logger:warning("Payment tool token expired: ~p", [woody_deadline:to_binary(ValidUntil)]),
+                    logger:warning("Payment tool token expired: ~p", [capi_utils:deadline_to_binary(ValidUntil)]),
                     erlang:throw(invalid_token);
                 _ ->
                     PaymentToolThrift

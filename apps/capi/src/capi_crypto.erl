@@ -6,13 +6,14 @@
 -type payment_tool() :: dmsl_domain_thrift:'PaymentTool'().
 -type payment_tool_token() :: dmsl_payment_tool_token_thrift:'PaymentToolToken'().
 -type payment_tool_token_payload() :: dmsl_payment_tool_token_thrift:'PaymentToolTokenPayload'().
+-type deadline() :: capi_utils:deadline().
 
 -export_type([encrypted_token/0]).
 
 -export([create_encrypted_payment_tool_token/2]).
 -export([decrypt_payment_tool_token/1]).
 
--spec create_encrypted_payment_tool_token(payment_tool(), woody:deadline()) -> encrypted_token().
+-spec create_encrypted_payment_tool_token(payment_tool(), deadline()) -> encrypted_token().
 create_encrypted_payment_tool_token(PaymentTool, ValidUntil) ->
     PaymentToolToken = encode_payment_tool_token(PaymentTool, ValidUntil),
     ThriftType = {struct, union, {dmsl_payment_tool_token_thrift, 'PaymentToolToken'}},
@@ -21,7 +22,7 @@ create_encrypted_payment_tool_token(PaymentTool, ValidUntil) ->
     <<TokenVersion/binary, ".", EncodedToken/binary>>.
 
 -spec decrypt_payment_tool_token(encrypted_token()) ->
-    {ok, {payment_tool(), woody:deadline()}}
+    {ok, {payment_tool(), deadline()}}
     | unrecognized
     | {error, lechiffre:decoding_error()}.
 decrypt_payment_tool_token(Token) ->
@@ -61,13 +62,13 @@ decrypt_token_v1(EncryptedPaymentToolToken) ->
             Error
     end.
 
--spec encode_deadline(woody:deadline()) -> binary() | undefined.
+-spec encode_deadline(deadline()) -> binary() | undefined.
 encode_deadline(undefined) ->
     undefined;
 encode_deadline(Deadline) ->
-    woody_deadline:to_binary(Deadline).
+    capi_utils:deadline_to_binary(Deadline).
 
--spec encode_payment_tool_token(payment_tool(), woody:deadline()) -> payment_tool_token().
+-spec encode_payment_tool_token(payment_tool(), deadline()) -> payment_tool_token().
 encode_payment_tool_token(PaymentTool, ValidUntil) ->
     #ptt_PaymentToolToken{
         payload = encode_payment_tool_token_payload(PaymentTool),
@@ -96,11 +97,11 @@ encode_payment_tool_token_payload({mobile_commerce, MobileCommerce}) ->
         mobile_commerce = MobileCommerce
     }}.
 
--spec decode_deadline(binary()) -> woody:deadline() | undefined.
+-spec decode_deadline(binary()) -> deadline() | undefined.
 decode_deadline(undefined) ->
     undefined;
 decode_deadline(Deadline) ->
-    woody_deadline:from_binary(Deadline).
+    capi_utils:deadline_from_binary(Deadline).
 
 -spec decode_payment_tool_token_payload(payment_tool_token_payload()) -> payment_tool().
 decode_payment_tool_token_payload(PaymentToolToken) ->

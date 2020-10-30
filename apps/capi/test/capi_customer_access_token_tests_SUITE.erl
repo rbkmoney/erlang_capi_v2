@@ -149,7 +149,7 @@ create_binding_ok_test(Config) ->
 -spec create_binding_expired_test(config()) -> _.
 create_binding_expired_test(Config) ->
     PaymentTool = {bank_card, ?BANK_CARD},
-    ValidUntil = woody_deadline:from_unixtime_ms(0),
+    ValidUntil = capi_utils:deadline_from_timeout(0),
     PaymentToolToken = capi_crypto:create_encrypted_payment_tool_token(PaymentTool, ValidUntil),
     Req = #{
         <<"paymentResource">> => #{
