@@ -103,7 +103,10 @@
     check_no_payment_by_external_id_test/1,
     check_no_internal_id_for_external_id_test/1,
     retrieve_payment_by_external_id_test/1,
-    check_no_invoice_by_external_id_test/1
+    check_no_invoice_by_external_id_test/1,
+
+    check_support_decrypt_v1_test/1,
+    check_support_decrypt_v2_test/1
 ]).
 
 -define(CAPI_PORT, 8080).
@@ -125,7 +128,8 @@ init([]) ->
 -spec all() -> [test_case_name()].
 all() ->
     [
-        {group, operations_by_base_api_token}
+        {group, operations_by_base_api_token},
+        {group, payment_tool_token_support}
     ].
 
 -spec groups() -> [{group_name(), list(), [test_case_name()]}].
@@ -210,6 +214,10 @@ groups() ->
             check_no_internal_id_for_external_id_test,
             retrieve_payment_by_external_id_test,
             check_no_invoice_by_external_id_test
+        ]},
+        {payment_tool_token_support, [], [
+            check_support_decrypt_v1_test,
+            check_support_decrypt_v2_test
         ]}
     ].
 
@@ -1445,3 +1453,47 @@ get_payment_institution_payout_terms(Config) ->
         <<"USD">>,
         <<"BankAccount">>
     ).
+
+-spec check_support_decrypt_v1_test(config()) -> _.
+check_support_decrypt_v1_test(_Config) ->
+    PaymentToolToken = <<
+        "v1.eyJhbGciOiJFQ0RILUVTIiwiZW5jIjoiQTEyOEdDTSIsImVwayI6eyJhbGciOiJFQ0RILUVTIiwiY3J2IjoiUC0yNTYiLCJrdHkiOi"
+        "JFQyIsInVzZSI6ImVuYyIsIngiOiJaN0xCNXprLUtIaUd2OV9PS2lYLUZ6d1M3bE5Ob25iQm8zWlJnaWkxNEFBIiwieSI6IlFTdWVSb2I"
+        "tSjhJV1pjTmptRWxFMWlBckt4d1lHeFg5a01FMloxSXJKNVUifSwia2lkIjoia3hkRDBvclZQR29BeFdycUFNVGVRMFU1TVJvSzQ3dVp4"
+        "V2lTSmRnbzB0MCJ9..Zf3WXHtg0cg_Pg2J.wi8sq9RWZ-SO27G1sRrHAsJUALdLGniGGXNOtIGtLyppW_NYF3TSPJ-ehYzy.vRLMAbWtd"
+        "uC6jBO6F7-t_A"
+    >>,
+    {ok, {PaymentTool, ValidUntil}} = capi_crypto:decrypt_payment_tool_token(PaymentToolToken),
+    ?assertEqual(
+        {mobile_commerce, #domain_MobileCommerce{
+            phone = #domain_MobilePhone{
+                cc = <<"7">>,
+                ctn = <<"9210001122">>
+            },
+            operator = megafone
+        }},
+        PaymentTool
+    ),
+    ?assertEqual(undefined, ValidUntil).
+
+-spec check_support_decrypt_v2_test(config()) -> _.
+check_support_decrypt_v2_test(_Config) ->
+    PaymentToolToken = <<
+        "v2.eyJhbGciOiJFQ0RILUVTIiwiZW5jIjoiQTEyOEdDTSIsImVwayI6eyJhbGciOiJFQ0RILUVTIiwiY3J2IjoiUC0yNTYiLCJrdHkiOi"
+        "JFQyIsInVzZSI6ImVuYyIsIngiOiJRanFmNFVrOTJGNzd3WXlEUjNqY3NwR2dpYnJfdVRmSXpMUVplNzVQb1R3IiwieSI6InA5cjJGV3F"
+        "mU2xBTFJXYWhUSk8xY3VneVZJUXVvdzRwMGdHNzFKMFJkUVEifSwia2lkIjoia3hkRDBvclZQR29BeFdycUFNVGVRMFU1TVJvSzQ3dVp4"
+        "V2lTSmRnbzB0MCJ9..j3zEyCqyfQjpEtQM.JAc3kqJm6zbn0fMZGlK_t14Yt4PvgOuoVL2DtkEgIXIqrxxWFbykKBGxQvwYisJYIUJJwt"
+        "YbwvuGEODcK2uTC2quPD2Ejew66DLJF2xcAwE.MNVimzi8r-5uTATNalgoBQ"
+    >>,
+    {ok, {PaymentTool, ValidUntil}} = capi_crypto:decrypt_payment_tool_token(PaymentToolToken),
+    ?assertEqual(
+        {mobile_commerce, #domain_MobileCommerce{
+            phone = #domain_MobilePhone{
+                cc = <<"7">>,
+                ctn = <<"9210001122">>
+            },
+            operator = megafone
+        }},
+        PaymentTool
+    ),
+    ?assertEqual(<<"2020-10-29T23:44:15.499Z">>, capi_utils:deadline_to_binary(ValidUntil)).
