@@ -120,15 +120,15 @@ get_extra_properties(Context) ->
 
 -spec get_my_party(processing_context()) -> woody:result().
 get_my_party(Context) ->
-    Call = {party_management, 'Get', []},
+    GetCall = {party_management, 'Get', []},
     Flags = [user_info, party_id],
-    service_call_with(Flags, Call, Context).
+    service_call_with(Flags, GetCall, Context).
 
 -spec get_my_party_with_create(processing_context()) -> woody:result().
 get_my_party_with_create(Context) ->
     GetCall = {party_management, 'Get', []},
     Flags = [user_info, party_id],
-    case service_call_with_(Flags, GetCall, Context) of
+    case service_call_with(Flags, GetCall, Context) of
         {exception, #payproc_PartyNotFound{}} ->
             _ = logger:info("Attempting to create a missing party"),
             PartyParams = #payproc_PartyParams{
@@ -139,9 +139,9 @@ get_my_party_with_create(Context) ->
             CreateCall = {party_management, 'Create', [PartyParams]},
             case service_call_with(Flags, CreateCall, Context) of
                 {ok, _} ->
-                    service_call_with_(Flags, GetCall, Context);
+                    service_call_with(Flags, GetCall, Context);
                 {exception, #payproc_PartyExists{}} ->
-                    service_call_with_(Flags, GetCall, Context);
+                    service_call_with(Flags, GetCall, Context);
                 Error ->
                     Error
             end;
