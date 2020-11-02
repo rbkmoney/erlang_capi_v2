@@ -149,7 +149,6 @@ get_my_party_with_create(Context) ->
             Result
     end.
 
-
 %% Utils
 
 -spec issue_access_token(binary(), tuple()) -> map().
