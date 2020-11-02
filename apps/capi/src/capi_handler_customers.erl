@@ -218,16 +218,7 @@ encode_customer_metadata(Meta) ->
 
 encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
     PaymentToolToken = maps:get(<<"paymentToolToken">>, PaymentResource),
-    PaymentTool =
-        case capi_crypto:decrypt_payment_tool_token(PaymentToolToken) of
-            unrecognized ->
-                encode_legacy_payment_tool_token(PaymentToolToken);
-            {ok, Result} ->
-                Result;
-            {error, {decryption_failed, _} = Error} ->
-                logger:warning("Payment tool token decryption failed: ~p", [Error]),
-                erlang:throw(invalid_token)
-        end,
+    PaymentTool = encode_payment_tool_token(PaymentToolToken),
     {ClientInfo, PaymentSession} =
         capi_handler_utils:unwrap_payment_session(maps:get(<<"paymentSession">>, PaymentResource)),
     #payproc_CustomerBindingParams{
@@ -237,6 +228,23 @@ encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
             client_info = capi_handler_encoder:encode_client_info(ClientInfo)
         }
     }.
+
+encode_payment_tool_token(Token) ->
+    case capi_crypto:decrypt_payment_tool_token(Token) of
+        {ok, {PaymentTool, ValidUntil}} ->
+            case capi_utils:deadline_is_reached(ValidUntil) of
+                true ->
+                    logger:warning("Payment tool token expired: ~p", [capi_utils:deadline_to_binary(ValidUntil)]),
+                    erlang:throw(invalid_token);
+                _ ->
+                    PaymentTool
+            end;
+        unrecognized ->
+            encode_legacy_payment_tool_token(Token);
+        {error, {decryption_failed, Error}} ->
+            logger:warning("Payment tool token decryption failed: ~p", [Error]),
+            erlang:throw(invalid_token)
+    end.
 
 encode_legacy_payment_tool_token(Token) ->
     try

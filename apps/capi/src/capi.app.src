@@ -28,7 +28,9 @@
         woody_user_identity,
         payproc_errors,
         erl_health,
-        uac
+        uac,
+        prometheus,
+        prometheus_cowboy
     ]},
     {env, []}
 ]}.

@@ -1,5 +1,14 @@
 -module(capi_utils).
 
+-type deadline() :: woody:deadline().
+
+-export_type([deadline/0]).
+
+-export([deadline_to_binary/1]).
+-export([deadline_from_binary/1]).
+-export([deadline_from_timeout/1]).
+-export([deadline_is_reached/1]).
+
 -export([base64url_to_map/1]).
 -export([map_to_base64url/1]).
 
@@ -18,6 +27,26 @@
 
 % 1 min
 -define(MAX_REQUEST_DEADLINE_TIME, timer:minutes(1)).
+
+-spec deadline_to_binary(deadline()) -> binary() | undefined.
+deadline_to_binary(undefined) ->
+    undefined;
+deadline_to_binary(Deadline) ->
+    woody_deadline:to_binary(Deadline).
+
+-spec deadline_from_binary(binary()) -> deadline() | undefined.
+deadline_from_binary(undefined) ->
+    undefined;
+deadline_from_binary(Binary) ->
+    woody_deadline:from_binary(Binary).
+
+-spec deadline_from_timeout(timeout()) -> deadline().
+deadline_from_timeout(Timeout) ->
+    woody_deadline:from_timeout(Timeout).
+
+-spec deadline_is_reached(deadline()) -> boolean().
+deadline_is_reached(Deadline) ->
+    woody_deadline:is_reached(Deadline).
 
 -spec base64url_to_map(binary()) -> map() | no_return().
 base64url_to_map(Base64) when is_binary(Base64) ->
