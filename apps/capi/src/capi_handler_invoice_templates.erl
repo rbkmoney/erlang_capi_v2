@@ -118,16 +118,17 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
     InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
-    Result = try get_invoice_template(InvoiceTplID, Context) of
-        {ok, InvoiceTpl} ->
-            PartyID = InvoiceTpl#domain_InvoiceTemplate.owner_id,
-            create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, OperationID);
-        {exception, _} = Exception ->
-            Exception
-    catch
-        throw:Error ->
-            {error, Error}
-    end,
+    Result =
+        try get_invoice_template(InvoiceTplID, Context) of
+            {ok, InvoiceTpl} ->
+                PartyID = InvoiceTpl#domain_InvoiceTemplate.owner_id,
+                create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, OperationID);
+            {exception, _} = Exception ->
+                Exception
+        catch
+            throw:Error ->
+                {error, Error}
+        end,
 
     case Result of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->

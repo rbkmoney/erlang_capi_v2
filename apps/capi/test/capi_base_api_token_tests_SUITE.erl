@@ -290,9 +290,7 @@ end_per_testcase(_Name, C) ->
 create_invoice_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {invoicing, fun
-                ('Create', _) -> {ok, ?PAYPROC_INVOICE}
-            end},
+            {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end},
             {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
         ],
         Config
@@ -303,8 +301,8 @@ create_invoice_ok_test(Config) ->
 create_invoice_autorization_error_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {invoicing, fun
-                ('Create', [_, #payproc_InvoiceParams{party_id = <<"WrongPartyID">>}]) -> throw(#payproc_InvalidUser{})
+            {invoicing, fun('Create', [_, #payproc_InvoiceParams{party_id = <<"WrongPartyID">>}]) ->
+                throw(#payproc_InvalidUser{})
             end},
             {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
         ],
@@ -343,8 +341,8 @@ create_invoice_access_token_ok_test(Config) ->
 create_invoice_template_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {invoice_templating, fun
-                ('Create', [_, #payproc_InvoiceTemplateCreateParams{party_id = ?STRING}]) -> {ok, ?INVOICE_TPL}
+            {invoice_templating, fun('Create', [_, #payproc_InvoiceTemplateCreateParams{party_id = ?STRING}]) ->
+                {ok, ?INVOICE_TPL}
             end}
         ],
         Config
@@ -365,14 +363,19 @@ create_invoice_template_ok_test(Config) ->
         }
     },
     {ok, _} = capi_client_invoice_templates:create(?config(context, Config), Req#{<<"details">> => Details0}),
-    {ok, _} = capi_client_invoice_templates:create(?config(context, Config), Req#{<<"details">> => ?INVOICE_TMPL_DETAILS_PARAMS}).
+    {ok, _} = capi_client_invoice_templates:create(?config(context, Config), Req#{
+        <<"details">> => ?INVOICE_TMPL_DETAILS_PARAMS
+    }).
 
 -spec create_invoice_template_autorization_error_test(config()) -> _.
 create_invoice_template_autorization_error_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {invoice_templating, fun
-                ('Create', [_, #payproc_InvoiceTemplateCreateParams{party_id = <<"WrongPartyID">>}]) -> throw(#payproc_InvalidUser{})
+            {invoice_templating, fun(
+                'Create',
+                [_, #payproc_InvoiceTemplateCreateParams{party_id = <<"WrongPartyID">>}]
+            ) ->
+                throw(#payproc_InvalidUser{})
             end}
         ],
         Config
@@ -461,9 +464,7 @@ create_invoice_with_template_test(Config) ->
 create_customer_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {customer_management, fun
-                ('Create', [#payproc_CustomerParams{party_id = ?STRING}]) -> {ok, ?CUSTOMER}
-            end}
+            {customer_management, fun('Create', [#payproc_CustomerParams{party_id = ?STRING}]) -> {ok, ?CUSTOMER} end}
         ],
         Config
     ),
@@ -473,8 +474,8 @@ create_customer_ok_test(Config) ->
 create_customer_autorization_error_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {customer_management, fun
-                ('Create', [#payproc_CustomerParams{party_id = <<"WrongPartyID">>}]) -> throw(#payproc_InvalidUser{})
+            {customer_management, fun('Create', [#payproc_CustomerParams{party_id = <<"WrongPartyID">>}]) ->
+                throw(#payproc_InvalidUser{})
             end}
         ],
         Config
@@ -788,9 +789,7 @@ get_shop_by_id_for_party_ok_test(Config) ->
 get_shop_by_id_for_party_error_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {party_management, fun
-                ('GetShop', [_, <<"WrongPartyID">>, _]) -> throw(#payproc_InvalidUser{})
-            end}
+            {party_management, fun('GetShop', [_, <<"WrongPartyID">>, _]) -> throw(#payproc_InvalidUser{}) end}
         ],
         Config
     ),
@@ -818,9 +817,7 @@ get_shops_for_party_ok_test(Config) ->
 get_shops_for_party_error_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {party_management, fun
-                ('Get', [_, <<"WrongPartyID">>]) -> throw(#payproc_InvalidUser{})
-            end}
+            {party_management, fun('Get', [_, <<"WrongPartyID">>]) -> throw(#payproc_InvalidUser{}) end}
         ],
         Config
     ),
@@ -838,9 +835,7 @@ activate_shop_ok_test(Config) ->
 activate_shop_for_party_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {party_management, fun
-                ('ActivateShop', [_, ?STRING, _]) -> {ok, ok}
-            end}
+            {party_management, fun('ActivateShop', [_, ?STRING, _]) -> {ok, ok} end}
         ],
         Config
     ),
@@ -850,9 +845,7 @@ activate_shop_for_party_ok_test(Config) ->
 activate_shop_for_party_error_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {party_management, fun
-                ('ActivateShop', [_, <<"WrongPartyID">>, _]) -> throw(#payproc_InvalidUser{})
-            end}
+            {party_management, fun('ActivateShop', [_, <<"WrongPartyID">>, _]) -> throw(#payproc_InvalidUser{}) end}
         ],
         Config
     ),
@@ -870,9 +863,7 @@ suspend_shop_ok_test(Config) ->
 suspend_shop_for_party_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {party_management, fun
-                ('SuspendShop', _) -> {ok, ok}
-            end}
+            {party_management, fun('SuspendShop', _) -> {ok, ok} end}
         ],
         Config
     ),
@@ -882,9 +873,7 @@ suspend_shop_for_party_ok_test(Config) ->
 suspend_shop_for_party_error_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {party_management, fun
-                ('SuspendShop', [_, <<"WrongPartyID">>, _]) -> throw(#payproc_InvalidUser{})
-            end}
+            {party_management, fun('SuspendShop', [_, <<"WrongPartyID">>, _]) -> throw(#payproc_InvalidUser{}) end}
         ],
         Config
     ),
