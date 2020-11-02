@@ -14,11 +14,11 @@
     Context :: capi_handler:processing_context()
 ) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('GetContracts', _Req, Context) ->
-    Party = capi_utils:unwrap(capi_handler_utils:get_my_party(Context)),
+    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
     {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
 process_request('GetContractByID', Req, Context) ->
     ContractID = maps:get('contractID', Req),
-    Party = capi_utils:unwrap(capi_handler_utils:get_my_party(Context)),
+    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
     case genlib_map:get(ContractID, Party#domain_Party.contracts) of
         undefined ->
             {ok, general_error(404, <<"Contract not found">>)};
@@ -48,7 +48,11 @@ process_request('GetContractAdjustmentByID', Req, Context) ->
     end;
 process_request('GetContractsForParty', Req, Context) ->
     PartyID = maps:get('partyID', Req),
-    case capi_handler_utils:get_my_party(PartyID, Context) of
+    % TODO
+    % Here we're relying on hellgate ownership check, thus no explicit authorization.
+    % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
+    % remains authorized.
+    case capi_handler_utils:get_party(PartyID, Context) of
         {ok, Party} ->
             {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
         {exception, #payproc_InvalidUser{}} ->
@@ -59,7 +63,11 @@ process_request('GetContractsForParty', Req, Context) ->
 process_request('GetContractByIDForParty', Req, Context) ->
     ContractID = maps:get('contractID', Req),
     PartyID = maps:get('partyID', Req),
-    case capi_handler_utils:get_my_party(PartyID, Context) of
+    % TODO
+    % Here we're relying on hellgate ownership check, thus no explicit authorization.
+    % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
+    % remains authorized.
+    case capi_handler_utils:get_party(PartyID, Context) of
         {ok, Party} ->
             case genlib_map:get(ContractID, Party#domain_Party.contracts) of
                 undefined ->
@@ -75,6 +83,10 @@ process_request('GetContractByIDForParty', Req, Context) ->
 process_request('GetContractAdjustmentsForParty', Req, Context) ->
     PartyID = maps:get('partyID', Req),
     ContractID = maps:get('contractID', Req),
+    % TODO
+    % Here we're relying on hellgate ownership check, thus no explicit authorization.
+    % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
+    % remains authorized.
     case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
         {ok, #domain_Contract{adjustments = Adjustments}} ->
             Resp = [decode_contract_adjustment(A) || A <- Adjustments],
@@ -89,6 +101,10 @@ process_request('GetContractAdjustmentsForParty', Req, Context) ->
 process_request('GetContractAdjustmentByIDForParty', Req, Context) ->
     PartyID = maps:get('partyID', Req),
     ContractID = maps:get('contractID', Req),
+    % TODO
+    % Here we're relying on hellgate ownership check, thus no explicit authorization.
+    % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
+    % remains authorized.
     case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
         {ok, #domain_Contract{adjustments = Adjustments}} ->
             AdjustmentID = maps:get('adjustmentID', Req),

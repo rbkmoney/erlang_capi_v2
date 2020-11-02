@@ -115,23 +115,19 @@ process_request('DeleteInvoiceTemplate', Req, Context) ->
             end
     end;
 process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
-    UserID = capi_handler_utils:get_user_id(Context),
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
     InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
-    Result =
-        try
-            case get_invoice_template(InvoiceTplID, Context) of
-                {ok, InvoiceTpl} ->
-                    PartyID = InvoiceTpl#domain_InvoiceTemplate.owner_id,
-                    create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, OperationID);
-                {exception, _} = Exception ->
-                    Exception
-            end
-        catch
-            throw:Error ->
-                {error, Error}
-        end,
+    Result = try get_invoice_template(InvoiceTplID, Context) of
+        {ok, InvoiceTpl} ->
+            PartyID = InvoiceTpl#domain_InvoiceTemplate.owner_id,
+            create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, OperationID);
+        {exception, _} = Exception ->
+            Exception
+    catch
+        throw:Error ->
+            {error, Error}
+    end,
 
     case Result of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
@@ -139,7 +135,7 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
                 {201, #{},
                     capi_handler_decoder_invoicing:make_invoice_and_token(
                         Invoice,
-                        UserID,
+                        Invoice#domain_Invoice.owner_id,
                         ExtraProperties
                     )}};
         {exception, Reason} ->
@@ -170,7 +166,7 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
 process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
     InvoiceTemplateID = maps:get('invoiceTemplateID', Req),
     Timestamp = genlib_rfc3339:format_relaxed(erlang:system_time(microsecond), microsecond),
-    {ok, Party} = capi_handler_utils:get_my_party(Context),
+    {ok, Party} = capi_handler_utils:get_party(Context),
     Revision = Party#domain_Party.revision,
     Args = [InvoiceTemplateID, Timestamp, {revision, Revision}],
     case capi_handler_decoder_invoicing:construct_payment_methods(invoice_templating, Args, Context) of

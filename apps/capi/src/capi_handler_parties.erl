@@ -12,7 +12,7 @@
     Context :: capi_handler:processing_context()
 ) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('GetMyParty', _Req, Context) ->
-    Party = capi_utils:unwrap(capi_handler_utils:get_my_party(Context)),
+    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
     {ok, {200, #{}, capi_handler_decoder_party:decode_party(Party)}};
 process_request('ActivateMyParty', _Req, Context) ->
     Call = {party_management, 'Activate', []},

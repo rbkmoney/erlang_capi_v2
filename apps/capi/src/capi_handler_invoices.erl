@@ -21,8 +21,7 @@ process_request('CreateInvoice' = OperationID, Req, Context) ->
     PartyID = maps:get(<<"partyID">>, InvoiceParams, UserID),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     try
-        Result = create_invoice(PartyID, InvoiceParams, Context, OperationID),
-        case Result of
+        case create_invoice(PartyID, InvoiceParams, Context, OperationID) of
             {ok, #'payproc_Invoice'{invoice = Invoice}} ->
                 {ok,
                     {201, #{},
@@ -176,7 +175,7 @@ process_request('GetInvoiceEvents', Req, Context) ->
     end;
 process_request('GetInvoicePaymentMethods', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    Party = capi_utils:unwrap(capi_handler_utils:get_my_party(Context)),
+    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
     Revision = Party#domain_Party.revision,
     Args = [InvoiceID, {revision, Revision}],
     case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, Args, Context) of

@@ -20,23 +20,19 @@ process_request('CreateWebhook', Req, Context) ->
     PartyID = maps:get(<<"partyID">>, Params, UserID),
     WebhookParams = encode_webhook_params(PartyID, Params),
     ShopID = validate_webhook_params(WebhookParams),
-    try
-        capi_handler_utils:assert_party_accessible(UserID, PartyID),
-        Call = {party_management, 'GetShop', [ShopID]},
-        case capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context) of
-            {ok, _} ->
-                case capi_handler_utils:service_call({webhook_manager, 'Create', [WebhookParams]}, Context) of
-                    {ok, Webhook} ->
-                        {ok, {201, #{}, decode_webhook(Webhook)}};
-                    {exception, #webhooker_LimitExceeded{}} ->
-                        {ok, general_error(429, <<"Webhook limit exceeded">>)}
-                end;
-            {exception, #payproc_ShopNotFound{}} ->
-                {ok, logic_error(invalidShopID, <<"Shop not found">>)}
-        end
-    catch
-        party_inaccessible ->
-            {ok, logic_error(invalidPartyID, <<"Party not found">>)}
+    Call = {party_management, 'GetShop', [PartyID, ShopID]},
+    case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
+        {ok, _} ->
+            case capi_handler_utils:service_call({webhook_manager, 'Create', [WebhookParams]}, Context) of
+                {ok, Webhook} ->
+                    {ok, {201, #{}, decode_webhook(Webhook)}};
+                {exception, #webhooker_LimitExceeded{}} ->
+                    {ok, general_error(429, <<"Webhook limit exceeded">>)}
+            end;
+        {exception, #payproc_InvalidUser{}} ->
+            {ok, logic_error(invalidPartyID, <<"Party not found">>)};
+        {exception, #payproc_ShopNotFound{}} ->
+            {ok, logic_error(invalidShopID, <<"Shop not found">>)}
     end;
 process_request('GetWebhooks', _Req, Context) ->
     Webhooks = capi_utils:unwrap(

@@ -31,7 +31,7 @@ process_request('GetReport', Req, Context) ->
     get_report(PartyID, Req, Context);
 process_request('GetReportForParty', Req, Context) ->
     UserID = capi_handler_utils:get_user_id(Context),
-    PartyID = capi_handler_utils:get_party_id(Context),
+    PartyID = maps:get(partyID, Req),
     capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
         get_report(PartyID, Req, Context)
     end);

@@ -13,8 +13,8 @@
 -export([service_call_with/3]).
 -export([service_call/2]).
 
--export([get_my_party/1]).
--export([get_my_party/2]).
+-export([get_party/1]).
+-export([get_party/2]).
 -export([get_auth_context/1]).
 -export([get_user_id/1]).
 -export([get_party_id/1]).
@@ -147,13 +147,13 @@ get_extra_properties(Context) ->
 
 %% Common functions
 
--spec get_my_party(processing_context()) -> woody:result().
-get_my_party(Context) ->
+-spec get_party(processing_context()) -> woody:result().
+get_party(Context) ->
     Call = {party_management, 'Get', []},
     service_call_with([user_info, party_id, party_creation], Call, Context).
 
--spec get_my_party(binary(), processing_context()) -> woody:result().
-get_my_party(PartyID, Context) ->
+-spec get_party(binary(), processing_context()) -> woody:result().
+get_party(PartyID, Context) ->
     Call = {party_management, 'Get', [PartyID]},
     service_call_with([user_info], Call, Context).
 

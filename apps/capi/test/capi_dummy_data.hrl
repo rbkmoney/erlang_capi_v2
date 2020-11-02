@@ -1227,3 +1227,70 @@
         }
     })
 ).
+
+-define(INVOICE_TMPL_DETAILS_PARAMS,
+    #{
+        <<"templateType">> => <<"InvoiceTemplateMultiLine">>,
+        <<"currency">> => ?RUB,
+        <<"cart">> => [
+            #{
+                <<"product">> => ?STRING,
+                <<"price">> => ?INTEGER,
+                <<"quantity">> => ?INTEGER
+            },
+            #{
+                <<"product">> => ?STRING,
+                <<"price">> => ?INTEGER,
+                <<"quantity">> => ?INTEGER,
+                <<"taxMode">> => #{
+                    <<"type">> => <<"InvoiceLineTaxVAT">>,
+                    <<"rate">> => <<"18%">>
+                }
+            }
+        ]
+    }
+).
+
+-define(INVOICE_PARAMS,
+    #{
+        <<"shopID">> => ?STRING,
+        <<"partyID">> => ?STRING,
+        <<"amount">> => ?INTEGER,
+        <<"currency">> => ?RUB,
+        <<"metadata">> => #{<<"invoice_dummy_metadata">> => <<"test_value">>},
+        <<"dueDate">> => ?TIMESTAMP,
+        <<"product">> => <<"test_product">>,
+        <<"description">> => <<"test_invoice_description">>
+    }
+).
+
+-define(CUSTOMER_PARAMS,
+    #{
+        <<"shopID">> => ?STRING,
+        <<"contactInfo">> => #{<<"email">> => <<"bla@bla.ru">>},
+        <<"metadata">> => #{<<"text">> => [<<"SOMESHIT">>, 42]}
+    }
+).
+
+-define(PAYOUT_PARAMS,
+    #{
+        <<"id">> => ?STRING,
+        <<"shopID">> => ?STRING,
+        <<"partyID">> => ?STRING,
+        <<"payoutToolID">> => ?WALLET_TOOL,
+        <<"amount">> => 2,
+        <<"currency">> => <<"RUB">>,
+        <<"metadata">> => #{
+            <<"payoutBinary">> => <<"sample data">>,
+            <<"payoutInt">> => 5,
+            <<"payoutList">> => [
+                <<"some_1">>,
+                <<"some_2">>
+            ],
+            <<"payoutMap">> => #{
+                <<"someKey">> => 234
+            },
+            <<"how_about_null">> => null
+        }
+    }
+).
