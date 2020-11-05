@@ -10,8 +10,6 @@
 -export([service_call_with/3]).
 -export([service_call/2]).
 
--export([get_my_party/1]).
--export([get_my_party_with_create/1]).
 -export([get_auth_context/1]).
 -export([get_party_id/1]).
 -export([get_extra_properties/1]).
@@ -115,39 +113,6 @@ get_party_id(Context) ->
 get_extra_properties(Context) ->
     Claims = uac_authorizer_jwt:get_claims(get_auth_context(Context)),
     maps:with(capi_auth:get_extra_properties(), Claims).
-
-%% Common functions
-
--spec get_my_party(processing_context()) -> woody:result().
-get_my_party(Context) ->
-    GetCall = {party_management, 'Get', []},
-    Flags = [user_info, party_id],
-    service_call_with(Flags, GetCall, Context).
-
--spec get_my_party_with_create(processing_context()) -> woody:result().
-get_my_party_with_create(Context) ->
-    GetCall = {party_management, 'Get', []},
-    Flags = [user_info, party_id],
-    case service_call_with(Flags, GetCall, Context) of
-        {exception, #payproc_PartyNotFound{}} ->
-            _ = logger:info("Attempting to create a missing party"),
-            PartyParams = #payproc_PartyParams{
-                contact_info = #domain_PartyContactInfo{
-                    email = uac_authorizer_jwt:get_claim(<<"email">>, get_auth_context(Context))
-                }
-            },
-            CreateCall = {party_management, 'Create', [PartyParams]},
-            case service_call_with(Flags, CreateCall, Context) of
-                {ok, _} ->
-                    service_call_with(Flags, GetCall, Context);
-                {exception, #payproc_PartyExists{}} ->
-                    service_call_with(Flags, GetCall, Context);
-                Error ->
-                    Error
-            end;
-        Result ->
-            Result
-    end.
 
 %% Utils
 

@@ -40,7 +40,7 @@ process_request('SuspendShop', Req, Context) ->
             end
     end;
 process_request('GetShops', _Req, Context) ->
-    Party = capi_utils:unwrap(capi_handler_utils:get_my_party(Context)),
+    Party = capi_utils:unwrap(capi_handler_parties:get_my_party(Context)),
     {ok, {200, #{}, decode_shops_map(Party#domain_Party.shops)}};
 process_request('GetShopByID', Req, Context) ->
     Call = {party_management, 'GetShop', [maps:get(shopID, Req)]},
