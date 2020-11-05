@@ -10,6 +10,7 @@
 -export([service_call_with/3]).
 -export([service_call/2]).
 
+-export([get_party/1]).
 -export([get_auth_context/1]).
 -export([get_party_id/1]).
 -export([get_extra_properties/1]).
@@ -113,6 +114,12 @@ get_party_id(Context) ->
 get_extra_properties(Context) ->
     Claims = uac_authorizer_jwt:get_claims(get_auth_context(Context)),
     maps:with(capi_auth:get_extra_properties(), Claims).
+
+-spec get_party(processing_context()) -> woody:result().
+get_party(Context) ->
+    GetCall = {party_management, 'Get', []},
+    Flags = [user_info, party_id],
+    capi_handler_utils:service_call_with(Flags, GetCall, Context).
 
 %% Utils
 

@@ -153,7 +153,7 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
 process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
     InvoiceTemplateID = maps:get('invoiceTemplateID', Req),
     Timestamp = genlib_rfc3339:format_relaxed(erlang:system_time(microsecond), microsecond),
-    {ok, Party} = capi_handler_parties:get_my_party(Context),
+    {ok, Party} = capi_handler_utils:get_party(Context),
     Revision = Party#domain_Party.revision,
     Args = [InvoiceTemplateID, Timestamp, {revision, Revision}],
     case capi_handler_decoder_invoicing:construct_payment_methods(invoice_templating, Args, Context) of

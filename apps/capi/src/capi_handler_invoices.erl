@@ -161,7 +161,7 @@ process_request('GetInvoiceEvents', Req, Context) ->
     end;
 process_request('GetInvoicePaymentMethods', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    Party = capi_utils:unwrap(capi_handler_parties:get_my_party(Context)),
+    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
     Revision = Party#domain_Party.revision,
     Args = [InvoiceID, {revision, Revision}],
     case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, Args, Context) of

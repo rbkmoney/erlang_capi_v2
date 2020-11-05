@@ -14,11 +14,11 @@
     Context :: capi_handler:processing_context()
 ) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('GetContracts', _Req, Context) ->
-    Party = capi_utils:unwrap(capi_handler_parties:get_my_party(Context)),
+    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
     {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
 process_request('GetContractByID', Req, Context) ->
     ContractID = maps:get('contractID', Req),
-    Party = capi_utils:unwrap(capi_handler_parties:get_my_party(Context)),
+    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
     case genlib_map:get(ContractID, Party#domain_Party.contracts) of
         undefined ->
             {ok, general_error(404, <<"Contract not found">>)};
