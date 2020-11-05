@@ -14,8 +14,10 @@
     Context :: capi_handler:processing_context()
 ) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('CreateCustomer', Req, Context) ->
-    PartyID = capi_handler_utils:get_party_id(Context),
-    Call = {customer_management, 'Create', [encode_customer_params(PartyID, maps:get('Customer', Req))]},
+    CustomerParams = maps:get('Customer', Req),
+    UserID = capi_handler_utils:get_user_id(Context),
+    PartyID = maps:get(<<"partyID">>, CustomerParams, UserID),
+    Call = {customer_management, 'Create', [encode_customer_params(PartyID, CustomerParams)]},
     case capi_handler_utils:service_call_with([party_creation], Call, Context) of
         {ok, Customer} ->
             {ok, {201, #{}, make_customer_and_token(Customer, PartyID)}};
@@ -24,6 +26,8 @@ process_request('CreateCustomer', Req, Context) ->
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)};
+                #payproc_InvalidUser{} ->
+                    {ok, logic_error(invalidPartyID, <<"Party not found">>)};
                 #payproc_ShopNotFound{} ->
                     {ok, logic_error(invalidShopID, <<"Shop not found">>)};
                 #payproc_InvalidPartyStatus{} ->
@@ -69,9 +73,9 @@ process_request('DeleteCustomer', Req, Context) ->
 process_request('CreateCustomerAccessToken', Req, Context) ->
     CustomerID = maps:get(customerID, Req),
     case get_customer_by_id(CustomerID, Context) of
-        {ok, #payproc_Customer{}} ->
+        {ok, #payproc_Customer{owner_id = PartyID}} ->
             Response = capi_handler_utils:issue_access_token(
-                capi_handler_utils:get_party_id(Context),
+                PartyID,
                 {customer, CustomerID}
             ),
             {ok, {201, #{}, Response}};

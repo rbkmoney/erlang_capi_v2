@@ -119,6 +119,7 @@ create_invoice_with_tpl_ok_test(Config) ->
             {generator, fun('GenerateID', _) ->
                 capi_ct_helper_bender:generate_id(<<"bender_key">>)
             end},
+            {invoice_templating, fun('Get', _) -> {ok, ?INVOICE_TPL} end},
             {invoicing, fun('CreateWithTemplate', _) -> {ok, ?PAYPROC_INVOICE} end}
         ],
         Config

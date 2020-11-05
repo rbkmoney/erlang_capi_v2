@@ -14,26 +14,39 @@
     Context :: capi_handler:processing_context()
 ) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('CreateInvoice' = OperationID, Req, Context) ->
-    PartyID = capi_handler_utils:get_party_id(Context),
-    ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     InvoiceParams = maps:get('InvoiceParams', Req),
-    try create_invoice(PartyID, InvoiceParams, Context, OperationID) of
-        {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-            {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, PartyID, ExtraProperties)}};
-        {exception, Exception} ->
-            case Exception of
-                #'InvalidRequest'{errors = Errors} ->
-                    FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, logic_error(invalidRequest, FormattedErrors)};
-                #payproc_ShopNotFound{} ->
-                    {ok, logic_error(invalidShopID, <<"Shop not found">>)};
-                #payproc_InvalidPartyStatus{} ->
-                    {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
-                #payproc_InvalidShopStatus{} ->
-                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
-                #payproc_InvoiceTermsViolated{} ->
-                    {ok, logic_error(invoiceTermsViolated, <<"Invoice parameters violate contract terms">>)}
-            end
+    UserID = capi_handler_utils:get_user_id(Context),
+    %% Now hellgate checks user's possibility use party.
+    %% After integration with bouncer, we have to remove validation in hellgate.
+    PartyID = maps:get(<<"partyID">>, InvoiceParams, UserID),
+    ExtraProperties = capi_handler_utils:get_extra_properties(Context),
+    try
+        case create_invoice(PartyID, InvoiceParams, Context, OperationID) of
+            {ok, #'payproc_Invoice'{invoice = Invoice}} ->
+                {ok,
+                    {201, #{},
+                        capi_handler_decoder_invoicing:make_invoice_and_token(
+                            Invoice,
+                            PartyID,
+                            ExtraProperties
+                        )}};
+            {exception, Exception} ->
+                case Exception of
+                    #'payproc_InvalidUser'{} ->
+                        {ok, logic_error(invalidPartyID, <<"Party not found">>)};
+                    #'InvalidRequest'{errors = Errors} ->
+                        FormattedErrors = capi_handler_utils:format_request_errors(Errors),
+                        {ok, logic_error(invalidRequest, FormattedErrors)};
+                    #payproc_ShopNotFound{} ->
+                        {ok, logic_error(invalidShopID, <<"Shop not found">>)};
+                    #payproc_InvalidPartyStatus{} ->
+                        {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
+                    #payproc_InvalidShopStatus{} ->
+                        {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
+                    #payproc_InvoiceTermsViolated{} ->
+                        {ok, logic_error(invoiceTermsViolated, <<"Invoice parameters violate contract terms">>)}
+                end
+        end
     catch
         invoice_cart_empty ->
             {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
@@ -46,9 +59,10 @@ process_request('CreateInvoiceAccessToken', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
-        {ok, #'payproc_Invoice'{}} ->
+        {ok, #'payproc_Invoice'{invoice = Invoice}} ->
+            #'domain_Invoice'{owner_id = PartyID} = Invoice,
             Response = capi_handler_utils:issue_access_token(
-                capi_handler_utils:get_party_id(Context),
+                PartyID,
                 {invoice, InvoiceID},
                 ExtraProperties
             ),
@@ -161,7 +175,7 @@ process_request('GetInvoiceEvents', Req, Context) ->
     end;
 process_request('GetInvoicePaymentMethods', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    Party = capi_utils:unwrap(capi_handler_utils:get_my_party(Context)),
+    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
     Revision = Party#domain_Party.revision,
     Args = [InvoiceID, {revision, Revision}],
     case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, Args, Context) of
