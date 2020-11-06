@@ -55,7 +55,7 @@ process_request('GetPaymentInstitutionPaymentTerms', Req, Context) ->
     end;
 process_request('GetPaymentInstitutionPayoutMethods', Req, Context) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
-    case compute_payment_institution_terms(PaymentInstitutionID, prepare_varset(Req), Context) of
+    case compute_payment_institution_terms(PaymentInstitutionID, prepare_varset(Req, Context), Context) of
         {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{payout_methods = PayoutMethods}}} ->
             {ok, {200, #{}, decode_payout_methods_selector(PayoutMethods)}};
         {ok, #domain_TermSet{payouts = undefined}} ->
@@ -65,7 +65,7 @@ process_request('GetPaymentInstitutionPayoutMethods', Req, Context) ->
     end;
 process_request('GetPaymentInstitutionPayoutSchedules', Req, Context) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
-    case compute_payment_institution_terms(PaymentInstitutionID, prepare_varset(Req), Context) of
+    case compute_payment_institution_terms(PaymentInstitutionID, prepare_varset(Req, Context), Context) of
         {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{payout_schedules = Schedules}}} ->
             {ok, {200, #{}, decode_business_schedules_selector(Schedules)}};
         {ok, #domain_TermSet{payouts = undefined}} ->
@@ -98,12 +98,13 @@ check_payment_institution_residence(Residence, #domain_PaymentInstitutionObject{
 
 compute_payment_institution_terms(PaymentInstitutionID, VS, Context) ->
     Call = {party_management, 'ComputePaymentInstitutionTerms', [?payment_institution_ref(PaymentInstitutionID), VS]},
-    capi_handler_utils:service_call_with([user_info, party_id], Call, Context).
+    capi_handler_utils:service_call_with([user_info], Call, Context).
 
-prepare_varset(Req) ->
+prepare_varset(Req, Context) ->
     #payproc_Varset{
         currency = encode_optional_currency(genlib_map:get(currency, Req)),
-        payout_method = encode_optional_payout_method(genlib_map:get(payoutMethod, Req))
+        payout_method = encode_optional_payout_method(genlib_map:get(payoutMethod, Req)),
+        party_id = capi_handler_utils:get_party_id(Context)
     }.
 
 %

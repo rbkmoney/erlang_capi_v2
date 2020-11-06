@@ -18,7 +18,6 @@
 -export([decode_make_recurrent/1]).
 
 -export([construct_payment_methods/3]).
--export([make_invoice_and_token/2]).
 -export([make_invoice_and_token/3]).
 
 -type processing_context() :: capi_handler:processing_context().
@@ -499,10 +498,6 @@ decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
 
 compute_terms(ServiceName, Args, Context) ->
     capi_handler_utils:service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
-
--spec make_invoice_and_token(capi_handler_encoder:encode_data(), binary()) -> capi_handler_decoder_utils:decode_data().
-make_invoice_and_token(Invoice, PartyID) ->
-    make_invoice_and_token(Invoice, PartyID, #{}).
 
 -spec make_invoice_and_token(capi_handler_encoder:encode_data(), binary(), map()) ->
     capi_handler_decoder_utils:decode_data().

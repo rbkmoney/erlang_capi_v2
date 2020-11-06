@@ -7,11 +7,16 @@
 -export([server_error/1]).
 -export([format_request_errors/1]).
 
+-export([assert_party_accessible/2]).
+-export([run_if_party_accessible/3]).
+
 -export([service_call_with/3]).
 -export([service_call/2]).
 
 -export([get_party/1]).
+-export([get_party/2]).
 -export([get_auth_context/1]).
+-export([get_user_id/1]).
 -export([get_party_id/1]).
 -export([get_extra_properties/1]).
 
@@ -29,6 +34,7 @@
 -export([get_payment_by_id/3]).
 -export([get_refund_by_id/4]).
 -export([get_contract_by_id/2]).
+-export([get_contract_by_id/3]).
 
 -export([create_dsl/3]).
 
@@ -102,24 +108,34 @@ get_auth_context(#{swagger_context := #{auth_context := AuthContext}}) ->
 
 get_user_info(Context) ->
     #payproc_UserInfo{
-        id = get_party_id(Context),
+        id = get_user_id(Context),
         type = {external_user, #payproc_ExternalUser{}}
     }.
 
+-spec get_user_id(processing_context()) -> binary().
+get_user_id(Context) ->
+    uac_authorizer_jwt:get_subject_id(get_auth_context(Context)).
+
 -spec get_party_id(processing_context()) -> binary().
 get_party_id(Context) ->
-    uac_authorizer_jwt:get_subject_id(get_auth_context(Context)).
+    get_user_id(Context).
 
 -spec get_extra_properties(processing_context()) -> map().
 get_extra_properties(Context) ->
     Claims = uac_authorizer_jwt:get_claims(get_auth_context(Context)),
     maps:with(capi_auth:get_extra_properties(), Claims).
 
+%% Common functions
+
 -spec get_party(processing_context()) -> woody:result().
 get_party(Context) ->
-    GetCall = {party_management, 'Get', []},
-    Flags = [user_info, party_id],
-    capi_handler_utils:service_call_with(Flags, GetCall, Context).
+    Call = {party_management, 'Get', []},
+    service_call_with([user_info, party_id], Call, Context).
+
+-spec get_party(binary(), processing_context()) -> woody:result().
+get_party(PartyID, Context) ->
+    Call = {party_management, 'Get', [PartyID]},
+    service_call_with([user_info], Call, Context).
 
 %% Utils
 
@@ -259,9 +275,30 @@ get_contract_by_id(ContractID, Context) ->
     Call = {party_management, 'GetContract', [ContractID]},
     service_call_with([user_info, party_id], Call, Context).
 
+-spec get_contract_by_id(binary(), binary(), processing_context()) -> woody:result().
+get_contract_by_id(PartyID, ContractID, Context) ->
+    Call = {party_management, 'GetContract', [PartyID, ContractID]},
+    service_call_with([user_info], Call, Context).
+
 -spec create_dsl(atom(), map(), map()) -> map().
 create_dsl(QueryType, QueryBody, QueryParams) ->
     merge_and_compact(
         #{<<"query">> => maps:put(genlib:to_binary(QueryType), genlib_map:compact(QueryBody), #{})},
         QueryParams
     ).
+
+-spec assert_party_accessible(binary(), binary()) -> ok.
+assert_party_accessible(PartyID, PartyID) ->
+    ok;
+assert_party_accessible(_UserID, _PartyID) ->
+    throw(party_inaccessible).
+
+-spec run_if_party_accessible(binary(), binary(), function()) -> woody:result().
+run_if_party_accessible(UserID, PartyID, Fun) ->
+    try
+        assert_party_accessible(UserID, PartyID),
+        Fun()
+    catch
+        throw:party_inaccessible ->
+            {ok, general_error(404, <<"Party not found">>)}
+    end.

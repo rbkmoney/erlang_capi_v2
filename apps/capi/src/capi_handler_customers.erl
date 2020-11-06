@@ -14,8 +14,10 @@
     Context :: capi_handler:processing_context()
 ) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('CreateCustomer', Req, Context) ->
-    PartyID = capi_handler_utils:get_party_id(Context),
-    Call = {customer_management, 'Create', [encode_customer_params(PartyID, maps:get('Customer', Req))]},
+    CustomerParams = maps:get('Customer', Req),
+    UserID = capi_handler_utils:get_user_id(Context),
+    PartyID = maps:get(<<"partyID">>, CustomerParams, UserID),
+    Call = {customer_management, 'Create', [encode_customer_params(PartyID, CustomerParams)]},
     case capi_handler_utils:service_call_with([], Call, Context) of
         {ok, Customer} ->
             {ok, {201, #{}, make_customer_and_token(Customer, PartyID)}};
@@ -24,6 +26,8 @@ process_request('CreateCustomer', Req, Context) ->
                 #'InvalidRequest'{errors = Errors} ->
                     FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                     {ok, logic_error(invalidRequest, FormattedErrors)};
+                #payproc_InvalidUser{} ->
+                    {ok, logic_error(invalidPartyID, <<"Party not found">>)};
                 #payproc_ShopNotFound{} ->
                     {ok, logic_error(invalidShopID, <<"Shop not found">>)};
                 #payproc_InvalidPartyStatus{} ->
@@ -69,9 +73,9 @@ process_request('DeleteCustomer', Req, Context) ->
 process_request('CreateCustomerAccessToken', Req, Context) ->
     CustomerID = maps:get(customerID, Req),
     case get_customer_by_id(CustomerID, Context) of
-        {ok, #payproc_Customer{}} ->
+        {ok, #payproc_Customer{owner_id = PartyID}} ->
             Response = capi_handler_utils:issue_access_token(
-                capi_handler_utils:get_party_id(Context),
+                PartyID,
                 {customer, CustomerID}
             ),
             {ok, {201, #{}, Response}};
@@ -214,16 +218,7 @@ encode_customer_metadata(Meta) ->
 
 encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
     PaymentToolToken = maps:get(<<"paymentToolToken">>, PaymentResource),
-    PaymentTool =
-        case capi_crypto:decrypt_payment_tool_token(PaymentToolToken) of
-            unrecognized ->
-                encode_legacy_payment_tool_token(PaymentToolToken);
-            {ok, Result} ->
-                Result;
-            {error, {decryption_failed, _} = Error} ->
-                logger:warning("Payment tool token decryption failed: ~p", [Error]),
-                erlang:throw(invalid_token)
-        end,
+    PaymentTool = encode_payment_tool_token(PaymentToolToken),
     {ClientInfo, PaymentSession} =
         capi_handler_utils:unwrap_payment_session(maps:get(<<"paymentSession">>, PaymentResource)),
     #payproc_CustomerBindingParams{
@@ -233,6 +228,23 @@ encode_customer_binding_params(#{<<"paymentResource">> := PaymentResource}) ->
             client_info = capi_handler_encoder:encode_client_info(ClientInfo)
         }
     }.
+
+encode_payment_tool_token(Token) ->
+    case capi_crypto:decrypt_payment_tool_token(Token) of
+        {ok, {PaymentTool, ValidUntil}} ->
+            case capi_utils:deadline_is_reached(ValidUntil) of
+                true ->
+                    logger:warning("Payment tool token expired: ~p", [capi_utils:deadline_to_binary(ValidUntil)]),
+                    erlang:throw(invalid_token);
+                _ ->
+                    PaymentTool
+            end;
+        unrecognized ->
+            encode_legacy_payment_tool_token(Token);
+        {error, {decryption_failed, Error}} ->
+            logger:warning("Payment tool token decryption failed: ~p", [Error]),
+            erlang:throw(invalid_token)
+    end.
 
 encode_legacy_payment_tool_token(Token) ->
     try

@@ -188,11 +188,23 @@ get_operation_access('GetAccountByID', _) ->
     [{[party], read}];
 get_operation_access('GetShopByID', _) ->
     [{[party], read}];
+get_operation_access('GetShopsForParty', _) ->
+    [{[party], read}];
+get_operation_access('GetShopByIDForParty', _) ->
+    [{[party], read}];
+get_operation_access('ActivateShopForParty', _) ->
+    [{[party], write}];
+get_operation_access('SuspendShopForParty', _) ->
+    [{[party], write}];
 get_operation_access('GetShops', _) ->
     [{[party], read}];
 get_operation_access('GetPayoutTools', _) ->
     [{[party], read}];
 get_operation_access('GetPayoutToolByID', _) ->
+    [{[party], read}];
+get_operation_access('GetPayoutToolsForParty', _) ->
+    [{[party], read}];
+get_operation_access('GetPayoutToolByIDForParty', _) ->
     [{[party], read}];
 get_operation_access('GetContracts', _) ->
     [{[party], read}];
@@ -202,6 +214,14 @@ get_operation_access('GetContractAdjustments', _) ->
     [{[party], read}];
 get_operation_access('GetContractAdjustmentByID', _) ->
     [{[party], read}];
+get_operation_access('GetContractsForParty', _) ->
+    [{[party], read}];
+get_operation_access('GetContractByIDForParty', _) ->
+    [{[party], read}];
+get_operation_access('GetContractAdjustmentsForParty', _) ->
+    [{[party], read}];
+get_operation_access('GetContractAdjustmentByIDForParty', _) ->
+    [{[party], read}];
 get_operation_access('GetReports', _) ->
     [{[party], read}];
 get_operation_access('GetReport', _) ->
@@ -209,6 +229,14 @@ get_operation_access('GetReport', _) ->
 get_operation_access('CreateReport', _) ->
     [{[party], write}];
 get_operation_access('DownloadFile', _) ->
+    [{[party], read}];
+get_operation_access('GetReportsForParty', _) ->
+    [{[party], read}];
+get_operation_access('GetReportForParty', _) ->
+    [{[party], read}];
+get_operation_access('CreateReportForParty', _) ->
+    [{[party], write}];
+get_operation_access('DownloadFileForParty', _) ->
     [{[party], read}];
 get_operation_access('GetWebhooks', _) ->
     [{[party], read}];

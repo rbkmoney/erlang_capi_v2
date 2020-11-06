@@ -562,7 +562,7 @@ get_encrypted_token(PS, ExpDate, IsCvvEmpty) ->
     ).
 
 encrypt_payment_tool(PaymentTool) ->
-    capi_crypto:create_encrypted_payment_tool_token(PaymentTool).
+    capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined).
 
 response_error(409, EID, ID) ->
     {error,

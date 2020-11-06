@@ -50,7 +50,8 @@ get_party(Context) ->
                 contact_info = #domain_PartyContactInfo{
                     email = uac_authorizer_jwt:get_claim(
                         <<"email">>,
-                        capi_handler_utils:get_auth_context(Context))
+                        capi_handler_utils:get_auth_context(Context)
+                    )
                 }
             },
             CreateCall = {party_management, 'Create', [PartyParams]},
