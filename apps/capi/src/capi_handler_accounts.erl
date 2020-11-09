@@ -15,7 +15,7 @@
 ) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('GetAccountByID', Req, Context) ->
     Call = {party_management, 'GetAccountState', [genlib:to_int(maps:get('accountID', Req))]},
-    case capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context) of
+    case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
         {ok, S} ->
             {ok, {200, #{}, decode_account_state(S)}};
         {exception, #payproc_AccountNotFound{}} ->

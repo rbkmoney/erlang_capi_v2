@@ -84,7 +84,7 @@ format_request_errors(Errors) -> genlib_string:join(<<"\n">>, Errors).
 %%%
 
 % Нужно быть аккуратным с флагами их порядок влияет на порядок аргументов при вызове функций!
-% обычно параметры идут в порядке [user_info, party_id, party_creation],
+% обычно параметры идут в порядке [user_info, party_id],
 % но это зависит от damsel протокола
 -spec service_call_with(list(atom()), {atom(), atom(), list()}, processing_context()) -> woody:result().
 service_call_with(Flags, Call, Context) ->
@@ -95,32 +95,12 @@ service_call_with_([user_info | T], {ServiceName, Function, Args}, Context) ->
     service_call_with_(T, {ServiceName, Function, [get_user_info(Context) | Args]}, Context);
 service_call_with_([party_id | T], {ServiceName, Function, Args}, Context) ->
     service_call_with_(T, {ServiceName, Function, [get_party_id(Context) | Args]}, Context);
-service_call_with_([party_creation | T], Call, Context) ->
-    case service_call_with_(T, Call, Context) of
-        {exception, #payproc_PartyNotFound{}} ->
-            _ = logger:info("Attempting to create a missing party"),
-            CreateCall = {party_management, 'Create', [get_party_params(Context)]},
-            case service_call_with([user_info, party_id], CreateCall, Context) of
-                {ok, _} -> service_call_with_(T, Call, Context);
-                {exception, #payproc_PartyExists{}} -> service_call_with_(T, Call, Context);
-                Error -> Error
-            end;
-        Result ->
-            Result
-    end;
 service_call_with_([], Call, Context) ->
     service_call(Call, Context).
 
 -spec service_call({atom(), atom(), list()}, processing_context()) -> woody:result().
 service_call({ServiceName, Function, Args}, #{woody_context := WoodyContext}) ->
     capi_woody_client:call_service(ServiceName, Function, Args, WoodyContext).
-
-get_party_params(Context) ->
-    #payproc_PartyParams{
-        contact_info = #domain_PartyContactInfo{
-            email = uac_authorizer_jwt:get_claim(<<"email">>, get_auth_context(Context))
-        }
-    }.
 
 -spec get_auth_context(processing_context()) -> any().
 get_auth_context(#{swagger_context := #{auth_context := AuthContext}}) ->
@@ -150,7 +130,7 @@ get_extra_properties(Context) ->
 -spec get_party(processing_context()) -> woody:result().
 get_party(Context) ->
     Call = {party_management, 'Get', []},
-    service_call_with([user_info, party_id, party_creation], Call, Context).
+    service_call_with([user_info, party_id], Call, Context).
 
 -spec get_party(binary(), processing_context()) -> woody:result().
 get_party(PartyID, Context) ->
@@ -293,7 +273,7 @@ get_refund_by_id(InvoiceID, PaymentID, RefundID, Context) ->
 -spec get_contract_by_id(binary(), processing_context()) -> woody:result().
 get_contract_by_id(ContractID, Context) ->
     Call = {party_management, 'GetContract', [ContractID]},
-    service_call_with([user_info, party_id, party_creation], Call, Context).
+    service_call_with([user_info, party_id], Call, Context).
 
 -spec get_contract_by_id(binary(), binary(), processing_context()) -> woody:result().
 get_contract_by_id(PartyID, ContractID, Context) ->

@@ -15,7 +15,7 @@
 ) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('ActivateShop', Req, Context) ->
     Call = {party_management, 'ActivateShop', [maps:get(shopID, Req)]},
-    case capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context) of
+    case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
         {ok, _R} ->
             {ok, {204, #{}, undefined}};
         {exception, Exception} ->
@@ -28,7 +28,7 @@ process_request('ActivateShop', Req, Context) ->
     end;
 process_request('SuspendShop', Req, Context) ->
     Call = {party_management, 'SuspendShop', [maps:get(shopID, Req)]},
-    case capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context) of
+    case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
         {ok, _R} ->
             {ok, {204, #{}, undefined}};
         {exception, Exception} ->
@@ -44,7 +44,7 @@ process_request('GetShops', _Req, Context) ->
     {ok, {200, #{}, decode_shops_map(Party#domain_Party.shops)}};
 process_request('GetShopByID', Req, Context) ->
     Call = {party_management, 'GetShop', [maps:get(shopID, Req)]},
-    case capi_handler_utils:service_call_with([user_info, party_id, party_creation], Call, Context) of
+    case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
         {ok, Shop} ->
             {ok, {200, #{}, decode_shop(Shop)}};
         {exception, #payproc_ShopNotFound{}} ->
@@ -113,7 +113,7 @@ process_request('SuspendShopForParty', Req, Context) ->
     % Here we're relying on hellgate ownership check, thus no explicit authorization.
     % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
     % remains authorized.
-    case capi_handler_utils:service_call_with([user_info, party_creation], Call, Context) of
+    case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _R} ->
             {ok, {204, #{}, undefined}};
         {exception, Exception} ->

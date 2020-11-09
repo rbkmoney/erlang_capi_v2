@@ -22,7 +22,7 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
     try
         CallArgs = [encode_invoice_tpl_create_params(PartyID, InvoiceTemplateParams)],
         capi_handler_utils:service_call_with(
-            [user_info, party_creation],
+            [user_info],
             {invoice_templating, 'Create', CallArgs},
             Context
         )
@@ -214,7 +214,7 @@ create_invoice(_PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCt
 
 get_invoice_template(ID, Context) ->
     Call = {invoice_templating, 'Get', [ID]},
-    capi_handler_utils:service_call_with([user_info, party_creation], Call, Context).
+    capi_handler_utils:service_call_with([user_info], Call, Context).
 
 encode_invoice_tpl_create_params(PartyID, Params) ->
     Details = encode_invoice_tpl_details(genlib_map:get(<<"details">>, Params)),
