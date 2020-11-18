@@ -196,7 +196,6 @@ process_request('GetInvoicePaymentMethods', Req, Context) ->
         {exception, #payproc_PartyNotFound{}} ->
             {ok, general_error(404, <<"Party not found">>)}
     end;
-
 %%
 
 process_request(_OperationID, _Req, _Context) ->

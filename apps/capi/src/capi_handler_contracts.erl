@@ -15,23 +15,23 @@
 ) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('GetContracts', _Req, Context) ->
     case capi_handler_utils:get_party(Context) of
-    {ok, Party} ->
-        {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
-    {exception, #payproc_PartyNotFound{}} ->
-        {ok, general_error(404, <<"Party not found">>)}
+        {ok, Party} ->
+            {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
+        {exception, #payproc_PartyNotFound{}} ->
+            {ok, general_error(404, <<"Party not found">>)}
     end;
 process_request('GetContractByID', Req, Context) ->
     case capi_handler_utils:get_party(Context) of
-    {ok, Party} ->
-        ContractID = maps:get('contractID', Req),
-        case genlib_map:get(ContractID, Party#domain_Party.contracts) of
-            undefined ->
-                {ok, general_error(404, <<"Contract not found">>)};
-            Contract ->
-                {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}}
-        end;
-    {exception, #payproc_PartyNotFound{}} ->
-        {ok, general_error(404, <<"Party not found">>)}
+        {ok, Party} ->
+            ContractID = maps:get('contractID', Req),
+            case genlib_map:get(ContractID, Party#domain_Party.contracts) of
+                undefined ->
+                    {ok, general_error(404, <<"Contract not found">>)};
+                Contract ->
+                    {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}}
+            end;
+        {exception, #payproc_PartyNotFound{}} ->
+            {ok, general_error(404, <<"Party not found">>)}
     end;
 process_request('GetContractAdjustments', Req, Context) ->
     case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
@@ -63,10 +63,7 @@ process_request('GetContractsForParty', Req, Context) ->
     case capi_handler_utils:get_party(PartyID, Context) of
         {ok, Party} ->
             {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
-        {exception, E} when
-            E == #payproc_InvalidUser{};
-            E == #payproc_PartyNotFound{}
-        ->
+        {exception, E} when E == #payproc_InvalidUser{}; E == #payproc_PartyNotFound{} ->
             {ok, general_error(404, <<"Party not found">>)}
     end;
 process_request('GetContractByIDForParty', Req, Context) ->
@@ -84,10 +81,7 @@ process_request('GetContractByIDForParty', Req, Context) ->
                 Contract ->
                     {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}}
             end;
-        {exception, E} when
-            E == #payproc_InvalidUser{};
-            E == #payproc_PartyNotFound{}
-        ->
+        {exception, E} when E == #payproc_InvalidUser{}; E == #payproc_PartyNotFound{} ->
             {ok, general_error(404, <<"Party not found">>)}
     end;
 process_request('GetContractAdjustmentsForParty', Req, Context) ->
