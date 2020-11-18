@@ -51,7 +51,9 @@ process_request('GetPaymentInstitutionPaymentTerms', Req, Context) ->
         {ok, #domain_TermSet{payments = PaymentTerms}} ->
             {ok, {200, #{}, decode_payment_terms(PaymentTerms)}};
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
-            {ok, general_error(404, <<"Payment institution not found">>)}
+            {ok, general_error(404, <<"Payment institution not found">>)};
+        {exception, #payproc_PartyNotFound{}} ->
+            {ok, general_error(404, <<"Party not found">>)}
     end;
 process_request('GetPaymentInstitutionPayoutMethods', Req, Context) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
@@ -61,7 +63,9 @@ process_request('GetPaymentInstitutionPayoutMethods', Req, Context) ->
         {ok, #domain_TermSet{payouts = undefined}} ->
             {ok, general_error(404, <<"Automatic payouts not allowed">>)};
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
-            {ok, general_error(404, <<"Payment institution not found">>)}
+            {ok, general_error(404, <<"Payment institution not found">>)};
+        {exception, #payproc_PartyNotFound{}} ->
+            {ok, general_error(404, <<"Party not found">>)}
     end;
 process_request('GetPaymentInstitutionPayoutSchedules', Req, Context) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
@@ -71,7 +75,9 @@ process_request('GetPaymentInstitutionPayoutSchedules', Req, Context) ->
         {ok, #domain_TermSet{payouts = undefined}} ->
             {ok, general_error(404, <<"Automatic payouts not allowed">>)};
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
-            {ok, general_error(404, <<"Payment institution not found">>)}
+            {ok, general_error(404, <<"Payment institution not found">>)};
+        {exception, #payproc_PartyNotFound{}} ->
+            {ok, general_error(404, <<"Party not found">>)}
     end;
 %%
 

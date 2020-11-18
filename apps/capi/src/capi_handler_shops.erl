@@ -23,7 +23,9 @@ process_request('ActivateShop', Req, Context) ->
                 #payproc_ShopNotFound{} ->
                     {ok, general_error(404, <<"Shop not found">>)};
                 #payproc_InvalidShopStatus{status = {suspension, {active, _}}} ->
-                    {ok, {204, #{}, undefined}}
+                    {ok, {204, #{}, undefined}};
+                #payproc_PartyNotFound{} ->
+                    {ok, general_error(404, <<"Party not found">>)}
             end
     end;
 process_request('SuspendShop', Req, Context) ->
@@ -36,19 +38,27 @@ process_request('SuspendShop', Req, Context) ->
                 #payproc_ShopNotFound{} ->
                     {ok, general_error(404, <<"Shop not found">>)};
                 #payproc_InvalidShopStatus{status = {suspension, {suspended, _}}} ->
-                    {ok, {204, #{}, undefined}}
+                    {ok, {204, #{}, undefined}};
+                #payproc_PartyNotFound{} ->
+                    {ok, general_error(404, <<"Party not found">>)}
             end
     end;
 process_request('GetShops', _Req, Context) ->
-    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
-    {ok, {200, #{}, decode_shops_map(Party#domain_Party.shops)}};
+    case capi_handler_utils:get_party(Context) of
+        {ok, Party} ->
+            {ok, {200, #{}, decode_shops_map(Party#domain_Party.shops)}};
+        {exception, #payproc_PartyNotFound{}} ->
+                    {ok, general_error(404, <<"Party not found">>)}
+    end;
 process_request('GetShopByID', Req, Context) ->
     Call = {party_management, 'GetShop', [maps:get(shopID, Req)]},
     case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
         {ok, Shop} ->
             {ok, {200, #{}, decode_shop(Shop)}};
         {exception, #payproc_ShopNotFound{}} ->
-            {ok, general_error(404, <<"Shop not found">>)}
+            {ok, general_error(404, <<"Shop not found">>)};
+        {exception, #payproc_PartyNotFound{}} ->
+            {ok, general_error(404, <<"Party not found">>)}
     end;
 process_request('GetShopsForParty', Req, Context) ->
     PartyID = maps:get(partyID, Req),
@@ -59,9 +69,10 @@ process_request('GetShopsForParty', Req, Context) ->
     case capi_handler_utils:get_party(PartyID, Context) of
         {ok, Party} ->
             {ok, {200, #{}, decode_shops_map(Party#domain_Party.shops)}};
-        {exception, #payproc_InvalidUser{}} ->
-            {ok, general_error(404, <<"Party not found">>)};
-        {exception, #payproc_PartyNotFound{}} ->
+        {exception, E} when
+            E == #payproc_InvalidUser{};
+            E == #payproc_PartyNotFound{}
+        ->
             {ok, general_error(404, <<"Party not found">>)}
     end;
 process_request('GetShopByIDForParty', Req, Context) ->
@@ -77,10 +88,10 @@ process_request('GetShopByIDForParty', Req, Context) ->
             {ok, {200, #{}, decode_shop(Shop)}};
         {exception, #payproc_InvalidUser{}} ->
             {ok, general_error(404, <<"Party not found">>)};
-        {exception, #payproc_PartyNotFound{}} ->
-            {ok, general_error(404, <<"Party not found">>)};
         {exception, #payproc_ShopNotFound{}} ->
-            {ok, general_error(404, <<"Shop not found">>)}
+            {ok, general_error(404, <<"Shop not found">>)};
+        {exception, #payproc_PartyNotFound{}} ->
+            {ok, general_error(404, <<"Party not found">>)}
     end;
 process_request('ActivateShopForParty', Req, Context) ->
     PartyID = maps:get(partyID, Req),
@@ -120,12 +131,12 @@ process_request('SuspendShopForParty', Req, Context) ->
             case Exception of
                 #payproc_InvalidUser{} ->
                     {ok, general_error(404, <<"Party not found">>)};
-                #payproc_PartyNotFound{} ->
-                    {ok, general_error(404, <<"Party not found">>)};
                 #payproc_ShopNotFound{} ->
                     {ok, general_error(404, <<"Shop not found">>)};
                 #payproc_InvalidShopStatus{status = {suspension, {suspended, _}}} ->
-                    {ok, {204, #{}, undefined}}
+                    {ok, {204, #{}, undefined}};
+                #payproc_PartyNotFound{} ->
+                    {ok, general_error(404, <<"Party not found">>)}
             end
     end;
 %%

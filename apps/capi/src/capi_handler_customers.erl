@@ -39,7 +39,9 @@ process_request('CreateCustomer', Req, Context) ->
                         operationNotPermitted,
                         <<"Operation not permitted">>
                     ),
-                    {ok, ErrorResp}
+                    {ok, ErrorResp};
+                #payproc_PartyNotFound{} ->
+                    {ok, general_error(404, <<"Party not found">>)}
             end
     end;
 process_request('GetCustomerById', Req, Context) ->

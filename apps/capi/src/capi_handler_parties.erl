@@ -6,6 +6,8 @@
 
 -export([process_request/3]).
 
+-import(capi_handler_utils, [general_error/2]).
+
 -type processing_context() :: capi_handler:processing_context().
 
 -spec process_request(
@@ -14,8 +16,14 @@
     Context :: processing_context()
 ) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('GetMyParty', _Req, Context) ->
-    Party = capi_utils:unwrap(get_party(Context)),
-    {ok, {200, #{}, capi_handler_decoder_party:decode_party(Party)}};
+    case get_party(Context) of
+        {ok, Party} ->
+            {ok, {200, #{}, capi_handler_decoder_party:decode_party(Party)}};
+        {exception, #payproc_PartyNotFound{}} ->
+            {ok, general_error(404, <<"Party not found">>)};
+        Error ->
+            Error
+    end;
 process_request('ActivateMyParty', _Req, Context) ->
     Call = {party_management, 'Activate', []},
     case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of

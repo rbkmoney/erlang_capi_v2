@@ -32,7 +32,9 @@ process_request('CreateWebhook', Req, Context) ->
         {exception, #payproc_InvalidUser{}} ->
             {ok, logic_error(invalidPartyID, <<"Party not found">>)};
         {exception, #payproc_ShopNotFound{}} ->
-            {ok, logic_error(invalidShopID, <<"Shop not found">>)}
+            {ok, logic_error(invalidShopID, <<"Shop not found">>)};
+        {exception, #payproc_PartyNotFound{}} ->
+            {ok, general_error(404, <<"Party not found">>)}
     end;
 process_request('GetWebhooks', _Req, Context) ->
     Webhooks = capi_utils:unwrap(

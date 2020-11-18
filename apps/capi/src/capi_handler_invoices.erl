@@ -44,7 +44,9 @@ process_request('CreateInvoice' = OperationID, Req, Context) ->
                     #payproc_InvalidShopStatus{} ->
                         {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
                     #payproc_InvoiceTermsViolated{} ->
-                        {ok, logic_error(invoiceTermsViolated, <<"Invoice parameters violate contract terms">>)}
+                        {ok, logic_error(invoiceTermsViolated, <<"Invoice parameters violate contract terms">>)};
+                    #payproc_PartyNotFound{} ->
+                        {ok, general_error(404, <<"Party not found">>)}
                 end
         end
     catch
@@ -174,22 +176,27 @@ process_request('GetInvoiceEvents', Req, Context) ->
             end
     end;
 process_request('GetInvoicePaymentMethods', Req, Context) ->
-    InvoiceID = maps:get(invoiceID, Req),
-    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
-    Revision = Party#domain_Party.revision,
-    Args = [InvoiceID, {revision, Revision}],
-    case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, Args, Context) of
-        {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
-            PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
-            {ok, {200, #{}, PaymentMethods}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Invoice not found">>)};
-                #payproc_InvoiceNotFound{} ->
-                    {ok, general_error(404, <<"Invoice not found">>)}
-            end
+    case capi_handler_utils:get_party(Context) of
+        {ok, Party} ->
+            InvoiceID = maps:get(invoiceID, Req),
+            Revision = Party#domain_Party.revision,
+            Args = [InvoiceID, {revision, Revision}],
+            case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, Args, Context) of
+                {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
+                    PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
+                    {ok, {200, #{}, PaymentMethods}};
+                {exception, Exception} ->
+                    case Exception of
+                        #payproc_InvalidUser{} ->
+                            {ok, general_error(404, <<"Invoice not found">>)};
+                        #payproc_InvoiceNotFound{} ->
+                            {ok, general_error(404, <<"Invoice not found">>)}
+                    end
+            end;
+        {exception, #payproc_PartyNotFound{}} ->
+            {ok, general_error(404, <<"Party not found">>)}
     end;
+
 %%
 
 process_request(_OperationID, _Req, _Context) ->

@@ -15,10 +15,12 @@
 ) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('GetClaims', Req, Context) ->
     Call = {party_management, 'GetClaims', []},
-    Claims = capi_utils:unwrap(
-        capi_handler_utils:service_call_with([user_info, party_id], Call, Context)
-    ),
-    {ok, {200, #{}, decode_claims(filter_claims(maps:get('claimStatus', Req), Claims))}};
+    case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
+        {ok, Claims} ->
+            {ok, {200, #{}, decode_claims(filter_claims(maps:get('claimStatus', Req), Claims))}};
+        {exception, #payproc_PartyNotFound{}} ->
+            {ok, general_error(404, <<"Party not found">>)}
+    end;
 process_request('GetClaimByID', Req, Context) ->
     Call = {
         party_management,
@@ -35,7 +37,9 @@ process_request('GetClaimByID', Req, Context) ->
                     {ok, {200, #{}, decode_claim(Claim)}}
             end;
         {exception, #payproc_ClaimNotFound{}} ->
-            {ok, general_error(404, <<"Claim not found">>)}
+            {ok, general_error(404, <<"Claim not found">>)};
+        {exception, #payproc_PartyNotFound{}} ->
+            {ok, general_error(404, <<"Party not found">>)}
     end;
 process_request('CreateClaim', Req, Context) ->
     try
@@ -54,7 +58,9 @@ process_request('CreateClaim', Req, Context) ->
                         {ok, logic_error(invalidChangeset, <<"Invalid changeset">>)};
                     #'InvalidRequest'{errors = Errors} ->
                         FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                        {ok, logic_error(invalidRequest, FormattedErrors)}
+                        {ok, logic_error(invalidRequest, FormattedErrors)};
+                    #payproc_PartyNotFound{} ->
+                        {ok, general_error(404, <<"Party not found">>)}
                 end
         end
     catch
@@ -75,11 +81,12 @@ process_request('CreateClaim', Req, Context) ->
 %             genlib:to_int(maps:get('claimRevision', Req)),
 %             encode_claim_changeset(maps:get('claimChangeset', Req))
 %         ]},
-%     Party = capi_utils:unwrap(
-%         capi_handler_utils:service_call_with([user_info, party_id], Call, Context)
-%     ),
-%     {ok, {200, #{}, capi_handler_utils:capi_handler_decoder_party:decode_party(Party)}};
-
+%     case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
+%         {ok, Party} ->
+%             {ok, {200, #{}, capi_handler_utils:capi_handler_decoder_party:decode_party(Party)}};
+%         {exception, #payproc_PartyNotFound{}} ->
+%             {ok, general_error(404, <<"Party not found">>)}
+%     end;
 process_request('RevokeClaimByID', Req, Context) ->
     Call =
         {party_management, 'RevokeClaim', [
@@ -99,7 +106,9 @@ process_request('RevokeClaimByID', Req, Context) ->
                 #payproc_InvalidClaimStatus{} ->
                     {ok, logic_error(invalidClaimStatus, <<"Invalid claim status">>)};
                 #payproc_InvalidClaimRevision{} ->
-                    {ok, logic_error(invalidClaimRevision, <<"Invalid claim revision">>)}
+                    {ok, logic_error(invalidClaimRevision, <<"Invalid claim revision">>)};
+                #payproc_PartyNotFound{} ->
+                    {ok, general_error(404, <<"Party not found">>)}
             end
     end;
 %%

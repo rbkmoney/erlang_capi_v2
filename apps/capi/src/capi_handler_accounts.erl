@@ -19,7 +19,9 @@ process_request('GetAccountByID', Req, Context) ->
         {ok, S} ->
             {ok, {200, #{}, decode_account_state(S)}};
         {exception, #payproc_AccountNotFound{}} ->
-            {ok, general_error(404, <<"Account not found">>)}
+            {ok, general_error(404, <<"Account not found">>)};
+        {exception, #payproc_PartyNotFound{}} ->
+            {ok, general_error(404, <<"Party not found">>)}
     end;
 %%
 

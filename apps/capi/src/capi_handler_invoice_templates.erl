@@ -41,7 +41,9 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
                 #payproc_InvalidPartyStatus{} ->
                     {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
                 #payproc_InvalidShopStatus{} ->
-                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)}
+                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
+                #payproc_PartyNotFound{} ->
+                    {ok, general_error(404, <<"Party not found">>)}
             end
     catch
         throw:invoice_cart_empty ->
@@ -155,7 +157,9 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
                 #payproc_InvoiceTemplateRemoved{} ->
                     {ok, general_error(404, <<"Invoice Template not found">>)};
                 #payproc_InvoiceTermsViolated{} ->
-                    {ok, logic_error(invoiceTermsViolated, <<"Invoice parameters violate contract terms">>)}
+                    {ok, logic_error(invoiceTermsViolated, <<"Invoice parameters violate contract terms">>)};
+                #payproc_PartyNotFound{} ->
+                    {ok, general_error(404, <<"Party not found">>)}
             end;
         {error, {bad_invoice_params, currency_no_amount}} ->
             {ok, logic_error(invalidRequest, <<"Amount is required for the currency">>)};
@@ -167,17 +171,23 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
 process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
     InvoiceTemplateID = maps:get('invoiceTemplateID', Req),
     Timestamp = genlib_rfc3339:format_relaxed(erlang:system_time(microsecond), microsecond),
-    {ok, Party} = capi_handler_utils:get_party(Context),
-    Revision = Party#domain_Party.revision,
-    Args = [InvoiceTemplateID, Timestamp, {revision, Revision}],
-    case capi_handler_decoder_invoicing:construct_payment_methods(invoice_templating, Args, Context) of
-        {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
-            PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
-            {ok, {200, #{}, PaymentMethods}};
-        {exception, E} when
-            E == #payproc_InvalidUser{}; E == #payproc_InvoiceTemplateNotFound{}; E == #payproc_InvoiceTemplateRemoved{}
-        ->
-            {ok, general_error(404, <<"Invoice template not found">>)}
+    case capi_handler_utils:get_party(Context) of
+        {ok, Party} ->
+            Revision = Party#domain_Party.revision,
+            Args = [InvoiceTemplateID, Timestamp, {revision, Revision}],
+            case capi_handler_decoder_invoicing:construct_payment_methods(invoice_templating, Args, Context) of
+                {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
+                    PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
+                    {ok, {200, #{}, PaymentMethods}};
+                {exception, E} when
+                    E == #payproc_InvalidUser{};
+                    E == #payproc_InvoiceTemplateNotFound{};
+                    E == #payproc_InvoiceTemplateRemoved{}
+                ->
+                    {ok, general_error(404, <<"Invoice template not found">>)}
+            end;
+        {exception, #payproc_PartyNotFound{}} ->
+            {ok, general_error(404, <<"Party not found">>)}
     end;
 %%
 
