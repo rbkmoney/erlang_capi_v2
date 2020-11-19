@@ -69,7 +69,9 @@ process_request('GetShopsForParty', Req, Context) ->
     case capi_handler_utils:get_party(PartyID, Context) of
         {ok, Party} ->
             {ok, {200, #{}, decode_shops_map(Party#domain_Party.shops)}};
-        {exception, E} when E == #payproc_InvalidUser{}; E == #payproc_PartyNotFound{} ->
+        {exception, #payproc_InvalidUser{}} ->
+            {ok, general_error(404, <<"Party not found">>)};
+        {exception, #payproc_PartyNotFound{}} ->
             {ok, general_error(404, <<"Party not found">>)}
     end;
 process_request('GetShopByIDForParty', Req, Context) ->

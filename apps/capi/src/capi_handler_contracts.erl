@@ -63,7 +63,9 @@ process_request('GetContractsForParty', Req, Context) ->
     case capi_handler_utils:get_party(PartyID, Context) of
         {ok, Party} ->
             {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
-        {exception, E} when E == #payproc_InvalidUser{}; E == #payproc_PartyNotFound{} ->
+        {exception, #payproc_InvalidUser{}} ->
+            {ok, general_error(404, <<"Party not found">>)};
+        {exception, #payproc_PartyNotFound{}} ->
             {ok, general_error(404, <<"Party not found">>)}
     end;
 process_request('GetContractByIDForParty', Req, Context) ->
@@ -81,7 +83,9 @@ process_request('GetContractByIDForParty', Req, Context) ->
                 Contract ->
                     {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}}
             end;
-        {exception, E} when E == #payproc_InvalidUser{}; E == #payproc_PartyNotFound{} ->
+        {exception, #payproc_InvalidUser{}} ->
+            {ok, general_error(404, <<"Party not found">>)};
+        {exception, #payproc_PartyNotFound{}} ->
             {ok, general_error(404, <<"Party not found">>)}
     end;
 process_request('GetContractAdjustmentsForParty', Req, Context) ->
