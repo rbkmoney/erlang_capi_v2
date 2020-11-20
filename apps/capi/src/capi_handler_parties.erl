@@ -6,8 +6,6 @@
 
 -export([process_request/3]).
 
--import(capi_handler_utils, [general_error/2]).
-
 -type processing_context() :: capi_handler:processing_context().
 
 -spec process_request(
