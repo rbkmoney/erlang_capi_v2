@@ -87,6 +87,7 @@ process_request('CreateClaim', Req, Context) ->
 %         {exception, #payproc_PartyNotFound{}} ->
 %             {ok, general_error(404, <<"Party not found">>)}
 %     end;
+
 process_request('RevokeClaimByID', Req, Context) ->
     Call =
         {party_management, 'RevokeClaim', [
