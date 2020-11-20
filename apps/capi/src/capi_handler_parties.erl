@@ -19,8 +19,6 @@ process_request('GetMyParty', _Req, Context) ->
     case get_party(Context) of
         {ok, Party} ->
             {ok, {200, #{}, capi_handler_decoder_party:decode_party(Party)}};
-        {exception, #payproc_PartyNotFound{}} ->
-            {ok, general_error(404, <<"Party not found">>)};
         Error ->
             Error
     end;
