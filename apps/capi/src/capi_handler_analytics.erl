@@ -52,11 +52,8 @@ create_stat_dsl(StatType, Req, Context) ->
     capi_handler_utils:create_dsl(StatType, Query, #{}).
 
 process_merchant_stat(StatType, Req, Context) ->
-    Call = {
-        merchant_stat,
-        'GetStatistics',
-        [capi_handler_encoder:encode_stat_request(create_stat_dsl(StatType, Req, Context))]
-    },
+    CallArgs = {capi_handler_encoder:encode_stat_request(create_stat_dsl(StatType, Req, Context))},
+    Call = {merchant_stat, 'GetStatistics', CallArgs},
     process_merchant_stat_result(StatType, capi_handler_utils:service_call(Call, Context)).
 
 process_merchant_stat_result(customers_rate_stat = StatType, {ok, #merchstat_StatResponse{data = {records, Stats}}}) ->

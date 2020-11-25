@@ -17,7 +17,8 @@ process_request('CreateCustomer', Req, Context) ->
     CustomerParams = maps:get('Customer', Req),
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(<<"partyID">>, CustomerParams, UserID),
-    Call = {customer_management, 'Create', [encode_customer_params(PartyID, CustomerParams)]},
+    CallArgs = {encode_customer_params(PartyID, CustomerParams)},
+    Call = {customer_management, 'Create', CallArgs},
     case capi_handler_utils:service_call_with([], Call, Context) of
         {ok, Customer} ->
             {ok, {201, #{}, make_customer_and_token(Customer, PartyID)}};
@@ -55,7 +56,9 @@ process_request('GetCustomerById', Req, Context) ->
             end
     end;
 process_request('DeleteCustomer', Req, Context) ->
-    case capi_handler_utils:service_call({customer_management, 'Delete', [maps:get(customerID, Req)]}, Context) of
+    CallArgs = {maps:get(customerID, Req)},
+    Call = {customer_management, 'Delete', CallArgs},
+    case capi_handler_utils:service_call(Call, Context) of
         {ok, _} ->
             {ok, {204, #{}, undefined}};
         {exception, Exception} ->
@@ -90,10 +93,10 @@ process_request('CreateCustomerAccessToken', Req, Context) ->
 process_request('CreateBinding', Req, Context) ->
     Result =
         try
-            CallArgs = [
+            CallArgs = {
                 maps:get(customerID, Req),
                 encode_customer_binding_params(maps:get('CustomerBindingParams', Req))
-            ],
+            },
             capi_handler_utils:service_call({customer_management, 'StartBinding', CallArgs}, Context)
         catch
             throw:Error when Error =:= invalid_token orelse Error =:= invalid_payment_session ->
@@ -168,7 +171,7 @@ process_request('GetBinding', Req, Context) ->
 process_request('GetCustomerEvents', Req, Context) ->
     GetterFun = fun(Range) ->
         capi_handler_utils:service_call(
-            {customer_management, 'GetEvents', [maps:get(customerID, Req), Range]},
+            {customer_management, 'GetEvents', {maps:get(customerID, Req), Range}},
             Context
         )
     end,
@@ -203,7 +206,7 @@ process_request(_OperationID, _Req, _Context) ->
 
 get_customer_by_id(CustomerID, Context) ->
     EventRange = #payproc_EventRange{},
-    capi_handler_utils:service_call({customer_management, 'Get', [CustomerID, EventRange]}, Context).
+    capi_handler_utils:service_call({customer_management, 'Get', {CustomerID, EventRange}}, Context).
 
 encode_customer_params(PartyID, Params) ->
     #payproc_CustomerParams{

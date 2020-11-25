@@ -17,7 +17,7 @@ process_request('GetMyParty', _Req, Context) ->
     Party = capi_utils:unwrap(get_party(Context)),
     {ok, {200, #{}, capi_handler_decoder_party:decode_party(Party)}};
 process_request('ActivateMyParty', _Req, Context) ->
-    Call = {party_management, 'Activate', []},
+    Call = {party_management, 'Activate', {}},
     case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
         {ok, _R} ->
             {ok, {204, #{}, undefined}};
@@ -25,7 +25,7 @@ process_request('ActivateMyParty', _Req, Context) ->
             {ok, {204, #{}, undefined}}
     end;
 process_request('SuspendMyParty', _Req, Context) ->
-    Call = {party_management, 'Suspend', []},
+    Call = {party_management, 'Suspend', {}},
     case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
         {ok, _R} ->
             {ok, {204, #{}, undefined}};
@@ -41,7 +41,7 @@ process_request(_OperationID, _Req, _Context) ->
 
 -spec get_party(processing_context()) -> woody:result().
 get_party(Context) ->
-    GetCall = {party_management, 'Get', []},
+    GetCall = {party_management, 'Get', {}},
     Flags = [user_info, party_id],
     case capi_handler_utils:service_call_with(Flags, GetCall, Context) of
         {exception, #payproc_PartyNotFound{}} ->
@@ -54,7 +54,7 @@ get_party(Context) ->
                     )
                 }
             },
-            CreateCall = {party_management, 'Create', [PartyParams]},
+            CreateCall = {party_management, 'Create', {PartyParams}},
             case capi_handler_utils:service_call_with(Flags, CreateCall, Context) of
                 {ok, _} ->
                     capi_handler_utils:service_call_with(Flags, GetCall, Context);

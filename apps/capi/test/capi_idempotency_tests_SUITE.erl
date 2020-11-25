@@ -253,7 +253,7 @@ create_invoice_ok_test(Config) ->
     ExternalID = <<"merch_id">>,
     capi_ct_helper:mock_services(
         [
-            {invoicing, fun('Create', [_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}]) ->
+            {invoicing, fun('Create', {_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}}) ->
                 {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
             end},
             {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
@@ -289,7 +289,7 @@ create_invoice_legacy_fail_test(Config) ->
     Ctx = capi_msgp_marshalling:marshal(#{<<"version">> => 1, <<"params_hash">> => erlang:phash2(Req)}),
     capi_ct_helper:mock_services(
         [
-            {invoicing, fun('Create', [_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}]) ->
+            {invoicing, fun('Create', {_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}}) ->
                 {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
             end},
             {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
@@ -441,11 +441,11 @@ create_payment(BenderKey, Requests, Config) ->
     Tid = capi_ct_helper_bender:create_storage(),
     capi_ct_helper:mock_services(
         [
-            {invoicing, fun('StartPayment', [_, _, IPP]) ->
+            {invoicing, fun('StartPayment', {_, _, IPP}) ->
                 #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
                 {ok, ?PAYPROC_PAYMENT(ID, EID)}
             end},
-            {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
+            {bender, fun('GenerateID', {_, _, CtxMsgPack}) ->
                 capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
             end}
         ],
@@ -466,10 +466,10 @@ create_invoices(BenderKey, Requests, Config) ->
     Tid = capi_ct_helper_bender:create_storage(),
     capi_ct_helper:mock_services(
         [
-            {invoicing, fun('Create', [_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}]) ->
+            {invoicing, fun('Create', {_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}}) ->
                 {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
             end},
-            {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
+            {bender, fun('GenerateID', {_, _, CtxMsgPack}) ->
                 capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
             end}
         ],
@@ -492,11 +492,11 @@ create_refunds(BenderKey, Requests, Config) ->
         [
             {invoicing, fun(
                 'RefundPayment',
-                [_, _, _, #payproc_InvoicePaymentRefundParams{id = ID, external_id = EID}]
+                {_, _, _, #payproc_InvoicePaymentRefundParams{id = ID, external_id = EID}}
             ) ->
                 {ok, ?REFUND(ID, EID)}
             end},
-            {bender, fun('GenerateID', [_, _, CtxMsgPack]) ->
+            {bender, fun('GenerateID', {_, _, CtxMsgPack}) ->
                 capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
             end}
         ],

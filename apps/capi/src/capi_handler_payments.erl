@@ -159,7 +159,7 @@ process_request('GetPaymentByExternalID', Req, Context) ->
             end
     end;
 process_request('CancelPayment', Req, Context) ->
-    CallArgs = [maps:get(invoiceID, Req), maps:get(paymentID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))],
+    CallArgs = {maps:get(invoiceID, Req), maps:get(paymentID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))},
     Call = {invoicing, 'CancelPayment', CallArgs},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _} ->
@@ -194,7 +194,7 @@ process_request('CapturePayment', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
     try
-        CallArgs = [
+        CallArgs = {
             InvoiceID,
             PaymentID,
             #payproc_InvoicePaymentCaptureParams{
@@ -202,7 +202,7 @@ process_request('CapturePayment', Req, Context) ->
                 cash = encode_optional_cash(CaptureParams, InvoiceID, PaymentID, Context),
                 cart = capi_handler_encoder:encode_invoice_cart(CaptureParams)
             }
-        ],
+        },
         Call = {invoicing, 'CapturePayment', CallArgs},
         capi_handler_utils:service_call_with([user_info], Call, Context)
     of
@@ -372,11 +372,8 @@ process_request('GetChargebacks', Req, Context) ->
             end
     end;
 process_request('GetChargebackByID', Req, Context) ->
-    Call = {
-        invoicing,
-        'GetPaymentChargeback',
-        [maps:get(invoiceID, Req), maps:get(paymentID, Req), maps:get(chargebackID, Req)]
-    },
+    CallArgs = {maps:get(invoiceID, Req), maps:get(paymentID, Req), maps:get(chargebackID, Req)},
+    Call = {invoicing, 'GetPaymentChargeback', CallArgs},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, Chargeback} ->
             {ok, {200, #{}, capi_handler_decoder_invoicing:decode_chargeback(Chargeback, Context)}};
@@ -428,7 +425,7 @@ create_payment(InvoiceID, _PartyID, PaymentParams, #{woody_context := WoodyCtx} 
 
 start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context) ->
     InvoicePaymentParams = encode_invoice_payment_params(ID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift),
-    Call = {invoicing, 'StartPayment', [InvoiceID, InvoicePaymentParams]},
+    Call = {invoicing, 'StartPayment', {InvoiceID, InvoicePaymentParams}},
     capi_handler_utils:service_call_with([user_info], Call, Context).
 
 decrypt_payer(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer) ->
@@ -632,12 +629,12 @@ refund_payment(RefundID, InvoiceID, PaymentID, RefundParams, Context) ->
         cash = encode_optional_cash(RefundParams, InvoiceID, PaymentID, Context),
         cart = capi_handler_encoder:encode_invoice_cart(RefundParams)
     },
-    Call =
-        {invoicing, 'RefundPayment', [
-            InvoiceID,
-            PaymentID,
-            Params#payproc_InvoicePaymentRefundParams{id = RefundID}
-        ]},
+    CallArgs = {
+        InvoiceID,
+        PaymentID,
+        Params#payproc_InvoicePaymentRefundParams{id = RefundID}
+    },
+    Call = {invoicing, 'RefundPayment', CallArgs},
     capi_handler_utils:service_call_with([user_info], Call, Context).
 
 %%

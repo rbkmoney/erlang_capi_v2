@@ -14,7 +14,7 @@
     Context :: capi_handler:processing_context()
 ) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('GetLocationsNames', Req, Context) ->
-    CallArgs = [ordsets:from_list(maps:get('geoIDs', Req)), maps:get('language', Req)],
+    CallArgs = {ordsets:from_list(maps:get('geoIDs', Req)), maps:get('language', Req)},
     Call = {geo_ip_service, 'GetLocationName', CallArgs},
     case capi_handler_utils:service_call(Call, Context) of
         {ok, LocationNames = #{}} ->

@@ -102,7 +102,8 @@ process_request('GetInvoiceByExternalID', Req, Context) ->
             end
     end;
 process_request('FulfillInvoice', Req, Context) ->
-    Call = {invoicing, 'Fulfill', [maps:get(invoiceID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))]},
+    CallArgs = {maps:get(invoiceID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))},
+    Call = {invoicing, 'Fulfill', CallArgs},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _} ->
             {ok, {204, #{}, undefined}};
@@ -121,7 +122,8 @@ process_request('FulfillInvoice', Req, Context) ->
             end
     end;
 process_request('RescindInvoice', Req, Context) ->
-    Call = {invoicing, 'Rescind', [maps:get(invoiceID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))]},
+    CallArgs = {maps:get(invoiceID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))},
+    Call = {invoicing, 'Rescind', CallArgs},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _} ->
             {ok, {204, #{}, undefined}};
@@ -150,7 +152,7 @@ process_request('GetInvoiceEvents', Req, Context) ->
             fun(Range) ->
                 capi_handler_utils:service_call_with(
                     [user_info],
-                    {invoicing, 'GetEvents', [maps:get(invoiceID, Req), Range]},
+                    {invoicing, 'GetEvents', {maps:get(invoiceID, Req), Range}},
                     Context
                 )
             end,
@@ -177,7 +179,7 @@ process_request('GetInvoicePaymentMethods', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
     Revision = Party#domain_Party.revision,
-    Args = [InvoiceID, {revision, Revision}],
+    Args = {InvoiceID, {revision, Revision}},
     case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, Args, Context) of
         {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
             PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
@@ -204,7 +206,7 @@ create_invoice(PartyID, #{<<"externalID">> := ExternalID} = InvoiceParams, Conte
     BenderParams = {Hash, Features},
     case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
         {ok, ID} ->
-            Call = {invoicing, 'Create', [encode_invoice_params(ID, PartyID, InvoiceParams)]},
+            Call = {invoicing, 'Create', {encode_invoice_params(ID, PartyID, InvoiceParams)}},
             capi_handler_utils:service_call_with([user_info], Call, Context);
         {error, {external_id_conflict, ID, undefined}} ->
             logger:warning("This externalID: ~p, used in another request.~n", [ID]),
@@ -216,7 +218,7 @@ create_invoice(PartyID, #{<<"externalID">> := ExternalID} = InvoiceParams, Conte
     end;
 create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context, _) ->
     {ok, {ID, _}} = bender_generator_client:gen_snowflake(WoodyCtx),
-    Call = {invoicing, 'Create', [encode_invoice_params(ID, PartyID, InvoiceParams)]},
+    Call = {invoicing, 'Create', {encode_invoice_params(ID, PartyID, InvoiceParams)}},
     capi_handler_utils:service_call_with([user_info], Call, Context).
 
 encode_invoice_params(ID, PartyID, InvoiceParams) ->
