@@ -20,7 +20,7 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
     PartyID = maps:get(<<"partyID">>, InvoiceTemplateParams, UserID),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     try
-        CallArgs = [encode_invoice_tpl_create_params(PartyID, InvoiceTemplateParams)],
+        CallArgs = {encode_invoice_tpl_create_params(PartyID, InvoiceTemplateParams)},
         capi_handler_utils:service_call_with(
             [user_info],
             {invoice_templating, 'Create', CallArgs},
@@ -62,7 +62,7 @@ process_request('GetInvoiceTemplateByID', Req, Context) ->
 process_request('UpdateInvoiceTemplate', Req, Context) ->
     try
         Params = encode_invoice_tpl_update_params(maps:get('InvoiceTemplateUpdateParams', Req)),
-        Call = {invoice_templating, 'Update', [maps:get('invoiceTemplateID', Req), Params]},
+        Call = {invoice_templating, 'Update', {maps:get('invoiceTemplateID', Req), Params}},
         capi_handler_utils:service_call_with([user_info], Call, Context)
     of
         {ok, InvoiceTpl} ->
@@ -96,7 +96,7 @@ process_request('UpdateInvoiceTemplate', Req, Context) ->
             {ok, logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}
     end;
 process_request('DeleteInvoiceTemplate', Req, Context) ->
-    Call = {invoice_templating, 'Delete', [maps:get('invoiceTemplateID', Req)]},
+    Call = {invoice_templating, 'Delete', {maps:get('invoiceTemplateID', Req)}},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _R} ->
             {ok, {204, #{}, undefined}};
@@ -169,7 +169,7 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
     Timestamp = genlib_rfc3339:format_relaxed(erlang:system_time(microsecond), microsecond),
     {ok, Party} = capi_handler_utils:get_party(Context),
     Revision = Party#domain_Party.revision,
-    Args = [InvoiceTemplateID, Timestamp, {revision, Revision}],
+    Args = {InvoiceTemplateID, Timestamp, {revision, Revision}},
     case capi_handler_decoder_invoicing:construct_payment_methods(invoice_templating, Args, Context) of
         {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
             PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
@@ -195,8 +195,8 @@ create_invoice(PartyID, InvoiceTplID, #{<<"externalID">> := ExternalID} = Invoic
     BenderParams = {Hash, Features},
     case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
         {ok, InvoiceID} ->
-            Params = [encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams)],
-            Call = {invoicing, 'CreateWithTemplate', Params},
+            CallArgs = {encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams)},
+            Call = {invoicing, 'CreateWithTemplate', CallArgs},
             capi_handler_utils:service_call_with([user_info], Call, Context);
         {error, {external_id_conflict, ID, undefined}} ->
             throw({external_id_conflict, ID, ExternalID});
@@ -208,12 +208,12 @@ create_invoice(PartyID, InvoiceTplID, #{<<"externalID">> := ExternalID} = Invoic
 create_invoice(_PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx} = Context, _) ->
     {ok, {InvoiceID, _}} = bender_generator_client:gen_snowflake(WoodyCtx),
     InvoiceParamsWithEID = InvoiceParams#{<<"externalID">> => undefined},
-    Params = [encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParamsWithEID)],
-    Call = {invoicing, 'CreateWithTemplate', Params},
+    CallArgs = {encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParamsWithEID)},
+    Call = {invoicing, 'CreateWithTemplate', CallArgs},
     capi_handler_utils:service_call_with([user_info], Call, Context).
 
 get_invoice_template(ID, Context) ->
-    Call = {invoice_templating, 'Get', [ID]},
+    Call = {invoice_templating, 'Get', {ID}},
     capi_handler_utils:service_call_with([user_info], Call, Context).
 
 encode_invoice_tpl_create_params(PartyID, Params) ->

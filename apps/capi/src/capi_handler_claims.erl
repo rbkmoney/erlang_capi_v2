@@ -14,17 +14,14 @@
     Context :: capi_handler:processing_context()
 ) -> {ok | error, capi_handler:response() | noimpl}.
 process_request('GetClaims', Req, Context) ->
-    Call = {party_management, 'GetClaims', []},
+    Call = {party_management, 'GetClaims', {}},
     Claims = capi_utils:unwrap(
         capi_handler_utils:service_call_with([user_info, party_id], Call, Context)
     ),
     {ok, {200, #{}, decode_claims(filter_claims(maps:get('claimStatus', Req), Claims))}};
 process_request('GetClaimByID', Req, Context) ->
-    Call = {
-        party_management,
-        'GetClaim',
-        [capi_handler_utils:get_party_id(Context), genlib:to_int(maps:get('claimID', Req))]
-    },
+    CallArgs = {capi_handler_utils:get_party_id(Context), genlib:to_int(maps:get('claimID', Req))},
+    Call = {party_management, 'GetClaim', CallArgs},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, Claim} ->
             case is_wallet_claim(Claim) of
@@ -40,7 +37,8 @@ process_request('GetClaimByID', Req, Context) ->
 process_request('CreateClaim', Req, Context) ->
     try
         Changeset = encode_claim_changeset(maps:get('ClaimChangeset', Req)),
-        Call = {party_management, 'CreateClaim', [capi_handler_utils:get_party_id(Context), Changeset]},
+        CallArgs = {capi_handler_utils:get_party_id(Context), Changeset},
+        Call = {party_management, 'CreateClaim', CallArgs},
         case capi_handler_utils:service_call_with([user_info], Call, Context) of
             {ok, Claim} ->
                 {ok, {201, #{}, decode_claim(Claim)}};
@@ -81,12 +79,12 @@ process_request('CreateClaim', Req, Context) ->
 %     {ok, {200, #{}, capi_handler_utils:capi_handler_decoder_party:decode_party(Party)}};
 
 process_request('RevokeClaimByID', Req, Context) ->
-    Call =
-        {party_management, 'RevokeClaim', [
-            genlib:to_int(maps:get('claimID', Req)),
-            genlib:to_int(maps:get('claimRevision', Req)),
-            encode_reason(maps:get('Reason', Req))
-        ]},
+    CallArgs = {
+        genlib:to_int(maps:get('claimID', Req)),
+        genlib:to_int(maps:get('claimRevision', Req)),
+        encode_reason(maps:get('Reason', Req))
+    },
+    Call = {party_management, 'RevokeClaim', CallArgs},
     case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
         {ok, _} ->
             {ok, {204, #{}, undefined}};

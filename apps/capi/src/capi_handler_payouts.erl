@@ -36,7 +36,7 @@ process_request('GetPayoutToolByID', Req, Context) ->
     end;
 process_request('GetPayout', Req, Context) ->
     PayoutID = maps:get(payoutID, Req),
-    case capi_handler_utils:service_call({payouts, 'Get', [PayoutID]}, Context) of
+    case capi_handler_utils:service_call({payouts, 'Get', {PayoutID}}, Context) of
         {ok, Payout} ->
             case check_party_in_payout(capi_handler_utils:get_party_id(Context), Payout) of
                 true ->
@@ -53,8 +53,8 @@ process_request('CreatePayout', Req, Context) ->
     PartyID = maps:get(<<"partyID">>, PayoutParams, UserID),
     CreateRequest = encode_payout_params(PartyID, PayoutParams),
     try
-        capi_handler_utils:assert_party_accessible(UserID, PartyID),
-        case capi_handler_utils:service_call({payouts, 'CreatePayout', [CreateRequest]}, Context) of
+        _ = capi_handler_utils:assert_party_accessible(UserID, PartyID),
+        case capi_handler_utils:service_call({payouts, 'CreatePayout', {CreateRequest}}, Context) of
             {ok, Payout} ->
                 {ok, {201, #{}, decode_payout(Payout)}};
             {exception, Exception} ->

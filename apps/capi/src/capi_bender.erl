@@ -89,7 +89,7 @@ get_idempotent_key(Prefix, PartyID, ExternalID) ->
 
 -spec get_internal_id(binary(), woody_context()) -> {ok, binary(), context_data()} | {error, internal_id_not_found}.
 get_internal_id(ExternalID, WoodyContext) ->
-    case capi_woody_client:call_service(bender, 'GetInternalID', [ExternalID], WoodyContext) of
+    case capi_woody_client:call_service(bender, 'GetInternalID', {ExternalID}, WoodyContext) of
         {ok, #bender_GetInternalIDResult{
             internal_id = InternalID,
             context = Context
@@ -107,7 +107,7 @@ gen_external_id() ->
 
 generate_id(Key, BenderSchema, {Hash, Features}, WoodyContext, CtxData) ->
     BenderCtx = create_bender_ctx(Features, CtxData),
-    Args = [Key, BenderSchema, capi_msgp_marshalling:marshal(BenderCtx)],
+    Args = {Key, BenderSchema, capi_msgp_marshalling:marshal(BenderCtx)},
     Result =
         case capi_woody_client:call_service(bender, 'GenerateID', Args, WoodyContext) of
             {ok, #bender_GenerationResult{internal_id = InternalID, context = undefined}} ->

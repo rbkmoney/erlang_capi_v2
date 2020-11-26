@@ -176,7 +176,7 @@ get_invoice_events_ok_test(Config) ->
     end,
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('GetEvents', [_, _, #payproc_EventRange{'after' = ID, limit = N}]) ->
+            {invoicing, fun('GetEvents', {_, _, #payproc_EventRange{'after' = ID, limit = N}}) ->
                 {ok,
                     lists:sublist(
                         [
@@ -217,7 +217,7 @@ create_payment_ok_test(Config) ->
     ExternalID = <<"merch_id">>,
     capi_ct_helper:mock_services(
         [
-            {invoicing, fun('StartPayment', [_, _, IPP]) ->
+            {invoicing, fun('StartPayment', {_, _, IPP}) ->
                 #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
                 {ok, ?PAYPROC_PAYMENT(ID, EID)}
             end},
@@ -275,7 +275,7 @@ create_payment_with_empty_cvv_ok_test(Config) ->
         [
             {invoicing, fun(
                 'StartPayment',
-                [
+                {
                     _UserInfo,
                     _InvoiceID,
                     #payproc_InvoicePaymentParams{
@@ -289,7 +289,7 @@ create_payment_with_empty_cvv_ok_test(Config) ->
                                 }
                             }}
                     }
-                ]
+                }
             ) ->
                 {ok, ?PAYPROC_PAYMENT}
             end},
@@ -317,7 +317,7 @@ create_payment_qiwi_access_token_ok_test(Config) ->
         [
             {invoicing, fun(
                 'StartPayment',
-                [
+                {
                     _UserInfo,
                     _InvoiceID,
                     #payproc_InvoicePaymentParams{
@@ -331,7 +331,7 @@ create_payment_qiwi_access_token_ok_test(Config) ->
                                 }
                             }}
                     }
-                ]
+                }
             ) ->
                 {ok, ?PAYPROC_PAYMENT}
             end},
@@ -357,7 +357,7 @@ create_payment_with_googlepay_encrypt_ok_test(Config) ->
         [
             {invoicing, fun(
                 'StartPayment',
-                [
+                {
                     _UserInfo,
                     _InvoiceID,
                     #payproc_InvoicePaymentParams{
@@ -375,7 +375,7 @@ create_payment_with_googlepay_encrypt_ok_test(Config) ->
                                 }
                             }}
                     }
-                ]
+                }
             ) ->
                 {ok, ?PAYPROC_PAYMENT}
             end},
@@ -438,7 +438,7 @@ capture_partial_payment_ok_test(Config) ->
         [
             {invoicing, fun(
                 'CapturePayment',
-                [
+                {
                     _,
                     _,
                     _,
@@ -446,7 +446,7 @@ capture_partial_payment_ok_test(Config) ->
                         cash = ?CASH,
                         cart = ?THRIFT_INVOICE_CART
                     }
-                ]
+                }
             ) ->
                 {ok, ok}
             end}

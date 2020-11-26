@@ -121,12 +121,12 @@ process_search_request(QueryType, Query, Req, Context, Opts = #{thrift_fun := Th
     Call = {
         merchant_stat,
         ThriftFun,
-        [
+        {
             capi_handler_encoder:encode_stat_request(
                 capi_handler_utils:create_dsl(QueryType, Query, QueryParams),
                 ContinuationToken
             )
-        ]
+        }
     },
     process_search_request_result(QueryType, capi_handler_utils:service_call(Call, Context), Context, Opts).
 

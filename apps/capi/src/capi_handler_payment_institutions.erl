@@ -97,7 +97,8 @@ check_payment_institution_residence(Residence, #domain_PaymentInstitutionObject{
     ordsets:is_element(Residence, Residences).
 
 compute_payment_institution_terms(PaymentInstitutionID, VS, Context) ->
-    Call = {party_management, 'ComputePaymentInstitutionTerms', [?payment_institution_ref(PaymentInstitutionID), VS]},
+    CallArgs = {?payment_institution_ref(PaymentInstitutionID), VS},
+    Call = {party_management, 'ComputePaymentInstitutionTerms', CallArgs},
     capi_handler_utils:service_call_with([user_info], Call, Context).
 
 prepare_varset(Req, Context) ->

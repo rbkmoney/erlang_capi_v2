@@ -407,7 +407,7 @@ decode_invoice_line_tax_mode(#{<<"TaxMode">> := {str, TM}}) ->
 decode_invoice_line_tax_mode(_) ->
     undefined.
 
--spec construct_payment_methods(atom(), list(), processing_context()) -> {ok, list()} | woody:result().
+-spec construct_payment_methods(atom(), tuple(), processing_context()) -> {ok, list()} | woody:result().
 construct_payment_methods(ServiceName, Args, Context) ->
     case compute_terms(ServiceName, Args, Context) of
         {ok, #domain_TermSet{payments = undefined}} ->

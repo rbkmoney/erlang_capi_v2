@@ -309,7 +309,7 @@ create_invoice_ok_test(Config) ->
 create_invoice_autorization_error_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {invoicing, fun('Create', [_, #payproc_InvoiceParams{party_id = <<"WrongPartyID">>}]) ->
+            {invoicing, fun('Create', {_, #payproc_InvoiceParams{party_id = <<"WrongPartyID">>}}) ->
                 throw(#payproc_InvalidUser{})
             end},
             {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
@@ -349,7 +349,7 @@ create_invoice_access_token_ok_test(Config) ->
 create_invoice_template_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {invoice_templating, fun('Create', [_, #payproc_InvoiceTemplateCreateParams{party_id = ?STRING}]) ->
+            {invoice_templating, fun('Create', {_, #payproc_InvoiceTemplateCreateParams{party_id = ?STRING}}) ->
                 {ok, ?INVOICE_TPL}
             end}
         ],
@@ -381,7 +381,7 @@ create_invoice_template_autorization_error_test(Config) ->
         [
             {invoice_templating, fun(
                 'Create',
-                [_, #payproc_InvoiceTemplateCreateParams{party_id = <<"WrongPartyID">>}]
+                {_, #payproc_InvoiceTemplateCreateParams{party_id = <<"WrongPartyID">>}}
             ) ->
                 throw(#payproc_InvalidUser{})
             end}
@@ -417,7 +417,7 @@ create_invoice_with_template_test(Config) ->
             end},
             {invoicing, fun(
                 'CreateWithTemplate',
-                [_UserInfo, #payproc_InvoiceWithTemplateParams{id = ID, external_id = EID}]
+                {_UserInfo, #payproc_InvoiceWithTemplateParams{id = ID, external_id = EID}}
             ) ->
                 {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
             end},
@@ -472,7 +472,7 @@ create_invoice_with_template_test(Config) ->
 create_customer_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {customer_management, fun('Create', [#payproc_CustomerParams{party_id = ?STRING}]) -> {ok, ?CUSTOMER} end}
+            {customer_management, fun('Create', {#payproc_CustomerParams{party_id = ?STRING}}) -> {ok, ?CUSTOMER} end}
         ],
         Config
     ),
@@ -482,7 +482,7 @@ create_customer_ok_test(Config) ->
 create_customer_autorization_error_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {customer_management, fun('Create', [#payproc_CustomerParams{party_id = <<"WrongPartyID">>}]) ->
+            {customer_management, fun('Create', {#payproc_CustomerParams{party_id = <<"WrongPartyID">>}}) ->
                 throw(#payproc_InvalidUser{})
             end}
         ],
@@ -594,11 +594,11 @@ create_refund_error(Config) ->
     capi_ct_helper:mock_services(
         [
             {invoicing, fun
-                ('RefundPayment', [_, <<"42">> | _]) ->
+                ('RefundPayment', {_, <<"42">>, _, _}) ->
                     throw(#payproc_InvalidPartyStatus{
                         status = {blocking, {blocked, #domain_Blocked{reason = ?STRING, since = ?TIMESTAMP}}}
                     });
-                ('RefundPayment', [_, <<"43">> | _]) ->
+                ('RefundPayment', {_, <<"43">>, _, _}) ->
                     throw(#payproc_InvalidContractStatus{
                         status = {expired, #domain_ContractExpired{}}
                     })
@@ -619,7 +619,7 @@ create_partial_refund(Config) ->
         [
             {invoicing, fun(
                 'RefundPayment',
-                [
+                {
                     _,
                     _,
                     _,
@@ -627,7 +627,7 @@ create_partial_refund(Config) ->
                         cash = ?CASH,
                         cart = ?THRIFT_INVOICE_CART
                     }
-                ]
+                }
             ) ->
                 {ok, ?REFUND}
             end},
@@ -797,7 +797,7 @@ get_shop_by_id_for_party_ok_test(Config) ->
 get_shop_by_id_for_party_error_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {party_management, fun('GetShop', [_, <<"WrongPartyID">>, _]) -> throw(#payproc_InvalidUser{}) end}
+            {party_management, fun('GetShop', {_, <<"WrongPartyID">>, _}) -> throw(#payproc_InvalidUser{}) end}
         ],
         Config
     ),
@@ -825,7 +825,7 @@ get_shops_for_party_ok_test(Config) ->
 get_shops_for_party_error_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {party_management, fun('Get', [_, <<"WrongPartyID">>]) -> throw(#payproc_InvalidUser{}) end}
+            {party_management, fun('Get', {_, <<"WrongPartyID">>}) -> throw(#payproc_InvalidUser{}) end}
         ],
         Config
     ),
@@ -843,7 +843,7 @@ activate_shop_ok_test(Config) ->
 activate_shop_for_party_ok_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {party_management, fun('ActivateShop', [_, ?STRING, _]) -> {ok, ok} end}
+            {party_management, fun('ActivateShop', {_, ?STRING, _}) -> {ok, ok} end}
         ],
         Config
     ),
@@ -853,7 +853,7 @@ activate_shop_for_party_ok_test(Config) ->
 activate_shop_for_party_error_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {party_management, fun('ActivateShop', [_, <<"WrongPartyID">>, _]) -> throw(#payproc_InvalidUser{}) end}
+            {party_management, fun('ActivateShop', {_, <<"WrongPartyID">>, _}) -> throw(#payproc_InvalidUser{}) end}
         ],
         Config
     ),
@@ -881,7 +881,7 @@ suspend_shop_for_party_ok_test(Config) ->
 suspend_shop_for_party_error_test(Config) ->
     capi_ct_helper:mock_services(
         [
-            {party_management, fun('SuspendShop', [_, <<"WrongPartyID">>, _]) -> throw(#payproc_InvalidUser{}) end}
+            {party_management, fun('SuspendShop', {_, <<"WrongPartyID">>, _}) -> throw(#payproc_InvalidUser{}) end}
         ],
         Config
     ),
@@ -1474,7 +1474,7 @@ create_report_ok_test(Config) ->
         [
             {reporting, fun
                 ('CreateReport', _) -> {ok, ?INTEGER};
-                ('GetReport', [?INTEGER]) -> {ok, ?REPORT}
+                ('GetReport', {?INTEGER}) -> {ok, ?REPORT}
             end}
         ],
         Config
