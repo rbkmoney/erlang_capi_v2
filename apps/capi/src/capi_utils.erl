@@ -299,6 +299,14 @@ no_deduplication_test() ->
                 <<"visa">>,
                 <<"visaelectron">>
             ]
+        },
+        #{
+            <<"method">> => <<"BankCard">>,
+            <<"paymentSystems">> => [
+                <<"mastercard">>,
+                <<"visa">>
+            ],
+            <<"tokenProviders">> => [<<"yandexpay">>]
         }
     ],
     Methods = deduplicate_payment_methods(Methods).
