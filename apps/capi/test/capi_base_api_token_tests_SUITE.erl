@@ -1269,6 +1269,10 @@ get_locations_names_ok_test(Config) ->
 -spec search_invoices_ok_test(config()) -> _.
 search_invoices_ok_test(Config) ->
     capi_ct_helper:mock_services([{merchant_stat, fun('GetInvoices', _) -> {ok, ?STAT_RESPONSE_INVOICES} end}], Config),
+    ok = search_invoices_ok_test_(<<"applepay">>, Config),
+    ok = search_invoices_ok_test_(<<"yandexpay">>, Config).
+
+search_invoices_ok_test_(BankCardTokenProvider, Config) ->
     Query = [
         {limit, 2},
         {from_time, {{2015, 08, 11}, {19, 42, 35}}},
@@ -1285,17 +1289,21 @@ search_invoices_ok_test(Config) ->
         {first6, <<"424242">>},
         {last4, <<"2222">>},
         {rrn, <<"090909090909">>},
-        {bankCardTokenProvider, <<"applepay">>},
+        {bankCardTokenProvider, BankCardTokenProvider},
         {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000},
         {continuationToken, <<"come_back_next_time">>}
     ],
-
-    {ok, _, _} = capi_client_searches:search_invoices(?config(context, Config), ?STRING, Query).
+    {ok, _, _} = capi_client_searches:search_invoices(?config(context, Config), ?STRING, Query),
+    ok.
 
 -spec search_payments_ok_test(config()) -> _.
 search_payments_ok_test(Config) ->
     capi_ct_helper:mock_services([{merchant_stat, fun('GetPayments', _) -> {ok, ?STAT_RESPONSE_PAYMENTS} end}], Config),
+    ok = search_payments_ok_(<<"applepay">>, Config),
+    ok = search_payments_ok_(<<"yandexpay">>, Config).
+
+search_payments_ok_(BankCardTokenProvider, Config) ->
     Query = [
         {limit, 2},
         {from_time, {{2015, 08, 11}, {19, 42, 35}}},
@@ -1312,12 +1320,13 @@ search_payments_ok_test(Config) ->
         {last4, <<"2222">>},
         {rrn, <<"090909090909">>},
         {approvalCode, <<"808080">>},
-        {bankCardTokenProvider, <<"applepay">>},
+        {bankCardTokenProvider, BankCardTokenProvider},
         {bankCardPaymentSystem, <<"visa">>},
         {paymentAmount, 10000},
         {continuationToken, <<"come_back_next_time">>}
     ],
-    {ok, _, _} = capi_client_searches:search_payments(?config(context, Config), ?STRING, Query).
+    {ok, _, _} = capi_client_searches:search_payments(?config(context, Config), ?STRING, Query),
+    ok.
 
 -spec search_refunds_ok_test(config()) -> _.
 search_refunds_ok_test(Config) ->
