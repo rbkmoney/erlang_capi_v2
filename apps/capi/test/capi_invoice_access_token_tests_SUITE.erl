@@ -31,6 +31,7 @@
     create_payment_with_googlepay_encrypt_ok_test/1,
     get_payments_ok_test/1,
     get_payment_by_id_ok_test/1,
+    get_payment_by_id_trx_ok_test/1,
     get_client_payment_status_test/1,
     cancel_payment_ok_test/1,
     capture_payment_ok_test/1,
@@ -76,6 +77,7 @@ invoice_access_token_tests() ->
         get_payments_ok_test,
         get_client_payment_status_test,
         get_payment_by_id_ok_test,
+        get_payment_by_id_trx_ok_test,
         cancel_payment_ok_test,
         capture_payment_ok_test,
         capture_partial_payment_ok_test,
@@ -411,6 +413,16 @@ get_payment_by_id_ok_test(Config) ->
     Result = ?PAYPROC_PAYMENT(?PAYMENT_WITH_RECURRENT_PAYER, [?REFUND], [?ADJUSTMENT], [?PAYPROC_CHARGEBACK]),
     capi_ct_helper:mock_services([{invoicing, fun('GetPayment', _) -> {ok, Result} end}], Config),
     {ok, _} = capi_client_payments:get_payment_by_id(?config(context, Config), ?STRING, ?STRING).
+
+-spec get_payment_by_id_trx_ok_test(config()) -> _.
+get_payment_by_id_trx_ok_test(Config) ->
+    capi_ct_helper:mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
+    {ok, #{
+        <<"transactionInfo">> := #{
+            <<"rrn">> := <<"090909090909">>,
+            <<"approvalCode">> := <<"808080">>
+        }
+    }} = capi_client_payments:get_payment_by_id(?config(context, Config), ?STRING, ?STRING).
 
 -spec get_client_payment_status_test(config()) -> _.
 get_client_payment_status_test(Config) ->

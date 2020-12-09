@@ -262,7 +262,8 @@
     chargebacks = Chargebacks,
     sessions = [],
     legacy_refunds = Refunds,
-    adjustments = Adjustments
+    adjustments = Adjustments,
+    last_transaction_info = ?TX_INFO
 }).
 
 -define(PAYPROC_PAYMENT, ?PAYPROC_PAYMENT(?PAYMENT, [?REFUND], [?ADJUSTMENT], [?PAYPROC_CHARGEBACK])).
@@ -817,10 +818,17 @@
     payer = Payer,
     context = ?CONTENT,
     domain_revision = ?INTEGER,
-    additional_transaction_info = ?TX_INFO
+    additional_transaction_info = ?ADDITIONAL_TX_INFO
 }).
 
--define(TX_INFO, #domain_AdditionalTransactionInfo{
+-define(TX_INFO, #domain_TransactionInfo{
+    id = ?STRING,
+    timestamp = ?TIMESTAMP,
+    extra = #{},
+    additional_info = ?ADDITIONAL_TX_INFO
+}).
+
+-define(ADDITIONAL_TX_INFO, #domain_AdditionalTransactionInfo{
     rrn = <<"090909090909">>,
     approval_code = <<"808080">>
 }).

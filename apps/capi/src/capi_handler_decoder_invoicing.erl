@@ -5,6 +5,7 @@
 
 -export([decode_user_interaction_form/1]).
 -export([decode_user_interaction/1]).
+-export([decode_invoice_payment/3]).
 -export([decode_payment/3]).
 -export([decode_chargeback/2]).
 -export([decode_refund/2]).
@@ -147,6 +148,32 @@ decode_payment(InvoiceID, Payment, Context) ->
         },
         decode_payment_status(Payment#domain_InvoicePayment.status, Context)
     ).
+
+-spec decode_invoice_payment(binary(), capi_handler_encoder:encode_data(), processing_context()) ->
+    capi_handler_decoder_utils:decode_data().
+decode_invoice_payment(InvoiceID, InvoicePayment = #payproc_InvoicePayment{payment = Payment}, Context) ->
+    capi_handler_utils:merge_and_compact(
+        decode_payment(InvoiceID, Payment, Context),
+        #{
+            <<"transactionInfo">> => decode_last_tx_info(InvoicePayment#payproc_InvoicePayment.last_transaction_info)
+        }
+    ).
+
+decode_last_tx_info(undefined) ->
+    undefined;
+decode_last_tx_info(TransactionInfo) ->
+    decode_additional_tx_info(TransactionInfo#domain_TransactionInfo.additional_info).
+
+decode_additional_tx_info(undefined) ->
+    undefined;
+decode_additional_tx_info(AdditionalTransactionInfo) ->
+    RRN = AdditionalTransactionInfo#domain_AdditionalTransactionInfo.rrn,
+    AAC = AdditionalTransactionInfo#domain_AdditionalTransactionInfo.approval_code,
+    ParsedTransactionInfo = #{
+        <<"rrn">> => RRN,
+        <<"approvalCode">> => AAC
+    },
+    genlib_map:compact(ParsedTransactionInfo).
 
 decode_payer(
     {customer, #domain_CustomerPayer{

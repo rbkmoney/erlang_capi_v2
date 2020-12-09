@@ -536,8 +536,8 @@ encode_optional_cash(_, _, _, _) ->
 
 %%
 
-decode_invoice_payment(InvoiceID, #payproc_InvoicePayment{payment = Payment}, Context) ->
-    capi_handler_decoder_invoicing:decode_payment(InvoiceID, Payment, Context).
+decode_invoice_payment(InvoiceID, InvoicePayment, Context) ->
+    capi_handler_decoder_invoicing:decode_invoice_payment(InvoiceID, InvoicePayment, Context).
 
 get_refund_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
