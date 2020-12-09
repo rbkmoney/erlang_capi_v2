@@ -167,13 +167,10 @@ decode_last_tx_info(TransactionInfo) ->
 decode_additional_tx_info(undefined) ->
     undefined;
 decode_additional_tx_info(AdditionalTransactionInfo) ->
-    RRN = AdditionalTransactionInfo#domain_AdditionalTransactionInfo.rrn,
-    AAC = AdditionalTransactionInfo#domain_AdditionalTransactionInfo.approval_code,
-    ParsedTransactionInfo = #{
-        <<"rrn">> => RRN,
-        <<"approvalCode">> => AAC
-    },
-    genlib_map:compact(ParsedTransactionInfo).
+    genlib_map:compact(#{
+        <<"rrn">> => AdditionalTransactionInfo#domain_AdditionalTransactionInfo.rrn,
+        <<"approvalCode">> => AdditionalTransactionInfo#domain_AdditionalTransactionInfo.approval_code
+    }).
 
 decode_payer(
     {customer, #domain_CustomerPayer{
