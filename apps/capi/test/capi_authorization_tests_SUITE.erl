@@ -177,7 +177,7 @@ issue_dummy_token(ACL, Config) ->
     JWKPublic = jose_jwk:to_public(GoodJWK),
     {_Module, PublicKey} = JWKPublic#jose_jwk.kty,
     {_PemEntry, Data, _} = public_key:pem_entry_encode('SubjectPublicKeyInfo', PublicKey),
-    KID = base64url:encode(crypto:hash(sha256, Data)),
+    KID = jose_base64url:encode(crypto:hash(sha256, Data)),
     JWT = jose_jwt:sign(BadJWK, #{<<"alg">> => <<"RS256">>, <<"kid">> => KID}, Claims),
     {_Modules, Token} = jose_jws:compact(JWT),
     {ok, Token}.
