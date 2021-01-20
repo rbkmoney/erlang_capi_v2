@@ -78,7 +78,7 @@ start_capi(Config, ExtraEnv) ->
     JwkPublSource = {json, {file, get_keysource("keys/local/jwk.publ.json", Config)}},
     JwkPrivSource = {json, {file, get_keysource("keys/local/jwk.priv.json", Config)}},
     BlacklistedKeysDir = get_blacklisted_keys_dir(Config),
-    file:make_dir(BlacklistedKeysDir),
+    ok = file:make_dir(BlacklistedKeysDir),
     CapiEnv =
         ExtraEnv ++
             [
@@ -182,7 +182,7 @@ mock_services(Services, SupOrConfig) ->
         end,
         Services
     ),
-    start_bender_client(mock_services_(BenderClientServices, SupOrConfig)),
+    _ = start_bender_client(mock_services_(BenderClientServices, SupOrConfig)),
     start_woody_client(mock_services_(WoodyServices, SupOrConfig)).
 
 start_bender_client(Services) ->

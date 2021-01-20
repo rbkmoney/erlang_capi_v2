@@ -16,14 +16,13 @@
 -export([generate_id/1]).
 
 -spec create_storage() -> tid().
--spec del_storage(tid()) -> ok.
--spec get_internal_id(tid(), internal_id(), msg_pack()) -> bender_thrift:bender_GenerationResult().
--spec generate_id(binary()) -> bender_thrift:bender_GenerateID().
+-spec del_storage(tid()) -> true.
+-spec get_internal_id(tid(), internal_id(), msg_pack()) -> {ok, bender_thrift:'GenerationResult'()}.
+-spec generate_id(binary()) -> {ok, bender_thrift:'GeneratedID'()}.
 
--spec get_result(binary()) -> bender_thrift:bender_GenerationResult().
--spec get_result(binary(), msgpack_thrift:'Value'() | undefined) -> bender_thrift:bender_GenerationResult().
--spec get_internal_id_result(binary(), msgpack_thrift:'Value'() | undefined) ->
-    bender_thrift:bender_GetInternalIDResult().
+-spec get_result(binary()) -> bender_thrift:'GenerationResult'().
+-spec get_result(binary(), msgpack_thrift:'Value'() | undefined) -> bender_thrift:'GenerationResult'().
+-spec get_internal_id_result(binary(), msgpack_thrift:'Value'() | undefined) -> bender_thrift:'GetInternalIDResult'().
 
 -spec no_internal_id() -> bender_thrift:'InternalIDNotFound'().
 

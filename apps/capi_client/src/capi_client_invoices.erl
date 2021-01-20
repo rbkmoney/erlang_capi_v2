@@ -64,7 +64,7 @@ get_invoice_by_external_id(Context, ExternalID) ->
     Response = swag_client_invoices_api:get_invoice_by_external_id(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 
--spec fulfill_invoice(context(), binary(), string()) -> ok | {error, term()}.
+-spec fulfill_invoice(context(), binary(), binary()) -> ok | {error, term()}.
 fulfill_invoice(Context, InvoiceID, Reason) ->
     Params = #{
         binding => #{<<"invoiceID">> => InvoiceID},
@@ -77,7 +77,7 @@ fulfill_invoice(Context, InvoiceID, Reason) ->
         {error, Error} -> {error, Error}
     end.
 
--spec rescind_invoice(context(), binary(), string()) -> ok | {error, term()}.
+-spec rescind_invoice(context(), binary(), binary()) -> ok | {error, term()}.
 rescind_invoice(Context, InvoiceID, Reason) ->
     Params = #{
         binding => #{<<"invoiceID">> => InvoiceID},

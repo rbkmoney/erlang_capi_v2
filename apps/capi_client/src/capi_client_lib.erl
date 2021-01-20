@@ -16,7 +16,7 @@
     timeout := integer(),
     event_handler := event_handler(),
     protocol := protocol(),
-    deadline := iolist() | undefined,
+    deadline := iodata() | undefined,
     extra_properties := map()
 }.
 
@@ -116,7 +116,7 @@ get_context(Url, Token, Timeout, Protocol, ExtraProperties) ->
 get_context(Url, Token, Timeout, Protocol, ExtraProperties, EventHandler) ->
     get_context(Url, Token, Timeout, Protocol, ExtraProperties, EventHandler, undefined).
 
--spec get_context(string(), term(), integer(), protocol(), map(), event_handler(), iolist() | undefined) -> context().
+-spec get_context(string(), term(), integer(), protocol(), map(), event_handler(), iodata() | undefined) -> context().
 get_context(Url, Token, Timeout, Protocol, ExtraProperties, EventHandler, Deadline) ->
     #{
         url => Url,
@@ -162,7 +162,7 @@ headers(#{deadline := Deadline} = Context) ->
 x_request_id_header() ->
     {<<"X-Request-ID">>, integer_to_binary(rand:uniform(100000))}.
 
--spec x_request_deadline_header(iolist() | undefined, list()) -> list().
+-spec x_request_deadline_header(iodata() | undefined, list()) -> list().
 x_request_deadline_header(undefined, Headers) ->
     Headers;
 x_request_deadline_header(Time, Headers) ->

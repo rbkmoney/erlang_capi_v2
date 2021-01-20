@@ -38,16 +38,19 @@
 -define(TPL_CASH, {fixed, ?CASH}).
 
 -define(INVOICE_STATUS(Status),
-    case Status of
-        unpaid ->
-            {unpaid, #domain_InvoiceUnpaid{}};
-        paid ->
-            {paid, #domain_InvoicePaid{}};
-        cancelled ->
-            {cancelled, #domain_InvoiceCancelled{details = ?STRING}};
-        fulfilled ->
-            {fulfilled, #domain_InvoiceFulfilled{details = ?STRING}}
-    end
+    erlang:apply(
+        fun
+            (unpaid) ->
+                {unpaid, #domain_InvoiceUnpaid{}};
+            (paid) ->
+                {paid, #domain_InvoicePaid{}};
+            (cancelled) ->
+                {cancelled, #domain_InvoiceCancelled{details = ?STRING}};
+            (fulfilled) ->
+                {fulfilled, #domain_InvoiceFulfilled{details = ?STRING}}
+        end,
+        [Status]
+    )
 ).
 
 -define(INVOICE, ?INVOICE(?STRING, undefined)).
@@ -272,7 +275,7 @@
 
 -define(FAILED_PAYMENT(Failure), ?PAYMENT(?STRING, ?STRING, {failed, #domain_InvoicePaymentFailed{failure = Failure}})).
 
--define(PAYPROC_FAILED_PAYMENT(Failure), ?PAYPROC_PAYMENT(?FAILED_PAYMENT(Failure), [], [], [])).
+-define(PAYPROC_FAILED_PAYMENT(Failure), ?PAYPROC_PAYMENT(?FAILED_PAYMENT(Failure), [?REFUND], [], [])).
 
 -define(ACCOUNT_STATE, #payproc_AccountState{
     account_id = ?INTEGER,
