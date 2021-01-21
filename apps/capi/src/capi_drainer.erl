@@ -15,6 +15,12 @@
 -export([handle_cast/2]).
 -export([terminate/2]).
 
+%% State
+
+-record(state, {ranch_ref = undefined :: undefined | ranch:ref()}).
+
+-type state() :: #state{}.
+
 %% API
 
 -spec child_spec(options()) -> supervisor:child_spec().
@@ -33,21 +39,21 @@ start_link(RanchRef) ->
 
 %% gen_server callbacks
 
--spec init(ranch:ref()) -> {ok, ranch:ref()}.
+-spec init(ranch:ref()) -> {ok, state()}.
 init(RanchRef) ->
     process_flag(trap_exit, true),
-    {ok, RanchRef}.
+    {ok, #state{ranch_ref = RanchRef}}.
 
--spec handle_call(_, _, ranch:ref()) -> {noreply, ranch:ref()}.
+-spec handle_call(_, _, state()) -> {noreply, state()}.
 handle_call(_Call, _From, St) ->
     {noreply, St}.
 
--spec handle_cast(_, ranch:ref()) -> {noreply, ranch:ref()}.
+-spec handle_cast(_, state()) -> {noreply, state()}.
 handle_cast(_Call, St) ->
     {noreply, St}.
 
--spec terminate(_, ranch:ref()) -> ok.
-terminate(shutdown, Ref) ->
+-spec terminate(_, state()) -> ok.
+terminate(shutdown, #state{ranch_ref = Ref}) ->
     ok = ranch:suspend_listener(Ref),
     ok = ranch:wait_for_connections(Ref, '==', 0);
 terminate(_, _) ->
