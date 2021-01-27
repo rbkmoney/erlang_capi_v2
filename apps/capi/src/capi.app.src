@@ -7,7 +7,6 @@
         kernel,
         stdlib,
         public_key,
-        logger_logstash_formatter,
         snowflake,
         genlib,
         woody,
