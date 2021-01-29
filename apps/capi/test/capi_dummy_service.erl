@@ -8,8 +8,8 @@
     {ok, woody:result()} | no_return().
 handle_function(FunName, Args, _, #{function := Fun}) ->
     case Fun(FunName, Args) of
-        {ok, _Reply} = Result ->
-            Result;
         {throwing, Exception} ->
-            erlang:throw(Exception)
+            erlang:throw(Exception);
+        Result ->
+            Result
     end.
