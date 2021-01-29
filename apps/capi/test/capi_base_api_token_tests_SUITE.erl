@@ -125,8 +125,6 @@
 -define(CAPI_HOST_NAME, "localhost").
 -define(CAPI_URL, ?CAPI_HOST_NAME ++ ":" ++ integer_to_list(?CAPI_PORT)).
 
--define(badresp(Code), {error, {invalid_response_code, Code}}).
-
 -type test_case_name() :: atom().
 -type config() :: [{atom(), any()}].
 -type group_name() :: atom().
@@ -311,7 +309,7 @@ create_invoice_autorization_error_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Create', {_, #payproc_InvoiceParams{party_id = <<"WrongPartyID">>}}) ->
-                throwing_reply(#payproc_InvalidUser{})
+                {throwing, #payproc_InvalidUser{}}
             end},
             {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
         ],
@@ -384,7 +382,7 @@ create_invoice_template_autorization_error_test(Config) ->
                 'Create',
                 {_, #payproc_InvoiceTemplateCreateParams{party_id = <<"WrongPartyID">>}}
             ) ->
-                throwing_reply(#payproc_InvalidUser{})
+                {throwing, #payproc_InvalidUser{}}
             end}
         ],
         Config
@@ -484,7 +482,7 @@ create_customer_autorization_error_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {customer_management, fun('Create', {#payproc_CustomerParams{party_id = <<"WrongPartyID">>}}) ->
-                throwing_reply(#payproc_InvalidUser{})
+                {throwing, #payproc_InvalidUser{}}
             end}
         ],
         Config
@@ -596,11 +594,11 @@ create_refund_error(Config) ->
         [
             {invoicing, fun
                 ('RefundPayment', {_, <<"42">>, _, _}) ->
-                    throwing_reply(#payproc_InvalidPartyStatus{
+                    {throwing, #payproc_InvalidPartyStatus{
                         status = {blocking, {blocked, #domain_Blocked{reason = ?STRING, since = ?TIMESTAMP}}}
-                    });
+                    }};
                 ('RefundPayment', {_, <<"43">>, _, _}) ->
-                    throwing_reply(#payproc_InvalidContractStatus{status = {expired, #domain_ContractExpired{}}})
+                    {throwing, #payproc_InvalidContractStatus{status = {expired, #domain_ContractExpired{}}}}
             end},
             {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(BenderKey) end}
         ],
@@ -798,7 +796,7 @@ get_shop_by_id_for_party_error_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {party_management, fun('GetShop', {_, <<"WrongPartyID">>, _}) ->
-                throwing_reply(#payproc_InvalidUser{})
+                {throwing, #payproc_InvalidUser{}}
             end}
         ],
         Config
@@ -826,7 +824,7 @@ get_shops_for_party_ok_test(Config) ->
 -spec get_shops_for_party_error_test(config()) -> _.
 get_shops_for_party_error_test(Config) ->
     _ = capi_ct_helper:mock_services(
-        [{party_management, fun('Get', {_, <<"WrongPartyID">>}) -> throwing_reply(#payproc_InvalidUser{}) end}],
+        [{party_management, fun('Get', {_, <<"WrongPartyID">>}) -> {throwing, #payproc_InvalidUser{}} end}],
         Config
     ),
     ?assertMatch(
@@ -854,7 +852,7 @@ activate_shop_for_party_error_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {party_management, fun('ActivateShop', {_, <<"WrongPartyID">>, _}) ->
-                throwing_reply(#payproc_InvalidUser{})
+                {throwing, #payproc_InvalidUser{}}
             end}
         ],
         Config
@@ -884,7 +882,7 @@ suspend_shop_for_party_error_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {party_management, fun('SuspendShop', {_, <<"WrongPartyID">>, _}) ->
-                throwing_reply(#payproc_InvalidUser{})
+                {throwing, #payproc_InvalidUser{}}
             end}
         ],
         Config
@@ -1209,7 +1207,7 @@ create_webhook_limit_exceeded_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {party_management, fun('GetShop', _) -> {ok, ?SHOP} end},
-            {webhook_manager, fun('Create', _) -> throwing_reply(#webhooker_LimitExceeded{}) end}
+            {webhook_manager, fun('Create', _) -> {throwing, #webhooker_LimitExceeded{}} end}
         ],
         Config
     ),
@@ -1575,7 +1573,9 @@ check_no_payment_by_external_id_test(Config) ->
     BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{<<"invoice_id">> => <<"123">>}}),
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('GetPayment', _) -> throwing_reply(#payproc_InvoicePaymentNotFound{}) end},
+            {invoicing, fun('GetPayment', _) ->
+                {throwing, #payproc_InvoicePaymentNotFound{}}
+            end},
             {bender, fun('GetInternalID', _) ->
                 InternalKey = capi_utils:get_unique_id(),
                 {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)}
@@ -1615,7 +1615,7 @@ check_no_internal_id_for_external_id_test(Config) ->
     ExternalID = capi_utils:get_unique_id(),
     _ = capi_ct_helper:mock_services(
         [
-            {bender, fun('GetInternalID', _) -> throwing_reply(capi_ct_helper_bender:no_internal_id()) end}
+            {bender, fun('GetInternalID', _) -> {throwing, capi_ct_helper_bender:no_internal_id()} end}
         ],
         Config
     ),
@@ -1732,7 +1732,3 @@ check_support_decrypt_v2_test(_Config) ->
         PaymentTool
     ),
     ?assertEqual(<<"2020-10-29T23:44:15.499Z">>, capi_utils:deadline_to_binary(ValidUntil)).
-
--spec throwing_reply(any()) -> {ok, term()}.
-throwing_reply(Error) ->
-    {ok, erlang:apply(erlang, throw, [Error])}.

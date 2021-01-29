@@ -7,4 +7,9 @@
 -spec handle_function(woody:func(), woody:args(), woody_context:ctx(), woody:options()) ->
     {ok, woody:result()} | no_return().
 handle_function(FunName, Args, _, #{function := Fun}) ->
-    Fun(FunName, Args).
+    case Fun(FunName, Args) of
+        {ok, _Reply} = Result ->
+            Result;
+        {throwing, Exception} ->
+            erlang:throw(Exception)
+    end.
