@@ -18,5 +18,5 @@ build('capi', 'docker-host', finalHook) {
     pipeErlangService = load("${env.JENKINS_LIB}/pipeErlangService.groovy")
   }
 
-  pipeErlangService.runPipe(false, true, 'test')
+  pipeErlangService.runPipe(false, false, 'test')
 }
