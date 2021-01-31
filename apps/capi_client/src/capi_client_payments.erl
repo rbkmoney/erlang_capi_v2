@@ -61,7 +61,7 @@ create_payment(Context, Request, InvoiceID) ->
     Response = swag_client_payments_api:create_payment(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
 
--spec cancel_payment(context(), integer(), integer(), binary()) -> ok | {error, term()}.
+-spec cancel_payment(context(), binary(), binary(), binary()) -> ok | {error, term()}.
 cancel_payment(Context, InvoiceID, PaymentID, Reason) ->
     Params = #{
         binding => #{
@@ -77,7 +77,7 @@ cancel_payment(Context, InvoiceID, PaymentID, Reason) ->
         {error, Error} -> {error, Error}
     end.
 
--spec capture_payment(context(), map(), integer(), integer()) -> ok | {error, term()}.
+-spec capture_payment(context(), map(), binary(), binary()) -> ok | {error, term()}.
 capture_payment(Context, Request, InvoiceID, PaymentID) ->
     Params = #{
         binding => #{

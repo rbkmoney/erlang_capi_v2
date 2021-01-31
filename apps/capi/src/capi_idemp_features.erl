@@ -18,8 +18,8 @@
     | {request_key_visit, {key, integer(), request()}}
     | {request_key_visited, {key, integer()}}.
 
--type options() :: term().
 -type event_handler() :: {module(), options()} | undefined.
+-type options() :: term().
 
 -export_type([event_handler/0]).
 -export_type([event/0]).
@@ -29,6 +29,7 @@
 -export_type([features/0]).
 -export_type([feature_name/0]).
 -export_type([feature_value/0]).
+-export_type([options/0]).
 
 -export([read/2, read/3]).
 -export([compare/2]).

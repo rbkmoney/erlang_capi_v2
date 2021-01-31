@@ -38,7 +38,7 @@
 init([]) ->
     {ok, {#{strategy => one_for_all, intensity => 1, period => 1}, []}}.
 
--spec all() -> [test_case_name()].
+-spec all() -> [{group, test_case_name()}].
 all() ->
     [
         {group, stream_handler_tests},
@@ -71,7 +71,7 @@ init_per_suite(Config) ->
 -spec end_per_suite(config()) -> _.
 end_per_suite(C) ->
     _ = capi_ct_helper:stop_mocked_service_sup(?config(suite_test_sup, C)),
-    [application:stop(App) || App <- proplists:get_value(apps, C)],
+    _ = [application:stop(App) || App <- proplists:get_value(apps, C)],
     ok.
 
 -spec init_per_group(group_name(), config()) -> config().
@@ -101,9 +101,9 @@ end_per_group(_Group, _C) ->
 init_per_testcase(_Name, C) ->
     [{test_sup, capi_ct_helper:start_mocked_service_sup(?MODULE)} | C].
 
--spec end_per_testcase(test_case_name(), config()) -> config().
+-spec end_per_testcase(test_case_name(), config()) -> _.
 end_per_testcase(_Name, C) ->
-    capi_ct_helper:stop_mocked_service_sup(?config(test_sup, C)),
+    _ = capi_ct_helper:stop_mocked_service_sup(?config(test_sup, C)),
     ok.
 
 %%% Tests
@@ -128,7 +128,7 @@ oops_body_test(Config) ->
 
 -spec schema_param_validation(config()) -> _.
 schema_param_validation(Config) ->
-    capi_ct_helper:mock_services(
+    _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end},
             {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"key">>)} end}
@@ -149,7 +149,7 @@ schema_param_validation(Config) ->
 
 -spec query_param_validation(config()) -> _.
 query_param_validation(Config) ->
-    capi_ct_helper:mock_services(
+    _ = capi_ct_helper:mock_services(
         [
             {merchant_stat, fun('GetInvoices', _) -> {ok, ?STAT_RESPONSE_INVOICES} end},
             {geo_ip_service, fun('GetLocationName', _) -> {ok, #{123 => ?STRING}} end}

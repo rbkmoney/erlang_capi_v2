@@ -43,7 +43,7 @@
 init([]) ->
     {ok, {#{strategy => one_for_all, intensity => 1, period => 1}, []}}.
 
--spec all() -> [test_case_name()].
+-spec all() -> [{group, test_case_name()}].
 all() ->
     [
         {group, payment_creation},
@@ -85,8 +85,8 @@ init_per_suite(Config) ->
 -spec end_per_suite(config()) -> _.
 end_per_suite(C) ->
     _ = capi_ct_helper:stop_mocked_service_sup(?config(suite_test_sup, C)),
-    [application:stop(App) || App <- proplists:get_value(apps, C)],
-    application:unset_env(capi, idempotence_event_handler),
+    _ = [application:stop(App) || App <- proplists:get_value(apps, C)],
+    _ = application:unset_env(capi, idempotence_event_handler),
     ok.
 
 -spec init_per_group(group_name(), config()) -> config().
@@ -94,7 +94,7 @@ init_per_group(payment_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
     ExtraProperties = #{<<"ip_replacement_allowed">> => true},
     {ok, Token} = capi_ct_helper:issue_token([{[invoices], write}], unlimited, ExtraProperties),
-    capi_ct_helper:mock_services(
+    _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end},
             {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
@@ -145,7 +145,7 @@ end_per_group(_Group, _C) ->
 init_per_testcase(_Name, C) ->
     [{test_sup, capi_ct_helper:start_mocked_service_sup(?MODULE)} | C].
 
--spec end_per_testcase(test_case_name(), config()) -> config().
+-spec end_per_testcase(test_case_name(), config()) -> _.
 end_per_testcase(_Name, C) ->
     capi_ct_helper:stop_mocked_service_sup(?config(test_sup, C)),
     ok.
@@ -251,7 +251,7 @@ second_request_with_idempotent_feature_test(Config) ->
 create_invoice_ok_test(Config) ->
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
-    capi_ct_helper:mock_services(
+    _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Create', {_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}}) ->
                 {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
@@ -287,7 +287,7 @@ create_invoice_legacy_fail_test(Config) ->
     ],
     Req2 = Req#{<<"product">> => <<"test_product2">>},
     Ctx = capi_msgp_marshalling:marshal(#{<<"version">> => 1, <<"params_hash">> => erlang:phash2(Req)}),
-    capi_ct_helper:mock_services(
+    _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Create', {_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}}) ->
                 {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
@@ -439,7 +439,7 @@ create_refund_idemp_fail_test(Config) ->
 
 create_payment(BenderKey, Requests, Config) ->
     Tid = capi_ct_helper_bender:create_storage(),
-    capi_ct_helper:mock_services(
+    _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('StartPayment', {_, _, IPP}) ->
                 #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
@@ -452,7 +452,7 @@ create_payment(BenderKey, Requests, Config) ->
         Config
     ),
     Result = [create_payment_(Req, Config) || Req <- Requests],
-    capi_ct_helper_bender:del_storage(Tid),
+    _ = capi_ct_helper_bender:del_storage(Tid),
     Result.
 
 create_payment_(Req, Config) ->
@@ -464,7 +464,7 @@ create_payment_(Req, Config) ->
 
 create_invoices(BenderKey, Requests, Config) ->
     Tid = capi_ct_helper_bender:create_storage(),
-    capi_ct_helper:mock_services(
+    _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Create', {_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}}) ->
                 {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
@@ -476,7 +476,7 @@ create_invoices(BenderKey, Requests, Config) ->
         Config
     ),
     Results = [create_invoice_(Req, Config) || Req <- Requests],
-    capi_ct_helper_bender:del_storage(Tid),
+    _ = capi_ct_helper_bender:del_storage(Tid),
     Results.
 
 create_invoice_(Req, Config) ->
@@ -488,7 +488,7 @@ create_invoice_(Req, Config) ->
 
 create_refunds(BenderKey, Requests, Config) ->
     Tid = capi_ct_helper_bender:create_storage(),
-    capi_ct_helper:mock_services(
+    _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun(
                 'RefundPayment',
@@ -503,7 +503,7 @@ create_refunds(BenderKey, Requests, Config) ->
         Config
     ),
     Results = [create_refund_(Req, Config) || Req <- Requests],
-    capi_ct_helper_bender:del_storage(Tid),
+    _ = capi_ct_helper_bender:del_storage(Tid),
     Results.
 
 create_refund_(Req, Config) ->
