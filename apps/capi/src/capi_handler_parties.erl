@@ -5,8 +5,21 @@
 -behaviour(capi_handler).
 
 -export([process_request/3]).
+-export([get_authorize_prototypes/3]).
 
 -type processing_context() :: capi_handler:processing_context().
+
+-spec get_authorize_prototypes(
+    OperationID :: capi_handler:operation_id(),
+    Req :: capi_handler:request_data(),
+    Context :: capi_handler:processing_context()
+) ->
+    {ok,
+        {capi_bouncer_context:prototype_operation(), capi_bouncer_context:prototypes()}}
+        | capi_handler:response()
+    | {error, noimpl}.
+get_authorize_prototypes(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),

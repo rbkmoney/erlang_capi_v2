@@ -6,8 +6,36 @@
 -behaviour(capi_handler).
 
 -export([process_request/3]).
+-export([get_authorize_prototypes/3]).
 
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
+
+-spec get_authorize_prototypes(
+    OperationID :: capi_handler:operation_id(),
+    Req :: capi_handler:request_data(),
+    Context :: capi_handler:processing_context()
+) ->
+    {ok,
+        {capi_bouncer_context:prototype_operation(), capi_bouncer_context:prototypes()}}
+        | capi_handler:response()
+    | {error, noimpl}.
+get_authorize_prototypes('CreateWebhook', Req, Context) ->
+    Params = maps:get('Webhook', Req),
+    UserID = capi_handler_utils:get_user_id(Context),
+    PartyID = maps:get(<<"partyID">>, Params, UserID),
+    {ok, {#{party => PartyID}, []}};
+get_authorize_prototypes('GetWebhooks', _Req, Context) ->
+    {ok, {#{party => capi_handler_utils:get_party_id(Context)}, []}};
+get_authorize_prototypes(OperationID, Req, _Context) when
+    OperationID =:= 'GetWebhookByID'
+    orelse OperationID =:= 'DeleteWebhookByID'
+->
+    case encode_webhook_id(maps:get(webhookID, Req)) of
+        {ok, WebhookID} ->
+            {ok, {#{webhook => maps:get(webhookID, Req)}, [{webhooks, #{webhook => WebhookID}}]}};
+        error ->
+            {ok, general_error(404, <<"Webhook not found">>)}
+    end.
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),

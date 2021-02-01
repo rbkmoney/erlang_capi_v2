@@ -16,12 +16,33 @@
 -export_type([request_context/0]).
 -export_type([response/0]).
 -export_type([processing_context/0]).
+-export_type([resolution/0]).
 
 -callback process_request(
     OperationID :: operation_id(),
     Req :: request_data(),
     Context :: processing_context()
 ) -> {ok | error, response() | noimpl}.
+
+% -callback process_request_with_restrictions(
+%     OperationID :: operation_id(),
+%     Req :: request_data(),
+%     Context :: processing_context()
+%     Restrictions :: any()
+% ) -> {ok,
+%         {capi_bouncer_context:prototype_operation(), capi_bouncer_context:prototypes()}
+%         | response()}
+%     | {error, noimpl}.
+
+-callback get_authorize_prototypes(
+    OperationID :: operation_id(),
+    Req :: request_data(),
+    Context :: processing_context()
+) ->
+    {ok,
+        {capi_bouncer_context:prototype_operation(), capi_bouncer_context:prototypes()}
+        | response()}
+    | {error, noimpl}.
 
 -import(capi_handler_utils, [logic_error/2, server_error/1]).
 
@@ -69,6 +90,11 @@ map_error(validation_error, Error) ->
     woody_context := woody_context:ctx()
 }.
 
+-type resolution() ::
+    allowed
+    % | {restricted, _Restrictions}
+    | forbidden.
+
 get_handlers() ->
     [
         capi_handler_accounts,
@@ -114,12 +140,14 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
         ok = set_request_meta(OperationID, Req),
         _ = logger:info("Processing request ~p", [OperationID]),
         OperationACL = capi_auth:get_operation_access(OperationID, Req),
-        case uac:authorize_operation(OperationACL, AuthContext) of
+        WoodyContext = attach_deadline(Req, create_woody_context(RpcID, AuthContext)),
+        Context = create_processing_context(SwagContext, WoodyContext),
+        ok = set_context_meta(Context),
+        case authorize_operation(OperationID, OperationACL, Req, Context) of
             ok ->
-                WoodyContext = attach_deadline(Req, create_woody_context(RpcID, AuthContext)),
-                Context = create_processing_context(SwagContext, WoodyContext),
-                ok = set_context_meta(Context),
                 process_request(OperationID, Req, Context, get_handlers());
+            % {ok, Restrictions} ->
+            %     process_request_with_restrictions(OperationID, Req, Context, get_handlers(), Restrictions);
             {error, _} = Error ->
                 _ = logger:info("Authorization failed due to ~p", [Error]),
                 {ok, {401, #{}, undefined}}
@@ -153,6 +181,44 @@ process_request(OperationID, Req, Context, [Handler | Rest]) ->
         Response ->
             Response
     end.
+
+-spec get_authorize_prototypes(
+    Handler :: module(),
+    OperationID :: operation_id(),
+    Req :: request_data(),
+    Context :: processing_context()
+) ->
+    {ok,
+        {capi_bouncer_context:prototype_operation(), capi_bouncer_context:prototypes()}
+        | response()}
+    | {error, noimpl}.
+get_authorize_prototypes(Handler, OperationID, Req, Context) ->
+    Handler:get_authorize_prototypes(OperationID, Req, Context).
+
+authorize_operation(OperationID, OperationACL, Req, Ctx = #{swagger_context := #{auth_context := AuthContext}}) ->
+    OldAuthResult = uac:authorize_operation(OperationACL, AuthContext),
+    AuthResult = authorize_operation(OperationID, Req, Ctx),
+    handle_auth_result(OldAuthResult, AuthResult, OperationID).
+
+handle_auth_result(ok, allowed, _OperationID) ->
+    ok;
+% handle_auth_result(ok, {restricted, Restrictions}, _OperationID) ->
+%     {ok, Restrictions};
+handle_auth_result({error, _} = Error, forbidden, _OperationID) ->
+    Error;
+handle_auth_result(ok, forbidden, OperationID) ->
+    _ = logger:error("Operation ~p new auth differ from old {ok, forbidden}", [OperationID]),
+    ok;
+% handle_auth_result({error, _} = Error, {restricted, Restrictions}, OperationID) ->
+%     _ = logger:error("Operation ~p new auth differ from old {error, restricted}", [OperationID]),
+%     Error;
+handle_auth_result({error, _} = Error, allowed, OperationID) ->
+    _ = logger:error("Operation ~p new auth differ from old {error, allowed}", [OperationID]),
+    Error;
+handle_auth_result(ok, _, _OperationID) ->
+    ok;
+handle_auth_result({error, _} = Error, _, _OperationID) ->
+    Error.
 
 %%
 
@@ -265,3 +331,36 @@ check_blacklist(ApiKey, Context) ->
         false ->
             {true, Context}
     end.
+
+-spec authorize_operation(
+    OperationID :: capi_handler:operation_id(),
+    Req :: capi_handler:request_data(),
+    Context :: capi_handler:processing_context()
+) -> resolution() | no_return().
+authorize_operation(OperationID, Req, Context) ->
+    case get_authorize_prototypes(OperationID, Req, Context) of
+        {ok, {OpCtxPrototype, AdditionalPrototypes}} ->
+            Prototypes = [{operation, OpCtxPrototype#{id => OperationID}} | AdditionalPrototypes],
+            authorize_operation(Prototypes, Context);
+        {ok, Response} ->
+            {ok, Response};
+        {error, noimpl} ->
+           forbidden
+    end.
+
+authorize_operation(Prototype, #{swagger_context := ReqCtx, woody_context := WoodyCtx}) ->
+    case capi_bouncer:extract_context_fragments(ReqCtx, WoodyCtx) of
+        Fragments when Fragments /= undefined ->
+            Fragments1 = capi_bouncer_context:build(Prototype, Fragments, WoodyCtx),
+            capi_bouncer:judge(Fragments1, WoodyCtx);
+        undefined ->
+            forbidden
+    end.
+
+get_authorize_prototypes(OpID, Req, Context) when
+    OpID =:= 'CreateWebhook'
+    orelse OpID =:= 'GetWebhooks'
+    orelse OpID =:= 'GetWebhookByID'
+    orelse OpID =:= 'DeleteWebhookByID'
+->
+    get_authorize_prototypes(capi_handler_webhooks, OpID, Req, Context).
