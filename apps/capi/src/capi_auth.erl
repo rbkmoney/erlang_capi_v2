@@ -14,10 +14,20 @@
 -type context() :: uac:context().
 -type claims() :: uac:claims().
 -type consumer() :: client | merchant | provider.
+-type realm() :: binary().
+-type auth_method() ::
+    user_session_token.
+
+-type metadata() :: #{
+    auth_method => auth_method(),
+    user_realm => realm()
+}.
 
 -export_type([context/0]).
 -export_type([claims/0]).
 -export_type([consumer/0]).
+-export_type([auth_method/0]).
+-export_type([metadata/0]).
 
 -define(SIGNEE, capi).
 
@@ -297,14 +307,14 @@ get_operation_access('CreatePayout', _) ->
 get_operation_access('GetPayout', _) ->
     [{[payouts], read}].
 
--spec get_access_config() -> map().
+-spec get_access_config() -> uac_conf:options().
 get_access_config() ->
     #{
         domain_name => <<"common-api">>,
         resource_hierarchy => get_resource_hierarchy()
     }.
 
--spec get_resource_hierarchy() -> #{atom() => map()}.
+-spec get_resource_hierarchy() -> uac_conf:resource_hierarchy().
 get_resource_hierarchy() ->
     #{
         party => #{invoice_templates => #{invoice_template_invoices => #{}}},

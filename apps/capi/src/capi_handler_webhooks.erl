@@ -5,37 +5,60 @@
 
 -behaviour(capi_handler).
 
+-export([preprocess_request/3]).
 -export([process_request/3]).
 -export([get_authorize_prototypes/3]).
 
+-type preprocessing_context() :: #{
+    webhook_id := integer()
+}.
+
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
--spec get_authorize_prototypes(
+-spec preprocess_request(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) ->
-    {ok,
-        {capi_bouncer_context:prototype_operation(), capi_bouncer_context:prototypes()}}
-        | capi_handler:response()
+    {ok, capi_handler:preprocess_context()}
+    | {error, capi_handler:response() | noimpl}.
+preprocess_request(OperationID, _Req, _Context) when
+    OperationID =:= 'CreateWebhook' orelse
+        OperationID =:= 'GetWebhooks'
+->
+    {ok, #{}};
+preprocess_request(OperationID, Req, _Context) when
+    OperationID =:= 'GetWebhookByID' orelse
+        OperationID =:= 'DeleteWebhookByID'
+->
+    case encode_webhook_id(maps:get(webhookID, Req)) of
+        {ok, WebhookID} ->
+            {ok, #{webhook_id => WebhookID}};
+        error ->
+            {ok, general_error(404, <<"Webhook not found">>)}
+    end;
+preprocess_request(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
+
+-spec get_authorize_prototypes(
+    OperationID :: capi_handler:operation_id(),
+    Req :: capi_handler:request_data(),
+    Context :: capi_handler:processing_context(preprocessing_context())
+) ->
+    {ok, capi_bouncer_context:authorize_prototypes()}
     | {error, noimpl}.
 get_authorize_prototypes('CreateWebhook', Req, Context) ->
     Params = maps:get('Webhook', Req),
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(<<"partyID">>, Params, UserID),
-    {ok, {#{party => PartyID}, []}};
+    {ok, #{op => #{party => PartyID}, add => []}};
 get_authorize_prototypes('GetWebhooks', _Req, Context) ->
-    {ok, {#{party => capi_handler_utils:get_party_id(Context)}, []}};
-get_authorize_prototypes(OperationID, Req, _Context) when
-    OperationID =:= 'GetWebhookByID'
-    orelse OperationID =:= 'DeleteWebhookByID'
+    {ok, #{op => #{party => capi_handler_utils:get_party_id(Context)}, add => []}};
+get_authorize_prototypes(OperationID, Req, #{preprocess_context := #{webhook_id := WebhookID}}) when
+    OperationID =:= 'GetWebhookByID' orelse
+        OperationID =:= 'DeleteWebhookByID'
 ->
-    case encode_webhook_id(maps:get(webhookID, Req)) of
-        {ok, WebhookID} ->
-            {ok, {#{webhook => maps:get(webhookID, Req)}, [{webhooks, #{webhook => WebhookID}}]}};
-        error ->
-            {ok, general_error(404, <<"Webhook not found">>)}
-    end.
+    {ok, #{op => #{webhook => maps:get(webhookID, Req)}, add => [{webhooks, #{webhook => WebhookID}}]}}.
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
@@ -67,29 +90,19 @@ process_request('GetWebhooks', _Req, Context) ->
         capi_handler_utils:service_call_with([party_id], {webhook_manager, 'GetList', {}}, Context)
     ),
     {ok, {200, #{}, [decode_webhook(V) || V <- Webhooks]}};
-process_request('GetWebhookByID', Req, Context) ->
-    case encode_webhook_id(maps:get(webhookID, Req)) of
-        {ok, WebhookID} ->
-            case get_webhook(WebhookID, Context) of
-                {ok, Webhook} ->
-                    {ok, {200, #{}, decode_webhook(Webhook)}};
-                {exception, #webhooker_WebhookNotFound{}} ->
-                    {ok, general_error(404, <<"Webhook not found">>)}
-            end;
-        error ->
+process_request('GetWebhookByID', _Req, Context = #{preprocess_context := #{webhook_id := WebhookID}}) ->
+    case get_webhook(WebhookID, Context) of
+        {ok, Webhook} ->
+            {ok, {200, #{}, decode_webhook(Webhook)}};
+        {exception, #webhooker_WebhookNotFound{}} ->
             {ok, general_error(404, <<"Webhook not found">>)}
     end;
-process_request('DeleteWebhookByID', Req, Context) ->
-    case encode_webhook_id(maps:get(webhookID, Req)) of
-        {ok, WebhookID} ->
-            case delete_webhook(WebhookID, Context) of
-                {ok, _} ->
-                    {ok, {204, #{}, undefined}};
-                {exception, #webhooker_WebhookNotFound{}} ->
-                    {ok, {204, #{}, undefined}}
-            end;
-        error ->
-            {ok, general_error(404, <<"Webhook not found">>)}
+process_request('DeleteWebhookByID', _Req, Context = #{preprocess_context := #{webhook_id := WebhookID}}) ->
+    case delete_webhook(WebhookID, Context) of
+        {ok, _} ->
+            {ok, {204, #{}, undefined}};
+        {exception, #webhooker_WebhookNotFound{}} ->
+            {ok, {204, #{}, undefined}}
     end;
 %%
 

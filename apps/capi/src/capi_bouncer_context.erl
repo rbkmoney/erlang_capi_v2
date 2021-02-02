@@ -80,12 +80,18 @@
 
 -type entity_id() :: binary().
 
+-type authorize_prototypes() :: #{
+    op := capi_bouncer_context:prototype_operation(),
+    add := capi_bouncer_context:prototypes()
+}.
+
 -export_type([prototypes/0]).
 -export_type([prototype_operation/0]).
 -export_type([prototype_payproc/0]).
 -export_type([prototype_payouts/0]).
 -export_type([prototype_webhooks/0]).
 -export_type([prototype_reports/0]).
+-export_type([authorize_prototypes/0]).
 
 -export([new/0]).
 -export([build/3]).
@@ -253,7 +259,7 @@ build_binding_ctx(#payproc_CustomerBinding{id = ID}) ->
 %%
 
 build_payout_ctx(ID, WoodyCtx) when is_binary(ID) ->
-    maybe_with_woody_result(payout_management, 'Get', {ID}, WoodyCtx, fun build_payout_ctx/1);
+    maybe_with_woody_result(payouts, 'Get', {ID}, WoodyCtx, fun build_payout_ctx/1);
 build_payout_ctx(Payout, _WoodyCtx) ->
     build_payout_ctx(Payout).
 

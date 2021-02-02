@@ -16,7 +16,16 @@
 -export_type([request_context/0]).
 -export_type([response/0]).
 -export_type([processing_context/0]).
+-export_type([processing_context/1]).
 -export_type([resolution/0]).
+-export_type([preprocess_context/0]).
+-export_type([preprocess_context/1]).
+
+-callback preprocess_request(
+    OperationID :: operation_id(),
+    Req :: request_data(),
+    Context :: processing_context()
+) -> {ok, preprocess_context()} | {error, response() | noimpl}.
 
 -callback process_request(
     OperationID :: operation_id(),
@@ -29,9 +38,7 @@
 %     Req :: request_data(),
 %     Context :: processing_context()
 %     Restrictions :: any()
-% ) -> {ok,
-%         {capi_bouncer_context:prototype_operation(), capi_bouncer_context:prototypes()}
-%         | response()}
+% ) ->  {ok, capi_bouncer_context:authorize_prototypes()}}
 %     | {error, noimpl}.
 
 -callback get_authorize_prototypes(
@@ -39,9 +46,7 @@
     Req :: request_data(),
     Context :: processing_context()
 ) ->
-    {ok,
-        {capi_bouncer_context:prototype_operation(), capi_bouncer_context:prototypes()}
-        | response()}
+    {ok, capi_bouncer_context:authorize_prototypes()}
     | {error, noimpl}.
 
 -import(capi_handler_utils, [logic_error/2, server_error/1]).
@@ -85,10 +90,16 @@ map_error(validation_error, Error) ->
 -type request_context() :: swag_server:request_context().
 -type response() :: swag_server:response().
 -type handler_opts() :: swag_server:handler_opts(_).
--type processing_context() :: #{
+-type processing_context(T) :: #{
     swagger_context := swag_server:request_context(),
-    woody_context := woody_context:ctx()
+    woody_context := woody_context:ctx(),
+    preprocess_context => preprocess_context(T)
 }.
+
+-type processing_context() :: processing_context(map()).
+
+-type preprocess_context(T) :: T.
+-type preprocess_context() :: preprocess_context(map()).
 
 -type resolution() ::
     allowed
@@ -141,16 +152,23 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
         _ = logger:info("Processing request ~p", [OperationID]),
         OperationACL = capi_auth:get_operation_access(OperationID, Req),
         WoodyContext = attach_deadline(Req, create_woody_context(RpcID, AuthContext)),
-        Context = create_processing_context(SwagContext, WoodyContext),
-        ok = set_context_meta(Context),
-        case authorize_operation(OperationID, OperationACL, Req, Context) of
-            ok ->
-                process_request(OperationID, Req, Context, get_handlers());
-            % {ok, Restrictions} ->
-            %     process_request_with_restrictions(OperationID, Req, Context, get_handlers(), Restrictions);
-            {error, _} = Error ->
-                _ = logger:info("Authorization failed due to ~p", [Error]),
-                {ok, {401, #{}, undefined}}
+        Context0 = create_processing_context(SwagContext, WoodyContext),
+        ok = set_context_meta(Context0),
+        Handlers = get_handlers(),
+        case preprocess_request(OperationID, Req, Context0, Handlers) of
+            {ok, PreprocessContext} ->
+                Context1 = add_preprocess_context(PreprocessContext, Context0),
+                case authorize_operation(OperationID, OperationACL, Req, Context1) of
+                    ok ->
+                        process_request(OperationID, Req, Context1, Handlers);
+                    % {ok, Restrictions} ->
+                    %     process_request_with_restrictions(OperationID, Req, Context1, Handlers, Restrictions);
+                    {error, _} = Error ->
+                        _ = logger:info("Authorization failed due to ~p", [Error]),
+                        {ok, {401, #{}, undefined}}
+                end;
+            {error, Response} ->
+                Response
         end
     catch
         throw:{bad_deadline, _Deadline} ->
@@ -164,6 +182,40 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
             process_general_error(Class, Reason, Stacktrace, Req, SwagContext)
     after
         ok = clear_rpc_meta()
+    end.
+
+-spec preprocess_request(
+    OperationID :: operation_id(),
+    Req :: request_data(),
+    Context :: processing_context(),
+    Handlers :: list(module())
+) -> {ok, preprocess_context()} | {error, response() | noimpl}.
+preprocess_request(_OperationID, _Req, _Context, []) ->
+    {ok, #{}};
+preprocess_request(OperationID, Req, Context, [Handler | Rest]) ->
+    case Handler:preprocess_request(OperationID, Req, Context) of
+        {error, noimpl} ->
+            preprocess_request(OperationID, Req, Context, Rest);
+        Response ->
+            Response
+    end.
+
+-spec get_authorize_prototypes(
+    OperationID :: operation_id(),
+    Req :: request_data(),
+    Context :: processing_context(),
+    Handlers :: list(module())
+) ->
+    {ok, capi_bouncer_context:authorize_prototypes()}
+    | {error, noimpl}.
+get_authorize_prototypes(_OperationID, _Req, _Context, []) ->
+    {error, noimpl};
+get_authorize_prototypes(OperationID, Req, Context, [Handler | Rest]) ->
+    case Handler:get_authorize_prototypes(OperationID, Req, Context) of
+        {error, noimpl} ->
+            get_authorize_prototypes(OperationID, Req, Context, Rest);
+        Response ->
+            Response
     end.
 
 -spec process_request(
@@ -181,19 +233,6 @@ process_request(OperationID, Req, Context, [Handler | Rest]) ->
         Response ->
             Response
     end.
-
--spec get_authorize_prototypes(
-    Handler :: module(),
-    OperationID :: operation_id(),
-    Req :: request_data(),
-    Context :: processing_context()
-) ->
-    {ok,
-        {capi_bouncer_context:prototype_operation(), capi_bouncer_context:prototypes()}
-        | response()}
-    | {error, noimpl}.
-get_authorize_prototypes(Handler, OperationID, Req, Context) ->
-    Handler:get_authorize_prototypes(OperationID, Req, Context).
 
 authorize_operation(OperationID, OperationACL, Req, Ctx = #{swagger_context := #{auth_context := AuthContext}}) ->
     OldAuthResult = uac:authorize_operation(OperationACL, AuthContext),
@@ -285,6 +324,10 @@ set_context_meta(Context) ->
     },
     scoper:add_meta(Meta).
 
+-spec add_preprocess_context(preprocess_context(), processing_context()) -> processing_context().
+add_preprocess_context(PreprocessContext, Context) ->
+    Context#{preprocess_context => PreprocessContext}.
+
 -spec set_request_meta(operation_id(), request_data()) -> ok.
 set_request_meta(OperationID, Req) ->
     InterestParams = [
@@ -338,14 +381,12 @@ check_blacklist(ApiKey, Context) ->
     Context :: capi_handler:processing_context()
 ) -> resolution() | no_return().
 authorize_operation(OperationID, Req, Context) ->
-    case get_authorize_prototypes(OperationID, Req, Context) of
-        {ok, {OpCtxPrototype, AdditionalPrototypes}} ->
+    case get_authorize_prototypes(OperationID, Req, Context, get_handlers()) of
+        {ok, #{op := OpCtxPrototype, add := AdditionalPrototypes}} ->
             Prototypes = [{operation, OpCtxPrototype#{id => OperationID}} | AdditionalPrototypes],
             authorize_operation(Prototypes, Context);
-        {ok, Response} ->
-            {ok, Response};
         {error, noimpl} ->
-           forbidden
+            forbidden
     end.
 
 authorize_operation(Prototype, #{swagger_context := ReqCtx, woody_context := WoodyCtx}) ->
@@ -356,11 +397,3 @@ authorize_operation(Prototype, #{swagger_context := ReqCtx, woody_context := Woo
         undefined ->
             forbidden
     end.
-
-get_authorize_prototypes(OpID, Req, Context) when
-    OpID =:= 'CreateWebhook'
-    orelse OpID =:= 'GetWebhooks'
-    orelse OpID =:= 'GetWebhookByID'
-    orelse OpID =:= 'DeleteWebhookByID'
-->
-    get_authorize_prototypes(capi_handler_webhooks, OpID, Req, Context).

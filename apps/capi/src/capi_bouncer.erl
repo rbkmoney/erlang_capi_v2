@@ -38,7 +38,7 @@ judge({Acc, External}, WoodyCtx) ->
 
 %%
 
-extract_context_fragments_by(claim, {Claims, _}, _) ->
+extract_context_fragments_by(claim, {_, _, Claims, _}, _) ->
     % TODO
     % We deliberately do not handle decoding errors here since we extract claims from verified
     % tokens only, hence they must be well-formed here.
@@ -49,7 +49,7 @@ extract_context_fragments_by(claim, {Claims, _}, _) ->
         undefined ->
             undefined
     end;
-extract_context_fragments_by(metadata, AuthCtx = {_, Metadata}, WoodyCtx) ->
+extract_context_fragments_by(metadata, AuthCtx = {_, _, _, Metadata}, WoodyCtx) ->
     case Metadata of
         #{auth_method := AuthMethod} ->
             build_auth_context_fragments(AuthMethod, AuthCtx, WoodyCtx);
@@ -58,18 +58,18 @@ extract_context_fragments_by(metadata, AuthCtx = {_, Metadata}, WoodyCtx) ->
     end.
 
 -spec build_auth_context_fragments(
-    uac_authorizer_jwt:auth_method(),
-    capi_auth:context(),
+    capi_auth:auth_method(),
+    uac:context(capi_auth:metadata()),
     woody_context:ctx()
 ) -> capi_bouncer_context:fragments().
-build_auth_context_fragments(user_session_token, {Claims, Metadata}, WoodyCtx) ->
-    UserID = uac_authorizer_jwt:get_subject_id(Claims),
-    Expiration = uac_authorizer_jwt:get_expires_at(Claims),
+build_auth_context_fragments(user_session_token, AuthCtx = {_, _, _, Metadata}, WoodyCtx) ->
+    UserID = uac_authorizer_jwt:get_subject_id(AuthCtx),
+    Expiration = uac_authorizer_jwt:get_expires_at(AuthCtx),
     {Acc0, External} = capi_bouncer_context:new(),
     Acc1 = bouncer_context_helpers:add_user(
         #{
             id => UserID,
-            email => uac_authorizer_jwt:get_subject_email(Claims),
+            email => uac_authorizer_jwt:get_subject_email(AuthCtx),
             realm => #{id => maps:get(user_realm, Metadata, undefined)}
         },
         Acc0
@@ -78,7 +78,7 @@ build_auth_context_fragments(user_session_token, {Claims, Metadata}, WoodyCtx) -
         #{
             method => <<"SessionToken">>,
             expiration => make_auth_expiration(Expiration),
-            token => #{id => uac_authorizer_jwt:get_token_id(Claims)}
+            token => #{id => uac_authorizer_jwt:get_token_id(AuthCtx)}
         },
         Acc1
     ),
@@ -112,7 +112,7 @@ add_requester_context(ReqCtx, FragmentAcc) ->
 
 -define(CLAIM_CTX_TYPE_V1_THRIFT_BINARY, <<"v1_thrift_binary">>).
 
--type claim() :: uac_authorizer_jwt:claim().
+-type claim() :: term().
 -type claims() :: uac_authorizer_jwt:claims().
 
 -spec get_claim(claims()) -> {ok, capi_bouncer_context:fragment()} | {error, {unsupported, claim()}} | undefined.
