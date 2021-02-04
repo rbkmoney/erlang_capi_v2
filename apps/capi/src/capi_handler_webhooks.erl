@@ -20,7 +20,7 @@
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) ->
-    {ok, capi_handler:preprocess_context()}
+    {ok, capi_handler:preprocess_context(preprocessing_context())}
     | {error, capi_handler:response() | noimpl}.
 preprocess_request(OperationID, _Req, _Context) when
     OperationID =:= 'CreateWebhook' orelse
@@ -58,7 +58,9 @@ get_authorize_prototypes(OperationID, Req, #{preprocess_context := #{webhook_id 
     OperationID =:= 'GetWebhookByID' orelse
         OperationID =:= 'DeleteWebhookByID'
 ->
-    {ok, #{op => #{webhook => maps:get(webhookID, Req)}, add => [{webhooks, #{webhook => WebhookID}}]}}.
+    {ok, #{op => #{webhook => maps:get(webhookID, Req)}, add => [{webhooks, #{webhook => WebhookID}}]}};
+get_authorize_prototypes(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),

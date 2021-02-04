@@ -302,8 +302,8 @@ process_woody_error(_Source, result_unknown, _Details) ->
 
 process_general_error(Class, Reason, Stacktrace, Req, SwagContext) ->
     _ = logger:error(
-        "Operation failed due to ~p:~p given req: ~p and context: ~p",
-        [Class, Reason, Req, SwagContext],
+        "Operation failed due to ~p:~p given req: ~p and context: ~p ~n~p",
+        [Class, Reason, Req, SwagContext, Stacktrace],
         #{
             error => #{
                 class => genlib:to_binary(Class),

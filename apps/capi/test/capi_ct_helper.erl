@@ -88,7 +88,13 @@ start_capi(Config, ExtraEnv) ->
                 {access_conf, #{
                     jwt => #{
                         keyset => #{
-                            capi => {pem_file, get_keysource("keys/local/private.pem", Config)}
+                            capi => #{
+                                source => {pem_file, get_keysource("keys/local/private.pem", Config)},
+                                metadata => #{
+                                    auth_method => user_session_token,
+                                    user_realm => <<"external">>
+                                }
+                            }
                         }
                     }
                 }},
