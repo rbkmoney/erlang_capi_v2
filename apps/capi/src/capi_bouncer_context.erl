@@ -80,18 +80,12 @@
 
 -type entity_id() :: binary().
 
--type authorize_prototypes() :: #{
-    op := capi_bouncer_context:prototype_operation(),
-    add := capi_bouncer_context:prototypes()
-}.
-
 -export_type([prototypes/0]).
 -export_type([prototype_operation/0]).
 -export_type([prototype_payproc/0]).
 -export_type([prototype_payouts/0]).
 -export_type([prototype_webhooks/0]).
 -export_type([prototype_reports/0]).
--export_type([authorize_prototypes/0]).
 
 -export([new/0]).
 -export([build/3]).

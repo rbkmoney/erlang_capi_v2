@@ -5,38 +5,37 @@
 
 -behaviour(capi_handler).
 
--export([preprocess_request/3]).
+-export([prepare_request/3]).
 -export([process_request/3]).
--export([get_authorize_prototypes/3]).
+-export([authorize_request/3]).
 
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
--spec preprocess_request(
+-spec prepare_request(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) ->
-    {ok, capi_handler:preprocess_context()}
-    | {error, capi_handler:response() | noimpl}.
-preprocess_request(_OperationID, _Req, _Context) ->
+   {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+prepare_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
--spec get_authorize_prototypes(
+-spec authorize_request(
     OperationID :: capi_handler:operation_id(),
-    Req :: capi_handler:request_data(),
-    Context :: capi_handler:processing_context()
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state()
 ) ->
-    {ok, capi_bouncer_context:authorize_prototypes()}
-    | {error, noimpl}.
-get_authorize_prototypes(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
+    {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+authorize_request(OperationID, Context, ReqState) ->
+    Resolution = capi_auth:authorize_operation(OperationID, [], Context, ReqState),
+    {ok, ReqState#{resolution => Resolution}}.
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
-    Req :: capi_handler:request_data(),
-    Context :: capi_handler:processing_context()
-) -> {ok | error, capi_handler:response() | noimpl}.
-process_request('CreateInvoiceTemplate', Req, Context) ->
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state()
+) -> capi_handler:request_response() | {error, noimpl}.
+process_request('CreateInvoiceTemplate', Context, #{data := Req}) ->
     InvoiceTemplateParams = maps:get('InvoiceTemplateCreateParams', Req),
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(<<"partyID">>, InvoiceTemplateParams, UserID),
@@ -71,7 +70,7 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
         throw:zero_invoice_lifetime ->
             {ok, logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}
     end;
-process_request('GetInvoiceTemplateByID', Req, Context) ->
+process_request('GetInvoiceTemplateByID', Context, #{data := Req}) ->
     ID = maps:get('invoiceTemplateID', Req),
     case get_invoice_template(ID, Context) of
         {ok, InvoiceTpl} ->
@@ -81,7 +80,7 @@ process_request('GetInvoiceTemplateByID', Req, Context) ->
         ->
             {ok, general_error(404, <<"Invoice template not found">>)}
     end;
-process_request('UpdateInvoiceTemplate', Req, Context) ->
+process_request('UpdateInvoiceTemplate', Context, #{data := Req}) ->
     try
         Params = encode_invoice_tpl_update_params(maps:get('InvoiceTemplateUpdateParams', Req)),
         Call = {invoice_templating, 'Update', {maps:get('invoiceTemplateID', Req), Params}},
@@ -117,7 +116,7 @@ process_request('UpdateInvoiceTemplate', Req, Context) ->
         throw:zero_invoice_lifetime ->
             {ok, logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}
     end;
-process_request('DeleteInvoiceTemplate', Req, Context) ->
+process_request('DeleteInvoiceTemplate', Context, #{data := Req}) ->
     Call = {invoice_templating, 'Delete', {maps:get('invoiceTemplateID', Req)}},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _R} ->
@@ -136,7 +135,7 @@ process_request('DeleteInvoiceTemplate', Req, Context) ->
                     {ok, general_error(404, <<"Invoice Template not found">>)}
             end
     end;
-process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
+process_request('CreateInvoiceWithTemplate' = OperationID, Context, #{data := Req}) ->
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
     InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
@@ -186,7 +185,7 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
         {error, {external_id_conflict, InvoiceID, ExternalID}} ->
             {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
     end;
-process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
+process_request('GetInvoicePaymentMethodsByTemplateID', Context, #{data := Req}) ->
     InvoiceTemplateID = maps:get('invoiceTemplateID', Req),
     Timestamp = genlib_rfc3339:format_relaxed(erlang:system_time(microsecond), microsecond),
     {ok, Party} = capi_handler_utils:get_party(Context),

@@ -29,7 +29,7 @@ extract_context_fragments([Method | Rest], ReqCtx, WoodyCtx) ->
 extract_context_fragments([], _, _) ->
     undefined.
 
--spec judge(capi_bouncer_context:fragments(), woody_context:ctx()) -> capi_handler:resolution().
+-spec judge(capi_bouncer_context:fragments(), woody_context:ctx()) -> capi_auth:resolution().
 judge({Acc, External}, WoodyCtx) ->
     % TODO error out early?
     {ok, RulesetID} = application:get_env(capi, bouncer_ruleset_id),

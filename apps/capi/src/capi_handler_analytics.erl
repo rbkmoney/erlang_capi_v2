@@ -4,49 +4,49 @@
 
 -behaviour(capi_handler).
 
--export([preprocess_request/3]).
+-export([prepare_request/3]).
 -export([process_request/3]).
--export([get_authorize_prototypes/3]).
+-export([authorize_request/3]).
 
 -import(capi_handler_utils, [logic_error/2]).
 
--spec preprocess_request(
+-spec prepare_request(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) ->
-    {ok, capi_handler:preprocess_context()}
-    | {error, capi_handler:response() | noimpl}.
-preprocess_request(_OperationID, _Req, _Context) ->
+   {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+prepare_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
--spec get_authorize_prototypes(
+-spec authorize_request(
     OperationID :: capi_handler:operation_id(),
-    Req :: capi_handler:request_data(),
-    Context :: capi_handler:processing_context()
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state()
 ) ->
-    {ok, capi_bouncer_context:authorize_prototypes()}
-    | {error, noimpl}.
-get_authorize_prototypes(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
+    {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+authorize_request(OperationID, Context, ReqState) ->
+    Resolution = capi_auth:authorize_operation(OperationID, [], Context, ReqState),
+    {ok, ReqState#{resolution => Resolution}}.
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
-    Req :: capi_handler:request_data(),
-    Context :: capi_handler:processing_context()
-) -> {ok | error, capi_handler:response() | noimpl}.
-process_request('GetPaymentConversionStats', Req, Context) ->
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state()
+) -> capi_handler:request_response() | {error, noimpl}.
+process_request('GetPaymentConversionStats', Context, #{data := Req}) ->
     process_merchant_stat(payments_conversion_stat, Req, Context);
-process_request('GetPaymentRevenueStats', Req, Context) ->
+process_request('GetPaymentRevenueStats', Context, #{data := Req}) ->
     process_merchant_stat(payments_turnover, Req, Context);
-process_request('GetPaymentGeoStats', Req, Context) ->
+process_request('GetPaymentGeoStats', Context, #{data := Req}) ->
     process_merchant_stat(payments_geo_stat, Req, Context);
-process_request('GetPaymentRateStats', Req, Context) ->
+process_request('GetPaymentRateStats', Context, #{data := Req}) ->
     process_merchant_stat(customers_rate_stat, Req, Context);
-process_request('GetPaymentMethodStats', Req, Context) ->
+process_request('GetPaymentMethodStats', Context, #{data := Req}) ->
     bankCard = maps:get(paymentMethod, Req),
     StatType = payments_pmt_cards_stat,
     process_merchant_stat(StatType, Req, Context);
+
 %%
 
 process_request(_OperationID, _Req, _Context) ->

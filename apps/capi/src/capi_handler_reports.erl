@@ -5,71 +5,70 @@
 
 -behaviour(capi_handler).
 
--export([preprocess_request/3]).
+-export([prepare_request/3]).
 -export([process_request/3]).
--export([get_authorize_prototypes/3]).
+-export([authorize_request/3]).
 
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 % seconds
 -define(DEFAULT_URL_LIFETIME, 60).
 
--spec preprocess_request(
+-spec prepare_request(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) ->
-    {ok, capi_handler:preprocess_context()}
-    | {error, capi_handler:response() | noimpl}.
-preprocess_request(_OperationID, _Req, _Context) ->
+   {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+prepare_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
--spec get_authorize_prototypes(
+-spec authorize_request(
     OperationID :: capi_handler:operation_id(),
-    Req :: capi_handler:request_data(),
-    Context :: capi_handler:processing_context()
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state()
 ) ->
-    {ok, capi_bouncer_context:authorize_prototypes()}
-    | {error, noimpl}.
-get_authorize_prototypes(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
+    {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+authorize_request(OperationID, Context, ReqState) ->
+    Resolution = capi_auth:authorize_operation(OperationID, [], Context, ReqState),
+    {ok, ReqState#{resolution => Resolution}}.
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
-    Req :: capi_handler:request_data(),
-    Context :: capi_handler:processing_context()
-) -> {ok | error, capi_handler:response() | noimpl}.
-process_request('GetReports', Req, Context) ->
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state()
+) -> capi_handler:request_response() | {error, noimpl}.
+process_request('GetReports', Context, #{data := Req}) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     get_reports(PartyID, Req, Context);
-process_request('GetReportsForParty', Req, Context) ->
+process_request('GetReportsForParty', Context, #{data := Req}) ->
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(partyID, Req),
     capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
         get_reports(PartyID, Req, Context)
     end);
-process_request('GetReport', Req, Context) ->
+process_request('GetReport', Context, #{data := Req}) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     get_report(PartyID, Req, Context);
-process_request('GetReportForParty', Req, Context) ->
+process_request('GetReportForParty', Context, #{data := Req}) ->
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(partyID, Req),
     capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
         get_report(PartyID, Req, Context)
     end);
-process_request('CreateReport', Req, Context) ->
+process_request('CreateReport', Context, #{data := Req}) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     create_report(PartyID, Req, Context);
-process_request('CreateReportForParty', Req, Context) ->
+process_request('CreateReportForParty', Context, #{data := Req}) ->
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(partyID, Req),
     capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
         create_report(PartyID, Req, Context)
     end);
-process_request('DownloadFile', Req, Context) ->
+process_request('DownloadFile', Context, #{data := Req}) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     download_file(PartyID, Req, Context);
-process_request('DownloadFileForParty', Req, Context) ->
+process_request('DownloadFileForParty', Context, #{data := Req}) ->
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(partyID, Req),
     capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->

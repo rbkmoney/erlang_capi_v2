@@ -4,41 +4,40 @@
 
 -behaviour(capi_handler).
 
--export([preprocess_request/3]).
+-export([prepare_request/3]).
 -export([process_request/3]).
--export([get_authorize_prototypes/3]).
+-export([authorize_request/3]).
 
 -import(capi_handler_utils, [general_error/2]).
 
--spec preprocess_request(
+-spec prepare_request(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) ->
-    {ok, capi_handler:preprocess_context()}
-    | {error, capi_handler:response() | noimpl}.
-preprocess_request(_OperationID, _Req, _Context) ->
+   {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+prepare_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
--spec get_authorize_prototypes(
+-spec authorize_request(
     OperationID :: capi_handler:operation_id(),
-    Req :: capi_handler:request_data(),
-    Context :: capi_handler:processing_context()
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state()
 ) ->
-    {ok, capi_bouncer_context:authorize_prototypes()}
-    | {error, noimpl}.
-get_authorize_prototypes(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
+    {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+authorize_request(OperationID, Context, ReqState) ->
+    Resolution = capi_auth:authorize_operation(OperationID, [], Context, ReqState),
+    {ok, ReqState#{resolution => Resolution}}.
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
-    Req :: capi_handler:request_data(),
-    Context :: capi_handler:processing_context()
-) -> {ok | error, capi_handler:response() | noimpl}.
-process_request('GetContracts', _Req, Context) ->
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state()
+) -> capi_handler:request_response() | {error, noimpl}.
+process_request('GetContracts', Context, _ReqState) ->
     Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
     {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
-process_request('GetContractByID', Req, Context) ->
+process_request('GetContractByID', Context, #{data := Req}) ->
     ContractID = maps:get('contractID', Req),
     Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
     case genlib_map:get(ContractID, Party#domain_Party.contracts) of
@@ -47,7 +46,7 @@ process_request('GetContractByID', Req, Context) ->
         Contract ->
             {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}}
     end;
-process_request('GetContractAdjustments', Req, Context) ->
+process_request('GetContractAdjustments', Context, #{data := Req}) ->
     case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
         {ok, #domain_Contract{adjustments = Adjustments}} ->
             Resp = [decode_contract_adjustment(A) || A <- Adjustments],
@@ -55,7 +54,7 @@ process_request('GetContractAdjustments', Req, Context) ->
         {exception, #payproc_ContractNotFound{}} ->
             {ok, general_error(404, <<"Contract not found">>)}
     end;
-process_request('GetContractAdjustmentByID', Req, Context) ->
+process_request('GetContractAdjustmentByID', Context, #{data := Req}) ->
     case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
         {ok, #domain_Contract{adjustments = Adjustments}} ->
             AdjustmentID = maps:get('adjustmentID', Req),
@@ -68,7 +67,7 @@ process_request('GetContractAdjustmentByID', Req, Context) ->
         {exception, #payproc_ContractNotFound{}} ->
             {ok, general_error(404, <<"Contract not found">>)}
     end;
-process_request('GetContractsForParty', Req, Context) ->
+process_request('GetContractsForParty', Context, #{data := Req}) ->
     PartyID = maps:get('partyID', Req),
     % TODO
     % Here we're relying on hellgate ownership check, thus no explicit authorization.
@@ -82,7 +81,7 @@ process_request('GetContractsForParty', Req, Context) ->
         {exception, #payproc_PartyNotFound{}} ->
             {ok, general_error(404, <<"Party not found">>)}
     end;
-process_request('GetContractByIDForParty', Req, Context) ->
+process_request('GetContractByIDForParty', Context, #{data := Req}) ->
     ContractID = maps:get('contractID', Req),
     PartyID = maps:get('partyID', Req),
     % TODO
@@ -102,7 +101,7 @@ process_request('GetContractByIDForParty', Req, Context) ->
         {exception, #payproc_PartyNotFound{}} ->
             {ok, general_error(404, <<"Party not found">>)}
     end;
-process_request('GetContractAdjustmentsForParty', Req, Context) ->
+process_request('GetContractAdjustmentsForParty', Context, #{data := Req}) ->
     PartyID = maps:get('partyID', Req),
     ContractID = maps:get('contractID', Req),
     % TODO
@@ -120,7 +119,7 @@ process_request('GetContractAdjustmentsForParty', Req, Context) ->
         {exception, #payproc_ContractNotFound{}} ->
             {ok, general_error(404, <<"Contract not found">>)}
     end;
-process_request('GetContractAdjustmentByIDForParty', Req, Context) ->
+process_request('GetContractAdjustmentByIDForParty', Context, #{data := Req}) ->
     PartyID = maps:get('partyID', Req),
     ContractID = maps:get('contractID', Req),
     % TODO

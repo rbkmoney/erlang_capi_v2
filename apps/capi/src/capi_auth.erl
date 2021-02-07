@@ -10,6 +10,7 @@
 -export([get_access_config/0]).
 
 -export([get_extra_properties/0]).
+-export([authorize_operation/4]).
 
 -type context() :: uac:context().
 -type claims() :: uac:claims().
@@ -23,11 +24,16 @@
     user_realm => realm()
 }.
 
+-type resolution() ::
+    allowed
+    | forbidden.
+
 -export_type([context/0]).
 -export_type([claims/0]).
 -export_type([consumer/0]).
 -export_type([auth_method/0]).
 -export_type([metadata/0]).
+-export_type([resolution/0]).
 
 -define(SIGNEE, capi).
 
@@ -338,4 +344,41 @@ get_consumer(Claims) ->
         <<"merchant">> -> merchant;
         <<"client">> -> client;
         <<"provider">> -> provider
+    end.
+
+-spec authorize_operation(
+    OperationID :: capi_handler:operation_id(),
+    Prototypes :: capi_bouncer_context:prototypes(),
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state()
+) -> resolution() | no_return().
+authorize_operation(
+    OperationID,
+    Prototypes,
+    Ctx = #{swagger_context := #{auth_context := AuthContext}},
+    #{data := Req}
+) ->
+    OperationACL = get_operation_access(OperationID, Req),
+    OldAuthResult = case uac:authorize_operation(OperationACL, AuthContext) of
+        ok ->
+            allowed;
+        {error, _} ->
+           forbidden
+    end,
+    AuthResult = authorize_operation(Prototypes, Ctx),
+    handle_auth_result(OldAuthResult, AuthResult, OperationID).
+
+handle_auth_result(Res, Res, _OperationID) ->
+    Res;
+handle_auth_result(OldRes, NewRes, OperationID) ->
+    _ = logger:error("Operation ~p new auth ~p differ from old ~p", [OperationID, NewRes, OldRes]),
+    OldRes.
+
+authorize_operation(Prototypes, #{swagger_context := ReqCtx, woody_context := WoodyCtx}) ->
+    case capi_bouncer:extract_context_fragments(ReqCtx, WoodyCtx) of
+        Fragments when Fragments /= undefined ->
+            Fragments1 = capi_bouncer_context:build(Prototypes, Fragments, WoodyCtx),
+            capi_bouncer:judge(Fragments1, WoodyCtx);
+        undefined ->
+            forbidden
     end.

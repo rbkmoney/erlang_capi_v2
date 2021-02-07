@@ -4,38 +4,36 @@
 
 -behaviour(capi_handler).
 
--export([preprocess_request/3]).
+-export([prepare_request/3]).
 -export([process_request/3]).
--export([get_authorize_prototypes/3]).
+-export([authorize_request/3]).
 
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
--spec preprocess_request(
+-spec prepare_request(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) ->
-    {ok, capi_handler:preprocess_context()}
-    | {error, capi_handler:response() | noimpl}.
-preprocess_request(_OperationID, _Req, _Context) ->
+   {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+prepare_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
--spec get_authorize_prototypes(
+-spec authorize_request(
     OperationID :: capi_handler:operation_id(),
-    Req :: capi_handler:request_data(),
-    Context :: capi_handler:processing_context()
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state()
 ) ->
-    {ok, capi_bouncer_context:authorize_prototypes()}
-    | {error, noimpl}.
-get_authorize_prototypes(_OperationID, _Req, _Context) ->
+    {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+authorize_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
-    Req :: capi_handler:request_data(),
-    Context :: capi_handler:processing_context()
-) -> {ok | error, capi_handler:response() | noimpl}.
-process_request('CreateCustomer', Req, Context) ->
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state()
+) -> capi_handler:request_response() | {error, noimpl}.
+process_request('CreateCustomer', Context, #{data := Req}) ->
     CustomerParams = maps:get('Customer', Req),
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(<<"partyID">>, CustomerParams, UserID),
@@ -65,7 +63,7 @@ process_request('CreateCustomer', Req, Context) ->
                     {ok, ErrorResp}
             end
     end;
-process_request('GetCustomerById', Req, Context) ->
+process_request('GetCustomerById', Context, #{data := Req}) ->
     case get_customer_by_id(maps:get('customerID', Req), Context) of
         {ok, Customer} ->
             {ok, {200, #{}, decode_customer(Customer)}};
@@ -77,7 +75,7 @@ process_request('GetCustomerById', Req, Context) ->
                     {ok, general_error(404, <<"Customer not found">>)}
             end
     end;
-process_request('DeleteCustomer', Req, Context) ->
+process_request('DeleteCustomer', Context, #{data := Req}) ->
     CallArgs = {maps:get(customerID, Req)},
     Call = {customer_management, 'Delete', CallArgs},
     case capi_handler_utils:service_call(Call, Context) of
@@ -95,7 +93,7 @@ process_request('DeleteCustomer', Req, Context) ->
                     {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)}
             end
     end;
-process_request('CreateCustomerAccessToken', Req, Context) ->
+process_request('CreateCustomerAccessToken', Context, #{data := Req}) ->
     CustomerID = maps:get(customerID, Req),
     case get_customer_by_id(CustomerID, Context) of
         {ok, #payproc_Customer{owner_id = PartyID}} ->
@@ -112,7 +110,7 @@ process_request('CreateCustomerAccessToken', Req, Context) ->
                     {ok, general_error(404, <<"Customer not found">>)}
             end
     end;
-process_request('CreateBinding', Req, Context) ->
+process_request('CreateBinding', Context, #{data := Req}) ->
     Result =
         try
             CallArgs = {
@@ -161,7 +159,7 @@ process_request('CreateBinding', Req, Context) ->
             ),
             {ok, ErrorResp}
     end;
-process_request('GetBindings', Req, Context) ->
+process_request('GetBindings', Context, #{data := Req}) ->
     case get_customer_by_id(maps:get(customerID, Req), Context) of
         {ok, #payproc_Customer{bindings = Bindings}} ->
             {ok, {200, #{}, [decode_customer_binding(B, Context) || B <- Bindings]}};
@@ -173,7 +171,7 @@ process_request('GetBindings', Req, Context) ->
                     {ok, general_error(404, <<"Customer not found">>)}
             end
     end;
-process_request('GetBinding', Req, Context) ->
+process_request('GetBinding', Context, #{data := Req}) ->
     case get_customer_by_id(maps:get(customerID, Req), Context) of
         {ok, #payproc_Customer{bindings = Bindings}} ->
             case lists:keyfind(maps:get(customerBindingID, Req), #payproc_CustomerBinding.id, Bindings) of
@@ -190,7 +188,7 @@ process_request('GetBinding', Req, Context) ->
                     {ok, general_error(404, <<"Customer not found">>)}
             end
     end;
-process_request('GetCustomerEvents', Req, Context) ->
+process_request('GetCustomerEvents', Context, #{data := Req}) ->
     GetterFun = fun(Range) ->
         capi_handler_utils:service_call(
             {customer_management, 'GetEvents', {maps:get(customerID, Req), Range}},

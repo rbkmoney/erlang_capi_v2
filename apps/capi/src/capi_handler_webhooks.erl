@@ -5,72 +5,101 @@
 
 -behaviour(capi_handler).
 
--export([preprocess_request/3]).
+-export([prepare_request/3]).
 -export([process_request/3]).
--export([get_authorize_prototypes/3]).
+-export([authorize_request/3]).
 
--type preprocessing_context() :: #{
-    webhook_id := integer()
+-type webhook() :: dmsl_webhooker_thrift:'Webhook'().
+
+-type op_context() :: #{
+    webhook_id => binary(),
+    webhook => webhook(),
+    party_id => binary(),
+    create_params => map()
 }.
 
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
--spec preprocess_request(
+-spec prepare_request(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) ->
-    {ok, capi_handler:preprocess_context(preprocessing_context())}
-    | {error, capi_handler:response() | noimpl}.
-preprocess_request(OperationID, _Req, _Context) when
-    OperationID =:= 'CreateWebhook' orelse
-        OperationID =:= 'GetWebhooks'
-->
-    {ok, #{}};
-preprocess_request(OperationID, Req, _Context) when
-    OperationID =:= 'GetWebhookByID' orelse
-        OperationID =:= 'DeleteWebhookByID'
-->
-    case encode_webhook_id(maps:get(webhookID, Req)) of
-        {ok, WebhookID} ->
-            {ok, #{webhook_id => WebhookID}};
-        error ->
-            {ok, general_error(404, <<"Webhook not found">>)}
-    end;
-preprocess_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
-
--spec get_authorize_prototypes(
-    OperationID :: capi_handler:operation_id(),
-    Req :: capi_handler:request_data(),
-    Context :: capi_handler:processing_context(preprocessing_context())
-) ->
-    {ok, capi_bouncer_context:authorize_prototypes()}
-    | {error, noimpl}.
-get_authorize_prototypes('CreateWebhook', Req, Context) ->
+    {ok, capi_handler:request_state(op_context())} | {done, capi_handler:request_response()} | {error, noimpl}.
+prepare_request('CreateWebhook', Req, Context) ->
     Params = maps:get('Webhook', Req),
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(<<"partyID">>, Params, UserID),
-    {ok, #{op => #{party => PartyID}, add => []}};
-get_authorize_prototypes('GetWebhooks', _Req, Context) ->
-    {ok, #{op => #{party => capi_handler_utils:get_party_id(Context)}, add => []}};
-get_authorize_prototypes(OperationID, Req, #{preprocess_context := #{webhook_id := WebhookID}}) when
+    {ok, #{op_state => #{party_id => PartyID, create_params => Params}}};
+prepare_request('GetWebhooks', _Req, _Context) ->
+    {ok, #{}};
+prepare_request('GetWebhookByID', Req, Context) ->
+    case encode_webhook_id(maps:get(webhookID, Req)) of
+        {ok, WebhookID} ->
+            case get_webhook(WebhookID, Context) of
+                {ok, Webhook} ->
+                    {ok, #{op_state => #{webhook_id => WebhookID, webhook => Webhook}}};
+                {exception, #webhooker_WebhookNotFound{}} ->
+                    {done, {ok, general_error(404, <<"Webhook not found">>)}}
+            end;
+        error ->
+            {done, {ok, general_error(404, <<"Webhook not found">>)}}
+    end;
+prepare_request('DeleteWebhookByID', Req, _Context) ->
+    case encode_webhook_id(maps:get(webhookID, Req)) of
+        {ok, WebhookID} ->
+            {ok, #{op_state => #{webhook_id => WebhookID}}};
+        error ->
+            {done, {ok, general_error(404, <<"Webhook not found">>)}}
+    end;
+prepare_request(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
+
+-spec authorize_request(
+    OperationID :: capi_handler:operation_id(),
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state(op_context())
+) ->
+    {ok, capi_handler:request_state(op_context())} | {done, capi_handler:request_response()} | {error, noimpl}.
+authorize_request(
+    OperationID = 'CreateWebhook',
+    Context,
+    ReqState = #{op_state := #{party_id := PartyID}}
+) ->
+    Prototypes = [{operation, #{party => PartyID, id => OperationID}}],
+    Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, ReqState),
+    {ok, ReqState#{resolution => Resolution}};
+authorize_request(OperationID = 'GetWebhooks', Context, ReqState) ->
+    Prototypes = [{operation, #{party => capi_handler_utils:get_party_id(Context), id => OperationID}}],
+    Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, ReqState),
+    {ok, ReqState#{resolution => Resolution}};
+authorize_request(
+    OperationID,
+    Context,
+    ReqState = #{data := Req, op_state := #{webhook := Webhook}}
+) when
     OperationID =:= 'GetWebhookByID' orelse
         OperationID =:= 'DeleteWebhookByID'
 ->
-    {ok, #{op => #{webhook => maps:get(webhookID, Req)}, add => [{webhooks, #{webhook => WebhookID}}]}};
-get_authorize_prototypes(_OperationID, _Req, _Context) ->
+    Prototypes = [
+        {operation, #{webhook => maps:get(webhookID, Req), id => OperationID}},
+        {webhooks, #{webhook => Webhook}}
+    ],
+    Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, ReqState),
+    {ok, ReqState#{resolution => Resolution}};
+authorize_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
-    Req :: capi_handler:request_data(),
-    Context :: capi_handler:processing_context()
-) -> {ok | error, capi_handler:response() | noimpl}.
-process_request('CreateWebhook', Req, Context) ->
-    Params = maps:get('Webhook', Req),
-    UserID = capi_handler_utils:get_user_id(Context),
-    PartyID = maps:get(<<"partyID">>, Params, UserID),
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state(op_context())
+) -> capi_handler:request_response() | {error, noimpl}.
+process_request(
+    'CreateWebhook',
+    Context,
+    #{op_state := #{party_id := PartyID, create_params := Params}}
+) ->
     WebhookParams = encode_webhook_params(PartyID, Params),
     ShopID = validate_webhook_params(WebhookParams),
     Call = {party_management, 'GetShop', {PartyID, ShopID}},
@@ -87,25 +116,21 @@ process_request('CreateWebhook', Req, Context) ->
         {exception, #payproc_ShopNotFound{}} ->
             {ok, logic_error(invalidShopID, <<"Shop not found">>)}
     end;
-process_request('GetWebhooks', _Req, Context) ->
+process_request('GetWebhooks', Context, _ReqState) ->
     Webhooks = capi_utils:unwrap(
         capi_handler_utils:service_call_with([party_id], {webhook_manager, 'GetList', {}}, Context)
     ),
     {ok, {200, #{}, [decode_webhook(V) || V <- Webhooks]}};
-process_request('GetWebhookByID', _Req, Context = #{preprocess_context := #{webhook_id := WebhookID}}) ->
-    case get_webhook(WebhookID, Context) of
-        {ok, Webhook} ->
-            {ok, {200, #{}, decode_webhook(Webhook)}};
-        {exception, #webhooker_WebhookNotFound{}} ->
-            {ok, general_error(404, <<"Webhook not found">>)}
-    end;
-process_request('DeleteWebhookByID', _Req, Context = #{preprocess_context := #{webhook_id := WebhookID}}) ->
+process_request('GetWebhookByID', _Context, #{op_state := #{webhook := Webhook}}) ->
+    {ok, {200, #{}, decode_webhook(Webhook)}};
+process_request('DeleteWebhookByID', Context, #{op_state := #{webhook_id := WebhookID}}) ->
     case delete_webhook(WebhookID, Context) of
         {ok, _} ->
             {ok, {204, #{}, undefined}};
         {exception, #webhooker_WebhookNotFound{}} ->
             {ok, {204, #{}, undefined}}
     end;
+
 %%
 
 process_request(_OperationID, _Req, _Context) ->
