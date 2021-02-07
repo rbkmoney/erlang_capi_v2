@@ -18,7 +18,6 @@
 -export([init/1]).
 
 -export([
-    authorization_positive_lifetime_ok_test/1,
     authorization_unlimited_lifetime_ok_test/1,
     authorization_far_future_deadline_ok_test/1,
     authorization_permission_ok_test/1,
@@ -53,7 +52,6 @@ all() ->
 groups() ->
     [
         {authorization, [], [
-            authorization_positive_lifetime_ok_test,
             authorization_unlimited_lifetime_ok_test,
             authorization_far_future_deadline_ok_test,
             authorization_permission_ok_test,
@@ -98,11 +96,6 @@ end_per_testcase(_Name, C) ->
 
 %%% Tests
 
--spec authorization_positive_lifetime_ok_test(config()) -> _.
-authorization_positive_lifetime_ok_test(_Config) ->
-    {ok, Token} = capi_ct_helper:issue_token([], {lifetime, 10}),
-    {ok, _} = capi_client_categories:get_categories(capi_ct_helper:get_context(Token)).
-
 -spec authorization_unlimited_lifetime_ok_test(config()) -> _.
 authorization_unlimited_lifetime_ok_test(_Config) ->
     {ok, Token} = capi_ct_helper:issue_token([], unlimited),
@@ -111,7 +104,7 @@ authorization_unlimited_lifetime_ok_test(_Config) ->
 -spec authorization_far_future_deadline_ok_test(config()) -> _.
 authorization_far_future_deadline_ok_test(_Config) ->
     % 01/01/2100 @ 12:00am (UTC)
-    {ok, Token} = capi_ct_helper:issue_token([], {deadline, 4102444800}),
+    {ok, Token} = capi_ct_helper:issue_token([], 4102444800),
     {ok, _} = capi_client_categories:get_categories(capi_ct_helper:get_context(Token)).
 
 -spec authorization_permission_ok_test(config()) -> _.
@@ -141,7 +134,7 @@ authorization_error_no_header_test(_Config) ->
 
 -spec authorization_error_no_permission_test(config()) -> _.
 authorization_error_no_permission_test(_Config) ->
-    {ok, Token} = capi_ct_helper:issue_token([], {lifetime, 10}),
+    {ok, Token} = capi_ct_helper:issue_token([], 4102444800),
     ?emptyresp(401) = capi_client_parties:get_my_party(capi_ct_helper:get_context(Token)).
 
 -spec authorization_blacklisted_token_error_test(config()) -> _.

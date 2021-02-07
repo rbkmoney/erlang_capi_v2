@@ -107,7 +107,7 @@ end_per_testcase(_Name, C) ->
 -spec deadline_error_test(config()) -> _.
 deadline_error_test(_Config) ->
     % 01/01/2100 @ 12:00am (UTC)
-    {ok, Token} = capi_ct_helper:issue_token([], {deadline, 4102444800}),
+    {ok, Token} = capi_ct_helper:issue_token([], 4102444800),
     {error, {400, _}} = capi_client_categories:get_categories(get_context(Token, <<"blabla">>)).
 
 -spec deadline_absolute_ok_test(config()) -> _.

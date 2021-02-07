@@ -84,9 +84,9 @@ resolve_token_spec({invoice, InvoiceID}) ->
             {[payment_resources], write}
         ])
     },
-    Expiration = {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME},
+    Expiration = lifetime_to_expiration(?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME),
     #{
-        <<"exp">> => Expiration,
+        <<"exp">> => make_auth_expiration(Expiration),
         <<"resource_access">> => DomainRoles,
         % token consumer
         <<"cons">> => <<"client">>
@@ -111,9 +111,9 @@ resolve_token_spec({customer, CustomerID}) ->
             {[payment_resources], write}
         ])
     },
-    Expiration = {lifetime, ?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME},
+    Expiration = lifetime_to_expiration(?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME),
     #{
-        <<"exp">> => Expiration,
+        <<"exp">> => make_auth_expiration(Expiration),
         <<"resource_access">> => DomainRoles
     }.
 
@@ -346,6 +346,14 @@ get_consumer(Claims) ->
         <<"provider">> -> provider
     end.
 
+lifetime_to_expiration(Lt) ->
+    genlib_time:unow() + Lt.
+
+make_auth_expiration(Timestamp) when is_integer(Timestamp) ->
+    genlib_rfc3339:format(Timestamp, second);
+make_auth_expiration(unlimited) ->
+    undefined.
+    
 -spec authorize_operation(
     OperationID :: capi_handler:operation_id(),
     Prototypes :: capi_bouncer_context:prototypes(),
