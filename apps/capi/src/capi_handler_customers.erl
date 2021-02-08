@@ -16,6 +16,17 @@
     Context :: capi_handler:processing_context()
 ) ->
    {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+prepare_request(OperationID, _Req, _Context) when
+    OperationID =:= 'CreateCustomer'
+        orelse OperationID =:= 'GetCustomerById'
+        orelse OperationID =:= 'DeleteCustomer'
+        orelse OperationID =:= 'CreateCustomerAccessToken'
+        orelse OperationID =:= 'CreateBinding'
+        orelse OperationID =:= 'GetBindings'
+        orelse OperationID =:= 'GetBinding'
+        orelse OperationID =:= 'GetCustomerEvents'
+->
+    {ok, #{}};
 prepare_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
@@ -25,6 +36,18 @@ prepare_request(_OperationID, _Req, _Context) ->
     ReqState :: capi_handler:request_state()
 ) ->
     {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+authorize_request(OperationID, Context, ReqState) when
+    OperationID =:= 'CreateCustomer'
+        orelse OperationID =:= 'GetCustomerById'
+        orelse OperationID =:= 'DeleteCustomer'
+        orelse OperationID =:= 'CreateCustomerAccessToken'
+        orelse OperationID =:= 'CreateBinding'
+        orelse OperationID =:= 'GetBindings'
+        orelse OperationID =:= 'GetBinding'
+        orelse OperationID =:= 'GetCustomerEvents'
+->
+    Resolution = capi_auth:authorize_operation(OperationID, [], Context, ReqState),
+    {ok, ReqState#{resolution => Resolution}};
 authorize_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 

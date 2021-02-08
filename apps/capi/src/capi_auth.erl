@@ -99,7 +99,7 @@ resolve_token_spec({invoice_tpl, InvoiceTplID}) ->
         ])
     },
     #{
-        <<"exp">> => unlimited,
+        <<"exp">> => make_auth_expiration(unlimited),
         <<"resource_access">> => DomainRoles
     };
 resolve_token_spec({customer, CustomerID}) ->
@@ -346,14 +346,14 @@ get_consumer(Claims) ->
         <<"provider">> -> provider
     end.
 
-lifetime_to_expiration(Lt) ->
+lifetime_to_expiration(Lt) when is_integer(Lt) ->
     genlib_time:unow() + Lt.
 
 make_auth_expiration(Timestamp) when is_integer(Timestamp) ->
     genlib_rfc3339:format(Timestamp, second);
 make_auth_expiration(unlimited) ->
-    undefined.
-    
+    unlimited.
+
 -spec authorize_operation(
     OperationID :: capi_handler:operation_id(),
     Prototypes :: capi_bouncer_context:prototypes(),
@@ -383,10 +383,15 @@ handle_auth_result(OldRes, NewRes, OperationID) ->
     OldRes.
 
 authorize_operation(Prototypes, #{swagger_context := ReqCtx, woody_context := WoodyCtx}) ->
-    case capi_bouncer:extract_context_fragments(ReqCtx, WoodyCtx) of
+    try
+        case capi_bouncer:extract_context_fragments(ReqCtx, WoodyCtx) of
         Fragments when Fragments /= undefined ->
             Fragments1 = capi_bouncer_context:build(Prototypes, Fragments, WoodyCtx),
             capi_bouncer:judge(Fragments1, WoodyCtx);
         undefined ->
+            forbidden
+        end
+    catch
+        error:{woody_error, {_Source, _Class, _Details}} ->
             forbidden
     end.

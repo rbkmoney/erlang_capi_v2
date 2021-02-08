@@ -45,10 +45,15 @@ prepare_request('GetWebhookByID', Req, Context) ->
         error ->
             {done, {ok, general_error(404, <<"Webhook not found">>)}}
     end;
-prepare_request('DeleteWebhookByID', Req, _Context) ->
+prepare_request('DeleteWebhookByID', Req, Context) ->
     case encode_webhook_id(maps:get(webhookID, Req)) of
         {ok, WebhookID} ->
-            {ok, #{op_state => #{webhook_id => WebhookID}}};
+            case get_webhook(WebhookID, Context) of
+                {ok, Webhook} ->
+                    {ok, #{op_state => #{webhook_id => WebhookID, webhook => Webhook}}};
+                {exception, #webhooker_WebhookNotFound{}} ->
+                    {done, {ok, {204, #{}, undefined}}}
+            end;
         error ->
             {done, {ok, general_error(404, <<"Webhook not found">>)}}
     end;
@@ -87,7 +92,7 @@ authorize_request(
     ],
     Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, ReqState),
     {ok, ReqState#{resolution => Resolution}};
-authorize_request(_OperationID, _Req, _Context) ->
+authorize_request(_OperationID, _Context, _ReqState) ->
     {error, noimpl}.
 
 -spec process_request(

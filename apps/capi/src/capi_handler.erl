@@ -58,7 +58,7 @@
 -spec authorize_api_key(swag_server:operation_id(), swag_server:api_key(), handler_opts()) ->
     Result :: false | {true, capi_auth:context()}.
 authorize_api_key(OperationID, ApiKey, _HandlerOpts) ->
-    case uac:authorize_api_key(ApiKey, get_verification_options()) of
+    case uac:authorize_api_key(ApiKey, #{}) of
         {ok, Context} ->
             check_blacklist(ApiKey, Context);
         {error, Error} ->
@@ -194,6 +194,7 @@ prepare_request(_OperationID, Req, _Context, []) ->
 prepare_request(OperationID, Req, Context, [Handler | Rest]) ->
     case Handler:prepare_request(OperationID, Req, Context) of
         {error, noimpl} ->
+            _ = logger:info("Try to prepare with ~p", [Handler]),
             prepare_request(OperationID, Req, Context, Rest);
         {ok, State} ->
             {ok, State#{data => Req, handler => Handler}};
@@ -216,12 +217,13 @@ authorize_request(OperationID, Context, State = #{handler := Handler}, _) ->
         Response ->
             Response
     end;
-authorize_request(OperationID, Context, State, [Handler | Rest]) ->
-    case Handler:authorize_request(OperationID, Context, State) of
+authorize_request(OperationID, Context, State0, [Handler | Rest]) ->
+    case Handler:authorize_request(OperationID, Context, State0) of
         {error, noimpl} ->
-            authorize_request(OperationID, Context, State, Rest);
-        {ok, State} ->
-            {ok, State#{handler => Handler}};
+            _ = logger:info("Try to authorize with ~p", [Handler]),
+            authorize_request(OperationID, Context, State0, Rest);
+        {ok, State1} ->
+            {ok, State1#{handler => Handler}};
         Response ->
             Response
     end.
@@ -335,11 +337,6 @@ clear_rpc_meta() ->
         Metadata ->
             logger:set_process_metadata(maps:without([trace_id, parent_id, span_id], Metadata))
     end.
-
-get_verification_options() ->
-    #{
-        domains_to_decode => [?DOMAIN]
-    }.
 
 check_blacklist(ApiKey, Context) ->
     case capi_api_key_blacklist:check(ApiKey) of

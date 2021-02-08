@@ -16,6 +16,14 @@
     Context :: capi_handler:processing_context()
 ) ->
    {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+prepare_request(OperationID, _Req, _Context) when
+    OperationID =:= 'GetPaymentConversionStats'
+        orelse OperationID =:= 'GetPaymentRevenueStats'
+        orelse OperationID =:= 'GetPaymentGeoStats'
+        orelse OperationID =:= 'GetPaymentRateStats'
+        orelse OperationID =:= 'GetPaymentMethodStats'
+->
+    {ok, #{}};
 prepare_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
@@ -25,9 +33,17 @@ prepare_request(_OperationID, _Req, _Context) ->
     ReqState :: capi_handler:request_state()
 ) ->
     {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
-authorize_request(OperationID, Context, ReqState) ->
+authorize_request(OperationID, Context, ReqState) when
+    OperationID =:= 'GetPaymentConversionStats'
+        orelse OperationID =:= 'GetPaymentRevenueStats'
+        orelse OperationID =:= 'GetPaymentGeoStats'
+        orelse OperationID =:= 'GetPaymentRateStats'
+        orelse OperationID =:= 'GetPaymentMethodStats'
+->
     Resolution = capi_auth:authorize_operation(OperationID, [], Context, ReqState),
-    {ok, ReqState#{resolution => Resolution}}.
+    {ok, ReqState#{resolution => Resolution}};
+authorize_request(_OperationID, _Context, _ReqState) ->
+    {error, noimpl}.
 
 -spec process_request(
     OperationID :: capi_handler:operation_id(),
