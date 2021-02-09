@@ -350,7 +350,7 @@ lifetime_to_expiration(Lt) when is_integer(Lt) ->
     genlib_time:unow() + Lt.
 
 make_auth_expiration(Timestamp) when is_integer(Timestamp) ->
-    genlib_rfc3339:format(Timestamp, second);
+    Timestamp;
 make_auth_expiration(unlimited) ->
     unlimited.
 
