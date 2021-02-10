@@ -367,12 +367,13 @@ authorize_operation(
     #{data := Req}
 ) ->
     OperationACL = get_operation_access(OperationID, Req),
-    OldAuthResult = case uac:authorize_operation(OperationACL, AuthContext) of
-        ok ->
-            allowed;
-        {error, _} ->
-           forbidden
-    end,
+    OldAuthResult =
+        case uac:authorize_operation(OperationACL, AuthContext) of
+            ok ->
+                allowed;
+            {error, _} ->
+                forbidden
+        end,
     AuthResult = authorize_operation(Prototypes, Ctx),
     handle_auth_result(OldAuthResult, AuthResult, OperationID).
 
@@ -383,15 +384,10 @@ handle_auth_result(OldRes, NewRes, OperationID) ->
     OldRes.
 
 authorize_operation(Prototypes, #{swagger_context := ReqCtx, woody_context := WoodyCtx}) ->
-    try
-        case capi_bouncer:extract_context_fragments(ReqCtx, WoodyCtx) of
+    case capi_bouncer:extract_context_fragments(ReqCtx, WoodyCtx) of
         Fragments when Fragments /= undefined ->
             Fragments1 = capi_bouncer_context:build(Prototypes, Fragments, WoodyCtx),
             capi_bouncer:judge(Fragments1, WoodyCtx);
         undefined ->
-            forbidden
-        end
-    catch
-        error:{woody_error, {_Source, _Class, _Details}} ->
             forbidden
     end.

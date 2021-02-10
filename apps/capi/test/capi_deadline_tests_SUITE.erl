@@ -85,12 +85,15 @@ init_per_group(deadline_header, Config) ->
     {ok, Token2} = capi_ct_helper:issue_token(BasePermissions, unlimited),
     Context = capi_ct_helper:get_context(Token),
     Config2 = [{context_with_relative_deadline, get_context(Token2, <<"3s">>)} | Config],
-    [{context_with_absolute_deadline, Context} | Config2];
+    SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
+    Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+    [{context_with_absolute_deadline, Context}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config2];
 init_per_group(_, Config) ->
     Config.
 
 -spec end_per_group(group_name(), config()) -> _.
-end_per_group(_Group, _C) ->
+end_per_group(_Group, C) ->
+    _ = capi_utils:maybe(?config(group_test_sup, C), fun capi_ct_helper:stop_mocked_service_sup/1),
     ok.
 
 -spec init_per_testcase(test_case_name(), config()) -> config().

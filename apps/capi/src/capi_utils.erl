@@ -25,6 +25,8 @@
 
 -export([get_unique_id/0]).
 
+-export([maybe/2]).
+
 % 1 min
 -define(MAX_REQUEST_DEADLINE_TIME, timer:minutes(1)).
 
@@ -234,6 +236,12 @@ do_merge_payment_methods(MergableField, Method1, Method2) ->
 get_unique_id() ->
     <<ID:64>> = snowflake:new(),
     genlib_format:format_int_base(ID, 62).
+
+-spec maybe(T | undefined, fun((T) -> R)) -> R | undefined.
+maybe(undefined, _Fun) ->
+    undefined;
+maybe(V, Fun) ->
+    Fun(V).
 
 %%
 

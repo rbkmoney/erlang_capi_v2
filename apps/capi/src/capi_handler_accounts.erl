@@ -14,11 +14,8 @@
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
-) ->
-   {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
-prepare_request(OperationID, _Req, _Context) when
-    OperationID =:= 'GetAccountByID'
-->
+) -> {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+prepare_request(OperationID, _Req, _Context) when OperationID =:= 'GetAccountByID' ->
     {ok, #{}};
 prepare_request(_OperationID, _Req, _Context) ->
     {error, noimpl}.
@@ -27,11 +24,8 @@ prepare_request(_OperationID, _Req, _Context) ->
     OperationID :: capi_handler:operation_id(),
     Context :: capi_handler:processing_context(),
     ReqState :: capi_handler:request_state()
-) ->
-    {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
-authorize_request(OperationID, Context, ReqState) when
-    OperationID =:= 'GetAccountByID'
-->
+) -> {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+authorize_request(OperationID, Context, ReqState) when OperationID =:= 'GetAccountByID' ->
     Resolution = capi_auth:authorize_operation(OperationID, [], Context, ReqState),
     {ok, ReqState#{resolution => Resolution}};
 authorize_request(_OperationID, _Context, _ReqState) ->

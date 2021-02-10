@@ -24,8 +24,7 @@
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
-) ->
-    {ok, capi_handler:request_state(op_context())} | {done, capi_handler:request_response()} | {error, noimpl}.
+) -> {ok, capi_handler:request_state(op_context())} | {done, capi_handler:request_response()} | {error, noimpl}.
 prepare_request('CreateWebhook', Req, Context) ->
     Params = maps:get('Webhook', Req),
     UserID = capi_handler_utils:get_user_id(Context),
@@ -64,8 +63,7 @@ prepare_request(_OperationID, _Req, _Context) ->
     OperationID :: capi_handler:operation_id(),
     Context :: capi_handler:processing_context(),
     ReqState :: capi_handler:request_state(op_context())
-) ->
-    {ok, capi_handler:request_state(op_context())} | {done, capi_handler:request_response()} | {error, noimpl}.
+) -> {ok, capi_handler:request_state(op_context())} | {done, capi_handler:request_response()} | {error, noimpl}.
 authorize_request(
     OperationID = 'CreateWebhook',
     Context,
@@ -135,7 +133,6 @@ process_request('DeleteWebhookByID', Context, #{op_state := #{webhook_id := Webh
         {exception, #webhooker_WebhookNotFound{}} ->
             {ok, {204, #{}, undefined}}
     end;
-
 %%
 
 process_request(_OperationID, _Req, _Context) ->
