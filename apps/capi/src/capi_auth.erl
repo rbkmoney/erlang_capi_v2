@@ -383,6 +383,9 @@ handle_auth_result(OldRes, NewRes, OperationID) ->
     _ = logger:error("Operation ~p new auth ~p differ from old ~p", [OperationID, NewRes, OldRes]),
     OldRes.
 
+%% TODO: Remove this clause after all handlers will be implemented
+authorize_operation([], _) ->
+    forbidden;
 authorize_operation(Prototypes, #{swagger_context := ReqCtx, woody_context := WoodyCtx}) ->
     case capi_bouncer:extract_context_fragments(ReqCtx, WoodyCtx) of
         Fragments when Fragments /= undefined ->
