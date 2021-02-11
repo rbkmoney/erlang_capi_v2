@@ -8,46 +8,42 @@
 -export([authorize_api_key/3]).
 -export([map_error/2]).
 -export([handle_request/4]).
--export([authorize_request/4]).
 
-%% Handler behaviour
+%%
+
+-type request_data() :: #{atom() | binary() => term()}.
+
+-type operation_id() :: swag_server:operation_id().
+-type request_context() :: swag_server:request_context().
+-type response() :: swag_server:response().
+-type request_response() :: {ok | error, response()}.
+-type processing_context() :: #{
+    swagger_context := swag_server:request_context(),
+    woody_context := woody_context:ctx()
+}.
+
+-type request_state() :: #{
+    authorize := fun(() -> {ok, capi_auth:resolution()} | {done, request_response()} | {error, noimpl}),
+    process := fun(() -> request_response() | {error, noimpl})
+}.
 
 -export_type([operation_id/0]).
 -export_type([request_data/0]).
 -export_type([request_context/0]).
 -export_type([processing_context/0]).
 -export_type([request_state/0]).
--export_type([request_state/1]).
 -export_type([response/0]).
 -export_type([request_response/0]).
 
--callback prepare_request(
+-type handler_opts() :: swag_server:handler_opts(_).
+
+%% Handler behaviour
+
+-callback prepare(
     OperationID :: operation_id(),
     Req :: request_data(),
     Context :: processing_context()
 ) -> {ok, request_state()} | {done, request_response()} | {error, noimpl}.
-
--callback process_request(
-    OperationID :: operation_id(),
-    Context :: processing_context(),
-    ReqState :: request_state()
-) -> request_response() | {error, noimpl}.
-
-% -callback process_request_with_restrictions(
-%     OperationID :: operation_id(),
-%     Req :: request_data(),
-%     Context :: processing_context()
-%     Restrictions :: any()
-% ) -> request_response() | {error, noimpl}.
-
--callback authorize_request(
-    OperationID :: operation_id(),
-    Context :: processing_context(),
-    ReqState :: request_state()
-) ->
-    {ok, request_state()}
-    | {done, request_response()}
-    | {error, noimpl}.
 
 -import(capi_handler_utils, [logic_error/2, server_error/1]).
 
@@ -83,26 +79,6 @@ map_error(validation_error, Error) ->
         <<"code">> => <<"invalidRequest">>,
         <<"message">> => Message
     }).
-
--type request_data() :: #{atom() | binary() => term()}.
-
--type operation_id() :: swag_server:operation_id().
--type request_context() :: swag_server:request_context().
--type response() :: swag_server:response().
--type request_response() :: {ok | error, response()}.
--type handler_opts() :: swag_server:handler_opts(_).
--type processing_context() :: #{
-    swagger_context := swag_server:request_context(),
-    woody_context := woody_context:ctx()
-}.
-
--type request_state(T) :: #{
-    data := request_data(),
-    op_state => T,
-    handler => module(),
-    resolution => capi_auth:resolution()
-}.
--type request_state() :: request_state(map()).
 
 get_handlers() ->
     [
@@ -151,14 +127,13 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
         WoodyContext = attach_deadline(Req, create_woody_context(RpcID, AuthContext)),
         Context = create_processing_context(SwagContext, WoodyContext),
         ok = set_context_meta(Context),
-        Handlers = get_handlers(),
-        case prepare_request(OperationID, Req, Context, Handlers) of
-            {ok, ReqState0} ->
-                case authorize_request(OperationID, Context, ReqState0, Handlers) of
-                    {ok, ReqState1 = #{resolution := Resolution}} ->
+        case prepare(OperationID, Req, Context, get_handlers()) of
+            {ok, #{authorize := Authorize, process := Process}} ->
+                case Authorize() of
+                    {ok, Resolution} ->
                         case Resolution of
                             allowed ->
-                                process_request(OperationID, Context, ReqState1);
+                                Process();
                             forbidden ->
                                 _ = logger:info("Authorization failed"),
                                 {ok, {401, #{}, undefined}}
@@ -183,60 +158,20 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
         ok = clear_rpc_meta()
     end.
 
--spec prepare_request(
+-spec prepare(
     OperationID :: operation_id(),
     Req :: request_data(),
     Context :: processing_context(),
     Handlers :: list(module())
 ) -> {ok, request_state()} | {done, request_response()}.
-prepare_request(_OperationID, Req, _Context, []) ->
-    {ok, #{data => Req}};
-prepare_request(OperationID, Req, Context, [Handler | Rest]) ->
-    case Handler:prepare_request(OperationID, Req, Context) of
-        {error, noimpl} ->
-            _ = logger:info("Try to prepare with ~p", [Handler]),
-            prepare_request(OperationID, Req, Context, Rest);
-        {ok, State} ->
-            {ok, State#{data => Req, handler => Handler}};
-        Response ->
-            Response
-    end.
-
--spec authorize_request(
-    OperationID :: operation_id(),
-    Context :: processing_context(),
-    ReqState :: request_state(),
-    Handlers :: list(module())
-) -> {ok, request_state()} | {done, request_response()}.
-authorize_request(OperationID, _Context, _State, []) ->
+prepare(OperationID, _Req, _Context, []) ->
     erlang:throw({handler_function_clause, OperationID});
-authorize_request(OperationID, Context, State = #{handler := Handler}, _) ->
-    case Handler:authorize_request(OperationID, Context, State) of
+prepare(OperationID, Req, Context, [Handler | Rest]) ->
+    case Handler:prepare(OperationID, Req, Context) of
         {error, noimpl} ->
-            erlang:throw({handler_function_clause, OperationID});
-        Response ->
-            Response
-    end;
-authorize_request(OperationID, Context, State0, [Handler | Rest]) ->
-    case Handler:authorize_request(OperationID, Context, State0) of
-        {error, noimpl} ->
-            _ = logger:info("Try to authorize with ~p", [Handler]),
-            authorize_request(OperationID, Context, State0, Rest);
-        {ok, State1} ->
-            {ok, State1#{handler => Handler}};
-        Response ->
-            Response
-    end.
-
--spec process_request(
-    OperationID :: operation_id(),
-    Context :: processing_context(),
-    ReqState :: request_state()
-) -> request_response().
-process_request(OperationID, Context, State = #{handler := Handler}) ->
-    case Handler:process_request(OperationID, Context, State) of
-        {error, noimpl} ->
-            erlang:throw({handler_function_clause, OperationID});
+            prepare(OperationID, Req, Context, Rest);
+        {ok, State} ->
+            {ok, State};
         Response ->
             Response
     end.

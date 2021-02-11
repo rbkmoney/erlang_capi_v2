@@ -358,13 +358,13 @@ make_auth_expiration(unlimited) ->
     OperationID :: capi_handler:operation_id(),
     Prototypes :: capi_bouncer_context:prototypes(),
     Context :: capi_handler:processing_context(),
-    ReqState :: capi_handler:request_state()
+    Req :: capi_handler:request_data()
 ) -> resolution() | no_return().
 authorize_operation(
     OperationID,
     Prototypes,
     Ctx = #{swagger_context := #{auth_context := AuthContext}},
-    #{data := Req}
+    Req
 ) ->
     OperationACL = get_operation_access(OperationID, Req),
     OldAuthResult =

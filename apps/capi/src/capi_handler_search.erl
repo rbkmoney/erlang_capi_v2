@@ -4,41 +4,25 @@
 
 -behaviour(capi_handler).
 
--export([prepare_request/3]).
--export([process_request/3]).
--export([authorize_request/3]).
+-export([prepare/3]).
 
 -import(capi_handler_utils, [logic_error/2]).
 
--spec prepare_request(
+-spec prepare(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
-prepare_request(OperationID, _Req, _Context) when
+prepare(OperationID, Req, Context) when
     OperationID =:= 'SearchInvoices' orelse
         OperationID =:= 'SearchPayments' orelse
         OperationID =:= 'SearchPayouts' orelse
         OperationID =:= 'SearchRefunds'
 ->
-    {ok, #{}};
-prepare_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
-
--spec authorize_request(
-    OperationID :: capi_handler:operation_id(),
-    Context :: capi_handler:processing_context(),
-    ReqState :: capi_handler:request_state()
-) -> {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
-authorize_request(OperationID, Context, ReqState) when
-    OperationID =:= 'SearchInvoices' orelse
-        OperationID =:= 'SearchPayments' orelse
-        OperationID =:= 'SearchPayouts' orelse
-        OperationID =:= 'SearchRefunds'
-->
-    Resolution = capi_auth:authorize_operation(OperationID, [], Context, ReqState),
-    {ok, ReqState#{resolution => Resolution}};
-authorize_request(_OperationID, _Context, _ReqState) ->
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 -spec process_request(
@@ -46,7 +30,7 @@ authorize_request(_OperationID, _Context, _ReqState) ->
     Context :: capi_handler:processing_context(),
     ReqState :: capi_handler:request_state()
 ) -> capi_handler:request_response() | {error, noimpl}.
-process_request('SearchInvoices', Context, #{data := Req}) ->
+process_request('SearchInvoices', Context, Req) ->
     Query = #{
         <<"merchant_id">> => capi_handler_utils:get_party_id(Context),
         <<"shop_id">> => genlib_map:get('shopID', Req),
@@ -76,7 +60,7 @@ process_request('SearchInvoices', Context, #{data := Req}) ->
         decode_fun => fun decode_stat_invoice/2
     },
     process_search_request(invoices, Query, Req, Context, Opts);
-process_request('SearchPayments', Context, #{data := Req}) ->
+process_request('SearchPayments', Context, Req) ->
     Query = #{
         <<"merchant_id">> => capi_handler_utils:get_party_id(Context),
         <<"shop_id">> => genlib_map:get('shopID', Req),
@@ -105,7 +89,7 @@ process_request('SearchPayments', Context, #{data := Req}) ->
         decode_fun => fun decode_stat_payment/2
     },
     process_search_request(payments, Query, Req, Context, Opts);
-process_request('SearchPayouts', Context, #{data := Req}) ->
+process_request('SearchPayouts', Context, Req) ->
     Query = #{
         <<"merchant_id">> => capi_handler_utils:get_party_id(Context),
         <<"shop_id">> => genlib_map:get('shopID', Req),
@@ -120,7 +104,7 @@ process_request('SearchPayouts', Context, #{data := Req}) ->
         decode_fun => fun decode_stat_payout/2
     },
     process_search_request(payouts, Query, Req, Context, Opts);
-process_request('SearchRefunds', Context, #{data := Req}) ->
+process_request('SearchRefunds', Context, Req) ->
     Query = #{
         <<"merchant_id">> => capi_handler_utils:get_party_id(Context),
         <<"shop_id">> => genlib_map:get('shopID', Req),
@@ -139,11 +123,9 @@ process_request('SearchRefunds', Context, #{data := Req}) ->
         thrift_fun => 'GetPayments',
         decode_fun => fun decode_stat_refund/2
     },
-    process_search_request(refunds, Query, Req, Context, Opts);
-%%
+    process_search_request(refunds, Query, Req, Context, Opts).
 
-process_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
+%%
 
 process_search_request(QueryType, Query, Req, Context, Opts = #{thrift_fun := ThriftFun}) ->
     QueryParams = #{

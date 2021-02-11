@@ -5,18 +5,16 @@
 
 -behaviour(capi_handler).
 
--export([prepare_request/3]).
--export([process_request/3]).
--export([authorize_request/3]).
+-export([prepare/3]).
 
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
--spec prepare_request(
+-spec prepare(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
-prepare_request(OperationID, _Req, _Context) when
+prepare(OperationID, Req, Context) when
     OperationID =:= 'GetPayoutTools' orelse
         OperationID =:= 'GetPayoutToolByID' orelse
         OperationID =:= 'GetPayout' orelse
@@ -25,27 +23,10 @@ prepare_request(OperationID, _Req, _Context) when
         OperationID =:= 'GetPayoutToolsForParty' orelse
         OperationID =:= 'GetPayoutToolByIDForParty'
 ->
-    {ok, #{}};
-prepare_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
-
--spec authorize_request(
-    OperationID :: capi_handler:operation_id(),
-    Context :: capi_handler:processing_context(),
-    ReqState :: capi_handler:request_state()
-) -> {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
-authorize_request(OperationID, Context, ReqState) when
-    OperationID =:= 'GetPayoutTools' orelse
-        OperationID =:= 'GetPayoutToolByID' orelse
-        OperationID =:= 'GetPayout' orelse
-        OperationID =:= 'CreatePayout' orelse
-        OperationID =:= 'GetScheduleByRef' orelse
-        OperationID =:= 'GetPayoutToolsForParty' orelse
-        OperationID =:= 'GetPayoutToolByIDForParty'
-->
-    Resolution = capi_auth:authorize_operation(OperationID, [], Context, ReqState),
-    {ok, ReqState#{resolution => Resolution}};
-authorize_request(_OperationID, _Context, _ReqState) ->
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 -spec process_request(
@@ -53,14 +34,14 @@ authorize_request(_OperationID, _Context, _ReqState) ->
     Context :: capi_handler:processing_context(),
     ReqState :: capi_handler:request_state()
 ) -> capi_handler:request_response() | {error, noimpl}.
-process_request('GetPayoutTools', Context, #{data := Req}) ->
+process_request('GetPayoutTools', Context, Req) ->
     case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
         {ok, #domain_Contract{payout_tools = PayoutTools}} ->
             {ok, {200, #{}, [decode_payout_tool(P) || P <- PayoutTools]}};
         {exception, #payproc_ContractNotFound{}} ->
             {ok, general_error(404, <<"Contract not found">>)}
     end;
-process_request('GetPayoutToolByID', Context, #{data := Req}) ->
+process_request('GetPayoutToolByID', Context, Req) ->
     case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
         {ok, #domain_Contract{payout_tools = PayoutTools}} ->
             PayoutToolID = maps:get('payoutToolID', Req),
@@ -73,7 +54,7 @@ process_request('GetPayoutToolByID', Context, #{data := Req}) ->
         {exception, #payproc_ContractNotFound{}} ->
             {ok, general_error(404, <<"Contract not found">>)}
     end;
-process_request('GetPayout', Context, #{data := Req}) ->
+process_request('GetPayout', Context, Req) ->
     PayoutID = maps:get(payoutID, Req),
     case capi_handler_utils:service_call({payouts, 'Get', {PayoutID}}, Context) of
         {ok, Payout} ->
@@ -86,7 +67,7 @@ process_request('GetPayout', Context, #{data := Req}) ->
         {exception, #'payout_processing_PayoutNotFound'{}} ->
             {ok, general_error(404, <<"Payout not found">>)}
     end;
-process_request('CreatePayout', Context, #{data := Req}) ->
+process_request('CreatePayout', Context, Req) ->
     PayoutParams = maps:get('PayoutParams', Req),
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(<<"partyID">>, PayoutParams, UserID),
@@ -111,7 +92,7 @@ process_request('CreatePayout', Context, #{data := Req}) ->
         party_inaccessible ->
             {ok, logic_error(invalidPartyID, <<"Party not found">>)}
     end;
-process_request('GetScheduleByRef', Context, #{data := Req}) ->
+process_request('GetScheduleByRef', Context, Req) ->
     case get_schedule_by_id(genlib:to_int(maps:get(scheduleID, Req)), Context) of
         {ok, Schedule} ->
             {ok, {200, #{}, decode_business_schedule(Schedule)}};
@@ -120,7 +101,7 @@ process_request('GetScheduleByRef', Context, #{data := Req}) ->
     end;
 %%
 
-process_request('GetPayoutToolsForParty', Context, #{data := Req}) ->
+process_request('GetPayoutToolsForParty', Context, Req) ->
     ContractID = maps:get('contractID', Req),
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get('partyID', Req),
@@ -132,7 +113,7 @@ process_request('GetPayoutToolsForParty', Context, #{data := Req}) ->
                 {ok, general_error(404, <<"Contract not found">>)}
         end
     end);
-process_request('GetPayoutToolByIDForParty', Context, #{data := Req}) ->
+process_request('GetPayoutToolByIDForParty', Context, Req) ->
     ContractID = maps:get('contractID', Req),
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get('partyID', Req),
@@ -149,11 +130,9 @@ process_request('GetPayoutToolByIDForParty', Context, #{data := Req}) ->
             {exception, #payproc_ContractNotFound{}} ->
                 {ok, general_error(404, <<"Contract not found">>)}
         end
-    end);
-%%
+    end).
 
-process_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
+%%
 
 check_party_in_payout(PartyID, #payout_processing_Payout{party_id = PartyID}) ->
     true;

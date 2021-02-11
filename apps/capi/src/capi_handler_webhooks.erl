@@ -5,137 +5,109 @@
 
 -behaviour(capi_handler).
 
--export([prepare_request/3]).
--export([process_request/3]).
--export([authorize_request/3]).
-
--type webhook() :: dmsl_webhooker_thrift:'Webhook'().
-
--type op_context() :: #{
-    webhook_id => binary(),
-    webhook => webhook(),
-    party_id => binary(),
-    create_params => map()
-}.
-
+-export([prepare/3]).
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
--spec prepare_request(
+-spec prepare(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
-) -> {ok, capi_handler:request_state(op_context())} | {done, capi_handler:request_response()} | {error, noimpl}.
-prepare_request('CreateWebhook', Req, Context) ->
+) -> {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+prepare('CreateWebhook' = OperationID, Req, Context) ->
     Params = maps:get('Webhook', Req),
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(<<"partyID">>, Params, UserID),
-    {ok, #{op_state => #{party_id => PartyID, create_params => Params}}};
-prepare_request('GetWebhooks', _Req, _Context) ->
-    {ok, #{}};
-prepare_request('GetWebhookByID', Req, Context) ->
+    Authorize = fun() ->
+        Prototypes = [{operation, #{party => PartyID, id => OperationID}}],
+        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        {ok, Resolution}
+    end,
+    Process = fun() ->
+        WebhookParams = encode_webhook_params(PartyID, Params),
+        ShopID = validate_webhook_params(WebhookParams),
+        Call = {party_management, 'GetShop', {PartyID, ShopID}},
+        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+            {ok, _} ->
+                case capi_handler_utils:service_call({webhook_manager, 'Create', {WebhookParams}}, Context) of
+                    {ok, Webhook} ->
+                        {ok, {201, #{}, decode_webhook(Webhook)}};
+                    {exception, #webhooker_LimitExceeded{}} ->
+                        {ok, general_error(429, <<"Webhook limit exceeded">>)}
+                end;
+            {exception, #payproc_InvalidUser{}} ->
+                {ok, logic_error(invalidPartyID, <<"Party not found">>)};
+            {exception, #payproc_ShopNotFound{}} ->
+                {ok, logic_error(invalidShopID, <<"Shop not found">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare('GetWebhooks' = OperationID, Req, Context) ->
+    Authorize = fun() ->
+        Prototypes = [{operation, #{party => capi_handler_utils:get_party_id(Context), id => OperationID}}],
+        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        {ok, Resolution}
+    end,
+    Process = fun() ->
+        Webhooks = capi_utils:unwrap(
+            capi_handler_utils:service_call_with([party_id], {webhook_manager, 'GetList', {}}, Context)
+        ),
+        {ok, {200, #{}, [decode_webhook(V) || V <- Webhooks]}}
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare('GetWebhookByID' = OperationID, Req, Context) ->
     case encode_webhook_id(maps:get(webhookID, Req)) of
         {ok, WebhookID} ->
             case get_webhook(WebhookID, Context) of
                 {ok, Webhook} ->
-                    {ok, #{op_state => #{webhook_id => WebhookID, webhook => Webhook}}};
+                    Authorize = fun() ->
+                        Prototypes = [
+                            {operation, #{webhook => maps:get(webhookID, Req), id => OperationID}},
+                            {webhooks, #{webhook => Webhook}}
+                        ],
+                        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+                        {ok, Resolution}
+                    end,
+                    Process = fun() ->
+                        {ok, {200, #{}, decode_webhook(Webhook)}}
+                    end,
+                    {ok, #{authorize => Authorize, process => Process}};
                 {exception, #webhooker_WebhookNotFound{}} ->
                     {done, {ok, general_error(404, <<"Webhook not found">>)}}
             end;
         error ->
             {done, {ok, general_error(404, <<"Webhook not found">>)}}
     end;
-prepare_request('DeleteWebhookByID', Req, Context) ->
+prepare('DeleteWebhookByID' = OperationID, Req, Context) ->
     case encode_webhook_id(maps:get(webhookID, Req)) of
         {ok, WebhookID} ->
             case get_webhook(WebhookID, Context) of
                 {ok, Webhook} ->
-                    {ok, #{op_state => #{webhook_id => WebhookID, webhook => Webhook}}};
+                    Authorize = fun() ->
+                        Prototypes = [
+                            {operation, #{webhook => maps:get(webhookID, Req), id => OperationID}},
+                            {webhooks, #{webhook => Webhook}}
+                        ],
+                        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+                        {ok, Resolution}
+                    end,
+                    Process = fun() ->
+                        case delete_webhook(WebhookID, Context) of
+                            {ok, _} ->
+                                {ok, {204, #{}, undefined}};
+                            {exception, #webhooker_WebhookNotFound{}} ->
+                                {ok, {204, #{}, undefined}}
+                        end
+                    end,
+                    {ok, #{authorize => Authorize, process => Process}};
                 {exception, #webhooker_WebhookNotFound{}} ->
                     {done, {ok, {204, #{}, undefined}}}
             end;
         error ->
             {done, {ok, general_error(404, <<"Webhook not found">>)}}
     end;
-prepare_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
-
--spec authorize_request(
-    OperationID :: capi_handler:operation_id(),
-    Context :: capi_handler:processing_context(),
-    ReqState :: capi_handler:request_state(op_context())
-) -> {ok, capi_handler:request_state(op_context())} | {done, capi_handler:request_response()} | {error, noimpl}.
-authorize_request(
-    OperationID = 'CreateWebhook',
-    Context,
-    ReqState = #{op_state := #{party_id := PartyID}}
-) ->
-    Prototypes = [{operation, #{party => PartyID, id => OperationID}}],
-    Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, ReqState),
-    {ok, ReqState#{resolution => Resolution}};
-authorize_request(OperationID = 'GetWebhooks', Context, ReqState) ->
-    Prototypes = [{operation, #{party => capi_handler_utils:get_party_id(Context), id => OperationID}}],
-    Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, ReqState),
-    {ok, ReqState#{resolution => Resolution}};
-authorize_request(
-    OperationID,
-    Context,
-    ReqState = #{data := Req, op_state := #{webhook := Webhook}}
-) when
-    OperationID =:= 'GetWebhookByID' orelse
-        OperationID =:= 'DeleteWebhookByID'
-->
-    Prototypes = [
-        {operation, #{webhook => maps:get(webhookID, Req), id => OperationID}},
-        {webhooks, #{webhook => Webhook}}
-    ],
-    Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, ReqState),
-    {ok, ReqState#{resolution => Resolution}};
-authorize_request(_OperationID, _Context, _ReqState) ->
-    {error, noimpl}.
-
--spec process_request(
-    OperationID :: capi_handler:operation_id(),
-    Context :: capi_handler:processing_context(),
-    ReqState :: capi_handler:request_state(op_context())
-) -> capi_handler:request_response() | {error, noimpl}.
-process_request(
-    'CreateWebhook',
-    Context,
-    #{op_state := #{party_id := PartyID, create_params := Params}}
-) ->
-    WebhookParams = encode_webhook_params(PartyID, Params),
-    ShopID = validate_webhook_params(WebhookParams),
-    Call = {party_management, 'GetShop', {PartyID, ShopID}},
-    case capi_handler_utils:service_call_with([user_info], Call, Context) of
-        {ok, _} ->
-            case capi_handler_utils:service_call({webhook_manager, 'Create', {WebhookParams}}, Context) of
-                {ok, Webhook} ->
-                    {ok, {201, #{}, decode_webhook(Webhook)}};
-                {exception, #webhooker_LimitExceeded{}} ->
-                    {ok, general_error(429, <<"Webhook limit exceeded">>)}
-            end;
-        {exception, #payproc_InvalidUser{}} ->
-            {ok, logic_error(invalidPartyID, <<"Party not found">>)};
-        {exception, #payproc_ShopNotFound{}} ->
-            {ok, logic_error(invalidShopID, <<"Shop not found">>)}
-    end;
-process_request('GetWebhooks', Context, _ReqState) ->
-    Webhooks = capi_utils:unwrap(
-        capi_handler_utils:service_call_with([party_id], {webhook_manager, 'GetList', {}}, Context)
-    ),
-    {ok, {200, #{}, [decode_webhook(V) || V <- Webhooks]}};
-process_request('GetWebhookByID', _Context, #{op_state := #{webhook := Webhook}}) ->
-    {ok, {200, #{}, decode_webhook(Webhook)}};
-process_request('DeleteWebhookByID', Context, #{op_state := #{webhook_id := WebhookID}}) ->
-    case delete_webhook(WebhookID, Context) of
-        {ok, _} ->
-            {ok, {204, #{}, undefined}};
-        {exception, #webhooker_WebhookNotFound{}} ->
-            {ok, {204, #{}, undefined}}
-    end;
 %%
 
-process_request(_OperationID, _Req, _Context) ->
+prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 validate_webhook_params(#webhooker_WebhookParams{event_filter = EventFilter}) ->

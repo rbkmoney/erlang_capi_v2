@@ -4,43 +4,26 @@
 
 -behaviour(capi_handler).
 
--export([prepare_request/3]).
--export([process_request/3]).
--export([authorize_request/3]).
+-export([prepare/3]).
 
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
--spec prepare_request(
+-spec prepare(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
-prepare_request(OperationID, _Req, _Context) when
+prepare(OperationID, Req, Context) when
     OperationID =:= 'GetClaims' orelse
         OperationID =:= 'GetClaimByID' orelse
         OperationID =:= 'CreateClaim' orelse
         OperationID =:= 'UpdateClaimByID' orelse
         OperationID =:= 'RevokeClaimByID'
 ->
-    {ok, #{}};
-prepare_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
-
--spec authorize_request(
-    OperationID :: capi_handler:operation_id(),
-    Context :: capi_handler:processing_context(),
-    ReqState :: capi_handler:request_state()
-) -> {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
-authorize_request(OperationID, Context, ReqState) when
-    OperationID =:= 'GetClaims' orelse
-        OperationID =:= 'GetClaimByID' orelse
-        OperationID =:= 'CreateClaim' orelse
-        OperationID =:= 'UpdateClaimByID' orelse
-        OperationID =:= 'RevokeClaimByID'
-->
-    Resolution = capi_auth:authorize_operation(OperationID, [], Context, ReqState),
-    {ok, ReqState#{resolution => Resolution}};
-authorize_request(_OperationID, _Context, _ReqState) ->
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 -spec process_request(
@@ -48,13 +31,13 @@ authorize_request(_OperationID, _Context, _ReqState) ->
     Context :: capi_handler:processing_context(),
     ReqState :: capi_handler:request_state()
 ) -> capi_handler:request_response() | {error, noimpl}.
-process_request('GetClaims', Context, #{data := Req}) ->
+process_request('GetClaims', Context, Req) ->
     Call = {party_management, 'GetClaims', {}},
     Claims = capi_utils:unwrap(
         capi_handler_utils:service_call_with([user_info, party_id], Call, Context)
     ),
     {ok, {200, #{}, decode_claims(filter_claims(maps:get('claimStatus', Req), Claims))}};
-process_request('GetClaimByID', Context, #{data := Req}) ->
+process_request('GetClaimByID', Context, Req) ->
     CallArgs = {capi_handler_utils:get_party_id(Context), genlib:to_int(maps:get('claimID', Req))},
     Call = {party_management, 'GetClaim', CallArgs},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
@@ -69,7 +52,7 @@ process_request('GetClaimByID', Context, #{data := Req}) ->
         {exception, #payproc_ClaimNotFound{}} ->
             {ok, general_error(404, <<"Claim not found">>)}
     end;
-process_request('CreateClaim', Context, #{data := Req}) ->
+process_request('CreateClaim', Context, Req) ->
     try
         Changeset = encode_claim_changeset(maps:get('ClaimChangeset', Req)),
         CallArgs = {capi_handler_utils:get_party_id(Context), Changeset},
@@ -101,7 +84,7 @@ process_request('CreateClaim', Context, #{data := Req}) ->
             {ok, logic_error(invalidRequest, <<"Invalid residence">>)}
     end;
 % TODO disabled temporary, exception handling must be fixed befor enabling
-% process_request('UpdateClaimByID', Context, #{data := Req}) ->
+% process_request('UpdateClaimByID', Context, Req) ->
 %     Call =
 %         {party_management, 'UpdateClaim', [
 %             genlib:to_int(maps:get('claimID', Req)),
@@ -113,7 +96,7 @@ process_request('CreateClaim', Context, #{data := Req}) ->
 %     ),
 %     {ok, {200, #{}, capi_handler_utils:capi_handler_decoder_party:decode_party(Party)}};
 
-process_request('RevokeClaimByID', Context, #{data := Req}) ->
+process_request('RevokeClaimByID', Context, Req) ->
     CallArgs = {
         genlib:to_int(maps:get('claimID', Req)),
         genlib:to_int(maps:get('claimRevision', Req)),
@@ -134,11 +117,9 @@ process_request('RevokeClaimByID', Context, #{data := Req}) ->
                 #payproc_InvalidClaimRevision{} ->
                     {ok, logic_error(invalidClaimRevision, <<"Invalid claim revision">>)}
             end
-    end;
-%%
+    end.
 
-process_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
+%%
 
 filter_claims(ClaimStatus, Claims) ->
     lists:filter(

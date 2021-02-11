@@ -4,18 +4,16 @@
 
 -behaviour(capi_handler).
 
--export([prepare_request/3]).
--export([process_request/3]).
--export([authorize_request/3]).
+-export([prepare/3]).
 
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
--spec prepare_request(
+-spec prepare(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
-prepare_request(OperationID, _Req, _Context) when
+prepare(OperationID, Req, Context) when
     OperationID =:= 'CreateInvoice' orelse
         OperationID =:= 'CreateInvoiceAccessToken' orelse
         OperationID =:= 'GetInvoiceByID' orelse
@@ -25,28 +23,10 @@ prepare_request(OperationID, _Req, _Context) when
         OperationID =:= 'GetInvoiceEvents' orelse
         OperationID =:= 'GetInvoicePaymentMethods'
 ->
-    {ok, #{}};
-prepare_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
-
--spec authorize_request(
-    OperationID :: capi_handler:operation_id(),
-    Context :: capi_handler:processing_context(),
-    ReqState :: capi_handler:request_state()
-) -> {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
-authorize_request(OperationID, Context, ReqState) when
-    OperationID =:= 'CreateInvoice' orelse
-        OperationID =:= 'CreateInvoiceAccessToken' orelse
-        OperationID =:= 'GetInvoiceByID' orelse
-        OperationID =:= 'GetInvoiceByExternalID' orelse
-        OperationID =:= 'FulfillInvoice' orelse
-        OperationID =:= 'RescindInvoice' orelse
-        OperationID =:= 'GetInvoiceEvents' orelse
-        OperationID =:= 'GetInvoicePaymentMethods'
-->
-    Resolution = capi_auth:authorize_operation(OperationID, [], Context, ReqState),
-    {ok, ReqState#{resolution => Resolution}};
-authorize_request(_OperationID, _Context, _ReqState) ->
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 -spec process_request(
@@ -54,7 +34,7 @@ authorize_request(_OperationID, _Context, _ReqState) ->
     Context :: capi_handler:processing_context(),
     ReqState :: capi_handler:request_state()
 ) -> capi_handler:request_response() | {error, noimpl}.
-process_request('CreateInvoice' = OperationID, Context, #{data := Req}) ->
+process_request('CreateInvoice' = OperationID, Context, Req) ->
     InvoiceParams = maps:get('InvoiceParams', Req),
     UserID = capi_handler_utils:get_user_id(Context),
     %% Now hellgate checks user's possibility use party.
@@ -96,7 +76,7 @@ process_request('CreateInvoice' = OperationID, Context, #{data := Req}) ->
         {external_id_conflict, InvoiceID, ExternalID} ->
             {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
     end;
-process_request('CreateInvoiceAccessToken', Context, #{data := Req}) ->
+process_request('CreateInvoiceAccessToken', Context, Req) ->
     InvoiceID = maps:get(invoiceID, Req),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
     case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
@@ -116,7 +96,7 @@ process_request('CreateInvoiceAccessToken', Context, #{data := Req}) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-process_request('GetInvoiceByID', Context, #{data := Req}) ->
+process_request('GetInvoiceByID', Context, Req) ->
     case capi_handler_utils:get_invoice_by_id(maps:get(invoiceID, Req), Context) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             {ok, {200, #{}, capi_handler_decoder_invoicing:decode_invoice(Invoice)}};
@@ -128,7 +108,7 @@ process_request('GetInvoiceByID', Context, #{data := Req}) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-process_request('GetInvoiceByExternalID', Context, #{data := Req}) ->
+process_request('GetInvoiceByExternalID', Context, Req) ->
     case get_invoice_by_external_id(maps:get(externalID, Req), Context) of
         {ok, #'payproc_Invoice'{invoice = Invoice}} ->
             {ok, {200, #{}, capi_handler_decoder_invoicing:decode_invoice(Invoice)}};
@@ -142,7 +122,7 @@ process_request('GetInvoiceByExternalID', Context, #{data := Req}) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-process_request('FulfillInvoice', Context, #{data := Req}) ->
+process_request('FulfillInvoice', Context, Req) ->
     CallArgs = {maps:get(invoiceID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))},
     Call = {invoicing, 'Fulfill', CallArgs},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
@@ -162,7 +142,7 @@ process_request('FulfillInvoice', Context, #{data := Req}) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-process_request('RescindInvoice', Context, #{data := Req}) ->
+process_request('RescindInvoice', Context, Req) ->
     CallArgs = {maps:get(invoiceID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))},
     Call = {invoicing, 'Rescind', CallArgs},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
@@ -185,7 +165,7 @@ process_request('RescindInvoice', Context, #{data := Req}) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-process_request('GetInvoiceEvents', Context, #{data := Req}) ->
+process_request('GetInvoiceEvents', Context, Req) ->
     Result =
         capi_handler_utils:collect_events(
             maps:get(limit, Req),
@@ -216,7 +196,7 @@ process_request('GetInvoiceEvents', Context, #{data := Req}) ->
                     {ok, logic_error(invalidRequest, FormattedErrors)}
             end
     end;
-process_request('GetInvoicePaymentMethods', Context, #{data := Req}) ->
+process_request('GetInvoicePaymentMethods', Context, Req) ->
     InvoiceID = maps:get(invoiceID, Req),
     Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
     Revision = Party#domain_Party.revision,
@@ -232,11 +212,9 @@ process_request('GetInvoicePaymentMethods', Context, #{data := Req}) ->
                 #payproc_InvoiceNotFound{} ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
-    end;
-%%
+    end.
 
-process_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
+%%
 
 create_invoice(PartyID, #{<<"externalID">> := ExternalID} = InvoiceParams, Context, BenderPrefix) ->
     #{woody_context := WoodyCtx} = Context,
