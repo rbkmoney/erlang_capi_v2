@@ -12,7 +12,7 @@
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
-) -> {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare(OperationID, Req, Context) when OperationID =:= 'GetLocationsNames' ->
     Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
@@ -24,7 +24,7 @@ prepare(_OperationID, _Req, _Context) ->
     OperationID :: capi_handler:operation_id(),
     Context :: capi_handler:processing_context(),
     ReqState :: capi_handler:request_state()
-) -> capi_handler:request_response() | {error, noimpl}.
+) -> {ok | error, capi_handler:response()}.
 process_request('GetLocationsNames', Context, Req) ->
     CallArgs = {ordsets:from_list(maps:get('geoIDs', Req)), maps:get('language', Req)},
     Call = {geo_ip_service, 'GetLocationName', CallArgs},

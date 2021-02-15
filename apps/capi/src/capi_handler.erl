@@ -16,15 +16,14 @@
 -type operation_id() :: swag_server:operation_id().
 -type request_context() :: swag_server:request_context().
 -type response() :: swag_server:response().
--type request_response() :: {ok | error, response()}.
 -type processing_context() :: #{
     swagger_context := swag_server:request_context(),
     woody_context := woody_context:ctx()
 }.
 
 -type request_state() :: #{
-    authorize := fun(() -> {ok, capi_auth:resolution()} | {done, request_response()} | {error, noimpl}),
-    process := fun(() -> request_response() | {error, noimpl})
+    authorize := fun(() -> {ok, capi_auth:resolution()} | {error, noimpl}),
+    process := fun(() -> {ok | error, response()} | {error, noimpl})
 }.
 
 -export_type([operation_id/0]).
@@ -33,7 +32,6 @@
 -export_type([processing_context/0]).
 -export_type([request_state/0]).
 -export_type([response/0]).
--export_type([request_response/0]).
 
 -type handler_opts() :: swag_server:handler_opts(_).
 
@@ -43,7 +41,7 @@
     OperationID :: operation_id(),
     Req :: request_data(),
     Context :: processing_context()
-) -> {ok, request_state()} | {done, request_response()} | {error, noimpl}.
+) -> {ok, request_state()} | {error, noimpl}.
 
 -import(capi_handler_utils, [logic_error/2, server_error/1]).
 
@@ -106,7 +104,7 @@ get_handlers() ->
     Req :: request_data(),
     SwagContext :: request_context(),
     HandlerOpts :: handler_opts()
-) -> request_response().
+) -> {ok | error, response()}.
 handle_request(OperationID, Req, SwagContext, HandlerOpts) ->
     scoper:scope(swagger, fun() ->
         handle_function_(OperationID, Req, SwagContext, HandlerOpts)
@@ -117,7 +115,7 @@ handle_request(OperationID, Req, SwagContext, HandlerOpts) ->
     Req :: request_data(),
     SwagContext :: request_context(),
     HandlerOpts :: handler_opts()
-) -> request_response().
+) -> {ok | error, response()}.
 handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext}, _HandlerOpts) ->
     try
         RpcID = create_rpc_id(Req),
@@ -127,24 +125,19 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
         WoodyContext = attach_deadline(Req, create_woody_context(RpcID, AuthContext)),
         Context = create_processing_context(SwagContext, WoodyContext),
         ok = set_context_meta(Context),
-        case prepare(OperationID, Req, Context, get_handlers()) of
-            {ok, #{authorize := Authorize, process := Process}} ->
-                case Authorize() of
-                    {ok, Resolution} ->
-                        case Resolution of
-                            allowed ->
-                                Process();
-                            forbidden ->
-                                _ = logger:info("Authorization failed"),
-                                {ok, {401, #{}, undefined}}
-                        end;
-                    {done, Response} ->
-                        Response
-                end;
-            {done, Response} ->
-                Response
+        {ok, #{authorize := Authorize, process := Process}} =
+            prepare(OperationID, Req, Context, get_handlers()),
+        {ok, Resolution} = Authorize(),
+        case Resolution of
+            allowed ->
+                Process();
+            forbidden ->
+                _ = logger:info("Authorization failed"),
+                {ok, {401, #{}, undefined}}
         end
     catch
+        throw:{unwrap_mapped, MappedResponse} ->
+            MappedResponse;
         throw:{bad_deadline, _Deadline} ->
             {ok, logic_error(invalidDeadline, <<"Invalid data in X-Request-Deadline header">>)};
         throw:{handler_function_clause, _OperationID} ->
@@ -163,7 +156,7 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
     Req :: request_data(),
     Context :: processing_context(),
     Handlers :: list(module())
-) -> {ok, request_state()} | {done, request_response()}.
+) -> {ok, request_state()}.
 prepare(OperationID, _Req, _Context, []) ->
     erlang:throw({handler_function_clause, OperationID});
 prepare(OperationID, Req, Context, [Handler | Rest]) ->
@@ -171,9 +164,7 @@ prepare(OperationID, Req, Context, [Handler | Rest]) ->
         {error, noimpl} ->
             prepare(OperationID, Req, Context, Rest);
         {ok, State} ->
-            {ok, State};
-        Response ->
-            Response
+            {ok, State}
     end.
 
 %%

@@ -7,12 +7,13 @@
 
 -export([prepare/3]).
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
+-import(capi_utils, [unwrap_and_map/2]).
 
 -spec prepare(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
-) -> {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare('CreateWebhook' = OperationID, Req, Context) ->
     Params = maps:get('Webhook', Req),
     UserID = capi_handler_utils:get_user_id(Context),
@@ -55,56 +56,52 @@ prepare('GetWebhooks' = OperationID, Req, Context) ->
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare('GetWebhookByID' = OperationID, Req, Context) ->
-    case encode_webhook_id(maps:get(webhookID, Req)) of
-        {ok, WebhookID} ->
-            case get_webhook(WebhookID, Context) of
-                {ok, Webhook} ->
-                    Authorize = fun() ->
-                        Prototypes = [
-                            {operation, #{webhook => maps:get(webhookID, Req), id => OperationID}},
-                            {webhooks, #{webhook => Webhook}}
-                        ],
-                        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
-                        {ok, Resolution}
-                    end,
-                    Process = fun() ->
-                        {ok, {200, #{}, decode_webhook(Webhook)}}
-                    end,
-                    {ok, #{authorize => Authorize, process => Process}};
-                {exception, #webhooker_WebhookNotFound{}} ->
-                    {done, {ok, general_error(404, <<"Webhook not found">>)}}
-            end;
-        error ->
-            {done, {ok, general_error(404, <<"Webhook not found">>)}}
-    end;
+    WebhookID = unwrap_and_map(
+        encode_webhook_id(maps:get(webhookID, Req)),
+        #{error => {ok, general_error(404, <<"Webhook not found">>)}}
+    ),
+    Webhook = unwrap_and_map(
+        get_webhook(WebhookID, Context),
+        #{{exception, #webhooker_WebhookNotFound{}} => {ok, general_error(404, <<"Webhook not found">>)}}
+    ),
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{webhook => maps:get(webhookID, Req), id => OperationID}},
+            {webhooks, #{webhook => Webhook}}
+        ],
+        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        {ok, Resolution}
+    end,
+    Process = fun() ->
+        {ok, {200, #{}, decode_webhook(Webhook)}}
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
 prepare('DeleteWebhookByID' = OperationID, Req, Context) ->
-    case encode_webhook_id(maps:get(webhookID, Req)) of
-        {ok, WebhookID} ->
-            case get_webhook(WebhookID, Context) of
-                {ok, Webhook} ->
-                    Authorize = fun() ->
-                        Prototypes = [
-                            {operation, #{webhook => maps:get(webhookID, Req), id => OperationID}},
-                            {webhooks, #{webhook => Webhook}}
-                        ],
-                        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
-                        {ok, Resolution}
-                    end,
-                    Process = fun() ->
-                        case delete_webhook(WebhookID, Context) of
-                            {ok, _} ->
-                                {ok, {204, #{}, undefined}};
-                            {exception, #webhooker_WebhookNotFound{}} ->
-                                {ok, {204, #{}, undefined}}
-                        end
-                    end,
-                    {ok, #{authorize => Authorize, process => Process}};
-                {exception, #webhooker_WebhookNotFound{}} ->
-                    {done, {ok, {204, #{}, undefined}}}
-            end;
-        error ->
-            {done, {ok, general_error(404, <<"Webhook not found">>)}}
-    end;
+    WebhookID = unwrap_and_map(
+        encode_webhook_id(maps:get(webhookID, Req)),
+        #{error => {ok, general_error(404, <<"Webhook not found">>)}}
+    ),
+    Webhook = unwrap_and_map(
+        get_webhook(WebhookID, Context),
+        #{{exception, #webhooker_WebhookNotFound{}} => {ok, {204, #{}, undefined}}}
+    ),
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{webhook => maps:get(webhookID, Req), id => OperationID}},
+            {webhooks, #{webhook => Webhook}}
+        ],
+        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        {ok, Resolution}
+    end,
+    Process = fun() ->
+        case delete_webhook(WebhookID, Context) of
+            {ok, _} ->
+                {ok, {204, #{}, undefined}};
+            {exception, #webhooker_WebhookNotFound{}} ->
+                {ok, {204, #{}, undefined}}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
 %%
 
 prepare(_OperationID, _Req, _Context) ->

@@ -12,7 +12,7 @@
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
-) -> {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare(OperationID, Req, Context) when
     OperationID =:= 'CreateInvoice' orelse
         OperationID =:= 'CreateInvoiceAccessToken' orelse
@@ -33,7 +33,7 @@ prepare(_OperationID, _Req, _Context) ->
     OperationID :: capi_handler:operation_id(),
     Context :: capi_handler:processing_context(),
     ReqState :: capi_handler:request_state()
-) -> capi_handler:request_response() | {error, noimpl}.
+) -> {ok | error, capi_handler:response()}.
 process_request('CreateInvoice' = OperationID, Context, Req) ->
     InvoiceParams = maps:get('InvoiceParams', Req),
     UserID = capi_handler_utils:get_user_id(Context),

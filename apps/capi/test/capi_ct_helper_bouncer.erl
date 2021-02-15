@@ -3,10 +3,149 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("capi_dummy_data.hrl").
 -include_lib("capi_bouncer_data.hrl").
+-include_lib("stdlib/include/assert.hrl").
+
+-export([mock_bouncer_assert_op_ctx/2]).
+-export([mock_bouncer_assert_party_op_ctx/3]).
+-export([mock_bouncer_assert_shop_op_ctx/4]).
+-export([mock_bouncer_assert_contract_op_ctx/4]).
+-export([mock_bouncer_assert_invoice_op_ctx/5]).
+-export([mock_bouncer_assert_payment_op_ctx/6]).
+-export([mock_bouncer_assert_invoice_tpl_op_ctx/5]).
+-export([mock_bouncer_assert_customer_op_ctx/5]).
+-export([mock_bouncer_assert_claim_op_ctx/4]).
+-export([mock_bouncer_assert_webhook_op_ctx/4]).
 
 -export([mock_bouncer_client/1]).
 -export([mock_bouncer_arbiter/2]).
 -export([judge_always_allowed/0]).
+
+%%
+
+-spec mock_bouncer_assert_op_ctx(_, _) -> _.
+mock_bouncer_assert_op_ctx(Op, Config) ->
+    mock_bouncer_arbiter(
+        ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_CAPI_OP(Op))
+            }
+        ),
+        Config
+    ).
+
+-spec mock_bouncer_assert_party_op_ctx(_, _, _) -> _.
+mock_bouncer_assert_party_op_ctx(Op, PartyID, Config) ->
+    mock_bouncer_arbiter(
+        ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_PARTY_OP(Op, PartyID))
+            }
+        ),
+        Config
+    ).
+
+-spec mock_bouncer_assert_shop_op_ctx(_, _, _, _) -> _.
+mock_bouncer_assert_shop_op_ctx(Op, PartyID, ShopID, Config) ->
+    mock_bouncer_arbiter(
+        ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_SHOP_OP(Op, PartyID, ShopID))
+            }
+        ),
+        Config
+    ).
+
+-spec mock_bouncer_assert_contract_op_ctx(_, _, _, _) -> _.
+mock_bouncer_assert_contract_op_ctx(Op, PartyID, ContractID, Config) ->
+    mock_bouncer_arbiter(
+        ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_CONTRACT_OP(Op, PartyID, ContractID))
+            }
+        ),
+        Config
+    ).
+
+-spec mock_bouncer_assert_invoice_op_ctx(_, _, _, _, _) -> _.
+mock_bouncer_assert_invoice_op_ctx(Op, InvoiceID, PartyID, ShopID, Config) ->
+    mock_bouncer_arbiter(
+        ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_INVOICE_OP(Op, InvoiceID)),
+                payment_processing = #bctx_v1_ContextPaymentProcessing{
+                    invoice = ?CTX_INVOICE(InvoiceID, PartyID, ShopID)
+                }
+            }
+        ),
+        Config
+    ).
+
+-spec mock_bouncer_assert_payment_op_ctx(_, _, _, _, _, _) -> _.
+mock_bouncer_assert_payment_op_ctx(Op, InvoiceID, PaymentID, PartyID, ShopID, Config) ->
+    mock_bouncer_arbiter(
+        ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_PAYMENT_OP(Op, InvoiceID, PaymentID)),
+                payment_processing = #bctx_v1_ContextPaymentProcessing{
+                    invoice = ?CTX_INVOICE(InvoiceID, PartyID, ShopID, [?CTX_PAYMENT(PaymentID)])
+                }
+            }
+        ),
+        Config
+    ).
+
+-spec mock_bouncer_assert_invoice_tpl_op_ctx(_, _, _, _, _) -> _.
+mock_bouncer_assert_invoice_tpl_op_ctx(Op, InvoiceTemplateID, PartyID, ShopID, Config) ->
+    mock_bouncer_arbiter(
+        ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_INVOICE_TPL_OP(Op, InvoiceTemplateID)),
+                payment_processing = #bctx_v1_ContextPaymentProcessing{
+                    invoice_template = ?CTX_INVOICE_TPL(InvoiceTemplateID, PartyID, ShopID)
+                }
+            }
+        ),
+        Config
+    ).
+
+-spec mock_bouncer_assert_customer_op_ctx(_, _, _, _, _) -> _.
+mock_bouncer_assert_customer_op_ctx(Op, CustomerID, PartyID, ShopID, Config) ->
+    mock_bouncer_arbiter(
+        ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_CUSTOMER_OP(Op, CustomerID)),
+                payment_processing = #bctx_v1_ContextPaymentProcessing{
+                    customer = ?CTX_CUSTOMER(CustomerID, PartyID, ShopID)
+                }
+            }
+        ),
+        Config
+    ).
+
+-spec mock_bouncer_assert_claim_op_ctx(_, _, _, _) -> _.
+mock_bouncer_assert_claim_op_ctx(Op, PartyID, ClaimID, Config) ->
+    mock_bouncer_arbiter(
+        ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_CLAIM_OP(Op, PartyID, ClaimID))
+            }
+        ),
+        Config
+    ).
+
+-spec mock_bouncer_assert_webhook_op_ctx(_, _, _, _) -> _.
+mock_bouncer_assert_webhook_op_ctx(Op, WebhookID, PartyID, Config) ->
+    mock_bouncer_arbiter(
+        ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_WEBHOOK_OP(Op, WebhookID)),
+                webhooks = #bctx_v1_ContextWebhooks{
+                    webhook = ?CTX_WEBHOOK(WebhookID, PartyID)
+                }
+            }
+        ),
+        Config
+    ).
 
 %%
 

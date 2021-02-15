@@ -139,6 +139,7 @@ init([]) ->
 all() ->
     [
         {group, operations_by_base_api_token},
+        {group, operations_by_base_api_token_with_new_auth},
         {group, payment_tool_token_support}
     ].
 
@@ -205,11 +206,6 @@ groups() ->
             create_payout_autorization_error,
             get_payout,
             get_payout_fail,
-            create_webhook_ok_test,
-            create_webhook_limit_exceeded_test,
-            get_webhooks,
-            get_webhook_by_id,
-            delete_webhook_by_id,
             get_locations_names_ok_test,
             search_invoices_ok_test,
             search_payments_ok_test,
@@ -239,6 +235,13 @@ groups() ->
             retrieve_payment_by_external_id_test,
             check_no_invoice_by_external_id_test
         ]},
+        {operations_by_base_api_token_with_new_auth, [], [
+            create_webhook_ok_test,
+            create_webhook_limit_exceeded_test,
+            get_webhooks,
+            get_webhook_by_id,
+            delete_webhook_by_id
+        ]},
         {payment_tool_token_support, [], [
             check_support_decrypt_v1_test,
             check_support_decrypt_v2_test
@@ -260,23 +263,19 @@ end_per_suite(C) ->
 
 -spec init_per_group(group_name(), config()) -> config().
 init_per_group(operations_by_base_api_token, Config) ->
-    BasePermissions = [
-        {[invoices], write},
-        {[invoices], read},
-        {[party], write},
-        {[party], read},
-        {[invoices, payments], write},
-        {[invoices, payments], read},
-        {[customers], write},
-        {[payouts], write},
-        {[payouts], read}
-    ],
+    BasePermissions = get_base_permissions(),
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
     {ok, Token2} = capi_ct_helper:issue_token(<<"TEST2">>, BasePermissions, unlimited, #{}),
     Config2 = [{context_with_diff_party, capi_ct_helper:get_context(Token2)} | Config],
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
     Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     [{context, capi_ct_helper:get_context(Token)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config2];
+init_per_group(operations_by_base_api_token_with_new_auth, Config) ->
+    BasePermissions = get_base_permissions(),
+    {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
+    {ok, Token2} = capi_ct_helper:issue_token(<<"TEST2">>, BasePermissions, unlimited, #{}),
+    Config2 = [{context_with_diff_party, capi_ct_helper:get_context(Token2)} | Config],
+    [{context, capi_ct_helper:get_context(Token)} | Config2];
 init_per_group(_, Config) ->
     Config.
 
@@ -293,6 +292,19 @@ init_per_testcase(_Name, C) ->
 end_per_testcase(_Name, C) ->
     capi_ct_helper:stop_mocked_service_sup(?config(test_sup, C)),
     ok.
+
+get_base_permissions() ->
+    [
+        {[invoices], write},
+        {[invoices], read},
+        {[party], write},
+        {[party], read},
+        {[invoices, payments], write},
+        {[invoices, payments], read},
+        {[customers], write},
+        {[payouts], write},
+        {[payouts], read}
+    ].
 
 %%% Tests
 
@@ -1181,6 +1193,7 @@ create_webhook_ok_test(Config) ->
         ],
         Config
     ),
+    capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"CreateWebhook">>, ?STRING, Config),
     Req = #{
         <<"url">> => <<"http://localhost:8080/TODO">>,
         <<"scope">> => #{
@@ -1214,6 +1227,7 @@ create_webhook_limit_exceeded_test(Config) ->
         ],
         Config
     ),
+    capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"CreateWebhook">>, ?STRING, Config),
     Req = #{
         <<"url">> => <<"http://localhost:8080/TODO">>,
         <<"scope">> => #{
@@ -1242,11 +1256,13 @@ create_webhook_limit_exceeded_test(Config) ->
 -spec get_webhooks(config()) -> _.
 get_webhooks(Config) ->
     _ = capi_ct_helper:mock_services([{webhook_manager, fun('GetList', _) -> {ok, [?WEBHOOK]} end}], Config),
+    capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetWebhooks">>, ?STRING, Config),
     {ok, _} = capi_client_webhooks:get_webhooks(?config(context, Config)).
 
 -spec get_webhook_by_id(config()) -> _.
 get_webhook_by_id(Config) ->
     _ = capi_ct_helper:mock_services([{webhook_manager, fun('Get', _) -> {ok, ?WEBHOOK} end}], Config),
+    capi_ct_helper_bouncer:mock_bouncer_assert_webhook_op_ctx(<<"GetWebhookByID">>, ?INTEGER_BINARY, ?STRING, Config),
     {ok, _} = capi_client_webhooks:get_webhook_by_id(?config(context, Config), ?INTEGER_BINARY).
 
 -spec delete_webhook_by_id(config()) -> _.
@@ -1258,6 +1274,12 @@ delete_webhook_by_id(Config) ->
                 ('Delete', _) -> {ok, ok}
             end}
         ],
+        Config
+    ),
+    capi_ct_helper_bouncer:mock_bouncer_assert_webhook_op_ctx(
+        <<"DeleteWebhookByID">>,
+        ?INTEGER_BINARY,
+        ?STRING,
         Config
     ),
     ok = capi_client_webhooks:delete_webhook_by_id(?config(context, Config), ?INTEGER_BINARY).

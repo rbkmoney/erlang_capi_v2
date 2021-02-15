@@ -12,7 +12,7 @@
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
-) -> {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare(OperationID, Req, Context) when
     OperationID =:= 'GetMyParty' orelse
         OperationID =:= 'ActivateMyParty' orelse
@@ -28,7 +28,7 @@ prepare(_OperationID, _Req, _Context) ->
     OperationID :: capi_handler:operation_id(),
     Context :: processing_context(),
     ReqState :: capi_handler:request_state()
-) -> capi_handler:request_response() | {error, noimpl}.
+) -> {ok | error, capi_handler:response()}.
 process_request('GetMyParty', Context, _Req) ->
     Party = capi_utils:unwrap(get_party(Context)),
     {ok, {200, #{}, capi_handler_decoder_party:decode_party(Party)}};

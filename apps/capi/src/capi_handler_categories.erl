@@ -12,7 +12,7 @@
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
-) -> {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare(OperationID, Req, Context) when
     OperationID =:= 'GetCategories' orelse
         OperationID =:= 'GetCategoryByRef'
@@ -27,7 +27,7 @@ prepare(_OperationID, _Req, _Context) ->
     OperationID :: capi_handler:operation_id(),
     Context :: capi_handler:processing_context(),
     ReqState :: capi_handler:request_state()
-) -> capi_handler:request_response() | {error, noimpl}.
+) -> {ok | error, capi_handler:response()}.
 process_request('GetCategories', #{woody_context := WoodyContext}, _Req) ->
     Categories = capi_utils:unwrap(capi_domain:get_categories(WoodyContext)),
     {ok, {200, #{}, [decode_category(C) || C <- Categories]}};

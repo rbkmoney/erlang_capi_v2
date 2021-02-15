@@ -12,7 +12,7 @@
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
-) -> {ok, capi_handler:request_state()} | {done, capi_handler:request_response()} | {error, noimpl}.
+) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare(OperationID, Req, Context) when
     OperationID =:= 'GetPaymentConversionStats' orelse
         OperationID =:= 'GetPaymentRevenueStats' orelse
@@ -30,7 +30,7 @@ prepare(_OperationID, _Req, _Context) ->
     OperationID :: capi_handler:operation_id(),
     Context :: capi_handler:processing_context(),
     ReqState :: capi_handler:request_state()
-) -> capi_handler:request_response() | {error, noimpl}.
+) -> {ok | error, capi_handler:response()}.
 process_request('GetPaymentConversionStats', Context, Req) ->
     process_merchant_stat(payments_conversion_stat, Req, Context);
 process_request('GetPaymentRevenueStats', Context, Req) ->
