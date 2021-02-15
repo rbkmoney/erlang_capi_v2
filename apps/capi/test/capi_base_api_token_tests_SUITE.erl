@@ -1193,7 +1193,7 @@ create_webhook_ok_test(Config) ->
         ],
         Config
     ),
-    capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"CreateWebhook">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"CreateWebhook">>, ?STRING, Config),
     Req = #{
         <<"url">> => <<"http://localhost:8080/TODO">>,
         <<"scope">> => #{
@@ -1227,7 +1227,7 @@ create_webhook_limit_exceeded_test(Config) ->
         ],
         Config
     ),
-    capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"CreateWebhook">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"CreateWebhook">>, ?STRING, Config),
     Req = #{
         <<"url">> => <<"http://localhost:8080/TODO">>,
         <<"scope">> => #{
@@ -1256,13 +1256,13 @@ create_webhook_limit_exceeded_test(Config) ->
 -spec get_webhooks(config()) -> _.
 get_webhooks(Config) ->
     _ = capi_ct_helper:mock_services([{webhook_manager, fun('GetList', _) -> {ok, [?WEBHOOK]} end}], Config),
-    capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetWebhooks">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetWebhooks">>, ?STRING, Config),
     {ok, _} = capi_client_webhooks:get_webhooks(?config(context, Config)).
 
 -spec get_webhook_by_id(config()) -> _.
 get_webhook_by_id(Config) ->
     _ = capi_ct_helper:mock_services([{webhook_manager, fun('Get', _) -> {ok, ?WEBHOOK} end}], Config),
-    capi_ct_helper_bouncer:mock_bouncer_assert_webhook_op_ctx(<<"GetWebhookByID">>, ?INTEGER_BINARY, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_webhook_op_ctx(<<"GetWebhookByID">>, ?INTEGER_BINARY, ?STRING, Config),
     {ok, _} = capi_client_webhooks:get_webhook_by_id(?config(context, Config), ?INTEGER_BINARY).
 
 -spec delete_webhook_by_id(config()) -> _.
@@ -1276,7 +1276,7 @@ delete_webhook_by_id(Config) ->
         ],
         Config
     ),
-    capi_ct_helper_bouncer:mock_bouncer_assert_webhook_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_webhook_op_ctx(
         <<"DeleteWebhookByID">>,
         ?INTEGER_BINARY,
         ?STRING,
