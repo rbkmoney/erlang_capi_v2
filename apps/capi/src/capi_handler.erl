@@ -23,7 +23,7 @@
 
 -type request_state() :: #{
     authorize := fun(() -> {ok, capi_auth:resolution()} | {error, noimpl}),
-    process := fun(() -> {ok | error, response()} | {error, noimpl})
+    process := fun(() -> {ok | error, response()})
 }.
 
 -export_type([operation_id/0]).
