@@ -19,7 +19,6 @@
 -export([redact/2]).
 
 -export([unwrap/1]).
--export([unwrap_and_map/2]).
 -export([define/2]).
 
 -export([deduplicate_payment_methods/1]).
@@ -99,19 +98,6 @@ unwrap({ok, Value}) ->
     Value;
 unwrap({error, Error}) ->
     erlang:error({unwrap_error, Error}).
-
--spec unwrap_and_map(ok | {ok, Value} | ResponseKey, #{ResponseKey := term()}) -> Value | no_return().
-unwrap_and_map(ok, _Map) ->
-    ok;
-unwrap_and_map({ok, Value}, _Map) ->
-    Value;
-unwrap_and_map(ResponseKey, Map) ->
-    case maps:get(ResponseKey, Map, undefined) of
-        undefined ->
-            erlang:error({unwrap_error, ResponseKey});
-        Response ->
-            erlang:throw({unwrap_mapped, Response})
-    end.
 
 -spec define(undefined | T, T) -> T.
 define(undefined, V) ->

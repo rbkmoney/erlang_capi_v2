@@ -27,7 +27,7 @@ prepare(_OperationID, _Req, _Context) ->
     OperationID :: capi_handler:operation_id(),
     Context :: capi_handler:processing_context(),
     ReqState :: capi_handler:request_state()
-) -> {ok | error, capi_handler:response()}.
+) -> {ok, capi_handler:response()}.
 process_request('GetCategories', #{woody_context := WoodyContext}, _Req) ->
     Categories = capi_utils:unwrap(capi_domain:get_categories(WoodyContext)),
     {ok, {200, #{}, [decode_category(C) || C <- Categories]}};

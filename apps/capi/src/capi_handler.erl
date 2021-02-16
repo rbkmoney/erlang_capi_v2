@@ -8,6 +8,7 @@
 -export([authorize_api_key/3]).
 -export([map_error/2]).
 -export([handle_request/4]).
+-export([respond/1]).
 
 %%
 
@@ -22,8 +23,8 @@
 }.
 
 -type request_state() :: #{
-    authorize := fun(() -> {ok, capi_auth:resolution()} | {error, noimpl}),
-    process := fun(() -> {ok | error, response()})
+    authorize := fun(() -> {ok, capi_auth:resolution()}),
+    process := fun(() -> {ok, response()})
 }.
 
 -export_type([operation_id/0]).
@@ -136,8 +137,8 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
                 {ok, {401, #{}, undefined}}
         end
     catch
-        throw:{unwrap_mapped, MappedResponse} ->
-            MappedResponse;
+        throw:{handler_respond, HandlerResponse} ->
+            {ok, HandlerResponse};
         throw:{bad_deadline, _Deadline} ->
             {ok, logic_error(invalidDeadline, <<"Invalid data in X-Request-Deadline header">>)};
         throw:{handler_function_clause, _OperationID} ->
@@ -166,6 +167,10 @@ prepare(OperationID, Req, Context, [Handler | Rest]) ->
         {ok, State} ->
             {ok, State}
     end.
+
+-spec respond(response()) -> no_return().
+respond(Response) ->
+    erlang:throw({handler_respond, Response}).
 
 %%
 

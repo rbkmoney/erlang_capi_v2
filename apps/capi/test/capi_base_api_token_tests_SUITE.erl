@@ -1262,7 +1262,12 @@ get_webhooks(Config) ->
 -spec get_webhook_by_id(config()) -> _.
 get_webhook_by_id(Config) ->
     _ = capi_ct_helper:mock_services([{webhook_manager, fun('Get', _) -> {ok, ?WEBHOOK} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_webhook_op_ctx(<<"GetWebhookByID">>, ?INTEGER_BINARY, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_webhook_op_ctx(
+        <<"GetWebhookByID">>,
+        ?INTEGER_BINARY,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_webhooks:get_webhook_by_id(?config(context, Config), ?INTEGER_BINARY).
 
 -spec delete_webhook_by_id(config()) -> _.

@@ -28,7 +28,7 @@ prepare(_OperationID, _Req, _Context) ->
     OperationID :: capi_handler:operation_id(),
     Context :: processing_context(),
     ReqState :: capi_handler:request_state()
-) -> {ok | error, capi_handler:response()}.
+) -> {ok, capi_handler:response()}.
 process_request('GetMyParty', Context, _Req) ->
     Party = capi_utils:unwrap(get_party(Context)),
     {ok, {200, #{}, capi_handler_decoder_party:decode_party(Party)}};

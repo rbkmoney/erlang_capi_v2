@@ -24,7 +24,7 @@ prepare(_OperationID, _Req, _Context) ->
     OperationID :: capi_handler:operation_id(),
     Context :: capi_handler:processing_context(),
     ReqState :: capi_handler:request_state()
-) -> {ok | error, capi_handler:response()}.
+) -> {ok, capi_handler:response()}.
 process_request('GetAccountByID', Context, Req) ->
     CallArgs = {genlib:to_int(maps:get('accountID', Req))},
     Call = {party_management, 'GetAccountState', CallArgs},

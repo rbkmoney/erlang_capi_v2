@@ -33,7 +33,7 @@ prepare(_OperationID, _Req, _Context) ->
     OperationID :: capi_handler:operation_id(),
     Context :: capi_handler:processing_context(),
     ReqState :: capi_handler:request_state()
-) -> {ok | error, capi_handler:response()}.
+) -> {ok, capi_handler:response()}.
 process_request('GetContracts', Context, _Req) ->
     Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
     {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};

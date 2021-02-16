@@ -30,7 +30,7 @@ prepare(_OperationID, _Req, _Context) ->
     OperationID :: capi_handler:operation_id(),
     Context :: capi_handler:processing_context(),
     ReqState :: capi_handler:request_state()
-) -> {ok | error, capi_handler:response()}.
+) -> {ok, capi_handler:response()}.
 process_request('GetPaymentConversionStats', Context, Req) ->
     process_merchant_stat(payments_conversion_stat, Req, Context);
 process_request('GetPaymentRevenueStats', Context, Req) ->
