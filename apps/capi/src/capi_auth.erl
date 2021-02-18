@@ -26,7 +26,8 @@
 
 -type resolution() ::
     allowed
-    | forbidden.
+    | forbidden
+    | {forbidden, _Reason}.
 
 -export_type([context/0]).
 -export_type([claims/0]).
@@ -371,26 +372,30 @@ authorize_operation(
         case uac:authorize_operation(OperationACL, AuthContext) of
             ok ->
                 allowed;
-            {error, _} ->
-                forbidden
+            {error, Reason} ->
+                {forbidden, Reason}
         end,
     AuthResult = authorize_operation(Prototypes, Ctx),
-    handle_auth_result(OldAuthResult, AuthResult, OperationID).
+    handle_auth_result(OldAuthResult, AuthResult).
 
-handle_auth_result(Res, Res, _OperationID) ->
+handle_auth_result(allowed, allowed) ->
+    allowed;
+handle_auth_result(Res = {forbidden, _Reason}, forbidden) ->
     Res;
-handle_auth_result(OldRes, NewRes, OperationID) ->
-    _ = logger:error("Operation ~p new auth ~p differ from old ~p", [OperationID, NewRes, OldRes]),
+handle_auth_result(Res, undefined) ->
+    Res;
+handle_auth_result(OldRes, NewRes) ->
+    _ = logger:warning("New auth ~p differ from old ~p", [NewRes, OldRes]),
     OldRes.
 
 %% TODO: Remove this clause after all handlers will be implemented
 authorize_operation([], _) ->
-    forbidden;
+    undefined;
 authorize_operation(Prototypes, #{swagger_context := ReqCtx, woody_context := WoodyCtx}) ->
     case capi_bouncer:extract_context_fragments(ReqCtx, WoodyCtx) of
         Fragments when Fragments /= undefined ->
             Fragments1 = capi_bouncer_context:build(Prototypes, Fragments, WoodyCtx),
             capi_bouncer:judge(Fragments1, WoodyCtx);
         undefined ->
-            forbidden
+            undefined
     end.

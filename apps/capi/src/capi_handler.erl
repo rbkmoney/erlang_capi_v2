@@ -21,10 +21,11 @@
     swagger_context := swag_server:request_context(),
     woody_context := woody_context:ctx()
 }.
+-type throw(_T) :: no_return().
 
 -type request_state() :: #{
-    authorize := fun(() -> {ok, capi_auth:resolution()}),
-    process := fun(() -> {ok, response()})
+    authorize := fun(() -> {ok, capi_auth:resolution()} | throw(response())),
+    process := fun(() -> {ok, response()} | throw(response()))
 }.
 
 -export_type([operation_id/0]).
@@ -134,6 +135,9 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
                 Process();
             forbidden ->
                 _ = logger:info("Authorization failed"),
+                {ok, {401, #{}, undefined}};
+            {forbidden, Error} ->
+                _ = logger:info("Authorization failed due to ~p", [Error]),
                 {ok, {401, #{}, undefined}}
         end
     catch
@@ -168,7 +172,7 @@ prepare(OperationID, Req, Context, [Handler | Rest]) ->
             {ok, State}
     end.
 
--spec respond(response()) -> no_return().
+-spec respond(response()) -> throw(response()).
 respond(Response) ->
     erlang:throw({handler_respond, Response}).
 
