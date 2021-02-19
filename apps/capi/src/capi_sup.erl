@@ -52,6 +52,7 @@ enable_health_logging(Check) ->
     EvHandler = {erl_health_event_handler, []},
     maps:map(fun(_, V = {_, _, _}) -> #{runner => V, event_handler => EvHandler} end, Check).
 
+-spec get_uac_config() -> uac:configuration(capi_auth:metadata()).
 get_uac_config() ->
     maps:merge(
         genlib_app:env(capi, access_conf),

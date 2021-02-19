@@ -4,18 +4,43 @@
 
 -behaviour(capi_handler).
 
--export([process_request/3]).
+-export([prepare/3]).
 
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -define(DEFAULT_PROCESSING_DEADLINE, <<"30m">>).
 
--spec process_request(
+-spec prepare(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
-) -> {ok | error, capi_handler:response() | noimpl}.
-process_request('CreatePayment' = OperationID, Req, Context) ->
+) -> {ok, capi_handler:request_state()} | {error, noimpl}.
+prepare(OperationID, Req, Context) when
+    OperationID =:= 'CreatePayment' orelse
+        OperationID =:= 'GetPayments' orelse
+        OperationID =:= 'GetPaymentByID' orelse
+        OperationID =:= 'GetRefundByExternalID' orelse
+        OperationID =:= 'GetPaymentByExternalID' orelse
+        OperationID =:= 'CancelPayment' orelse
+        OperationID =:= 'CapturePayment' orelse
+        OperationID =:= 'CreateRefund' orelse
+        OperationID =:= 'GetRefunds' orelse
+        OperationID =:= 'GetRefundByID' orelse
+        OperationID =:= 'GetChargebacks' orelse
+        OperationID =:= 'GetChargebackByID'
+->
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
+
+-spec process_request(
+    OperationID :: capi_handler:operation_id(),
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state()
+) -> {ok, capi_handler:response()}.
+process_request('CreatePayment' = OperationID, Context, Req) ->
     InvoiceID = maps:get('invoiceID', Req),
     PaymentParams = maps:get('PaymentParams', Req),
     PartyID = capi_handler_utils:get_party_id(Context),
@@ -88,7 +113,7 @@ process_request('CreatePayment' = OperationID, Req, Context) ->
         {error, {external_id_conflict, PaymentID, ExternalID}} ->
             {ok, logic_error(externalIDConflict, {PaymentID, ExternalID})}
     end;
-process_request('GetPayments', Req, Context) ->
+process_request('GetPayments', Context, Req) ->
     InvoiceID = maps:get(invoiceID, Req),
     case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
         {ok, #'payproc_Invoice'{payments = Payments}} ->
@@ -101,7 +126,7 @@ process_request('GetPayments', Req, Context) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-process_request('GetPaymentByID', Req, Context) ->
+process_request('GetPaymentByID', Context, Req) ->
     InvoiceID = maps:get(invoiceID, Req),
     case capi_handler_utils:get_payment_by_id(InvoiceID, maps:get(paymentID, Req), Context) of
         {ok, Payment} ->
@@ -116,7 +141,7 @@ process_request('GetPaymentByID', Req, Context) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-process_request('GetRefundByExternalID', Req, Context) ->
+process_request('GetRefundByExternalID', Context, Req) ->
     ExternalID = maps:get(externalID, Req),
     case get_refund_by_external_id(ExternalID, Context) of
         {ok, Refund} ->
@@ -139,7 +164,7 @@ process_request('GetRefundByExternalID', Req, Context) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-process_request('GetPaymentByExternalID', Req, Context) ->
+process_request('GetPaymentByExternalID', Context, Req) ->
     ExternalID = maps:get(externalID, Req),
     case get_payment_by_external_id(ExternalID, Context) of
         {ok, InvoiceID, Payment} ->
@@ -158,7 +183,7 @@ process_request('GetPaymentByExternalID', Req, Context) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-process_request('CancelPayment', Req, Context) ->
+process_request('CancelPayment', Context, Req) ->
     CallArgs = {maps:get(invoiceID, Req), maps:get(paymentID, Req), maps:get(<<"reason">>, maps:get('Reason', Req))},
     Call = {invoicing, 'CancelPayment', CallArgs},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
@@ -189,7 +214,7 @@ process_request('CancelPayment', Req, Context) ->
                     {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)}
             end
     end;
-process_request('CapturePayment', Req, Context) ->
+process_request('CapturePayment', Context, Req) ->
     CaptureParams = maps:get('CaptureParams', Req),
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
@@ -248,7 +273,7 @@ process_request('CapturePayment', Req, Context) ->
         throw:invoice_cart_empty ->
             {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)}
     end;
-process_request('CreateRefund' = OperationID, Req, Context) ->
+process_request('CreateRefund' = OperationID, Context, Req) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
     RefundParams = maps:get('RefundParams', Req),
@@ -313,7 +338,7 @@ process_request('CreateRefund' = OperationID, Req, Context) ->
         throw:invoice_cart_empty ->
             {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)}
     end;
-process_request('GetRefunds', Req, Context) ->
+process_request('GetRefunds', Context, Req) ->
     case capi_handler_utils:get_payment_by_id(maps:get(invoiceID, Req), maps:get(paymentID, Req), Context) of
         {ok, #payproc_InvoicePayment{refunds = Refunds}} ->
             {ok,
@@ -331,7 +356,7 @@ process_request('GetRefunds', Req, Context) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-process_request('GetRefundByID', Req, Context) ->
+process_request('GetRefundByID', Context, Req) ->
     case
         capi_handler_utils:get_refund_by_id(
             maps:get(invoiceID, Req),
@@ -354,7 +379,7 @@ process_request('GetRefundByID', Req, Context) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-process_request('GetChargebacks', Req, Context) ->
+process_request('GetChargebacks', Context, Req) ->
     DecodeChargebackFun = fun(C) ->
         capi_handler_decoder_invoicing:decode_chargeback(C#payproc_InvoicePaymentChargeback.chargeback, Context)
     end,
@@ -371,7 +396,7 @@ process_request('GetChargebacks', Req, Context) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
     end;
-process_request('GetChargebackByID', Req, Context) ->
+process_request('GetChargebackByID', Context, Req) ->
     CallArgs = {maps:get(invoiceID, Req), maps:get(paymentID, Req), maps:get(chargebackID, Req)},
     Call = {invoicing, 'GetPaymentChargeback', CallArgs},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
@@ -388,11 +413,9 @@ process_request('GetChargebackByID', Req, Context) ->
                 #payproc_InvalidUser{} ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
-    end;
-%%
+    end.
 
-process_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
+%%
 
 create_payment(InvoiceID, PartyID, #{<<"externalID">> := ExternalID} = PaymentParams, Context, BenderPrefix) ->
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),

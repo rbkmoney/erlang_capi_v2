@@ -10,14 +10,31 @@
 -export([get_access_config/0]).
 
 -export([get_extra_properties/0]).
+-export([authorize_operation/4]).
 
 -type context() :: uac:context().
 -type claims() :: uac:claims().
 -type consumer() :: client | merchant | provider.
+-type realm() :: binary().
+-type auth_method() ::
+    user_session_token.
+
+-type metadata() :: #{
+    auth_method => auth_method(),
+    user_realm => realm()
+}.
+
+-type resolution() ::
+    allowed
+    | forbidden
+    | {forbidden, _Reason}.
 
 -export_type([context/0]).
 -export_type([claims/0]).
 -export_type([consumer/0]).
+-export_type([auth_method/0]).
+-export_type([metadata/0]).
+-export_type([resolution/0]).
 
 -define(SIGNEE, capi).
 
@@ -68,9 +85,9 @@ resolve_token_spec({invoice, InvoiceID}) ->
             {[payment_resources], write}
         ])
     },
-    Expiration = {lifetime, ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME},
+    Expiration = lifetime_to_expiration(?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME),
     #{
-        <<"exp">> => Expiration,
+        <<"exp">> => make_auth_expiration(Expiration),
         <<"resource_access">> => DomainRoles,
         % token consumer
         <<"cons">> => <<"client">>
@@ -83,7 +100,7 @@ resolve_token_spec({invoice_tpl, InvoiceTplID}) ->
         ])
     },
     #{
-        <<"exp">> => unlimited,
+        <<"exp">> => make_auth_expiration(unlimited),
         <<"resource_access">> => DomainRoles
     };
 resolve_token_spec({customer, CustomerID}) ->
@@ -95,9 +112,9 @@ resolve_token_spec({customer, CustomerID}) ->
             {[payment_resources], write}
         ])
     },
-    Expiration = {lifetime, ?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME},
+    Expiration = lifetime_to_expiration(?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME),
     #{
-        <<"exp">> => Expiration,
+        <<"exp">> => make_auth_expiration(Expiration),
         <<"resource_access">> => DomainRoles
     }.
 
@@ -297,14 +314,14 @@ get_operation_access('CreatePayout', _) ->
 get_operation_access('GetPayout', _) ->
     [{[payouts], read}].
 
--spec get_access_config() -> map().
+-spec get_access_config() -> uac_conf:options().
 get_access_config() ->
     #{
         domain_name => <<"common-api">>,
         resource_hierarchy => get_resource_hierarchy()
     }.
 
--spec get_resource_hierarchy() -> #{atom() => map()}.
+-spec get_resource_hierarchy() -> uac_conf:resource_hierarchy().
 get_resource_hierarchy() ->
     #{
         party => #{invoice_templates => #{invoice_template_invoices => #{}}},
@@ -328,4 +345,57 @@ get_consumer(Claims) ->
         <<"merchant">> -> merchant;
         <<"client">> -> client;
         <<"provider">> -> provider
+    end.
+
+lifetime_to_expiration(Lt) when is_integer(Lt) ->
+    genlib_time:unow() + Lt.
+
+make_auth_expiration(Timestamp) when is_integer(Timestamp) ->
+    Timestamp;
+make_auth_expiration(unlimited) ->
+    unlimited.
+
+-spec authorize_operation(
+    OperationID :: capi_handler:operation_id(),
+    Prototypes :: capi_bouncer_context:prototypes(),
+    Context :: capi_handler:processing_context(),
+    Req :: capi_handler:request_data()
+) -> resolution() | no_return().
+authorize_operation(
+    OperationID,
+    Prototypes,
+    Ctx = #{swagger_context := #{auth_context := AuthContext}},
+    Req
+) ->
+    OperationACL = get_operation_access(OperationID, Req),
+    OldAuthResult =
+        case uac:authorize_operation(OperationACL, AuthContext) of
+            ok ->
+                allowed;
+            {error, Reason} ->
+                {forbidden, Reason}
+        end,
+    AuthResult = authorize_operation(Prototypes, Ctx),
+    handle_auth_result(OldAuthResult, AuthResult).
+
+handle_auth_result(allowed, allowed) ->
+    allowed;
+handle_auth_result(Res = {forbidden, _Reason}, forbidden) ->
+    Res;
+handle_auth_result(Res, undefined) ->
+    Res;
+handle_auth_result(OldRes, NewRes) ->
+    _ = logger:warning("New auth ~p differ from old ~p", [NewRes, OldRes]),
+    OldRes.
+
+%% TODO: Remove this clause after all handlers will be implemented
+authorize_operation([], _) ->
+    undefined;
+authorize_operation(Prototypes, #{swagger_context := ReqCtx, woody_context := WoodyCtx}) ->
+    case capi_bouncer:extract_context_fragments(ReqCtx, WoodyCtx) of
+        Fragments when Fragments /= undefined ->
+            Fragments1 = capi_bouncer_context:build(Prototypes, Fragments, WoodyCtx),
+            capi_bouncer:judge(Fragments1, WoodyCtx);
+        undefined ->
+            undefined
     end.

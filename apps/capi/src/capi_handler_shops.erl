@@ -4,16 +4,37 @@
 
 -behaviour(capi_handler).
 
--export([process_request/3]).
+-export([prepare/3]).
 
 -import(capi_handler_utils, [general_error/2]).
 
--spec process_request(
+-spec prepare(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
-) -> {ok | error, capi_handler:response() | noimpl}.
-process_request('ActivateShop', Req, Context) ->
+) -> {ok, capi_handler:request_state()} | {error, noimpl}.
+prepare(OperationID, Req, Context) when
+    OperationID =:= 'ActivateShop' orelse
+        OperationID =:= 'SuspendShop' orelse
+        OperationID =:= 'GetShops' orelse
+        OperationID =:= 'GetShopByID' orelse
+        OperationID =:= 'GetShopsForParty' orelse
+        OperationID =:= 'GetShopByIDForParty' orelse
+        OperationID =:= 'ActivateShopForParty' orelse
+        OperationID =:= 'SuspendShopForParty'
+->
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
+
+-spec process_request(
+    OperationID :: capi_handler:operation_id(),
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_data()
+) -> {ok, capi_handler:response()}.
+process_request('ActivateShop', Context, Req) ->
     Call = {party_management, 'ActivateShop', {maps:get(shopID, Req)}},
     case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
         {ok, _R} ->
@@ -26,7 +47,7 @@ process_request('ActivateShop', Req, Context) ->
                     {ok, {204, #{}, undefined}}
             end
     end;
-process_request('SuspendShop', Req, Context) ->
+process_request('SuspendShop', Context, Req) ->
     Call = {party_management, 'SuspendShop', {maps:get(shopID, Req)}},
     case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
         {ok, _R} ->
@@ -39,10 +60,10 @@ process_request('SuspendShop', Req, Context) ->
                     {ok, {204, #{}, undefined}}
             end
     end;
-process_request('GetShops', _Req, Context) ->
+process_request('GetShops', Context, _Req) ->
     Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
     {ok, {200, #{}, decode_shops_map(Party#domain_Party.shops)}};
-process_request('GetShopByID', Req, Context) ->
+process_request('GetShopByID', Context, Req) ->
     Call = {party_management, 'GetShop', {maps:get(shopID, Req)}},
     case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
         {ok, Shop} ->
@@ -50,7 +71,7 @@ process_request('GetShopByID', Req, Context) ->
         {exception, #payproc_ShopNotFound{}} ->
             {ok, general_error(404, <<"Shop not found">>)}
     end;
-process_request('GetShopsForParty', Req, Context) ->
+process_request('GetShopsForParty', Context, Req) ->
     PartyID = maps:get(partyID, Req),
     % TODO
     % Here we're relying on hellgate ownership check, thus no explicit authorization.
@@ -64,7 +85,7 @@ process_request('GetShopsForParty', Req, Context) ->
         {exception, #payproc_PartyNotFound{}} ->
             {ok, general_error(404, <<"Party not found">>)}
     end;
-process_request('GetShopByIDForParty', Req, Context) ->
+process_request('GetShopByIDForParty', Context, Req) ->
     PartyID = maps:get(partyID, Req),
     ShopID = maps:get(shopID, Req),
     Call = {party_management, 'GetShop', {PartyID, ShopID}},
@@ -82,7 +103,7 @@ process_request('GetShopByIDForParty', Req, Context) ->
         {exception, #payproc_ShopNotFound{}} ->
             {ok, general_error(404, <<"Shop not found">>)}
     end;
-process_request('ActivateShopForParty', Req, Context) ->
+process_request('ActivateShopForParty', Context, Req) ->
     PartyID = maps:get(partyID, Req),
     ShopID = maps:get(shopID, Req),
     Call = {party_management, 'ActivateShop', {PartyID, ShopID}},
@@ -105,7 +126,7 @@ process_request('ActivateShopForParty', Req, Context) ->
                     {ok, {204, #{}, undefined}}
             end
     end;
-process_request('SuspendShopForParty', Req, Context) ->
+process_request('SuspendShopForParty', Context, Req) ->
     PartyID = maps:get(partyID, Req),
     ShopID = maps:get(shopID, Req),
     Call = {party_management, 'SuspendShop', {PartyID, ShopID}},
@@ -127,11 +148,7 @@ process_request('SuspendShopForParty', Req, Context) ->
                 #payproc_InvalidShopStatus{status = {suspension, {suspended, _}}} ->
                     {ok, {204, #{}, undefined}}
             end
-    end;
-%%
-
-process_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
+    end.
 
 %%
 

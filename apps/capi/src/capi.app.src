@@ -28,7 +28,8 @@
         erl_health,
         uac,
         prometheus,
-        prometheus_cowboy
+        prometheus_cowboy,
+        bouncer_client
     ]},
     {env, []}
 ]}.

@@ -4,16 +4,28 @@
 
 -behaviour(capi_handler).
 
--export([process_request/3]).
+-export([prepare/3]).
 
 -import(capi_handler_utils, [logic_error/2]).
 
--spec process_request(
+-spec prepare(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
-) -> {ok | error, capi_handler:response() | noimpl}.
-process_request('GetLocationsNames', Req, Context) ->
+) -> {ok, capi_handler:request_state()} | {error, noimpl}.
+prepare(OperationID, Req, Context) when OperationID =:= 'GetLocationsNames' ->
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
+
+-spec process_request(
+    OperationID :: capi_handler:operation_id(),
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state()
+) -> {ok, capi_handler:response()}.
+process_request('GetLocationsNames', Context, Req) ->
     CallArgs = {ordsets:from_list(maps:get('geoIDs', Req)), maps:get('language', Req)},
     Call = {geo_ip_service, 'GetLocationName', CallArgs},
     case capi_handler_utils:service_call(Call, Context) of
@@ -28,11 +40,9 @@ process_request('GetLocationsNames', Req, Context) ->
         {exception, #'InvalidRequest'{errors = Errors}} ->
             FormattedErrors = capi_handler_utils:format_request_errors(Errors),
             {ok, logic_error(invalidRequest, FormattedErrors)}
-    end;
-%%
+    end.
 
-process_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
+%%
 
 decode_location_name(GeoID, Name) ->
     #{

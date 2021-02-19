@@ -8,20 +8,42 @@
 -export([authorize_api_key/3]).
 -export([map_error/2]).
 -export([handle_request/4]).
+-export([respond/1]).
 
-%% Handler behaviour
+%%
+
+-type request_data() :: #{atom() | binary() => term()}.
+
+-type operation_id() :: swag_server:operation_id().
+-type request_context() :: swag_server:request_context().
+-type response() :: swag_server:response().
+-type processing_context() :: #{
+    swagger_context := swag_server:request_context(),
+    woody_context := woody_context:ctx()
+}.
+-type throw(_T) :: no_return().
+
+-type request_state() :: #{
+    authorize := fun(() -> {ok, capi_auth:resolution()} | throw(response())),
+    process := fun(() -> {ok, response()} | throw(response()))
+}.
 
 -export_type([operation_id/0]).
 -export_type([request_data/0]).
 -export_type([request_context/0]).
--export_type([response/0]).
 -export_type([processing_context/0]).
+-export_type([request_state/0]).
+-export_type([response/0]).
 
--callback process_request(
+-type handler_opts() :: swag_server:handler_opts(_).
+
+%% Handler behaviour
+
+-callback prepare(
     OperationID :: operation_id(),
     Req :: request_data(),
     Context :: processing_context()
-) -> {ok | error, response() | noimpl}.
+) -> {ok, request_state()} | {error, noimpl}.
 
 -import(capi_handler_utils, [logic_error/2, server_error/1]).
 
@@ -32,7 +54,7 @@
 -spec authorize_api_key(swag_server:operation_id(), swag_server:api_key(), handler_opts()) ->
     Result :: false | {true, capi_auth:context()}.
 authorize_api_key(OperationID, ApiKey, _HandlerOpts) ->
-    case uac:authorize_api_key(ApiKey, get_verification_options()) of
+    case uac:authorize_api_key(ApiKey, #{}) of
         {ok, Context} ->
             check_blacklist(ApiKey, Context);
         {error, Error} ->
@@ -57,17 +79,6 @@ map_error(validation_error, Error) ->
         <<"code">> => <<"invalidRequest">>,
         <<"message">> => Message
     }).
-
--type request_data() :: #{atom() | binary() => term()}.
-
--type operation_id() :: swag_server:operation_id().
--type request_context() :: swag_server:request_context().
--type response() :: swag_server:response().
--type handler_opts() :: swag_server:handler_opts(_).
--type processing_context() :: #{
-    swagger_context := swag_server:request_context(),
-    woody_context := woody_context:ctx()
-}.
 
 get_handlers() ->
     [
@@ -113,18 +124,25 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
         ok = set_rpc_meta(RpcID),
         ok = set_request_meta(OperationID, Req),
         _ = logger:info("Processing request ~p", [OperationID]),
-        OperationACL = capi_auth:get_operation_access(OperationID, Req),
-        case uac:authorize_operation(OperationACL, AuthContext) of
-            ok ->
-                WoodyContext = attach_deadline(Req, create_woody_context(RpcID, AuthContext)),
-                Context = create_processing_context(SwagContext, WoodyContext),
-                ok = set_context_meta(Context),
-                process_request(OperationID, Req, Context, get_handlers());
-            {error, _} = Error ->
+        WoodyContext = attach_deadline(Req, create_woody_context(RpcID, AuthContext)),
+        Context = create_processing_context(SwagContext, WoodyContext),
+        ok = set_context_meta(Context),
+        {ok, #{authorize := Authorize, process := Process}} =
+            prepare(OperationID, Req, Context, get_handlers()),
+        {ok, Resolution} = Authorize(),
+        case Resolution of
+            allowed ->
+                Process();
+            forbidden ->
+                _ = logger:info("Authorization failed"),
+                {ok, {401, #{}, undefined}};
+            {forbidden, Error} ->
                 _ = logger:info("Authorization failed due to ~p", [Error]),
                 {ok, {401, #{}, undefined}}
         end
     catch
+        throw:{handler_respond, HandlerResponse} ->
+            {ok, HandlerResponse};
         throw:{bad_deadline, _Deadline} ->
             {ok, logic_error(invalidDeadline, <<"Invalid data in X-Request-Deadline header">>)};
         throw:{handler_function_clause, _OperationID} ->
@@ -138,21 +156,25 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
         ok = clear_rpc_meta()
     end.
 
--spec process_request(
+-spec prepare(
     OperationID :: operation_id(),
     Req :: request_data(),
     Context :: processing_context(),
     Handlers :: list(module())
-) -> {ok | error, response()}.
-process_request(OperationID, _Req, _Context, []) ->
+) -> {ok, request_state()}.
+prepare(OperationID, _Req, _Context, []) ->
     erlang:throw({handler_function_clause, OperationID});
-process_request(OperationID, Req, Context, [Handler | Rest]) ->
-    case Handler:process_request(OperationID, Req, Context) of
+prepare(OperationID, Req, Context, [Handler | Rest]) ->
+    case Handler:prepare(OperationID, Req, Context) of
         {error, noimpl} ->
-            process_request(OperationID, Req, Context, Rest);
-        Response ->
-            Response
+            prepare(OperationID, Req, Context, Rest);
+        {ok, State} ->
+            {ok, State}
     end.
+
+-spec respond(response()) -> throw(response()).
+respond(Response) ->
+    erlang:throw({handler_respond, Response}).
 
 %%
 
@@ -197,8 +219,8 @@ process_woody_error(_Source, result_unknown, _Details) ->
 
 process_general_error(Class, Reason, Stacktrace, Req, SwagContext) ->
     _ = logger:error(
-        "Operation failed due to ~p:~p given req: ~p and context: ~p",
-        [Class, Reason, Req, SwagContext],
+        "Operation failed due to ~p:~p given req: ~p and context: ~p ~n~p",
+        [Class, Reason, Req, SwagContext, Stacktrace],
         #{
             error => #{
                 class => genlib:to_binary(Class),
@@ -250,11 +272,6 @@ clear_rpc_meta() ->
         Metadata ->
             logger:set_process_metadata(maps:without([trace_id, parent_id, span_id], Metadata))
     end.
-
-get_verification_options() ->
-    #{
-        domains_to_decode => [?DOMAIN]
-    }.
 
 check_blacklist(ApiKey, Context) ->
     case capi_api_key_blacklist:check(ApiKey) of

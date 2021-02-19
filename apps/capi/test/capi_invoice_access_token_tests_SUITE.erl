@@ -131,7 +131,9 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
         <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
     }} = capi_client_invoices:create_invoice(capi_ct_helper:get_context(Token, ExtraProperties), Req),
     capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
-    [{context, capi_ct_helper:get_context(InvAccToken)} | Config];
+    SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
+    Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+    [{context, capi_ct_helper:get_context(InvAccToken)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config];
 init_per_group(operations_by_invoice_access_token_after_token_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
     {ok, Token} = capi_ct_helper:issue_token([{[invoices], write}], unlimited),
@@ -147,12 +149,15 @@ init_per_group(operations_by_invoice_access_token_after_token_creation, Config) 
         ?STRING
     ),
     capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
-    [{context, capi_ct_helper:get_context(InvAccToken)} | Config];
+    SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
+    Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+    [{context, capi_ct_helper:get_context(InvAccToken)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config];
 init_per_group(_, Config) ->
     Config.
 
 -spec end_per_group(group_name(), config()) -> _.
-end_per_group(_Group, _C) ->
+end_per_group(_Group, C) ->
+    _ = capi_utils:maybe(?config(group_test_sup, C), fun capi_ct_helper:stop_mocked_service_sup/1),
     ok.
 
 -spec init_per_testcase(test_case_name(), config()) -> config().

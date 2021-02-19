@@ -5,58 +5,77 @@
 
 -behaviour(capi_handler).
 
--export([process_request/3]).
+-export([prepare/3]).
 
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 % seconds
 -define(DEFAULT_URL_LIFETIME, 60).
 
--spec process_request(
+-spec prepare(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
-) -> {ok | error, capi_handler:response() | noimpl}.
-process_request('GetReports', Req, Context) ->
+) -> {ok, capi_handler:request_state()} | {error, noimpl}.
+prepare(OperationID, Req, Context) when
+    OperationID =:= 'GetReports' orelse
+        OperationID =:= 'GetReportsForParty' orelse
+        OperationID =:= 'GetReport' orelse
+        OperationID =:= 'GetReportForParty' orelse
+        OperationID =:= 'CreateReport' orelse
+        OperationID =:= 'CreateReportForParty' orelse
+        OperationID =:= 'DownloadFile' orelse
+        OperationID =:= 'DownloadFileForParty'
+->
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
+
+-spec process_request(
+    OperationID :: capi_handler:operation_id(),
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state()
+) -> {ok, capi_handler:response()}.
+process_request('GetReports', Context, Req) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     get_reports(PartyID, Req, Context);
-process_request('GetReportsForParty', Req, Context) ->
+process_request('GetReportsForParty', Context, Req) ->
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(partyID, Req),
     capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
         get_reports(PartyID, Req, Context)
     end);
-process_request('GetReport', Req, Context) ->
+process_request('GetReport', Context, Req) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     get_report(PartyID, Req, Context);
-process_request('GetReportForParty', Req, Context) ->
+process_request('GetReportForParty', Context, Req) ->
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(partyID, Req),
     capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
         get_report(PartyID, Req, Context)
     end);
-process_request('CreateReport', Req, Context) ->
+process_request('CreateReport', Context, Req) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     create_report(PartyID, Req, Context);
-process_request('CreateReportForParty', Req, Context) ->
+process_request('CreateReportForParty', Context, Req) ->
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(partyID, Req),
     capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
         create_report(PartyID, Req, Context)
     end);
-process_request('DownloadFile', Req, Context) ->
+process_request('DownloadFile', Context, Req) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     download_file(PartyID, Req, Context);
-process_request('DownloadFileForParty', Req, Context) ->
+process_request('DownloadFileForParty', Context, Req) ->
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(partyID, Req),
     capi_handler_utils:run_if_party_accessible(UserID, PartyID, fun() ->
         download_file(PartyID, Req, Context)
-    end);
-%%
+    end).
 
-process_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
+%%
 
 create_report(PartyID, Req, Context) ->
     ShopID = maps:get(shopID, Req),

@@ -5,16 +5,35 @@
 
 -behaviour(capi_handler).
 
--export([process_request/3]).
+-export([prepare/3]).
 
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
--spec process_request(
+-spec prepare(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
-) -> {ok | error, capi_handler:response() | noimpl}.
-process_request('CreateInvoiceTemplate', Req, Context) ->
+) -> {ok, capi_handler:request_state()} | {error, noimpl}.
+prepare(OperationID, Req, Context) when
+    OperationID =:= 'CreateInvoiceTemplate' orelse
+        OperationID =:= 'GetInvoiceTemplateByID' orelse
+        OperationID =:= 'UpdateInvoiceTemplate' orelse
+        OperationID =:= 'DeleteInvoiceTemplate' orelse
+        OperationID =:= 'CreateInvoiceWithTemplate' orelse
+        OperationID =:= 'GetInvoicePaymentMethodsByTemplateID'
+->
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
+
+-spec process_request(
+    OperationID :: capi_handler:operation_id(),
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state()
+) -> {ok, capi_handler:response()}.
+process_request('CreateInvoiceTemplate', Context, Req) ->
     InvoiceTemplateParams = maps:get('InvoiceTemplateCreateParams', Req),
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(<<"partyID">>, InvoiceTemplateParams, UserID),
@@ -49,7 +68,7 @@ process_request('CreateInvoiceTemplate', Req, Context) ->
         throw:zero_invoice_lifetime ->
             {ok, logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}
     end;
-process_request('GetInvoiceTemplateByID', Req, Context) ->
+process_request('GetInvoiceTemplateByID', Context, Req) ->
     ID = maps:get('invoiceTemplateID', Req),
     case get_invoice_template(ID, Context) of
         {ok, InvoiceTpl} ->
@@ -59,7 +78,7 @@ process_request('GetInvoiceTemplateByID', Req, Context) ->
         ->
             {ok, general_error(404, <<"Invoice template not found">>)}
     end;
-process_request('UpdateInvoiceTemplate', Req, Context) ->
+process_request('UpdateInvoiceTemplate', Context, Req) ->
     try
         Params = encode_invoice_tpl_update_params(maps:get('InvoiceTemplateUpdateParams', Req)),
         Call = {invoice_templating, 'Update', {maps:get('invoiceTemplateID', Req), Params}},
@@ -95,7 +114,7 @@ process_request('UpdateInvoiceTemplate', Req, Context) ->
         throw:zero_invoice_lifetime ->
             {ok, logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}
     end;
-process_request('DeleteInvoiceTemplate', Req, Context) ->
+process_request('DeleteInvoiceTemplate', Context, Req) ->
     Call = {invoice_templating, 'Delete', {maps:get('invoiceTemplateID', Req)}},
     case capi_handler_utils:service_call_with([user_info], Call, Context) of
         {ok, _R} ->
@@ -114,7 +133,7 @@ process_request('DeleteInvoiceTemplate', Req, Context) ->
                     {ok, general_error(404, <<"Invoice Template not found">>)}
             end
     end;
-process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
+process_request('CreateInvoiceWithTemplate' = OperationID, Context, Req) ->
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
     InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
     ExtraProperties = capi_handler_utils:get_extra_properties(Context),
@@ -164,7 +183,7 @@ process_request('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
         {error, {external_id_conflict, InvoiceID, ExternalID}} ->
             {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
     end;
-process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
+process_request('GetInvoicePaymentMethodsByTemplateID', Context, Req) ->
     InvoiceTemplateID = maps:get('invoiceTemplateID', Req),
     Timestamp = genlib_rfc3339:format_relaxed(erlang:system_time(microsecond), microsecond),
     {ok, Party} = capi_handler_utils:get_party(Context),
@@ -178,11 +197,9 @@ process_request('GetInvoicePaymentMethodsByTemplateID', Req, Context) ->
             E == #payproc_InvalidUser{}; E == #payproc_InvoiceTemplateNotFound{}; E == #payproc_InvoiceTemplateRemoved{}
         ->
             {ok, general_error(404, <<"Invoice template not found">>)}
-    end;
-%%
+    end.
 
-process_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
+%%
 
 create_invoice(PartyID, InvoiceTplID, #{<<"externalID">> := ExternalID} = InvoiceParams, Context, BenderPrefix) ->
     #{woody_context := WoodyCtx} = Context,

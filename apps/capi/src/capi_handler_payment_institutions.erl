@@ -4,18 +4,36 @@
 
 -behaviour(capi_handler).
 
--export([process_request/3]).
+-export([prepare/3]).
 
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -define(payment_institution_ref(PaymentInstitutionID), #domain_PaymentInstitutionRef{id = PaymentInstitutionID}).
 
--spec process_request(
+-spec prepare(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
-) -> {ok | error, capi_handler:response() | noimpl}.
-process_request('GetPaymentInstitutions', Req, #{woody_context := WoodyContext}) ->
+) -> {ok, capi_handler:request_state()} | {error, noimpl}.
+prepare(OperationID, Req, Context) when
+    OperationID =:= 'GetPaymentInstitutions' orelse
+        OperationID =:= 'GetPaymentInstitutionByRef' orelse
+        OperationID =:= 'GetPaymentInstitutionPaymentTerms' orelse
+        OperationID =:= 'GetPaymentInstitutionPayoutMethods' orelse
+        OperationID =:= 'GetPaymentInstitutionPayoutSchedules'
+->
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
+
+-spec process_request(
+    OperationID :: capi_handler:operation_id(),
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state()
+) -> {ok, capi_handler:response()}.
+process_request('GetPaymentInstitutions', #{woody_context := WoodyContext}, Req) ->
     try
         Residence = capi_handler_encoder:encode_residence(genlib_map:get(residence, Req)),
         Realm = genlib_map:get(realm, Req),
@@ -37,7 +55,7 @@ process_request('GetPaymentInstitutions', Req, #{woody_context := WoodyContext})
         throw:{encode_residence, invalid_residence} ->
             {ok, logic_error(invalidRequest, <<"Invalid residence">>)}
     end;
-process_request('GetPaymentInstitutionByRef', Req, #{woody_context := WoodyContext}) ->
+process_request('GetPaymentInstitutionByRef', #{woody_context := WoodyContext}, Req) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
     case capi_domain:get({payment_institution, ?payment_institution_ref(PaymentInstitutionID)}, WoodyContext) of
         {ok, PaymentInstitution} ->
@@ -45,7 +63,7 @@ process_request('GetPaymentInstitutionByRef', Req, #{woody_context := WoodyConte
         {error, not_found} ->
             {ok, general_error(404, <<"Payment institution not found">>)}
     end;
-process_request('GetPaymentInstitutionPaymentTerms', Req, Context) ->
+process_request('GetPaymentInstitutionPaymentTerms', Context, Req) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
     case compute_payment_institution_terms(PaymentInstitutionID, #payproc_Varset{}, Context) of
         {ok, #domain_TermSet{payments = PaymentTerms}} ->
@@ -53,9 +71,9 @@ process_request('GetPaymentInstitutionPaymentTerms', Req, Context) ->
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
             {ok, general_error(404, <<"Payment institution not found">>)}
     end;
-process_request('GetPaymentInstitutionPayoutMethods', Req, Context) ->
+process_request('GetPaymentInstitutionPayoutMethods', Context, Req) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
-    case compute_payment_institution_terms(PaymentInstitutionID, prepare_varset(Req, Context), Context) of
+    case compute_payment_institution_terms(PaymentInstitutionID, prepare_request_varset(Req, Context), Context) of
         {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{payout_methods = PayoutMethods}}} ->
             {ok, {200, #{}, decode_payout_methods_selector(PayoutMethods)}};
         {ok, #domain_TermSet{payouts = undefined}} ->
@@ -63,20 +81,18 @@ process_request('GetPaymentInstitutionPayoutMethods', Req, Context) ->
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
             {ok, general_error(404, <<"Payment institution not found">>)}
     end;
-process_request('GetPaymentInstitutionPayoutSchedules', Req, Context) ->
+process_request('GetPaymentInstitutionPayoutSchedules', Context, Req) ->
     PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
-    case compute_payment_institution_terms(PaymentInstitutionID, prepare_varset(Req, Context), Context) of
+    case compute_payment_institution_terms(PaymentInstitutionID, prepare_request_varset(Req, Context), Context) of
         {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{payout_schedules = Schedules}}} ->
             {ok, {200, #{}, decode_business_schedules_selector(Schedules)}};
         {ok, #domain_TermSet{payouts = undefined}} ->
             {ok, general_error(404, <<"Automatic payouts not allowed">>)};
         {exception, #payproc_PaymentInstitutionNotFound{}} ->
             {ok, general_error(404, <<"Payment institution not found">>)}
-    end;
-%%
+    end.
 
-process_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
+%%
 
 check_payment_institution(Realm, Residence, PaymentInstitution) ->
     check_payment_institution_realm(Realm, PaymentInstitution) andalso
@@ -101,7 +117,7 @@ compute_payment_institution_terms(PaymentInstitutionID, VS, Context) ->
     Call = {party_management, 'ComputePaymentInstitutionTerms', CallArgs},
     capi_handler_utils:service_call_with([user_info], Call, Context).
 
-prepare_varset(Req, Context) ->
+prepare_request_varset(Req, Context) ->
     #payproc_Varset{
         currency = encode_optional_currency(genlib_map:get(currency, Req)),
         payout_method = encode_optional_payout_method(genlib_map:get(payoutMethod, Req)),

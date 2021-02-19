@@ -4,31 +4,47 @@
 
 -behaviour(capi_handler).
 
--export([process_request/3]).
+-export([prepare/3]).
 
 -import(capi_handler_utils, [logic_error/2]).
 
--spec process_request(
+-spec prepare(
     OperationID :: capi_handler:operation_id(),
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
-) -> {ok | error, capi_handler:response() | noimpl}.
-process_request('GetPaymentConversionStats', Req, Context) ->
+) -> {ok, capi_handler:request_state()} | {error, noimpl}.
+prepare(OperationID, Req, Context) when
+    OperationID =:= 'GetPaymentConversionStats' orelse
+        OperationID =:= 'GetPaymentRevenueStats' orelse
+        OperationID =:= 'GetPaymentGeoStats' orelse
+        OperationID =:= 'GetPaymentRateStats' orelse
+        OperationID =:= 'GetPaymentMethodStats'
+->
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
+
+-spec process_request(
+    OperationID :: capi_handler:operation_id(),
+    Context :: capi_handler:processing_context(),
+    ReqState :: capi_handler:request_state()
+) -> {ok, capi_handler:response()}.
+process_request('GetPaymentConversionStats', Context, Req) ->
     process_merchant_stat(payments_conversion_stat, Req, Context);
-process_request('GetPaymentRevenueStats', Req, Context) ->
+process_request('GetPaymentRevenueStats', Context, Req) ->
     process_merchant_stat(payments_turnover, Req, Context);
-process_request('GetPaymentGeoStats', Req, Context) ->
+process_request('GetPaymentGeoStats', Context, Req) ->
     process_merchant_stat(payments_geo_stat, Req, Context);
-process_request('GetPaymentRateStats', Req, Context) ->
+process_request('GetPaymentRateStats', Context, Req) ->
     process_merchant_stat(customers_rate_stat, Req, Context);
-process_request('GetPaymentMethodStats', Req, Context) ->
+process_request('GetPaymentMethodStats', Context, Req) ->
     bankCard = maps:get(paymentMethod, Req),
     StatType = payments_pmt_cards_stat,
-    process_merchant_stat(StatType, Req, Context);
-%%
+    process_merchant_stat(StatType, Req, Context).
 
-process_request(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
+%%
 
 create_stat_dsl(StatType, Req, Context) ->
     FromTime = capi_handler_utils:get_time('fromTime', Req),
