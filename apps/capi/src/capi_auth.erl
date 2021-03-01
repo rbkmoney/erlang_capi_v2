@@ -51,6 +51,12 @@
 -define(DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME, 259200).
 -define(DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME, 259200).
 
+%% TODO
+%% This is kinda brittle, how do we ensure this string is correct, besides tests?
+-define(AUTH_METHOD_INVOICE_ACCESS_TOKEN, <<"InvoiceAccessToken">>).
+-define(AUTH_METHOD_INVTPL_ACCESS_TOKEN, <<"InvoiceTemplateAccessToken">>).
+-define(AUTH_METHOD_CUSTOMER_ACCESS_TOKEN, <<"CustomerAccessToken">>).
+
 -type token_spec() ::
     {invoice, InvoiceID :: binary()}
     | {invoice_tpl, InvoiceTplID :: binary()}
@@ -62,15 +68,19 @@ issue_access_token(PartyID, TokenSpec) ->
 
 -spec issue_access_token(PartyID :: binary(), token_spec(), map()) -> uac_authorizer_jwt:token().
 issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
-    Claims = maps:merge(
+    Claims1 = maps:merge(
         ExtraProperties,
         resolve_token_spec(TokenSpec)
+    ),
+    Claims2 = capi_bouncer:set_claim(
+        bouncer_client:bake_context_fragment(resolve_bouncer_ctx(TokenSpec, PartyID)),
+        Claims1
     ),
     capi_utils:unwrap(
         uac_authorizer_jwt:issue(
             capi_utils:get_unique_id(),
             PartyID,
-            Claims,
+            Claims2,
             ?SIGNEE
         )
     ).
@@ -87,7 +97,7 @@ resolve_token_spec({invoice, InvoiceID}) ->
     },
     Expiration = lifetime_to_expiration(?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME),
     #{
-        <<"exp">> => make_auth_expiration(Expiration),
+        <<"exp">> => Expiration,
         <<"resource_access">> => DomainRoles,
         % token consumer
         <<"cons">> => <<"client">>
@@ -100,7 +110,7 @@ resolve_token_spec({invoice_tpl, InvoiceTplID}) ->
         ])
     },
     #{
-        <<"exp">> => make_auth_expiration(unlimited),
+        <<"exp">> => unlimited,
         <<"resource_access">> => DomainRoles
     };
 resolve_token_spec({customer, CustomerID}) ->
@@ -114,9 +124,44 @@ resolve_token_spec({customer, CustomerID}) ->
     },
     Expiration = lifetime_to_expiration(?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME),
     #{
-        <<"exp">> => make_auth_expiration(Expiration),
+        <<"exp">> => Expiration,
         <<"resource_access">> => DomainRoles
     }.
+
+-spec resolve_bouncer_ctx(token_spec(), _PartyID :: binary()) -> bouncer_context_helpers:context_fragment().
+resolve_bouncer_ctx({invoice, InvoiceID}, PartyID) ->
+    bouncer_context_helpers:make_auth_fragment(#{
+        method => ?AUTH_METHOD_INVOICE_ACCESS_TOKEN,
+        expiration => make_auth_expiration(lifetime_to_expiration(?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME)),
+        scope => [
+            #{
+                party => #{id => PartyID},
+                invoice => #{id => InvoiceID}
+            }
+        ]
+    });
+resolve_bouncer_ctx({invoice_tpl, InvoiceTemplateID}, PartyID) ->
+    bouncer_context_helpers:make_auth_fragment(#{
+        method => ?AUTH_METHOD_INVTPL_ACCESS_TOKEN,
+        expiration => make_auth_expiration(unlimited),
+        scope => [
+            #{
+                party => #{id => PartyID},
+                invoice_template => #{id => InvoiceTemplateID}
+            }
+        ]
+    });
+resolve_bouncer_ctx({customer, CustomerID}, PartyID) ->
+    bouncer_context_helpers:make_auth_fragment(#{
+        method => ?AUTH_METHOD_CUSTOMER_ACCESS_TOKEN,
+        expiration => make_auth_expiration(lifetime_to_expiration(?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME)),
+        scope => [
+            #{
+                party => #{id => PartyID},
+                customer => #{id => CustomerID}
+            }
+        ]
+    }).
 
 %%
 
@@ -351,9 +396,9 @@ lifetime_to_expiration(Lt) when is_integer(Lt) ->
     genlib_time:unow() + Lt.
 
 make_auth_expiration(Timestamp) when is_integer(Timestamp) ->
-    Timestamp;
+    genlib_rfc3339:format(Timestamp, second);
 make_auth_expiration(unlimited) ->
-    unlimited.
+    undefined.
 
 -spec authorize_operation(
     OperationID :: capi_handler:operation_id(),
