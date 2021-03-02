@@ -58,21 +58,23 @@ issue_access_token(PartyID, TokenSpec) ->
 
 -spec issue_access_token(PartyID :: binary(), token_spec(), map()) -> uac_authorizer_jwt:token().
 issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
+    TokenID = capi_utils:get_unique_id(),
+    AuthContext = resolve_bouncer_ctx(TokenSpec, PartyID),
+    ContextFragment = bouncer_context_helpers:make_auth_fragment(
+        AuthContext#{
+            token => #{id => TokenID}
+        }
+    ),
     Claims1 = maps:merge(
         ExtraProperties,
         resolve_token_spec(TokenSpec)
     ),
     Claims2 = capi_bouncer:set_claim(
-        bouncer_client:bake_context_fragment(resolve_bouncer_ctx(TokenSpec, PartyID)),
+        bouncer_client:bake_context_fragment(ContextFragment),
         Claims1
     ),
     capi_utils:unwrap(
-        uac_authorizer_jwt:issue(
-            capi_utils:get_unique_id(),
-            PartyID,
-            Claims2,
-            ?SIGNEE
-        )
+        uac_authorizer_jwt:issue(TokenID, PartyID, Claims2, ?SIGNEE)
     ).
 
 -spec resolve_token_spec(token_spec()) -> claims().
@@ -118,9 +120,9 @@ resolve_token_spec({customer, CustomerID}) ->
         <<"resource_access">> => DomainRoles
     }.
 
--spec resolve_bouncer_ctx(token_spec(), _PartyID :: binary()) -> bouncer_context_helpers:context_fragment().
+-spec resolve_bouncer_ctx(token_spec(), _PartyID :: binary()) -> bouncer_context_helpers:auth_params().
 resolve_bouncer_ctx({invoice, InvoiceID}, PartyID) ->
-    bouncer_context_helpers:make_auth_fragment(#{
+    #{
         method => ?BCTX_V1_AUTHMETHOD_INVOICEACCESSTOKEN,
         expiration => make_auth_expiration(lifetime_to_expiration(?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME)),
         scope => [
@@ -129,9 +131,9 @@ resolve_bouncer_ctx({invoice, InvoiceID}, PartyID) ->
                 invoice => #{id => InvoiceID}
             }
         ]
-    });
+    };
 resolve_bouncer_ctx({invoice_tpl, InvoiceTemplateID}, PartyID) ->
-    bouncer_context_helpers:make_auth_fragment(#{
+    #{
         method => ?BCTX_V1_AUTHMETHOD_INVOICETEMPLATEACCESSTOKEN,
         expiration => make_auth_expiration(unlimited),
         scope => [
@@ -140,9 +142,9 @@ resolve_bouncer_ctx({invoice_tpl, InvoiceTemplateID}, PartyID) ->
                 invoice_template => #{id => InvoiceTemplateID}
             }
         ]
-    });
+    };
 resolve_bouncer_ctx({customer, CustomerID}, PartyID) ->
-    bouncer_context_helpers:make_auth_fragment(#{
+    #{
         method => ?BCTX_V1_AUTHMETHOD_CUSTOMERACCESSTOKEN,
         expiration => make_auth_expiration(lifetime_to_expiration(?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME)),
         scope => [
@@ -151,7 +153,7 @@ resolve_bouncer_ctx({customer, CustomerID}, PartyID) ->
                 customer => #{id => CustomerID}
             }
         ]
-    }).
+    }.
 
 %%
 
