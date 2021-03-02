@@ -40,12 +40,6 @@
 
 %%
 
-% TODO
-% We need shared type here, exported somewhere in swagger app
--type request_data() :: #{atom() | binary() => term()}.
-
-%%
-
 %% TODO
 %% Hardcode for now, should pass it here probably as an argument
 -define(DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME, 259200).
@@ -161,7 +155,8 @@ resolve_bouncer_ctx({customer, CustomerID}, PartyID) ->
 
 %%
 
--spec get_operation_access(swag_server:operation_id(), request_data()) -> [{uac_acl:scope(), uac_acl:permission()}].
+-spec get_operation_access(swag_server:operation_id(), swag_server:object()) ->
+    [{uac_acl:scope(), uac_acl:permission()}].
 get_operation_access('CreateInvoice', _) ->
     [{[invoices], write}];
 get_operation_access('GetInvoiceByID', #{'invoiceID' := ID}) ->
