@@ -17,7 +17,8 @@ prepare(OperationID, Req, Context) when
     OperationID =:= 'GetCategories' orelse
         OperationID =:= 'GetCategoryByRef'
 ->
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
+    Prototypes = [{operation, #{id => OperationID}}],
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)} end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
