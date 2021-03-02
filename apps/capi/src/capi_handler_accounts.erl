@@ -14,7 +14,9 @@
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare(OperationID, Req, Context) when OperationID =:= 'GetAccountByID' ->
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
+    PartyID = capi_handler_utils:get_party_id(Context),
+    Prototypes = [{operation, #{id => OperationID, party => PartyID}}],
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)} end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
