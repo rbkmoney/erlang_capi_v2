@@ -51,11 +51,7 @@
 -define(DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME, 259200).
 -define(DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME, 259200).
 
-%% TODO
-%% This is kinda brittle, how do we ensure this string is correct, besides tests?
--define(AUTH_METHOD_INVOICE_ACCESS_TOKEN, <<"InvoiceAccessToken">>).
--define(AUTH_METHOD_INVTPL_ACCESS_TOKEN, <<"InvoiceTemplateAccessToken">>).
--define(AUTH_METHOD_CUSTOMER_ACCESS_TOKEN, <<"CustomerAccessToken">>).
+-include_lib("bouncer_proto/include/bouncer_context_v1_thrift.hrl").
 
 -type token_spec() ::
     {invoice, InvoiceID :: binary()}
@@ -131,7 +127,7 @@ resolve_token_spec({customer, CustomerID}) ->
 -spec resolve_bouncer_ctx(token_spec(), _PartyID :: binary()) -> bouncer_context_helpers:context_fragment().
 resolve_bouncer_ctx({invoice, InvoiceID}, PartyID) ->
     bouncer_context_helpers:make_auth_fragment(#{
-        method => ?AUTH_METHOD_INVOICE_ACCESS_TOKEN,
+        method => ?BCTX_V1_AUTHMETHOD_INVOICEACCESSTOKEN,
         expiration => make_auth_expiration(lifetime_to_expiration(?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME)),
         scope => [
             #{
@@ -142,7 +138,7 @@ resolve_bouncer_ctx({invoice, InvoiceID}, PartyID) ->
     });
 resolve_bouncer_ctx({invoice_tpl, InvoiceTemplateID}, PartyID) ->
     bouncer_context_helpers:make_auth_fragment(#{
-        method => ?AUTH_METHOD_INVTPL_ACCESS_TOKEN,
+        method => ?BCTX_V1_AUTHMETHOD_INVOICETEMPLATEACCESSTOKEN,
         expiration => make_auth_expiration(unlimited),
         scope => [
             #{
@@ -153,7 +149,7 @@ resolve_bouncer_ctx({invoice_tpl, InvoiceTemplateID}, PartyID) ->
     });
 resolve_bouncer_ctx({customer, CustomerID}, PartyID) ->
     bouncer_context_helpers:make_auth_fragment(#{
-        method => ?AUTH_METHOD_CUSTOMER_ACCESS_TOKEN,
+        method => ?BCTX_V1_AUTHMETHOD_CUSTOMERACCESSTOKEN,
         expiration => make_auth_expiration(lifetime_to_expiration(?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME)),
         scope => [
             #{
