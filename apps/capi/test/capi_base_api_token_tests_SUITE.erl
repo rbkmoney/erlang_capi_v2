@@ -172,7 +172,6 @@ groups() ->
             get_refund_by_external_id,
             update_invoice_template_ok_test,
             delete_invoice_template_ok_test,
-            get_account_by_id_ok_test,
             get_my_party_ok_test,
             suspend_my_party_ok_test,
             activate_my_party_ok_test,
@@ -222,7 +221,6 @@ groups() ->
             create_report_ok_test,
             download_report_file_ok_test,
             download_report_file_not_found_test,
-            get_categories_ok_test,
             get_category_by_ref_ok_test,
             get_schedule_by_ref_ok_test,
             get_payment_institutions,
@@ -236,6 +234,9 @@ groups() ->
             check_no_invoice_by_external_id_test
         ]},
         {operations_by_base_api_token_with_new_auth, [], [
+            get_account_by_id_ok_test,
+            get_categories_ok_test,
+
             create_webhook_ok_test,
             create_webhook_limit_exceeded_test,
             get_webhooks,
@@ -774,6 +775,7 @@ get_account_by_id_ok_test(Config) ->
         [{party_management, fun('GetAccountState', _) -> {ok, ?ACCOUNT_STATE} end}],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetAccountByID">>, ?STRING, Config),
     {ok, _} = capi_client_accounts:get_account_by_id(?config(context, Config), ?INTEGER).
 
 -spec get_my_party_ok_test(config()) -> _.
@@ -1587,10 +1589,12 @@ download_report_file_not_found_test(Config) ->
 
 -spec get_categories_ok_test(config()) -> _.
 get_categories_ok_test(Config) ->
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_op_ctx(<<"GetCategories">>, Config),
     {ok, _} = capi_client_categories:get_categories(?config(context, Config)).
 
 -spec get_category_by_ref_ok_test(config()) -> _.
 get_category_by_ref_ok_test(Config) ->
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_op_ctx(<<"GetCategoryByRef">>, Config),
     {ok, _} = capi_client_categories:get_category_by_ref(?config(context, Config), ?INTEGER).
 
 -spec get_schedule_by_ref_ok_test(config()) -> _.
