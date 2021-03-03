@@ -180,15 +180,6 @@ groups() ->
             activate_shop_ok_test,
             suspend_shop_ok_test,
 
-            get_shop_by_id_for_party_ok_test,
-            get_shop_by_id_for_party_error_test,
-            get_shops_for_party_ok_test,
-            get_shops_for_party_error_test,
-            suspend_shop_for_party_ok_test,
-            suspend_shop_for_party_error_test,
-            activate_shop_for_party_ok_test,
-            activate_shop_for_party_error_test,
-
             get_claim_by_id_ok_test,
             get_claims_ok_test,
             revoke_claim_ok_test,
@@ -236,6 +227,15 @@ groups() ->
         {operations_by_base_api_token_with_new_auth, [], [
             get_account_by_id_ok_test,
             get_categories_ok_test,
+
+            get_shop_by_id_for_party_ok_test,
+            get_shop_by_id_for_party_error_test,
+            get_shops_for_party_ok_test,
+            get_shops_for_party_error_test,
+            suspend_shop_for_party_ok_test,
+            suspend_shop_for_party_error_test,
+            activate_shop_for_party_ok_test,
+            activate_shop_for_party_error_test,
 
             create_webhook_ok_test,
             create_webhook_limit_exceeded_test,
@@ -806,6 +806,7 @@ get_shop_by_id_for_party_ok_test(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"GetShopByIDForParty">>, ?STRING, ?STRING, Config),
     {ok, _} = capi_client_shops:get_shop_by_id_for_party(?config(context, Config), ?STRING, ?STRING).
 
 -spec get_shop_by_id_for_party_error_test(config()) -> _.
@@ -818,6 +819,12 @@ get_shop_by_id_for_party_error_test(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(
+        <<"GetShopByIDForParty">>,
+        <<"WrongPartyID">>,
+        ?STRING,
+        Config
+    ),
     ?assertMatch(
         {error, {404, _}},
         capi_client_shops:get_shop_by_id_for_party(?config(context, Config), <<"WrongPartyID">>, ?STRING)
@@ -826,6 +833,7 @@ get_shop_by_id_for_party_error_test(Config) ->
 -spec get_shops_ok_test(config()) -> _.
 get_shops_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetShops">>, ?STRING, Config),
     {ok, _} = capi_client_shops:get_shops(?config(context, Config)).
 
 -spec get_shops_for_party_ok_test(config()) -> _.
@@ -836,6 +844,7 @@ get_shops_for_party_ok_test(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetShopsForParty">>, ?STRING, Config),
     {ok, _} = capi_client_shops:get_shops_for_party(?config(context, Config), ?STRING).
 
 -spec get_shops_for_party_error_test(config()) -> _.
@@ -844,6 +853,7 @@ get_shops_for_party_error_test(Config) ->
         [{party_management, fun('Get', {_, <<"WrongPartyID">>}) -> {throwing, #payproc_InvalidUser{}} end}],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetShopsForParty">>, <<"WrongPartyID">>, Config),
     ?assertMatch(
         {error, {404, _}},
         capi_client_shops:get_shops_for_party(?config(context, Config), <<"WrongPartyID">>)
@@ -852,6 +862,7 @@ get_shops_for_party_error_test(Config) ->
 -spec activate_shop_ok_test(config()) -> _.
 activate_shop_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('ActivateShop', _) -> {ok, ok} end}], Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"ActivateShop">>, ?STRING, ?STRING, Config),
     ok = capi_client_shops:activate_shop(?config(context, Config), ?STRING).
 
 -spec activate_shop_for_party_ok_test(config()) -> _.
@@ -862,6 +873,7 @@ activate_shop_for_party_ok_test(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"ActivateShopForParty">>, ?STRING, ?STRING, Config),
     ok = capi_client_shops:activate_shop_for_party(?config(context, Config), ?STRING, ?STRING).
 
 -spec activate_shop_for_party_error_test(config()) -> _.
@@ -874,6 +886,12 @@ activate_shop_for_party_error_test(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(
+        <<"ActivateShopForParty">>,
+        <<"WrongPartyID">>,
+        ?STRING,
+        Config
+    ),
     ?assertMatch(
         {error, {404, _}},
         capi_client_shops:activate_shop_for_party(?config(context, Config), <<"WrongPartyID">>, ?STRING)
@@ -882,6 +900,7 @@ activate_shop_for_party_error_test(Config) ->
 -spec suspend_shop_ok_test(config()) -> _.
 suspend_shop_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('SuspendShop', _) -> {ok, ok} end}], Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"SuspendShop">>, ?STRING, ?STRING, Config),
     ok = capi_client_shops:suspend_shop(?config(context, Config), ?STRING).
 
 -spec suspend_shop_for_party_ok_test(config()) -> _.
@@ -892,6 +911,7 @@ suspend_shop_for_party_ok_test(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"SuspendShopForParty">>, ?STRING, ?STRING, Config),
     ok = capi_client_shops:suspend_shop_for_party(?config(context, Config), ?STRING, ?STRING).
 
 -spec suspend_shop_for_party_error_test(config()) -> _.
@@ -902,6 +922,12 @@ suspend_shop_for_party_error_test(Config) ->
                 {throwing, #payproc_InvalidUser{}}
             end}
         ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(
+        <<"SuspendShopForParty">>,
+        <<"WrongPartyID">>,
+        ?STRING,
         Config
     ),
     ?assertMatch(
