@@ -1,6 +1,7 @@
 -module(capi_bouncer).
 
 -include_lib("bouncer_proto/include/bouncer_context_thrift.hrl").
+-include_lib("bouncer_proto/include/bouncer_context_v1_thrift.hrl").
 
 -export([extract_context_fragments/2]).
 -export([judge/2]).
@@ -76,7 +77,7 @@ build_auth_context_fragments(user_session_token, AuthCtx = {_, _, _, Metadata}, 
     ),
     Acc2 = bouncer_context_helpers:add_auth(
         #{
-            method => <<"SessionToken">>,
+            method => ?BCTX_V1_AUTHMETHOD_SESSIONTOKEN,
             expiration => make_auth_expiration(Expiration),
             token => #{id => uac_authorizer_jwt:get_token_id(AuthCtx)}
         },
