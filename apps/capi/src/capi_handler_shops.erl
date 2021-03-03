@@ -21,8 +21,8 @@ prepare(OperationID = 'ActivateShop', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        Call = {party_management, 'ActivateShop', {ShopID}},
-        case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
+        Call = {party_management, 'ActivateShop', {PartyID, ShopID}},
+        case capi_handler_utils:service_call_with([user_info], Call, Context) of
             {ok, _R} ->
                 {ok, {204, #{}, undefined}};
             {exception, Exception} ->
@@ -43,8 +43,8 @@ prepare(OperationID = 'SuspendShop', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        Call = {party_management, 'SuspendShop', {ShopID}},
-        case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
+        Call = {party_management, 'SuspendShop', {PartyID, ShopID}},
+        case capi_handler_utils:service_call_with([user_info], Call, Context) of
             {ok, _R} ->
                 {ok, {204, #{}, undefined}};
             {exception, Exception} ->
@@ -76,8 +76,8 @@ prepare(OperationID = 'GetShopByID', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        Call = {party_management, 'GetShop', {ShopID}},
-        case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
+        Call = {party_management, 'GetShop', {PartyID, ShopID}},
+        case capi_handler_utils:service_call_with([user_info], Call, Context) of
             {ok, Shop} ->
                 {ok, {200, #{}, decode_shop(Shop)}};
             {exception, #payproc_ShopNotFound{}} ->
