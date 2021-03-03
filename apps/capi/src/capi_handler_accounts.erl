@@ -14,26 +14,25 @@
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare(OperationID, Req, Context) when OperationID =:= 'GetAccountByID' ->
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
-    Process = fun() -> process_request(OperationID, Context, Req) end,
+    PartyID = capi_handler_utils:get_party_id(Context),
+    Authorize = fun() ->
+        Prototypes = [{operation, #{id => OperationID, party => PartyID}}],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        AccountID = genlib:to_int(maps:get('accountID', Req)),
+        CallArgs = {PartyID, AccountID},
+        Call = {party_management, 'GetAccountState', CallArgs},
+        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+            {ok, S} ->
+                {ok, {200, #{}, decode_account_state(S)}};
+            {exception, #payproc_AccountNotFound{}} ->
+                {ok, general_error(404, <<"Account not found">>)}
+        end
+    end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
-
--spec process_request(
-    OperationID :: capi_handler:operation_id(),
-    Context :: capi_handler:processing_context(),
-    ReqState :: capi_handler:request_state()
-) -> {ok, capi_handler:response()}.
-process_request('GetAccountByID', Context, Req) ->
-    CallArgs = {genlib:to_int(maps:get('accountID', Req))},
-    Call = {party_management, 'GetAccountState', CallArgs},
-    case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
-        {ok, S} ->
-            {ok, {200, #{}, decode_account_state(S)}};
-        {exception, #payproc_AccountNotFound{}} ->
-            {ok, general_error(404, <<"Account not found">>)}
-    end.
 
 %%
 

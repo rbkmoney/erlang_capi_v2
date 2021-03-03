@@ -13,31 +13,32 @@
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
-prepare(OperationID, Req, Context) when
-    OperationID =:= 'GetCategories' orelse
-        OperationID =:= 'GetCategoryByRef'
-->
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
-    Process = fun() -> process_request(OperationID, Context, Req) end,
+prepare(OperationID = 'GetCategories', Req, Context = #{woody_context := WoodyContext}) ->
+    Authorize = fun() ->
+        Prototypes = [{operation, #{id => OperationID}}],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        Categories = capi_utils:unwrap(capi_domain:get_categories(WoodyContext)),
+        {ok, {200, #{}, [decode_category(C) || C <- Categories]}}
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'GetCategoryByRef', Req, Context) ->
+    Authorize = fun() ->
+        Prototypes = [{operation, #{id => OperationID}}],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        case get_category_by_id(genlib:to_int(maps:get(categoryID, Req)), Context) of
+            {ok, Category} ->
+                {ok, {200, #{}, decode_category(Category)}};
+            {error, not_found} ->
+                {ok, general_error(404, <<"Category not found">>)}
+        end
+    end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
-
--spec process_request(
-    OperationID :: capi_handler:operation_id(),
-    Context :: capi_handler:processing_context(),
-    ReqState :: capi_handler:request_state()
-) -> {ok, capi_handler:response()}.
-process_request('GetCategories', #{woody_context := WoodyContext}, _Req) ->
-    Categories = capi_utils:unwrap(capi_domain:get_categories(WoodyContext)),
-    {ok, {200, #{}, [decode_category(C) || C <- Categories]}};
-process_request('GetCategoryByRef', Context, Req) ->
-    case get_category_by_id(genlib:to_int(maps:get(categoryID, Req)), Context) of
-        {ok, Category} ->
-            {ok, {200, #{}, decode_category(Category)}};
-        {error, not_found} ->
-            {ok, general_error(404, <<"Category not found">>)}
-    end.
 
 %%
 
