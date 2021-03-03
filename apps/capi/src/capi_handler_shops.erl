@@ -16,14 +16,21 @@
 prepare(OperationID, Req, Context) when
     OperationID =:= 'ActivateShop' orelse
         OperationID =:= 'SuspendShop' orelse
-        OperationID =:= 'GetShops' orelse
         OperationID =:= 'GetShopByID' orelse
         OperationID =:= 'GetShopsForParty' orelse
         OperationID =:= 'GetShopByIDForParty' orelse
         OperationID =:= 'ActivateShopForParty' orelse
         OperationID =:= 'SuspendShopForParty'
 ->
-    Prototypes = get_prototypes(OperationID, Req, Context),
+    PartyID = capi_handler_utils:get_party_id(Context),
+    ShopID = maps:get(shopID, Req),
+    Prototypes = [{operation, #{id => OperationID, party => PartyID, shop => ShopID}}],
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)} end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'GetShops', Req, Context) ->
+    PartyID = capi_handler_utils:get_party_id(Context),
+    Prototypes = [{operation, #{id => OperationID, party => PartyID}}],
     Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)} end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -179,39 +186,3 @@ decode_shop_account(#domain_ShopAccount{currency = Currency, settlement = Settle
         <<"settlementID">> => SettlementID,
         <<"currency">> => capi_handler_decoder_utils:decode_currency(Currency)
     }.
-
--spec get_prototypes(
-    OperationID :: capi_handler:operation_id(),
-    Req :: capi_handler:request_data(),
-    Context :: capi_handler:processing_context()
-) -> capi_bouncer_context:prototypes().
-get_prototypes(OperationID = 'ActivateShop', Req, Context) ->
-    PartyID = capi_handler_utils:get_party_id(Context),
-    ShopID = maps:get(shopID, Req),
-    [{operation, #{id => OperationID, party => PartyID, shop => ShopID}}];
-get_prototypes(OperationID = 'SuspendShop', Req, Context) ->
-    PartyID = capi_handler_utils:get_party_id(Context),
-    ShopID = maps:get(shopID, Req),
-    [{operation, #{id => OperationID, party => PartyID, shop => ShopID}}];
-get_prototypes(OperationID = 'GetShops', _Req, Context) ->
-    PartyID = capi_handler_utils:get_party_id(Context),
-    [{operation, #{id => OperationID, party => PartyID}}];
-get_prototypes(OperationID = 'GetShopByID', Req, Context) ->
-    PartyID = capi_handler_utils:get_party_id(Context),
-    ShopID = maps:get(shopID, Req),
-    [{operation, #{id => OperationID, party => PartyID, shop => ShopID}}];
-get_prototypes(OperationID = 'GetShopsForParty', _Req, Context) ->
-    PartyID = capi_handler_utils:get_party_id(Context),
-    [{operation, #{id => OperationID, party => PartyID}}];
-get_prototypes(OperationID = 'GetShopByIDForParty', Req, Context) ->
-    PartyID = capi_handler_utils:get_party_id(Context),
-    ShopID = maps:get(shopID, Req),
-    [{operation, #{id => OperationID, party => PartyID, shop => ShopID}}];
-get_prototypes(OperationID = 'ActivateShopForParty', Req, Context) ->
-    PartyID = capi_handler_utils:get_party_id(Context),
-    ShopID = maps:get(shopID, Req),
-    [{operation, #{id => OperationID, party => PartyID, shop => ShopID}}];
-get_prototypes(OperationID = 'SuspendShopForParty', Req, Context) ->
-    PartyID = capi_handler_utils:get_party_id(Context),
-    ShopID = maps:get(shopID, Req),
-    [{operation, #{id => OperationID, party => PartyID, shop => ShopID}}].
