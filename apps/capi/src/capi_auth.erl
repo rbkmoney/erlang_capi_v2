@@ -433,7 +433,18 @@ authorize_operation(Prototypes, #{swagger_context := ReqCtx, woody_context := Wo
     case capi_bouncer:extract_context_fragments(ReqCtx, WoodyCtx) of
         Fragments when Fragments /= undefined ->
             Fragments1 = capi_bouncer_context:build(Prototypes, Fragments, WoodyCtx),
-            capi_bouncer:judge(Fragments1, WoodyCtx);
+            try
+                capi_bouncer:judge(Fragments1, WoodyCtx)
+            catch
+                error:{woody_error, _} ->
+                    % TODO
+                    % This is temporary safeguard around bouncer integration put here so that
+                    % external requests would remain undisturbed by bouncer intermittent failures.
+                    % We need to remove it as soon as these two points come true:
+                    % * bouncer proves to be stable enough,
+                    % * capi starts depending on bouncer exclusively for authz decisions.
+                    undefined
+            end;
         undefined ->
             undefined
     end.
