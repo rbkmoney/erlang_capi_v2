@@ -11,7 +11,7 @@
   0},
  {<<"bouncer_client">>,
   {git,"https://github.com/rbkmoney/bouncer_client_erlang.git",
-       {ref,"36cb53a7d4fea4861d5ea5cf7e2f572eba941fde"}},
+       {ref,"2c083eb112b73a99f8a14966c01b953545a2e6be"}},
   0},
  {<<"bouncer_proto">>,
   {git,"https://github.com/rbkmoney/bouncer-proto.git",
