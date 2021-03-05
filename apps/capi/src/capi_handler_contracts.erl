@@ -13,135 +13,192 @@
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
-prepare(OperationID, Req, Context) when
-    OperationID =:= 'GetContracts' orelse
-        OperationID =:= 'GetContractByID' orelse
-        OperationID =:= 'GetContractAdjustments' orelse
-        OperationID =:= 'GetContractAdjustmentByID' orelse
-        OperationID =:= 'GetContractsForParty' orelse
-        OperationID =:= 'GetContractByIDForParty' orelse
-        OperationID =:= 'GetContractAdjustmentsForParty' orelse
-        OperationID =:= 'GetContractAdjustmentByIDForParty'
-->
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
-    Process = fun() -> process_request(OperationID, Context, Req) end,
+prepare(OperationID = 'GetContracts', Req, Context) ->
+    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{party => Party#domain_Party.id, id => OperationID}}
+        ],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}}
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'GetContractByID', Req, Context) ->
+    ContractID = maps:get('contractID', Req),
+    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{party => Party#domain_Party.id, contract => ContractID, id => OperationID}}
+        ],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        case genlib_map:get(ContractID, Party#domain_Party.contracts) of
+            undefined ->
+                {ok, general_error(404, <<"Contract not found">>)};
+            Contract ->
+                {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'GetContractAdjustments', Req, Context) ->
+    ContractID = maps:get('contractID', Req),
+    UserID = capi_handler_utils:get_user_id(Context),
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{party => UserID, contract => ContractID, id => OperationID}}
+        ],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        case capi_handler_utils:get_contract_by_id(ContractID, Context) of
+            {ok, #domain_Contract{adjustments = Adjustments}} ->
+                Resp = [decode_contract_adjustment(A) || A <- Adjustments],
+                {ok, {200, #{}, Resp}};
+            {exception, #payproc_ContractNotFound{}} ->
+                {ok, general_error(404, <<"Contract not found">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'GetContractAdjustmentByID', Req, Context) ->
+    ContractID = maps:get('contractID', Req),
+    UserID = capi_handler_utils:get_user_id(Context),
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{party => UserID, contract => ContractID, id => OperationID}}
+        ],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        case capi_handler_utils:get_contract_by_id(ContractID, Context) of
+            {ok, #domain_Contract{adjustments = Adjustments}} ->
+                AdjustmentID = maps:get('adjustmentID', Req),
+                case lists:keyfind(AdjustmentID, #domain_ContractAdjustment.id, Adjustments) of
+                    #domain_ContractAdjustment{} = A ->
+                        {ok, {200, #{}, decode_contract_adjustment(A)}};
+                    false ->
+                        {ok, general_error(404, <<"Adjustment not found">>)}
+                end;
+            {exception, #payproc_ContractNotFound{}} ->
+                {ok, general_error(404, <<"Contract not found">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'GetContractsForParty', Req, Context) ->
+    PartyID = maps:get('partyID', Req),
+    % TODO
+    % Here we're relying on hellgate ownership check, thus no explicit authorization.
+    % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
+    % remains authorized.
+    case capi_handler_utils:get_party(PartyID, Context) of
+        {ok, Party} ->
+            Authorize = fun() ->
+                Prototypes = [
+                    {operation, #{party => Party#domain_Party.id, id => OperationID}}
+                ],
+                {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+            end,
+            Process = fun() ->
+                {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}}
+            end,
+            {ok, #{authorize => Authorize, process => Process}};
+        {exception, #payproc_InvalidUser{}} ->
+            capi_handler:respond(general_error(404, <<"Party not found">>));
+        {exception, #payproc_PartyNotFound{}} ->
+            capi_handler:respond(general_error(404, <<"Party not found">>))
+    end;
+prepare(OperationID = 'GetContractByIDForParty', Req, Context) ->
+    ContractID = maps:get('contractID', Req),
+    PartyID = maps:get('partyID', Req),
+    % TODO
+    % Here we're relying on hellgate ownership check, thus no explicit authorization.
+    % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
+    % remains authorized.
+    case capi_handler_utils:get_party(PartyID, Context) of
+        {ok, Party} ->
+            Authorize = fun() ->
+                Prototypes = [
+                    {operation, #{party => Party#domain_Party.id, contract => ContractID, id => OperationID}}
+                ],
+                {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+            end,
+            Process = fun() ->
+                case genlib_map:get(ContractID, Party#domain_Party.contracts) of
+                    undefined ->
+                        {ok, general_error(404, <<"Contract not found">>)};
+                    Contract ->
+                        {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}}
+                end
+            end,
+            {ok, #{authorize => Authorize, process => Process}};
+        {exception, #payproc_InvalidUser{}} ->
+            capi_handler:respond(general_error(404, <<"Party not found">>));
+        {exception, #payproc_PartyNotFound{}} ->
+            capi_handler:respond(general_error(404, <<"Party not found">>))
+    end;
+prepare(OperationID = 'GetContractAdjustmentsForParty', Req, Context) ->
+    ContractID = maps:get('contractID', Req),
+    PartyID = maps:get('partyID', Req),
+    % TODO
+    % Here we're relying on hellgate ownership check, thus no explicit authorization.
+    % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
+    % remains authorized.
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{party => PartyID, contract => ContractID, id => OperationID}}
+        ],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
+            {ok, #domain_Contract{adjustments = Adjustments}} ->
+                Resp = [decode_contract_adjustment(A) || A <- Adjustments],
+                {ok, {200, #{}, Resp}};
+            {exception, #payproc_InvalidUser{}} ->
+                {ok, general_error(404, <<"Party not found">>)};
+            {exception, #payproc_PartyNotFound{}} ->
+                {ok, general_error(404, <<"Party not found">>)};
+            {exception, #payproc_ContractNotFound{}} ->
+                {ok, general_error(404, <<"Contract not found">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'GetContractAdjustmentByIDForParty', Req, Context) ->
+    ContractID = maps:get('contractID', Req),
+    PartyID = maps:get('partyID', Req),
+    % TODO
+    % Here we're relying on hellgate ownership check, thus no explicit authorization.
+    % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
+    % remains authorized.
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{party => PartyID, contract => ContractID, id => OperationID}}
+        ],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
+            {ok, #domain_Contract{adjustments = Adjustments}} ->
+                AdjustmentID = maps:get('adjustmentID', Req),
+                case lists:keyfind(AdjustmentID, #domain_ContractAdjustment.id, Adjustments) of
+                    #domain_ContractAdjustment{} = A ->
+                        {ok, {200, #{}, decode_contract_adjustment(A)}};
+                    false ->
+                        {ok, general_error(404, <<"Adjustment not found">>)}
+                end;
+            {exception, #payproc_InvalidUser{}} ->
+                {ok, general_error(404, <<"Party not found">>)};
+            {exception, #payproc_PartyNotFound{}} ->
+                {ok, general_error(404, <<"Party not found">>)};
+            {exception, #payproc_ContractNotFound{}} ->
+                {ok, general_error(404, <<"Contract not found">>)}
+        end
+    end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
-
--spec process_request(
-    OperationID :: capi_handler:operation_id(),
-    Context :: capi_handler:processing_context(),
-    ReqState :: capi_handler:request_state()
-) -> {ok, capi_handler:response()}.
-process_request('GetContracts', Context, _Req) ->
-    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
-    {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
-process_request('GetContractByID', Context, Req) ->
-    ContractID = maps:get('contractID', Req),
-    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
-    case genlib_map:get(ContractID, Party#domain_Party.contracts) of
-        undefined ->
-            {ok, general_error(404, <<"Contract not found">>)};
-        Contract ->
-            {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}}
-    end;
-process_request('GetContractAdjustments', Context, Req) ->
-    case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
-        {ok, #domain_Contract{adjustments = Adjustments}} ->
-            Resp = [decode_contract_adjustment(A) || A <- Adjustments],
-            {ok, {200, #{}, Resp}};
-        {exception, #payproc_ContractNotFound{}} ->
-            {ok, general_error(404, <<"Contract not found">>)}
-    end;
-process_request('GetContractAdjustmentByID', Context, Req) ->
-    case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
-        {ok, #domain_Contract{adjustments = Adjustments}} ->
-            AdjustmentID = maps:get('adjustmentID', Req),
-            case lists:keyfind(AdjustmentID, #domain_ContractAdjustment.id, Adjustments) of
-                #domain_ContractAdjustment{} = A ->
-                    {ok, {200, #{}, decode_contract_adjustment(A)}};
-                false ->
-                    {ok, general_error(404, <<"Adjustment not found">>)}
-            end;
-        {exception, #payproc_ContractNotFound{}} ->
-            {ok, general_error(404, <<"Contract not found">>)}
-    end;
-process_request('GetContractsForParty', Context, Req) ->
-    PartyID = maps:get('partyID', Req),
-    % TODO
-    % Here we're relying on hellgate ownership check, thus no explicit authorization.
-    % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
-    % remains authorized.
-    case capi_handler_utils:get_party(PartyID, Context) of
-        {ok, Party} ->
-            {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
-        {exception, #payproc_InvalidUser{}} ->
-            {ok, general_error(404, <<"Party not found">>)};
-        {exception, #payproc_PartyNotFound{}} ->
-            {ok, general_error(404, <<"Party not found">>)}
-    end;
-process_request('GetContractByIDForParty', Context, Req) ->
-    ContractID = maps:get('contractID', Req),
-    PartyID = maps:get('partyID', Req),
-    % TODO
-    % Here we're relying on hellgate ownership check, thus no explicit authorization.
-    % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
-    % remains authorized.
-    case capi_handler_utils:get_party(PartyID, Context) of
-        {ok, Party} ->
-            case genlib_map:get(ContractID, Party#domain_Party.contracts) of
-                undefined ->
-                    {ok, general_error(404, <<"Contract not found">>)};
-                Contract ->
-                    {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}}
-            end;
-        {exception, #payproc_InvalidUser{}} ->
-            {ok, general_error(404, <<"Party not found">>)};
-        {exception, #payproc_PartyNotFound{}} ->
-            {ok, general_error(404, <<"Party not found">>)}
-    end;
-process_request('GetContractAdjustmentsForParty', Context, Req) ->
-    PartyID = maps:get('partyID', Req),
-    ContractID = maps:get('contractID', Req),
-    % TODO
-    % Here we're relying on hellgate ownership check, thus no explicit authorization.
-    % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
-    % remains authorized.
-    case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
-        {ok, #domain_Contract{adjustments = Adjustments}} ->
-            Resp = [decode_contract_adjustment(A) || A <- Adjustments],
-            {ok, {200, #{}, Resp}};
-        {exception, #payproc_InvalidUser{}} ->
-            {ok, general_error(404, <<"Party not found">>)};
-        {exception, #payproc_PartyNotFound{}} ->
-            {ok, general_error(404, <<"Party not found">>)};
-        {exception, #payproc_ContractNotFound{}} ->
-            {ok, general_error(404, <<"Contract not found">>)}
-    end;
-process_request('GetContractAdjustmentByIDForParty', Context, Req) ->
-    PartyID = maps:get('partyID', Req),
-    ContractID = maps:get('contractID', Req),
-    % TODO
-    % Here we're relying on hellgate ownership check, thus no explicit authorization.
-    % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
-    % remains authorized.
-    case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
-        {ok, #domain_Contract{adjustments = Adjustments}} ->
-            AdjustmentID = maps:get('adjustmentID', Req),
-            case lists:keyfind(AdjustmentID, #domain_ContractAdjustment.id, Adjustments) of
-                #domain_ContractAdjustment{} = A ->
-                    {ok, {200, #{}, decode_contract_adjustment(A)}};
-                false ->
-                    {ok, general_error(404, <<"Adjustment not found">>)}
-            end;
-        {exception, #payproc_InvalidUser{}} ->
-            {ok, general_error(404, <<"Party not found">>)};
-        {exception, #payproc_PartyNotFound{}} ->
-            {ok, general_error(404, <<"Party not found">>)};
-        {exception, #payproc_ContractNotFound{}} ->
-            {ok, general_error(404, <<"Contract not found">>)}
-    end.
 
 %%
 

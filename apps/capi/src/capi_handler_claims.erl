@@ -13,111 +13,147 @@
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
-prepare(OperationID, Req, Context) when
-    OperationID =:= 'GetClaims' orelse
-        OperationID =:= 'GetClaimByID' orelse
-        OperationID =:= 'CreateClaim' orelse
-        OperationID =:= 'UpdateClaimByID' orelse
-        OperationID =:= 'RevokeClaimByID'
-->
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
-    Process = fun() -> process_request(OperationID, Context, Req) end,
+prepare(OperationID = 'GetClaims', Req, Context) ->
+    UserID = capi_handler_utils:get_user_id(Context),
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{party => UserID, id => OperationID}}
+        ],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        Call = {party_management, 'GetClaims', {}},
+        Claims = capi_utils:unwrap(
+            capi_handler_utils:service_call_with([user_info, party_id], Call, Context)
+        ),
+        {ok, {200, #{}, decode_claims(filter_claims(maps:get('claimStatus', Req), Claims))}}
+    end,
     {ok, #{authorize => Authorize, process => Process}};
-prepare(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
-
--spec process_request(
-    OperationID :: capi_handler:operation_id(),
-    Context :: capi_handler:processing_context(),
-    ReqState :: capi_handler:request_state()
-) -> {ok, capi_handler:response()}.
-process_request('GetClaims', Context, Req) ->
-    Call = {party_management, 'GetClaims', {}},
-    Claims = capi_utils:unwrap(
-        capi_handler_utils:service_call_with([user_info, party_id], Call, Context)
-    ),
-    {ok, {200, #{}, decode_claims(filter_claims(maps:get('claimStatus', Req), Claims))}};
-process_request('GetClaimByID', Context, Req) ->
-    CallArgs = {capi_handler_utils:get_party_id(Context), genlib:to_int(maps:get('claimID', Req))},
-    Call = {party_management, 'GetClaim', CallArgs},
-    case capi_handler_utils:service_call_with([user_info], Call, Context) of
-        {ok, Claim} ->
-            case is_wallet_claim(Claim) of
-                true ->
-                    %% filter this out
-                    {ok, general_error(404, <<"Claim not found">>)};
-                false ->
-                    {ok, {200, #{}, decode_claim(Claim)}}
-            end;
-        {exception, #payproc_ClaimNotFound{}} ->
-            {ok, general_error(404, <<"Claim not found">>)}
-    end;
-process_request('CreateClaim', Context, Req) ->
-    try
-        Changeset = encode_claim_changeset(maps:get('ClaimChangeset', Req)),
-        CallArgs = {capi_handler_utils:get_party_id(Context), Changeset},
-        Call = {party_management, 'CreateClaim', CallArgs},
+prepare(OperationID = 'GetClaimByID', Req, Context) ->
+    UserID = capi_handler_utils:get_user_id(Context),
+    ClaimID = maps:get('claimID', Req),
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{party => UserID, claim => ClaimID, id => OperationID}}
+        ],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        CallArgs = {capi_handler_utils:get_party_id(Context), genlib:to_int(ClaimID)},
+        Call = {party_management, 'GetClaim', CallArgs},
         case capi_handler_utils:service_call_with([user_info], Call, Context) of
             {ok, Claim} ->
-                {ok, {201, #{}, decode_claim(Claim)}};
-            {exception, Exception} ->
-                case Exception of
-                    #payproc_InvalidPartyStatus{} ->
-                        {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
-                    #payproc_ChangesetConflict{} ->
-                        {ok, logic_error(changesetConflict, <<"Changeset conflict">>)};
-                    #payproc_InvalidChangeset{} ->
-                        {ok, logic_error(invalidChangeset, <<"Invalid changeset">>)};
-                    #'InvalidRequest'{errors = Errors} ->
-                        FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                        {ok, logic_error(invalidRequest, FormattedErrors)}
-                end
+                case is_wallet_claim(Claim) of
+                    true ->
+                        %% filter this out
+                        {ok, general_error(404, <<"Claim not found">>)};
+                    false ->
+                        {ok, {200, #{}, decode_claim(Claim)}}
+                end;
+            {exception, #payproc_ClaimNotFound{}} ->
+                {ok, general_error(404, <<"Claim not found">>)}
         end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'CreateClaim', Req, Context) ->
+    UserID = capi_handler_utils:get_user_id(Context),
+    try
+        Changeset = encode_claim_changeset(maps:get('ClaimChangeset', Req)),
+        Authorize = fun() ->
+            Prototypes = [
+                {operation, #{party => UserID, id => OperationID}}
+            ],
+            {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        end,
+        Process = fun() ->
+            CallArgs = {capi_handler_utils:get_party_id(Context), Changeset},
+            Call = {party_management, 'CreateClaim', CallArgs},
+            case capi_handler_utils:service_call_with([user_info], Call, Context) of
+                {ok, Claim} ->
+                    {ok, {201, #{}, decode_claim(Claim)}};
+                {exception, Exception} ->
+                    case Exception of
+                        #payproc_InvalidPartyStatus{} ->
+                            {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
+                        #payproc_ChangesetConflict{} ->
+                            {ok, logic_error(changesetConflict, <<"Changeset conflict">>)};
+                        #payproc_InvalidChangeset{} ->
+                            {ok, logic_error(invalidChangeset, <<"Invalid changeset">>)};
+                        #'InvalidRequest'{errors = Errors} ->
+                            FormattedErrors = capi_handler_utils:format_request_errors(Errors),
+                            {ok, logic_error(invalidRequest, FormattedErrors)}
+                    end
+            end
+        end,
+        {ok, #{authorize => Authorize, process => Process}}
     catch
         throw:{encode_contract_modification, adjustment_creation_not_supported} ->
             ErrorResp = logic_error(
                 invalidChangeset,
                 <<"Contract adjustment creation not supported">>
             ),
-            {ok, ErrorResp};
+            capi_handler:respond(ErrorResp);
         throw:{encode_residence, invalid_residence} ->
-            {ok, logic_error(invalidRequest, <<"Invalid residence">>)}
+            capi_handler:respond(logic_error(invalidRequest, <<"Invalid residence">>))
     end;
 % TODO disabled temporary, exception handling must be fixed befor enabling
-% process_request('UpdateClaimByID', Context, Req) ->
-%     Call =
-%         {party_management, 'UpdateClaim', [
-%             genlib:to_int(maps:get('claimID', Req)),
-%             genlib:to_int(maps:get('claimRevision', Req)),
-%             encode_claim_changeset(maps:get('claimChangeset', Req))
-%         ]},
-%     Party = capi_utils:unwrap(
-%         capi_handler_utils:service_call_with([user_info, party_id], Call, Context)
-%     ),
-%     {ok, {200, #{}, capi_handler_utils:capi_handler_decoder_party:decode_party(Party)}};
-
-process_request('RevokeClaimByID', Context, Req) ->
-    CallArgs = {
-        genlib:to_int(maps:get('claimID', Req)),
-        genlib:to_int(maps:get('claimRevision', Req)),
-        encode_reason(maps:get('Reason', Req))
-    },
-    Call = {party_management, 'RevokeClaim', CallArgs},
-    case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
-        {ok, _} ->
-            {ok, {204, #{}, undefined}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidPartyStatus{} ->
-                    {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
-                #payproc_ClaimNotFound{} ->
-                    {ok, general_error(404, <<"Claim not found">>)};
-                #payproc_InvalidClaimStatus{} ->
-                    {ok, logic_error(invalidClaimStatus, <<"Invalid claim status">>)};
-                #payproc_InvalidClaimRevision{} ->
-                    {ok, logic_error(invalidClaimRevision, <<"Invalid claim revision">>)}
-            end
-    end.
+% prepare(OperationID = 'UpdateClaimByID', Req, Context) ->
+%     UserID = capi_handler_utils:get_user_id(Context),
+%     ClaimID = maps:get('claimID', Req),
+%     Authorize = fun() ->
+%         Prototypes = [
+%             {operation, #{party => UserID, claim => ClaimID, id => OperationID}}
+%         ],
+%         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+%     end,
+%     Process = fun() ->
+%         Call =
+%             {party_management, 'UpdateClaim', [
+%                 genlib:to_int(ClaimID),
+%                 genlib:to_int(maps:get('claimRevision', Req)),
+%                 encode_claim_changeset(maps:get('claimChangeset', Req))
+%             ]},
+%         Party = capi_utils:unwrap(
+%             capi_handler_utils:service_call_with([user_info, party_id], Call, Context)
+%         ),
+%         {ok, {200, #{}, capi_handler_decoder_party:decode_party(Party)}}
+%     end,
+%     {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'RevokeClaimByID', Req, Context) ->
+    UserID = capi_handler_utils:get_user_id(Context),
+    ClaimID = maps:get('claimID', Req),
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{party => UserID, claim => ClaimID, id => OperationID}}
+        ],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        CallArgs = {
+            genlib:to_int(ClaimID),
+            genlib:to_int(maps:get('claimRevision', Req)),
+            encode_reason(maps:get('Reason', Req))
+        },
+        Call = {party_management, 'RevokeClaim', CallArgs},
+        case capi_handler_utils:service_call_with([user_info, party_id], Call, Context) of
+            {ok, _} ->
+                {ok, {204, #{}, undefined}};
+            {exception, Exception} ->
+                case Exception of
+                    #payproc_InvalidPartyStatus{} ->
+                        {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
+                    #payproc_ClaimNotFound{} ->
+                        {ok, general_error(404, <<"Claim not found">>)};
+                    #payproc_InvalidClaimStatus{} ->
+                        {ok, logic_error(invalidClaimStatus, <<"Invalid claim status">>)};
+                    #payproc_InvalidClaimRevision{} ->
+                        {ok, logic_error(invalidClaimRevision, <<"Invalid claim revision">>)}
+                end
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
 
 %%
 
