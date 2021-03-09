@@ -13,215 +13,224 @@
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
-prepare(OperationID, Req, Context) when
-    OperationID =:= 'CreateCustomer' orelse
-        OperationID =:= 'GetCustomerById' orelse
-        OperationID =:= 'DeleteCustomer' orelse
-        OperationID =:= 'CreateCustomerAccessToken' orelse
-        OperationID =:= 'CreateBinding' orelse
-        OperationID =:= 'GetBindings' orelse
-        OperationID =:= 'GetBinding' orelse
-        OperationID =:= 'GetCustomerEvents'
-->
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
-    Process = fun() -> process_request(OperationID, Context, Req) end,
-    {ok, #{authorize => Authorize, process => Process}};
-prepare(_OperationID, _Req, _Context) ->
-    {error, noimpl}.
-
--spec process_request(
-    OperationID :: capi_handler:operation_id(),
-    Context :: capi_handler:processing_context(),
-    ReqState :: capi_handler:request_state()
-) -> {ok, capi_handler:response()}.
-process_request('CreateCustomer', Context, Req) ->
+prepare('CreateCustomer' = OperationID, Req, Context) ->
     CustomerParams = maps:get('Customer', Req),
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(<<"partyID">>, CustomerParams, UserID),
-    CallArgs = {encode_customer_params(PartyID, CustomerParams)},
-    Call = {customer_management, 'Create', CallArgs},
-    case capi_handler_utils:service_call_with([], Call, Context) of
-        {ok, Customer} ->
-            {ok, {201, #{}, make_customer_and_token(Customer, PartyID)}};
-        {exception, Exception} ->
-            case Exception of
-                #'InvalidRequest'{errors = Errors} ->
-                    FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, logic_error(invalidRequest, FormattedErrors)};
-                #payproc_InvalidUser{} ->
-                    {ok, logic_error(invalidPartyID, <<"Party not found">>)};
-                #payproc_ShopNotFound{} ->
-                    {ok, logic_error(invalidShopID, <<"Shop not found">>)};
-                #payproc_InvalidPartyStatus{} ->
-                    {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
-                #payproc_InvalidShopStatus{} ->
-                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
-                #payproc_OperationNotPermitted{} ->
-                    ErrorResp = logic_error(
-                        operationNotPermitted,
-                        <<"Operation not permitted">>
-                    ),
-                    {ok, ErrorResp}
-            end
-    end;
-process_request('GetCustomerById', Context, Req) ->
-    case get_customer_by_id(maps:get('customerID', Req), Context) of
-        {ok, Customer} ->
-            {ok, {200, #{}, decode_customer(Customer)}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Customer not found">>)};
-                #payproc_CustomerNotFound{} ->
-                    {ok, general_error(404, <<"Customer not found">>)}
-            end
-    end;
-process_request('DeleteCustomer', Context, Req) ->
-    CallArgs = {maps:get(customerID, Req)},
-    Call = {customer_management, 'Delete', CallArgs},
-    case capi_handler_utils:service_call(Call, Context) of
-        {ok, _} ->
-            {ok, {204, #{}, undefined}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Customer not found">>)};
-                #payproc_CustomerNotFound{} ->
-                    {ok, general_error(404, <<"Customer not found">>)};
-                #payproc_InvalidPartyStatus{} ->
-                    {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
-                #payproc_InvalidShopStatus{} ->
-                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)}
-            end
-    end;
-process_request('CreateCustomerAccessToken', Context, Req) ->
-    CustomerID = maps:get(customerID, Req),
-    case get_customer_by_id(CustomerID, Context) of
-        {ok, #payproc_Customer{owner_id = PartyID}} ->
-            Response = capi_handler_utils:issue_access_token(
-                PartyID,
-                {customer, CustomerID}
-            ),
-            {ok, {201, #{}, Response}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Customer not found">>)};
-                #payproc_CustomerNotFound{} ->
-                    {ok, general_error(404, <<"Customer not found">>)}
-            end
-    end;
-process_request('CreateBinding', Context, Req) ->
-    Result =
-        try
-            CallArgs = {
-                maps:get(customerID, Req),
-                encode_customer_binding_params(maps:get('CustomerBindingParams', Req))
-            },
-            capi_handler_utils:service_call({customer_management, 'StartBinding', CallArgs}, Context)
-        catch
-            throw:Error when Error =:= invalid_token orelse Error =:= invalid_payment_session ->
-                {error, Error}
-        end,
-
-    case Result of
-        {ok, CustomerBinding} ->
-            {ok, {201, #{}, decode_customer_binding(CustomerBinding, Context)}};
-        {exception, Exception} ->
-            case Exception of
-                #'InvalidRequest'{errors = Errors} ->
-                    FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, logic_error(invalidRequest, FormattedErrors)};
-                #payproc_InvalidPartyStatus{} ->
-                    {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
-                #payproc_InvalidShopStatus{} ->
-                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
-                #payproc_InvalidPaymentTool{} ->
-                    ErrorResp = logic_error(invalidPaymentResource, <<"Invalid payment resource">>),
-                    {ok, ErrorResp};
-                #payproc_OperationNotPermitted{} ->
-                    ErrorResp = logic_error(operationNotPermitted, <<"Operation not permitted">>),
-                    {ok, ErrorResp};
-                #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Customer not found">>)};
-                #payproc_CustomerNotFound{} ->
-                    {ok, general_error(404, <<"Customer not found">>)}
-            end;
-        {error, invalid_token} ->
-            ErrorResp = logic_error(
-                invalidPaymentToolToken,
-                <<"Specified payment tool token is invalid">>
-            ),
-            {ok, ErrorResp};
-        {error, invalid_payment_session} ->
-            ErrorResp = logic_error(
-                invalidPaymentSession,
-                <<"Specified payment session is invalid">>
-            ),
-            {ok, ErrorResp}
-    end;
-process_request('GetBindings', Context, Req) ->
-    case get_customer_by_id(maps:get(customerID, Req), Context) of
-        {ok, #payproc_Customer{bindings = Bindings}} ->
-            {ok, {200, #{}, [decode_customer_binding(B, Context) || B <- Bindings]}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Customer not found">>)};
-                #payproc_CustomerNotFound{} ->
-                    {ok, general_error(404, <<"Customer not found">>)}
-            end
-    end;
-process_request('GetBinding', Context, Req) ->
-    case get_customer_by_id(maps:get(customerID, Req), Context) of
-        {ok, #payproc_Customer{bindings = Bindings}} ->
-            case lists:keyfind(maps:get(customerBindingID, Req), #payproc_CustomerBinding.id, Bindings) of
-                #payproc_CustomerBinding{} = B ->
-                    {ok, {200, #{}, decode_customer_binding(B, Context)}};
-                false ->
-                    {ok, general_error(404, <<"Customer binding not found">>)}
-            end;
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Customer not found">>)};
-                #payproc_CustomerNotFound{} ->
-                    {ok, general_error(404, <<"Customer not found">>)}
-            end
-    end;
-process_request('GetCustomerEvents', Context, Req) ->
-    GetterFun = fun(Range) ->
-        capi_handler_utils:service_call(
-            {customer_management, 'GetEvents', {maps:get(customerID, Req), Range}},
-            Context
-        )
+    ShopID = maps:get(<<"shopID">>, CustomerParams),
+    Authorize = fun() ->
+        Prototypes = [{operation, #{id => OperationID, party => PartyID, shop => ShopID}}],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
-    Result =
-        capi_handler_utils:collect_events(
+    Process = fun() ->
+        EncodedCustomerParams = encode_customer_params(PartyID, CustomerParams),
+        Call = {customer_management, 'Create', {EncodedCustomerParams}},
+        case capi_handler_utils:service_call(Call, Context) of
+            {ok, Customer} ->
+                {ok, {201, #{}, make_customer_and_token(Customer, PartyID)}};
+            {exception, #payproc_InvalidUser{}} ->
+                {ok, logic_error(invalidPartyID, <<"Party not found">>)};
+            {exception, #payproc_InvalidPartyStatus{}} ->
+                {ok, logic_error(<<"invalidPartyStatus">>, <<"Invalid party status">>)};
+            {exception, #payproc_InvalidShopStatus{}} ->
+                {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
+            {exception, #payproc_ShopNotFound{}} ->
+                {ok, logic_error(invalidShopID, <<"Shop not found">>)};
+            {exception, #payproc_PartyNotFound{}} ->
+                {ok, logic_error(<<"invalidPartyID">>, <<"Party not found">>)};
+            {exception, #payproc_OperationNotPermitted{}} ->
+                {ok, logic_error(operationNotPermitted, <<"Operation not permitted">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare('GetCustomerById' = OperationID, Req, Context) ->
+    CustomerID = maps:get('customerID', Req),
+    Authorize = fun() ->
+        Prototypes = [{operation, #{id => OperationID, customer => CustomerID}}],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        case get_customer_by_id(CustomerID, Context) of
+            {ok, Customer} ->
+                {ok, {200, #{}, decode_customer(Customer)}};
+            {exception, #payproc_InvalidUser{}} ->
+                {ok, general_error(404, <<"Customer not found">>)};
+            {exception, #payproc_CustomerNotFound{}} ->
+                {ok, general_error(404, <<"Customer not found">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare('DeleteCustomer' = OperationID, Req, Context) ->
+    CustomerID = maps:get('customerID', Req),
+    CustomerReply = get_customer_by_id(CustomerID, Context),
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{id => OperationID, customer => CustomerID}},
+            {payproc, #{customer => maybe_woody_reply(CustomerReply)}}
+        ],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        Call = {customer_management, 'Delete', {CustomerID}},
+        case capi_handler_utils:service_call(Call, Context) of
+            {ok, _} ->
+                {ok, {204, #{}, undefined}};
+            {exception, #payproc_InvalidUser{}} ->
+                {ok, general_error(404, <<"Customer not found">>)};
+            {exception, #payproc_CustomerNotFound{}} ->
+                {ok, general_error(404, <<"Customer not found">>)};
+            {exception, #payproc_InvalidPartyStatus{}} ->
+                {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
+            {exception, #payproc_InvalidShopStatus{}} ->
+                {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare('CreateCustomerAccessToken' = OperationID, Req, Context) ->
+    CustomerID = maps:get('customerID', Req),
+    CustomerReply = get_customer_by_id(CustomerID, Context),
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{id => OperationID, customer => CustomerID}},
+            {payproc, #{customer => maybe_woody_reply(CustomerReply)}}
+        ],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        case CustomerReply of
+            {ok, #payproc_Customer{owner_id = PartyID}} ->
+                Response = capi_handler_utils:issue_access_token(PartyID, {customer, CustomerID}),
+                {ok, {201, #{}, Response}};
+            {exception, #payproc_InvalidUser{}} ->
+                {ok, general_error(404, <<"Customer not found">>)};
+            {exception, #payproc_CustomerNotFound{}} ->
+                {ok, general_error(404, <<"Customer not found">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare('CreateBinding' = OperationID, Req, Context) ->
+    CustomerID = maps:get(customerID, Req),
+    Authorize = fun() ->
+        Prototypes = [{operation, #{id => OperationID, customer => CustomerID}}],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        Result =
+            try
+                CustomerBindingParams = encode_customer_binding_params(maps:get('CustomerBindingParams', Req)),
+                Call = {customer_management, 'StartBinding', {CustomerID, CustomerBindingParams}},
+                capi_handler_utils:service_call(Call, Context)
+            catch
+                throw:invalid_token -> {error, invalid_token};
+                throw:invalid_payment_session -> {error, invalid_payment_session}
+            end,
+        case Result of
+            {ok, CustomerBinding} ->
+                {ok, {201, #{}, decode_customer_binding(CustomerBinding, Context)}};
+            {exception, #payproc_InvalidUser{}} ->
+                {ok, general_error(404, <<"Customer not found">>)};
+            {exception, #payproc_CustomerNotFound{}} ->
+                {ok, general_error(404, <<"Customer not found">>)};
+            {exception, #payproc_InvalidPartyStatus{}} ->
+                {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
+            {exception, #payproc_InvalidShopStatus{}} ->
+                {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
+            {exception, #payproc_InvalidContractStatus{}} ->
+                {ok, logic_error(invalidRequest, <<"Invalid contract status">>)};
+            {exception, #payproc_OperationNotPermitted{}} ->
+                {ok, logic_error(operationNotPermitted, <<"Operation not permitted">>)};
+            {error, invalid_token} ->
+                {ok, logic_error(invalidPaymentToolToken, <<"Specified payment tool token is invalid">>)};
+            {error, invalid_payment_session} ->
+                {ok, logic_error(invalidPaymentSession, <<"Specified payment session is invalid">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare('GetBindings' = OperationID, Req, Context) ->
+    CustomerID = maps:get(customerID, Req),
+    Authorize = fun() ->
+        Prototypes = [{operation, #{id => OperationID, customer => CustomerID}}],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        case get_customer_by_id(CustomerID, Context) of
+            {ok, #payproc_Customer{bindings = Bindings}} ->
+                {ok, {200, #{}, [decode_customer_binding(B, Context) || B <- Bindings]}};
+            {exception, #payproc_InvalidUser{}} ->
+                {ok, general_error(404, <<"Customer not found">>)};
+            {exception, #payproc_CustomerNotFound{}} ->
+                {ok, general_error(404, <<"Customer not found">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare('GetBinding' = OperationID, Req, Context) ->
+    CustomerID = maps:get(customerID, Req),
+    CustomerBindingID = maps:get(customerBindingID, Req),
+    Authorize = fun() ->
+        Prototypes = [{operation, #{id => OperationID, customer => CustomerID, binding => CustomerBindingID}}],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        case get_customer_by_id(CustomerID, Context) of
+            {ok, #payproc_Customer{bindings = Bindings}} ->
+                case lists:keyfind(CustomerBindingID, #payproc_CustomerBinding.id, Bindings) of
+                    #payproc_CustomerBinding{} = B ->
+                        {ok, {200, #{}, decode_customer_binding(B, Context)}};
+                    false ->
+                        {ok, general_error(404, <<"Customer binding not found">>)}
+                end;
+            {exception, #payproc_InvalidUser{}} ->
+                {ok, general_error(404, <<"Customer not found">>)};
+            {exception, #payproc_CustomerNotFound{}} ->
+                {ok, general_error(404, <<"Customer not found">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare('GetCustomerEvents' = OperationID, Req, Context) ->
+    CustomerID = maps:get(customerID, Req),
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{id => OperationID, customer => CustomerID}},
+            % при передаче ID capi_bouncer_context:build_customer_ctx извлечет объект
+            {payproc, #{customer => CustomerID}}
+        ],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        GetterFun = fun(Range) ->
+            capi_handler_utils:service_call(
+                {customer_management, 'GetEvents', {CustomerID, Range}},
+                Context
+            )
+        end,
+        Result = capi_handler_utils:collect_events(
             maps:get(limit, Req),
             genlib_map:get(eventID, Req),
             GetterFun,
             fun decode_customer_event/2,
             undefined
         ),
-    case Result of
-        {ok, Events} when is_list(Events) ->
-            {ok, {200, #{}, Events}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    {ok, general_error(404, <<"Customer not found">>)};
-                #payproc_CustomerNotFound{} ->
-                    {ok, general_error(404, <<"Customer not found">>)};
-                #payproc_EventNotFound{} ->
-                    {ok, general_error(404, <<"Event not found">>)};
-                #'InvalidRequest'{errors = Errors} ->
-                    FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {ok, logic_error(invalidRequest, FormattedErrors)}
-            end
-    end.
+        case Result of
+            {ok, Events} when is_list(Events) ->
+                {ok, {200, #{}, Events}};
+            {exception, #payproc_InvalidUser{}} ->
+                {ok, general_error(404, <<"Customer not found">>)};
+            {exception, #payproc_CustomerNotFound{}} ->
+                {ok, general_error(404, <<"Customer not found">>)};
+            {exception, #payproc_EventNotFound{}} ->
+                {ok, general_error(404, <<"Event not found">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(_OperationID, _Req, _Context) ->
+    {error, noimpl}.
 
 %%
+
+maybe_woody_reply({ok, Reply}) ->
+    Reply;
+maybe_woody_reply({exception, _}) ->
+    undefined.
 
 get_customer_by_id(CustomerID, Context) ->
     EventRange = #payproc_EventRange{},

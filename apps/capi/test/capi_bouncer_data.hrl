@@ -116,6 +116,8 @@
 }).
 
 -define(assertContextMatches(Expect), fun(Context) ->
+    logger:warning("Expect: ~p", [Expect]),
+    logger:warning("Context: ~p", [Context]),
     ?assertMatch(Expect, Context),
     {ok, ?JUDGEMENT(?ALLOWED)}
 end).
