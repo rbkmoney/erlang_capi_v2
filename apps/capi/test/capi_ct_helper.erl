@@ -180,7 +180,8 @@ start_mocked_service_sup(Module) ->
 
 -spec stop_mocked_service_sup(pid()) -> _.
 stop_mocked_service_sup(SupPid) ->
-    exit(SupPid, shutdown).
+    proc_lib:stop(SupPid, shutdown, 5000).
+%  exit(SupPid, shutdown).
 
 -spec mock_services(_, _) -> _.
 mock_services(Services, SupOrConfig) ->

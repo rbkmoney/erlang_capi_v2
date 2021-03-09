@@ -45,12 +45,16 @@ prepare('CreateCustomer' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('GetCustomerById' = OperationID, Req, Context) ->
     CustomerID = maps:get('customerID', Req),
+    CustomerReply = get_customer_by_id(CustomerID, Context),
     Authorize = fun() ->
-        Prototypes = [{operation, #{id => OperationID, customer => CustomerID}}],
+        Prototypes = [
+            {operation, #{id => OperationID, customer => CustomerID}},
+            {payproc, #{customer => maybe_woody_reply(CustomerReply)}}
+        ],
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case get_customer_by_id(CustomerID, Context) of
+        case CustomerReply of
             {ok, Customer} ->
                 {ok, {200, #{}, decode_customer(Customer)}};
             {exception, #payproc_InvalidUser{}} ->
@@ -111,7 +115,10 @@ prepare('CreateCustomerAccessToken' = OperationID, Req, Context) ->
 prepare('CreateBinding' = OperationID, Req, Context) ->
     CustomerID = maps:get(customerID, Req),
     Authorize = fun() ->
-        Prototypes = [{operation, #{id => OperationID, customer => CustomerID}}],
+        Prototypes = [
+            {operation, #{id => OperationID, customer => CustomerID}},
+            {payproc, #{customer => CustomerID}}
+        ],
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
@@ -148,12 +155,16 @@ prepare('CreateBinding' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('GetBindings' = OperationID, Req, Context) ->
     CustomerID = maps:get(customerID, Req),
+    CustomerReply = get_customer_by_id(CustomerID, Context),
     Authorize = fun() ->
-        Prototypes = [{operation, #{id => OperationID, customer => CustomerID}}],
+        Prototypes = [
+            {operation, #{id => OperationID, customer => CustomerID}},
+            {payproc, #{customer => maybe_woody_reply(CustomerReply)}}
+        ],
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case get_customer_by_id(CustomerID, Context) of
+        case CustomerReply of
             {ok, #payproc_Customer{bindings = Bindings}} ->
                 {ok, {200, #{}, [decode_customer_binding(B, Context) || B <- Bindings]}};
             {exception, #payproc_InvalidUser{}} ->
@@ -166,12 +177,16 @@ prepare('GetBindings' = OperationID, Req, Context) ->
 prepare('GetBinding' = OperationID, Req, Context) ->
     CustomerID = maps:get(customerID, Req),
     CustomerBindingID = maps:get(customerBindingID, Req),
+    CustomerReply = get_customer_by_id(CustomerID, Context),
     Authorize = fun() ->
-        Prototypes = [{operation, #{id => OperationID, customer => CustomerID, binding => CustomerBindingID}}],
+        Prototypes = [
+            {operation, #{id => OperationID, customer => CustomerID, binding => CustomerBindingID}},
+            {payproc, #{customer => maybe_woody_reply(CustomerReply)}}
+        ],
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case get_customer_by_id(CustomerID, Context) of
+        case CustomerReply of
             {ok, #payproc_Customer{bindings = Bindings}} ->
                 case lists:keyfind(CustomerBindingID, #payproc_CustomerBinding.id, Bindings) of
                     #payproc_CustomerBinding{} = B ->
@@ -191,7 +206,6 @@ prepare('GetCustomerEvents' = OperationID, Req, Context) ->
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, customer => CustomerID}},
-            % при передаче ID capi_bouncer_context:build_customer_ctx извлечет объект
             {payproc, #{customer => CustomerID}}
         ],
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}

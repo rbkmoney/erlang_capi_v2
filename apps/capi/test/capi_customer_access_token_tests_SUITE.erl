@@ -82,13 +82,10 @@ end_per_suite(C) ->
 
 -spec init_per_group(group_name(), config()) -> config().
 init_per_group(operations_by_customer_access_token_after_customer_creation, Config) ->
-    LocalMockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
+    MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
+    _ = capi_ct_helper:mock_services([{customer_management, fun('Create', _) -> {ok, ?CUSTOMER} end}], MockServiceSup),
+    _ = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), MockServiceSup),
     {ok, Token} = capi_ct_helper:issue_token([{[customers], write}], unlimited),
-    _ = capi_ct_helper:mock_services(
-        [{customer_management, fun('Create', _) -> {ok, ?CUSTOMER} end}],
-        LocalMockServiceSup
-    ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), LocalMockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"contactInfo">> => #{<<"email">> => <<"bla@bla.ru">>},
@@ -97,26 +94,23 @@ init_per_group(operations_by_customer_access_token_after_customer_creation, Conf
     {ok, #{
         <<"customerAccessToken">> := #{<<"payload">> := CustAccToken}
     }} = capi_client_customers:create_customer(capi_ct_helper:get_context(Token), Req),
-    capi_ct_helper:stop_mocked_service_sup(LocalMockServiceSup),
+    _ = capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    [{context, capi_ct_helper:get_context(CustAccToken)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config];
+    Apps = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+    [{context, capi_ct_helper:get_context(CustAccToken)}, {group_apps, Apps}, {group_test_sup, SupPid} | Config];
 init_per_group(operations_by_customer_access_token_after_token_creation, Config) ->
-    LocalMockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
+    MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
+    _ = capi_ct_helper:mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], MockServiceSup),
+    _ = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), MockServiceSup),
     {ok, Token} = capi_ct_helper:issue_token([{[customers], write}], unlimited),
-    _ = capi_ct_helper:mock_services(
-        [{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}],
-        LocalMockServiceSup
-    ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), LocalMockServiceSup),
     {ok, #{<<"payload">> := CustAccToken}} = capi_client_customers:create_customer_access_token(
         capi_ct_helper:get_context(Token),
         ?STRING
     ),
-    capi_ct_helper:stop_mocked_service_sup(LocalMockServiceSup),
+    _ = capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    [{context, capi_ct_helper:get_context(CustAccToken)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config];
+    Apps = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+    [{context, capi_ct_helper:get_context(CustAccToken)}, {group_apps, Apps}, {group_test_sup, SupPid} | Config];
 init_per_group(_, Config) ->
     Config.
 

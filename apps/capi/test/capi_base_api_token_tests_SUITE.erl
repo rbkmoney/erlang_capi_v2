@@ -34,9 +34,9 @@
     create_invoice_with_template_test/1,
     create_invoice_template_autorization_error_test/1,
     create_customer_ok_test/1,
-    create_customer_access_token_ok_test/1,
-    delete_customer_ok_test/1,
     create_customer_autorization_error_test/1,
+    delete_customer_ok_test/1,
+    create_customer_access_token_ok_test/1,
     rescind_invoice_ok_test/1,
     fulfill_invoice_ok_test/1,
     get_merchant_payment_status_test/1,
@@ -219,8 +219,8 @@ groups() ->
         {operations_by_base_api_token_with_new_auth, [], [
             create_customer_ok_test,
             create_customer_autorization_error_test,
-            create_customer_access_token_ok_test,
             delete_customer_ok_test,
+            create_customer_access_token_ok_test,
 
             get_my_party_ok_test,
             suspend_my_party_ok_test,
@@ -521,18 +521,6 @@ create_customer_autorization_error_test(Config) ->
         )
     ).
 
--spec create_customer_access_token_ok_test(config()) -> _.
-create_customer_access_token_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_customer_op_ctx(
-        <<"CreateCustomerAccessToken">>,
-        ?STRING,
-        ?STRING,
-        ?STRING,
-        Config
-    ),
-    {ok, _} = capi_client_customers:create_customer_access_token(?config(context, Config), ?STRING).
-
 -spec delete_customer_ok_test(config()) -> _.
 delete_customer_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
@@ -552,6 +540,18 @@ delete_customer_ok_test(Config) ->
         Config
     ),
     {ok, _} = capi_client_customers:delete_customer(?config(context, Config), ?STRING).
+
+-spec create_customer_access_token_ok_test(config()) -> _.
+create_customer_access_token_ok_test(Config) ->
+    _ = capi_ct_helper:mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_customer_op_ctx(
+        <<"CreateCustomerAccessToken">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
+    {ok, _} = capi_client_customers:create_customer_access_token(?config(context, Config), ?STRING).
 
 -spec rescind_invoice_ok_test(config()) -> _.
 rescind_invoice_ok_test(Config) ->
