@@ -9,6 +9,7 @@
 -export([map_error/2]).
 -export([handle_request/4]).
 -export([respond/1]).
+-export([respond_if_undefined/2]).
 
 %%
 
@@ -175,6 +176,12 @@ prepare(OperationID, Req, Context, [Handler | Rest]) ->
 -spec respond(response()) -> throw(response()).
 respond(Response) ->
     erlang:throw({handler_respond, Response}).
+
+-spec respond_if_undefined(undefined | _Entity, response()) -> ok | throw(response()).
+respond_if_undefined(undefined, Response) ->
+    respond(Response);
+respond_if_undefined(_, _Response) ->
+    ok.
 
 %%
 

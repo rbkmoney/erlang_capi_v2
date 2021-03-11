@@ -68,85 +68,82 @@ prepare('CreateInvoice' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('CreateInvoiceAccessToken' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
-        {ok, ResultInvoice = #'payproc_Invoice'{invoice = Invoice}} ->
-            Authorize = fun() ->
-                Prototypes = [
-                    {operation, #{id => OperationID, invoice => InvoiceID}},
-                    {payproc, #{invoice => ResultInvoice}}
-                ],
-                Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
-                {ok, Resolution}
-            end,
-            Process = fun() ->
-                ExtraProperties = capi_handler_utils:get_extra_properties(Context),
-                #'domain_Invoice'{owner_id = PartyID} = Invoice,
-                Response = capi_handler_utils:issue_access_token(
-                    PartyID,
-                    {invoice, InvoiceID},
-                    ExtraProperties
-                ),
-                {ok, {201, #{}, Response}}
-            end,
-            {ok, #{authorize => Authorize, process => Process}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    capi_handler:respond(general_error(404, <<"Invoice not found">>));
-                #payproc_InvoiceNotFound{} ->
-                    capi_handler:respond(general_error(404, <<"Invoice not found">>))
-            end
-    end;
+    ResultInvoice =
+        case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
+            {ok, Result} ->
+                Result;
+            {exception, _Exception} ->
+                undefined
+        end,
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{id => OperationID, invoice => InvoiceID}},
+            {payproc, #{invoice => ResultInvoice}}
+        ],
+        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        {ok, Resolution}
+    end,
+    Process = fun() ->
+        capi_handler:respond_if_undefined(ResultInvoice, general_error(404, <<"Invoice not found">>)),
+        #'payproc_Invoice'{invoice = Invoice} = ResultInvoice,
+        ExtraProperties = capi_handler_utils:get_extra_properties(Context),
+        #'domain_Invoice'{owner_id = PartyID} = Invoice,
+        Response = capi_handler_utils:issue_access_token(
+            PartyID,
+            {invoice, InvoiceID},
+            ExtraProperties
+        ),
+        {ok, {201, #{}, Response}}
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
 prepare('GetInvoiceByID' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
-        {ok, ResultInvoice = #'payproc_Invoice'{invoice = Invoice}} ->
-            Authorize = fun() ->
-                Prototypes = [
-                    {operation, #{id => OperationID, invoice => InvoiceID}},
-                    {payproc, #{invoice => ResultInvoice}}
-                ],
-                Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
-                {ok, Resolution}
-            end,
-            Process = fun() ->
-                {ok, {200, #{}, capi_handler_decoder_invoicing:decode_invoice(Invoice)}}
-            end,
-            {ok, #{authorize => Authorize, process => Process}};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    capi_handler:respond(general_error(404, <<"Invoice not found">>));
-                #payproc_InvoiceNotFound{} ->
-                    capi_handler:respond(general_error(404, <<"Invoice not found">>))
-            end
-    end;
+    ResultInvoice =
+        case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
+            {ok, Result} ->
+                Result;
+            {exception, _Exception} ->
+                undefined
+        end,
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{id => OperationID, invoice => InvoiceID}},
+            {payproc, #{invoice => ResultInvoice}}
+        ],
+        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        {ok, Resolution}
+    end,
+    Process = fun() ->
+        capi_handler:respond_if_undefined(ResultInvoice, general_error(404, <<"Invoice not found">>)),
+        #'payproc_Invoice'{invoice = Invoice} = ResultInvoice,
+        {ok, {200, #{}, capi_handler_decoder_invoicing:decode_invoice(Invoice)}}
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
 prepare('GetInvoiceByExternalID' = OperationID, Req, Context) ->
     ExternalID = maps:get(externalID, Req),
-    case get_invoice_by_external_id(ExternalID, Context) of
-        {ok, {InvoiceID, ResultInvoice = #'payproc_Invoice'{invoice = Invoice}}} ->
-            Authorize = fun() ->
-                Prototypes = [
-                    {operation, #{id => OperationID, invoice => InvoiceID}},
-                    {payproc, #{invoice => ResultInvoice}}
-                ],
-                Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
-                {ok, Resolution}
-            end,
-            Process = fun() ->
-                {ok, {200, #{}, capi_handler_decoder_invoicing:decode_invoice(Invoice)}}
-            end,
-            {ok, #{authorize => Authorize, process => Process}};
-        {error, internal_id_not_found} ->
-            capi_handler:respond(general_error(404, <<"Invoice not found">>));
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidUser{} ->
-                    capi_handler:respond(general_error(404, <<"Invoice not found">>));
-                #payproc_InvoiceNotFound{} ->
-                    capi_handler:respond(general_error(404, <<"Invoice not found">>))
-            end
-    end;
+    {InvoiceID, ResultInvoice} =
+        case get_invoice_by_external_id(ExternalID, Context) of
+            {ok, Result} ->
+                Result;
+            {error, internal_id_not_found} ->
+                {undefined, undefined};
+            {exception, _Exception} ->
+                {undefined, undefined}
+        end,
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{id => OperationID, invoice => InvoiceID}},
+            {payproc, #{invoice => ResultInvoice}}
+        ],
+        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        {ok, Resolution}
+    end,
+    Process = fun() ->
+        capi_handler:respond_if_undefined(ResultInvoice, general_error(404, <<"Invoice not found">>)),
+        #'payproc_Invoice'{invoice = Invoice} = ResultInvoice,
+        {ok, {200, #{}, capi_handler_decoder_invoicing:decode_invoice(Invoice)}}
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
 prepare('FulfillInvoice' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     Authorize = fun() ->
@@ -259,22 +256,10 @@ prepare('GetInvoiceEvents' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('GetInvoicePaymentMethods' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    Invoice =
-        case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
-            {ok, Result} ->
-                Result;
-            {exception, GetInvoiceException} ->
-                case GetInvoiceException of
-                    #payproc_InvalidUser{} ->
-                        capi_handler:respond(general_error(404, <<"Invoice not found">>));
-                    #payproc_InvoiceNotFound{} ->
-                        capi_handler:respond(general_error(404, <<"Invoice not found">>))
-                end
-        end,
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID}},
-            {payproc, #{invoice => Invoice}}
+            {payproc, #{invoice => InvoiceID}}
         ],
         Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
         {ok, Resolution}
