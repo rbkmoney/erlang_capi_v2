@@ -1181,7 +1181,15 @@ get_contracts_for_party_ok_test(Config) ->
 
 -spec get_contract_adjustments_ok_test(config()) -> _.
 get_contract_adjustments_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {party_management, fun
+                ('GetContract', _) -> {ok, ?CONTRACT};
+                ('Get', _) -> {ok, ?PARTY}
+            end}
+        ],
+        Config
+    ),
     capi_ct_helper_bouncer:mock_bouncer_assert_contract_op_ctx(<<"GetContractAdjustments">>, ?STRING, ?STRING, Config),
     {ok, _} = capi_client_contracts:get_contract_adjustments(?config(context, Config), ?STRING).
 
@@ -1198,7 +1206,15 @@ get_contract_adjustments_for_party_ok_test(Config) ->
 
 -spec get_contract_adjustment_by_id_ok_test(config()) -> _.
 get_contract_adjustment_by_id_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {party_management, fun
+                ('GetContract', _) -> {ok, ?CONTRACT};
+                ('Get', _) -> {ok, ?PARTY}
+            end}
+        ],
+        Config
+    ),
     capi_ct_helper_bouncer:mock_bouncer_assert_contract_op_ctx(
         <<"GetContractAdjustmentByID">>,
         ?STRING,
