@@ -17,6 +17,7 @@ search_invoices(Context, ShopID, Query) ->
     },
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
     Response = swag_client_search_api:search_invoices(Url, PreparedParams, Opts),
+    ct:print("Response ~p", [Response]),
     case capi_client_lib:handle_response(Response) of
         {ok, #{<<"totalCount">> := TotalCount, <<"result">> := Invoices}} ->
             {ok, TotalCount, Invoices};
