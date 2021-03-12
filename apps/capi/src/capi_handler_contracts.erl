@@ -45,7 +45,7 @@ prepare(OperationID = 'GetContractByID', Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetContractAdjustments', Req, Context) ->
     ContractID = maps:get('contractID', Req),
-    PartyID = capi_handler_utils:get_party(Context),
+    PartyID = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{party => PartyID, contract => ContractID, id => OperationID}}
@@ -64,7 +64,7 @@ prepare(OperationID = 'GetContractAdjustments', Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetContractAdjustmentByID', Req, Context) ->
     ContractID = maps:get('contractID', Req),
-    PartyID = capi_handler_utils:get_party(Context),
+    PartyID = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{party => PartyID, contract => ContractID, id => OperationID}}
