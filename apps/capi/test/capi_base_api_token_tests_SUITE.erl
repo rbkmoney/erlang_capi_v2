@@ -976,7 +976,12 @@ get_claims_ok_test(Config) ->
 -spec revoke_claim_ok_test(config()) -> _.
 revoke_claim_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('RevokeClaim', _) -> {ok, ok} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_claim_op_ctx(<<"RevokeClaimByID">>, ?STRING, ?INTEGER_BINARY, Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_claim_op_ctx(
+        <<"RevokeClaimByID">>,
+        ?STRING,
+        ?INTEGER_BINARY,
+        Config
+    ),
     ok = capi_client_claims:revoke_claim_by_id(?config(context, Config), ?STRING, ?INTEGER, ?INTEGER).
 
 -spec create_claim_ok_test(config()) -> _.
@@ -1164,7 +1169,12 @@ get_contract_by_id_ok_test(Config) ->
 -spec get_contract_by_id_for_party_ok_test(config()) -> _.
 get_contract_by_id_for_party_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_contract_op_ctx(<<"GetContractByIDForParty">>, ?STRING, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_contract_op_ctx(
+        <<"GetContractByIDForParty">>,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_contracts:get_contract_by_id_for_party(?config(context, Config), ?STRING, ?STRING).
 
 -spec get_contracts_ok_test(config()) -> _.
@@ -1190,7 +1200,12 @@ get_contract_adjustments_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_contract_op_ctx(<<"GetContractAdjustments">>, ?STRING, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_contract_op_ctx(
+        <<"GetContractAdjustments">>,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_contracts:get_contract_adjustments(?config(context, Config), ?STRING).
 
 -spec get_contract_adjustments_for_party_ok_test(config()) -> _.
