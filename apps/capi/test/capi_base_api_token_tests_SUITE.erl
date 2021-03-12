@@ -793,7 +793,10 @@ get_chargebacks(Config) ->
 
 -spec update_invoice_template_ok_test(config()) -> _.
 update_invoice_template_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{invoice_templating, fun('Update', _) -> {ok, ?INVOICE_TPL} end}], Config),
+    _ = capi_ct_helper:mock_services([{invoice_templating, fun
+        ('Update', _) -> {ok, ?INVOICE_TPL};
+        ('Get', _) -> {ok, ?INVOICE_TPL}
+    end}], Config),
     _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_tpl_op_ctx(
         <<"UpdateInvoiceTemplate">>,
         ?STRING,
