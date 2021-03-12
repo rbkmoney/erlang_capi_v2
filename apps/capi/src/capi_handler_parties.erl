@@ -6,7 +6,7 @@
 
 -export([prepare/3]).
 
--import(capi_handler_utils, [logic_error/2]).
+-import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -type processing_context() :: capi_handler:processing_context().
 
@@ -22,7 +22,7 @@ prepare('GetMyParty' = OperationID, Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case get_party(PartyID, Context) of
+        case get_or_create_party(PartyID, Context) of
             {ok, Party} ->
                 DecodedParty = capi_handler_decoder_party:decode_party(Party),
                 {ok, {200, #{}, DecodedParty}};
@@ -73,13 +73,71 @@ prepare('SuspendMyParty' = OperationID, Req, Context) ->
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
+prepare('GetPartyByID' = OperationID, Req, Context) ->
+    PartyID = maps:get(partyID, Req),
+    Authorize = fun() ->
+        Prototypes = [{operation, #{id => OperationID, party => PartyID}}],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        case capi_handler_utils:get_party(PartyID, Context) of
+            {ok, Party} ->
+                DecodedParty = capi_handler_decoder_party:decode_party(Party),
+                {ok, {200, #{}, DecodedParty}};
+            {exception, #payproc_InvalidUser{}} ->
+                {ok, general_error(404, <<"Party not found">>)};
+            {exception, #payproc_PartyNotFound{}} ->
+                {ok, general_error(404, <<"Party not found">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare('ActivatePartyByID' = OperationID, Req, Context) ->
+    PartyID = maps:get(partyID, Req),
+    Authorize = fun() ->
+        Prototypes = [{operation, #{id => OperationID, party => PartyID}}],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        Call = {party_management, 'Activate', {PartyID}},
+        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+            {ok, _R} ->
+                {ok, {204, #{}, undefined}};
+            {exception, #payproc_InvalidUser{}} ->
+                {ok, general_error(404, <<"Party not found">>)};
+            {exception, #payproc_PartyNotFound{}} ->
+                {ok, general_error(404, <<"Party not found">>)};
+            {exception, #payproc_InvalidPartyStatus{status = {suspension, {active, _}}}} ->
+                {ok, logic_error(<<"invalidRequest">>, <<"Invalid party status">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare('SuspendPartyByID' = OperationID, Req, Context) ->
+    PartyID = maps:get(partyID, Req),
+    Authorize = fun() ->
+        Prototypes = [{operation, #{id => OperationID, party => PartyID}}],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
+    Process = fun() ->
+        Call = {party_management, 'Suspend', {PartyID}},
+        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+            {ok, _R} ->
+                {ok, {204, #{}, undefined}};
+            {exception, #payproc_InvalidUser{}} ->
+                {ok, general_error(404, <<"Party not found">>)};
+            {exception, #payproc_PartyNotFound{}} ->
+                {ok, general_error(404, <<"Party not found">>)};
+            {exception, #payproc_InvalidPartyStatus{status = {suspension, {suspended, _}}}} ->
+                {ok, logic_error(<<"invalidRequest">>, <<"Invalid party status">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 %%
 
--spec get_party(binary(), processing_context()) -> woody:result().
-get_party(PartyID, Context) ->
+-spec get_or_create_party(binary(), processing_context()) -> woody:result().
+get_or_create_party(PartyID, Context) ->
     case capi_handler_utils:get_party(PartyID, Context) of
         {exception, #payproc_PartyNotFound{}} ->
             _ = logger:info("Attempting to create a missing party"),
