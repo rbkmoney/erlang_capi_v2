@@ -219,21 +219,15 @@ get_operation_access('GetPaymentRateStats', _) ->
     [{[party], read}];
 get_operation_access('GetPaymentMethodStats', _) ->
     [{[party], read}];
+get_operation_access('GetMyParty', _) ->
+    [{[party], read}];
 get_operation_access('ActivateShop', _) ->
     [{[party], write}];
 get_operation_access('SuspendShop', _) ->
     [{[party], write}];
-get_operation_access('GetMyParty', _) ->
-    [{[party], read}];
 get_operation_access('SuspendMyParty', _) ->
     [{[party], write}];
 get_operation_access('ActivateMyParty', _) ->
-    [{[party], write}];
-get_operation_access('GetPartyByID', _) ->
-    [{[party], read}];
-get_operation_access('SuspendPartyByID', _) ->
-    [{[party], write}];
-get_operation_access('ActivatePartyByID', _) ->
     [{[party], write}];
 get_operation_access('CreateClaim', _) ->
     [{[party], write}];
