@@ -56,9 +56,6 @@
     get_my_party_ok_test/1,
     suspend_my_party_ok_test/1,
     activate_my_party_ok_test/1,
-    get_party_by_id_ok_test/1,
-    suspend_party_by_id_ok_test/1,
-    activate_party_by_id_ok_test/1,
     get_shop_by_id_ok_test/1,
     get_shops_ok_test/1,
     activate_shop_ok_test/1,
@@ -228,10 +225,6 @@ groups() ->
             get_my_party_ok_test,
             suspend_my_party_ok_test,
             activate_my_party_ok_test,
-
-            get_party_by_id_ok_test,
-            suspend_party_by_id_ok_test,
-            activate_party_by_id_ok_test,
 
             get_locations_names_ok_test,
 
@@ -832,24 +825,6 @@ activate_my_party_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Activate', _) -> {ok, ok} end}], Config),
     _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"ActivateMyParty">>, ?STRING, Config),
     ok = capi_client_parties:activate_my_party(?config(context, Config)).
-
--spec get_party_by_id_ok_test(config()) -> _.
-get_party_by_id_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetPartyByID">>, ?STRING, Config),
-    {ok, _} = capi_client_parties:get_party_by_id(?config(context, Config), ?STRING).
-
--spec suspend_party_by_id_ok_test(config()) -> _.
-suspend_party_by_id_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{party_management, fun('Suspend', _) -> {ok, ok} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"SuspendPartyByID">>, ?STRING, Config),
-    ok = capi_client_parties:suspend_party_by_id(?config(context, Config), ?STRING).
-
--spec activate_party_by_id_ok_test(config()) -> _.
-activate_party_by_id_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{party_management, fun('Activate', _) -> {ok, ok} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"ActivatePartyByID">>, ?STRING, Config),
-    ok = capi_client_parties:activate_party_by_id(?config(context, Config), ?STRING).
 
 -spec get_shop_by_id_ok_test(config()) -> _.
 get_shop_by_id_ok_test(Config) ->
