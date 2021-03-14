@@ -436,7 +436,7 @@ authorize_operation(Prototypes, #{swagger_context := ReqCtx, woody_context := Wo
             try
                 capi_bouncer:judge(Fragments1, WoodyCtx)
             catch
-                error:{woody_error, _Error} ->
+                error:{woody_error, _} ->
                     % TODO
                     % This is temporary safeguard around bouncer integration put here so that
                     % external requests would remain undisturbed by bouncer intermittent failures.
