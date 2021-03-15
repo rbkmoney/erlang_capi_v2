@@ -115,18 +115,9 @@
     files = Files
 }).
 
--define(compareContext(Expect), fun(Context) ->
-    case (Context) of
-        Expect ->
-            {ok, ?JUDGEMENT(?ALLOWED)};
-        _ ->
-            {ok, ?JUDGEMENT(?FORBIDDEN)}
-    end
-end).
-
 -define(assertContextMatches(Expect), fun(Context) ->
-        ?assertMatch(Expect, Context),
-        {ok, ?JUDGEMENT(?ALLOWED)}
-    end).
+    ?assertMatch(Expect, Context),
+    {ok, ?JUDGEMENT(?ALLOWED)}
+end).
 
 -endif.
