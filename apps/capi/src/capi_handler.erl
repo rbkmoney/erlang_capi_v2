@@ -130,6 +130,7 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
         {ok, #{authorize := Authorize, process := Process}} =
             prepare(OperationID, Req, Context, get_handlers()),
         {ok, Resolution} = Authorize(),
+        ct:print("Resolution ~p", [Resolution]),
         case Resolution of
             allowed ->
                 Process();

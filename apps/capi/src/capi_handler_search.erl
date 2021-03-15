@@ -146,7 +146,6 @@ process_search_request(QueryType, Query, Req, Context, Opts = #{thrift_fun := Th
     process_search_request_result(QueryType, capi_handler_utils:service_call(Call, Context), Context, Opts).
 
 process_search_request_result(QueryType, Result, Context, #{decode_fun := DecodeFun}) ->
-    % ct:print("RESULT: ~p", [Result]),
     case Result of
         {ok, #merchstat_StatResponse{
             data = {QueryType, Data},
@@ -159,7 +158,6 @@ process_search_request_result(QueryType, Result, Context, #{decode_fun := Decode
                 <<"totalCount">> => TotalCount,
                 <<"continuationToken">> => ContinuationToken
             }),
-            ct:print("Resp: ~p", [Resp]),
             {ok, {200, #{}, Resp}};
         {exception, #'InvalidRequest'{errors = Errors}} ->
             FormattedErrors = capi_handler_utils:format_request_errors(Errors),

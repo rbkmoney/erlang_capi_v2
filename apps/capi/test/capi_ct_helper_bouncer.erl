@@ -11,6 +11,8 @@
 -export([mock_bouncer_assert_contract_op_ctx/4]).
 -export([mock_bouncer_assert_invoice_op_ctx/5]).
 -export([mock_bouncer_assert_payment_op_ctx/6]).
+-export([mock_bouncer_compare_payment_op_ctx/5]).
+-export([mock_bouncer_compare_payment_op_ctx/6]).
 -export([mock_bouncer_assert_invoice_tpl_op_ctx/5]).
 -export([mock_bouncer_assert_customer_op_ctx/5]).
 -export([mock_bouncer_assert_claim_op_ctx/4]).
@@ -94,6 +96,35 @@ mock_bouncer_assert_payment_op_ctx(Op, InvoiceID, PaymentID, PartyID, ShopID, Co
         Config
     ).
 
+-spec mock_bouncer_compare_payment_op_ctx(_, _, _, _, _) -> _.
+mock_bouncer_compare_payment_op_ctx(Op, InvoiceID, PartyID, ShopID, Config) ->
+    mock_bouncer_arbiter(
+        ?compareContext(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_PAYMENT_OP(Op, InvoiceID)),
+                payment_processing = #bctx_v1_ContextPaymentProcessing{
+                    invoice = ?CTX_INVOICE(InvoiceID, PartyID, ShopID, [])
+                }
+            }
+        ),
+        Config
+    ).
+
+-spec mock_bouncer_compare_payment_op_ctx(_, _, _, _, _, _) -> _.
+mock_bouncer_compare_payment_op_ctx(Op, InvoiceID, PaymentID, PartyID, ShopID, Config) ->
+    mock_bouncer_arbiter(
+        ?compareContext(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_PAYMENT_OP(Op, InvoiceID, PaymentID)),
+                payment_processing = #bctx_v1_ContextPaymentProcessing{
+                    invoice = ?CTX_INVOICE(InvoiceID, PartyID, ShopID, [?CTX_PAYMENT(PaymentID)])
+                }
+            }
+        ),
+        Config
+    ).
+
+
 -spec mock_bouncer_assert_invoice_tpl_op_ctx(_, _, _, _, _) -> _.
 mock_bouncer_assert_invoice_tpl_op_ctx(Op, InvoiceTemplateID, PartyID, ShopID, Config) ->
     mock_bouncer_arbiter(
@@ -148,7 +179,6 @@ mock_bouncer_assert_webhook_op_ctx(Op, WebhookID, PartyID, Config) ->
     ).
 
 %%
-
 start_bouncer_client(ServiceURLs) ->
     ServiceClients = maps:map(fun(_, URL) -> #{url => URL} end, ServiceURLs),
     Acc = application:get_env(bouncer_client, service_clients, #{}),

@@ -94,7 +94,6 @@
     search_payments_ok_test/1,
     search_refunds_ok_test/1,
     search_payouts_ok_test/1,
-    create_payment_ok_test/1,
     get_payment_conversion_stats_ok_test/1,
     get_payment_revenue_stats_ok_test/1,
     get_payment_geo_stats_ok_test/1,
@@ -114,8 +113,7 @@
     get_payment_institution_payment_terms/1,
     get_payment_institution_payout_terms/1,
     check_no_payment_by_external_id_test/1,
-    % TODO: to bouncer integration
-    % check_no_internal_id_for_external_id_test/1,
+    check_no_internal_id_for_external_id_test/1,
     retrieve_payment_by_external_id_test/1,
     check_no_invoice_by_external_id_test/1,
 
@@ -141,8 +139,8 @@ init([]) ->
 all() ->
     [
         {group, operations_by_base_api_token},
-        {group, operations_by_base_api_token_with_new_auth}
-        % {group, payment_tool_token_support}
+        {group, operations_by_base_api_token_with_new_auth},
+        {group, payment_tool_token_support}
     ].
 
 -spec groups() -> [{group_name(), list(), [test_case_name()]}].
@@ -238,8 +236,7 @@ groups() ->
             activate_shop_for_party_ok_test,
             activate_shop_for_party_error_test,
 
-            create_payment_ok_test,
-            % check_no_internal_id_for_external_id_test,
+            check_no_internal_id_for_external_id_test,
 
             create_webhook_ok_test,
             create_webhook_limit_exceeded_test,
@@ -278,9 +275,7 @@ init_per_group(operations_by_base_api_token, Config) ->
 init_per_group(operations_by_base_api_token_with_new_auth, Config) ->
     BasePermissions = get_base_permissions(),
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
-    {ok, Token2} = capi_ct_helper:issue_token(<<"TEST2">>, BasePermissions, unlimited, #{}),
-    Config2 = [{context_with_diff_party, capi_ct_helper:get_context(Token2)} | Config],
-    [{context, capi_ct_helper:get_context(Token)} | Config2];
+    [{context, capi_ct_helper:get_context(Token)} | Config];
 init_per_group(_, Config) ->
     Config.
 
@@ -487,9 +482,23 @@ create_invoice_with_template_test(Config) ->
     ?assertEqual(BenderKey, maps:get(<<"id">>, Invoice)),
     ?assertEqual(ExternalID, maps:get(<<"externalID">>, Invoice)).
 
--spec create_payment_ok_test(config()) -> _.
-create_payment_ok_test(_Config) ->
-    ok.
+-spec check_no_internal_id_for_external_id_test(config()) -> _.
+check_no_internal_id_for_external_id_test(Config) ->
+    ExternalID = capi_utils:get_unique_id(),
+    _ = capi_ct_helper:mock_services(
+        [
+            {bender, fun('GetInternalID', _) -> {throwing, capi_ct_helper_bender:no_internal_id()} end}
+        ],
+        Config
+    ),
+    capi_ct_helper_bouncer:mock_bouncer_compare_payment_op_ctx(
+        <<"CreatePayment">>, ?STRING, ?STRING, ?STRING, ?STRING, Config
+    ),
+    {error,
+        {404, #{
+            <<"message">> := <<"Payment not found">>
+        }}} =
+        capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
 
 -spec create_customer_ok_test(config()) -> _.
 create_customer_ok_test(Config) ->
@@ -1677,22 +1686,6 @@ check_no_invoice_by_external_id_test(Config) ->
 
     {error, {invalid_response_code, 500}} =
         capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
-%% TODO to autorize error
-% -spec check_no_internal_id_for_external_id_test(config()) -> _.
-% check_no_internal_id_for_external_id_test(Config) ->
-%     ExternalID = capi_utils:get_unique_id(),
-%     _ = capi_ct_helper:mock_services(
-%         [
-%             {bender, fun('GetInternalID', _) -> {throwing, capi_ct_helper_bender:no_internal_id()} end}
-%         ],
-%         Config
-%     ),
-
-%     {error,
-%         {404, #{
-%             <<"message">> := <<"Payment not found">>
-%         }}} =
-%         capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
 
 -spec retrieve_payment_by_external_id_test(config()) -> _.
 retrieve_payment_by_external_id_test(Config) ->

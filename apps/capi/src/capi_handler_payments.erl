@@ -140,37 +140,42 @@ prepare(OperationID = 'GetPaymentByID', Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetPaymentByExternalID', Req, Context) ->
     ExternalID = maps:get(externalID, Req),
-    {InvoiceID, PaymentID} = case get_internal_ctx(ExternalID, Context) of
-        {ok, Value} ->
-            Value;
-        {error, internal_id_not_found} ->
-            {undefined, undefined}
-    end,
+    try
+        {InvoiceID, PaymentID} = get_internal_ctx(ExternalID, Context),
+        InvoiceResult = get_invoice_by_id(InvoiceID, Context),
 
-    InvoiceResult = get_invoice_by_id(InvoiceID, Context),
-    Authorize = fun() ->
-        Prototypes = [
-            {operation, #{id => OperationID, invoice => map_result(InvoiceID), payment => map_result(PaymentID)}},
-            {payproc, #{invoice => map_result(InvoiceResult)}}
-        ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
-    end,
-    Process = fun() ->
-        case get_payment_by_id(InvoiceResult, PaymentID) of
-            {ok, Payment} ->
-                {ok, {200, #{}, decode_invoice_payment(InvoiceID, Payment, Context)}};
-            {exception, Exception} ->
-                case Exception of
-                    #payproc_InvoicePaymentNotFound{} ->
-                        {ok, general_error(404, <<"Payment not found">>)};
-                    #payproc_InvalidUser{} ->
-                        {ok, general_error(404, <<"Invoice not found">>)};
-                    #payproc_InvoiceNotFound{} ->
-                        {ok, general_error(404, <<"Invoice not found">>)}
-                end
-        end
-    end,
-    {ok, #{authorize => Authorize, process => Process}};
+        Authorize = fun() ->
+            Prototypes = [
+                {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID}},
+                {payproc, #{invoice => map_result(InvoiceResult)}}
+            ],
+            {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        end,
+        Process = fun() ->
+            case get_payment_by_id(InvoiceResult, PaymentID) of
+                {ok, Payment} ->
+                    {ok, {200, #{}, decode_invoice_payment(InvoiceID, Payment, Context)}};
+                {exception, Exception} ->
+                    case Exception of
+                        #payproc_InvoicePaymentNotFound{} ->
+                            {ok, general_error(404, <<"Payment not found">>)};
+                        #payproc_InvalidUser{} ->
+                            {ok, general_error(404, <<"Invoice not found">>)};
+                        #payproc_InvoiceNotFound{} ->
+                            {ok, general_error(404, <<"Invoice not found">>)}
+                    end
+            end
+        end,
+        {ok, #{authorize => Authorize, process => Process}}
+    catch throw:internal_id_not_found ->
+        Authorize2 = fun() ->
+            Prototypes = [{operation, #{id => OperationID}}],
+            {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        end,
+        Process2 = fun() -> {ok, general_error(404, <<"Payment not found">>)} end,
+        {ok, #{authorize => Authorize2, process => Process2}}
+    end;
+
 prepare(OperationID = 'CapturePayment', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
@@ -481,7 +486,19 @@ process_request('GetChargebackByID', Context, Req) ->
 
 create_payment(undefined, _PaymentParams, _Context, _BenderPrefix) ->
     {exception, #payproc_InvoiceNotFound{}};
-create_payment(Invoice, #{<<"externalID">> := ExternalID} = PaymentParams, Context, BenderPrefix) ->
+create_payment(Invoice, PaymentParams, Context, BenderPrefix) ->
+    try
+        create_payment_(Invoice, PaymentParams, Context, BenderPrefix)
+    catch
+        throw:Error when
+            Error =:= invalid_token orelse
+                Error =:= invalid_payment_session orelse
+                Error =:= invalid_processing_deadline
+        ->
+            {error, Error}
+    end.
+
+create_payment_(Invoice, #{<<"externalID">> := ExternalID} = PaymentParams, Context, BenderPrefix) ->
     #payproc_Invoice{invoice = #domain_Invoice{id = InvoiceID, owner_id = PartyID}} = Invoice,
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
@@ -504,7 +521,7 @@ create_payment(Invoice, #{<<"externalID">> := ExternalID} = PaymentParams, Conte
             logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, ReadableDiff]),
             {error, {external_id_conflict, ID, ExternalID}}
     end;
-create_payment(Invoice, PaymentParams, #{woody_context := WoodyCtx} = Context, _) ->
+create_payment_(Invoice, PaymentParams, #{woody_context := WoodyCtx} = Context, _) ->
     #payproc_Invoice{invoice = #domain_Invoice{id = InvoiceID}} = Invoice,
     ExternalID = undefined,
     {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
@@ -513,18 +530,9 @@ create_payment(Invoice, PaymentParams, #{woody_context := WoodyCtx} = Context, _
     start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context).
 
 start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context) ->
-    try
-        InvoicePaymentParams = encode_invoice_payment_params(ID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift),
-        Call = {invoicing, 'StartPayment', {InvoiceID, InvoicePaymentParams}},
-        capi_handler_utils:service_call_with([user_info], Call, Context)
-    catch
-        throw:Error when
-            Error =:= invalid_token orelse
-                Error =:= invalid_payment_session orelse
-                Error =:= invalid_processing_deadline
-        ->
-            {error, Error}
-    end.
+    InvoicePaymentParams = encode_invoice_payment_params(ID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift),
+    Call = {invoicing, 'StartPayment', {InvoiceID, InvoicePaymentParams}},
+    capi_handler_utils:service_call_with([user_info], Call, Context).
 
 get_payment_by_id(_, undefined) ->
     {exception, #payproc_InvoicePaymentNotFound{}};
@@ -543,30 +551,22 @@ get_payment_by_id_([#payproc_InvoicePayment{payment = #domain_InvoicePayment{id 
 get_invoice_by_id(InvoiceID, Context) ->
     capi_handler_utils:get_invoice_by_id(InvoiceID, Context).
 
-% maybe_with({error, _} = Error, _) ->
-%     Error;
-% maybe_with({exception, _} = Error, _) ->
-%     Error;
-% maybe_with(Value, Fun) ->
-%     Fun(Value).
-
 map_result({ok, Value}) ->
     Value;
 map_result(_) ->
     undefined.
 
 -spec get_internal_ctx(binary(), capi_handler:processing_context()) ->
-    {ok, {binary(), binary()}} |
-    {error, internal_id_not_found}.
+    {binary(), binary()}.
 get_internal_ctx(ExternalID, #{woody_context := WoodyContext} = Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     PaymentKey = capi_bender:get_idempotent_key('CreatePayment', PartyID, ExternalID),
     case capi_bender:get_internal_id(PaymentKey, WoodyContext) of
         {ok, PaymentID, CtxData} ->
             InvoiceID = maps:get(<<"invoice_id">>, CtxData),
-            {ok, {InvoiceID, PaymentID}};
-        Error ->
-            Error
+            {InvoiceID, PaymentID};
+        {error, internal_id_not_found} ->
+            throw(internal_id_not_found)
     end.
 
 decrypt_payer(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer) ->

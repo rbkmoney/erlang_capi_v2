@@ -1299,3 +1299,18 @@
         <<"how_about_null">> => null
     }
 }).
+
+-define(PAYMENT_PARAMS(EID, Token), #{
+    <<"externalID">> => EID,
+    <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
+    <<"payer">> => #{
+        <<"payerType">> => <<"PaymentResourcePayer">>,
+        <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
+        <<"paymentToolToken">> => Token,
+        <<"contactInfo">> => #{
+            <<"email">> => <<"bla@bla.ru">>
+        }
+    },
+    <<"metadata">> => ?JSON,
+    <<"processingDeadline">> => <<"5m">>
+}).

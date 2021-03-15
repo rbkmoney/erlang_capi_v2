@@ -42,6 +42,11 @@
     payment = ?CTX_ENTITY(PaymentID)
 }).
 
+-define(CTX_PAYMENT_OP(ID, InvoiceID), #bctx_v1_CommonAPIOperation{
+    id = ID,
+    invoice = ?CTX_ENTITY(InvoiceID)
+}).
+
 -define(CTX_REFUND_OP(ID, InvoiceID, PaymentID, RefundID), #bctx_v1_CommonAPIOperation{
     id = ID,
     invoice = ?CTX_ENTITY(InvoiceID),
@@ -115,9 +120,18 @@
     files = Files
 }).
 
--define(assertContextMatches(Expect), fun(Context) ->
-    ?assertMatch(Expect, Context),
-    {ok, ?JUDGEMENT(?ALLOWED)}
+-define(compareContext(Expect), fun(Context) ->
+    case (Context) of
+        Expect ->
+            {ok, ?JUDGEMENT(?ALLOWED)};
+        _ ->
+            {ok, ?JUDGEMENT(?FORBIDDEN)}
+    end
 end).
+
+-define(assertContextMatches(Expect), fun(Context) ->
+        ?assertMatch(Expect, Context),
+        {ok, ?JUDGEMENT(?ALLOWED)}
+    end).
 
 -endif.
