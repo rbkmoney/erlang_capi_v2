@@ -83,8 +83,9 @@ end_per_suite(C) ->
 -spec init_per_group(group_name(), config()) -> config().
 init_per_group(operations_by_customer_access_token_after_customer_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    {ok, Token} = capi_ct_helper:issue_token([{[customers], write}], unlimited),
     _ = capi_ct_helper:mock_services([{customer_management, fun('Create', _) -> {ok, ?CUSTOMER} end}], MockServiceSup),
+    _ = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), MockServiceSup),
+    {ok, Token} = capi_ct_helper:issue_token([{[customers], write}], unlimited),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"contactInfo">> => #{<<"email">> => <<"bla@bla.ru">>},
@@ -93,22 +94,23 @@ init_per_group(operations_by_customer_access_token_after_customer_creation, Conf
     {ok, #{
         <<"customerAccessToken">> := #{<<"payload">> := CustAccToken}
     }} = capi_client_customers:create_customer(capi_ct_helper:get_context(Token), Req),
-    capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
+    _ = capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    [{context, capi_ct_helper:get_context(CustAccToken)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config];
+    Apps = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+    [{context, capi_ct_helper:get_context(CustAccToken)}, {group_apps, Apps}, {group_test_sup, SupPid} | Config];
 init_per_group(operations_by_customer_access_token_after_token_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    {ok, Token} = capi_ct_helper:issue_token([{[customers], write}], unlimited),
     _ = capi_ct_helper:mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], MockServiceSup),
+    _ = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), MockServiceSup),
+    {ok, Token} = capi_ct_helper:issue_token([{[customers], write}], unlimited),
     {ok, #{<<"payload">> := CustAccToken}} = capi_client_customers:create_customer_access_token(
         capi_ct_helper:get_context(Token),
         ?STRING
     ),
-    capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
+    _ = capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    [{context, capi_ct_helper:get_context(CustAccToken)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config];
+    Apps = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+    [{context, capi_ct_helper:get_context(CustAccToken)}, {group_apps, Apps}, {group_test_sup, SupPid} | Config];
 init_per_group(_, Config) ->
     Config.
 
@@ -137,7 +139,10 @@ get_customer_ok_test(Config) ->
 create_binding_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
-            {customer_management, fun('StartBinding', _) -> {ok, ?CUSTOMER_BINDING} end},
+            {customer_management, fun
+                ('Get', _) -> {ok, ?CUSTOMER};
+                ('StartBinding', _) -> {ok, ?CUSTOMER_BINDING}
+            end},
             {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end}
         ],
         Config
@@ -153,6 +158,7 @@ create_binding_ok_test(Config) ->
 
 -spec create_binding_expired_test(config()) -> _.
 create_binding_expired_test(Config) ->
+    _ = capi_ct_helper:mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], Config),
     PaymentTool = {bank_card, ?BANK_CARD},
     ValidUntil = capi_utils:deadline_from_timeout(0),
     PaymentToolToken = capi_crypto:create_encrypted_payment_tool_token(PaymentTool, ValidUntil),
@@ -177,5 +183,13 @@ get_binding_ok_test(Config) ->
 
 -spec get_customer_events_ok_test(config()) -> _.
 get_customer_events_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{customer_management, fun('GetEvents', _) -> {ok, []} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {customer_management, fun
+                ('Get', _) -> {ok, ?CUSTOMER};
+                ('GetEvents', _) -> {ok, []}
+            end}
+        ],
+        Config
+    ),
     {ok, _} = capi_client_customers:get_customer_events(?config(context, Config), ?STRING, 10).
