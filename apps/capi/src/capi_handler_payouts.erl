@@ -26,6 +26,73 @@ prepare(OperationID, Req, Context) when
     Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID, Req, Context) when OperationID =:= 'GetPayout' ->
+    PayoutID = maps:get(payoutID, Req),
+    OperationContext = #{
+        id => OperationID,
+        party => capi_handler_utils:get_party_id(Context),
+        payout => PayoutID
+    },
+    Payout =
+        case capi_handler_utils:service_call({payouts, 'Get', {PayoutID}}, Context) of
+            {ok, Payout} ->
+                Payout;
+            {exception, #'payout_processing_PayoutNotFound'{}} ->
+                capi_handler:respond(general_error(404, <<"Payout not found">>))
+        end,
+    Prototypes = [
+        {operation, OperationContext},
+        {payouts, #{payout => Payout}}
+    ],
+    Authorize =
+        fun() ->
+            {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        end,
+    Process = fun() -> {ok, {200, #{}, decode_payout(Payout)}} end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID, Req, Context) when OperationID =:= 'CreatePayout' ->
+    PayoutParams = maps:get('PayoutParams', Req),
+    UserID = capi_handler_utils:get_user_id(Context),
+    PartyID = maps:get(<<"partyID">>, PayoutParams, UserID),
+    OperationContext = #{
+        id => OperationID,
+        party => PartyID,
+        shop => maps:get(<<"shopID">>, PayoutParams)
+    },
+    Authorize =
+        fun() ->
+            {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
+        end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID, Req, Context) when
+    OperationID =:= 'GetPayoutTools' orelse
+        OperationID =:= 'GetPayoutToolByID'
+->
+    OperationContext = #{
+        id => OperationID,
+        party => capi_handler_utils:get_party_id(Context)
+    },
+    Authorize =
+        fun() ->
+            {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
+        end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID, Req, Context) when
+        OperationID =:= 'GetPayoutToolsForParty' orelse
+        OperationID =:= 'GetPayoutToolByIDForParty'
+->
+    OperationContext = #{
+        id => OperationID,
+        party => maps:get('partyID', Req)
+    },
+    Authorize =
+        fun() ->
+            {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
+        end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
@@ -53,19 +120,6 @@ process_request('GetPayoutToolByID', Context, Req) ->
             end;
         {exception, #payproc_ContractNotFound{}} ->
             {ok, general_error(404, <<"Contract not found">>)}
-    end;
-process_request('GetPayout', Context, Req) ->
-    PayoutID = maps:get(payoutID, Req),
-    case capi_handler_utils:service_call({payouts, 'Get', {PayoutID}}, Context) of
-        {ok, Payout} ->
-            case check_party_in_payout(capi_handler_utils:get_party_id(Context), Payout) of
-                true ->
-                    {ok, {200, #{}, decode_payout(Payout)}};
-                false ->
-                    {ok, general_error(404, <<"Payout not found">>)}
-            end;
-        {exception, #'payout_processing_PayoutNotFound'{}} ->
-            {ok, general_error(404, <<"Payout not found">>)}
     end;
 process_request('CreatePayout', Context, Req) ->
     PayoutParams = maps:get('PayoutParams', Req),
@@ -133,11 +187,6 @@ process_request('GetPayoutToolByIDForParty', Context, Req) ->
     end).
 
 %%
-
-check_party_in_payout(PartyID, #payout_processing_Payout{party_id = PartyID}) ->
-    true;
-check_party_in_payout(_PartyID, _) ->
-    false.
 
 get_schedule_by_id(ScheduleID, #{woody_context := WoodyContext}) ->
     Ref = {business_schedule, #domain_BusinessScheduleRef{id = ScheduleID}},

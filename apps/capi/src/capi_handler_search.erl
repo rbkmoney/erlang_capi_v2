@@ -16,10 +16,23 @@
 prepare(OperationID, Req, Context) when
     OperationID =:= 'SearchInvoices' orelse
         OperationID =:= 'SearchPayments' orelse
-        OperationID =:= 'SearchPayouts' orelse
         OperationID =:= 'SearchRefunds'
 ->
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
+    OperationContext = make_authorization_query(OperationID, Context, Req),
+    Prototypes = [
+        {operation, OperationContext},
+        {payproc, OperationContext}
+    ],
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)} end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID, Req, Context) when OperationID =:= 'SearchPayouts' ->
+    OperationContext = make_authorization_query(OperationID, Context, Req),
+    Prototypes = [
+        {operation, OperationContext},
+        {payouts, OperationContext}
+    ],
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)} end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
@@ -31,92 +44,28 @@ prepare(_OperationID, _Req, _Context) ->
     ReqState :: capi_handler:request_state()
 ) -> {ok, capi_handler:response()}.
 process_request('SearchInvoices', Context, Req) ->
-    Query = #{
-        <<"merchant_id">> => capi_handler_utils:get_party_id(Context),
-        <<"shop_id">> => genlib_map:get('shopID', Req),
-        <<"invoice_id">> => genlib_map:get('invoiceID', Req),
-        <<"from_time">> => capi_handler_utils:get_time('fromTime', Req),
-        <<"to_time">> => capi_handler_utils:get_time('toTime', Req),
-        <<"invoice_status">> => genlib_map:get('invoiceStatus', Req),
-        <<"payment_status">> => genlib_map:get('paymentStatus', Req),
-        <<"payment_flow">> => genlib_map:get('paymentFlow', Req),
-        <<"payment_method">> => encode_payment_method(genlib_map:get('paymentMethod', Req)),
-        <<"payment_terminal_provider">> => genlib_map:get('paymentTerminalProvider', Req),
-        <<"payment_customer_id">> => genlib_map:get('customerID', Req),
-        <<"payment_id">> => genlib_map:get('paymentID', Req),
-        <<"payment_email">> => genlib_map:get('payerEmail', Req),
-        <<"payment_ip">> => genlib_map:get('payerIP', Req),
-        <<"payment_fingerprint">> => genlib_map:get('payerFingerprint', Req),
-        <<"payment_amount">> => genlib_map:get('paymentAmount', Req),
-        <<"invoice_amount">> => genlib_map:get('invoiceAmount', Req),
-        <<"payment_token_provider">> => genlib_map:get('bankCardTokenProvider', Req),
-        <<"payment_system">> => genlib_map:get('bankCardPaymentSystem', Req),
-        <<"payment_rrn">> => genlib_map:get('rrn', Req),
-        <<"payment_first6">> => genlib_map:get('first6', Req),
-        <<"payment_last4">> => genlib_map:get('last4', Req)
-    },
+    Query = make_query(Context, Req),
     Opts = #{
         thrift_fun => 'GetInvoices',
         decode_fun => fun decode_stat_invoice/2
     },
     process_search_request(invoices, Query, Req, Context, Opts);
 process_request('SearchPayments', Context, Req) ->
-    Query = #{
-        <<"merchant_id">> => capi_handler_utils:get_party_id(Context),
-        <<"shop_id">> => genlib_map:get('shopID', Req),
-        <<"invoice_id">> => genlib_map:get('invoiceID', Req),
-        <<"from_time">> => capi_handler_utils:get_time('fromTime', Req),
-        <<"to_time">> => capi_handler_utils:get_time('toTime', Req),
-        <<"payment_status">> => genlib_map:get('paymentStatus', Req),
-        <<"payment_flow">> => genlib_map:get('paymentFlow', Req),
-        <<"payment_method">> => encode_payment_method(genlib_map:get('paymentMethod', Req)),
-        <<"payment_terminal_provider">> => genlib_map:get('paymentTerminalProvider', Req),
-        <<"payment_customer_id">> => genlib_map:get('customerID', Req),
-        <<"payment_id">> => genlib_map:get('paymentID', Req),
-        <<"payment_email">> => genlib_map:get('payerEmail', Req),
-        <<"payment_ip">> => genlib_map:get('payerIP', Req),
-        <<"payment_fingerprint">> => genlib_map:get('payerFingerprint', Req),
-        <<"payment_amount">> => genlib_map:get('paymentAmount', Req),
-        <<"payment_token_provider">> => genlib_map:get('bankCardTokenProvider', Req),
-        <<"payment_system">> => genlib_map:get('bankCardPaymentSystem', Req),
-        <<"payment_rrn">> => genlib_map:get('rrn', Req),
-        <<"payment_approval_code">> => genlib_map:get('approvalCode', Req),
-        <<"payment_first6">> => genlib_map:get('first6', Req),
-        <<"payment_last4">> => genlib_map:get('last4', Req)
-    },
+    Query = make_query(Context, Req),
     Opts = #{
         thrift_fun => 'GetPayments',
         decode_fun => fun decode_stat_payment/2
     },
     process_search_request(payments, Query, Req, Context, Opts);
 process_request('SearchPayouts', Context, Req) ->
-    Query = #{
-        <<"merchant_id">> => capi_handler_utils:get_party_id(Context),
-        <<"shop_id">> => genlib_map:get('shopID', Req),
-        <<"from_time">> => capi_handler_utils:get_time('fromTime', Req),
-        <<"to_time">> => capi_handler_utils:get_time('toTime', Req),
-        <<"payout_statuses">> => [<<"confirmed">>, <<"paid">>],
-        <<"payout_id">> => genlib_map:get('payoutID', Req),
-        <<"payout_type">> => encode_payout_type(genlib_map:get('payoutToolType', Req))
-    },
+    Query = make_query(Context, Req),
     Opts = #{
         thrift_fun => 'GetPayouts',
         decode_fun => fun decode_stat_payout/2
     },
     process_search_request(payouts, Query, Req, Context, Opts);
 process_request('SearchRefunds', Context, Req) ->
-    Query = #{
-        <<"merchant_id">> => capi_handler_utils:get_party_id(Context),
-        <<"shop_id">> => genlib_map:get('shopID', Req),
-        <<"invoice_id">> => genlib_map:get('invoiceID', Req),
-        <<"payment_id">> => genlib_map:get('paymentID', Req),
-        <<"refund_id">> => genlib_map:get('refundID', Req),
-        <<"payment_rrn">> => genlib_map:get('rrn', Req),
-        <<"payment_approval_code">> => genlib_map:get('approvalCode', Req),
-        <<"from_time">> => capi_handler_utils:get_time('fromTime', Req),
-        <<"to_time">> => capi_handler_utils:get_time('toTime', Req),
-        <<"refund_status">> => genlib_map:get('refundStatus', Req)
-    },
+    Query = make_query(Context, Req),
     Opts = #{
         %% TODO no special fun for refunds so we can use any
         %% should be fixed in new magista
@@ -126,6 +75,47 @@ process_request('SearchRefunds', Context, Req) ->
     process_search_request(refunds, Query, Req, Context, Opts).
 
 %%
+
+make_query(Context, Req) ->
+    #{
+        <<"merchant_id">> => capi_handler_utils:get_party_id(Context),
+        <<"shop_id">> => genlib_map:get('shopID', Req),
+        <<"invoice_id">> => genlib_map:get('invoiceID', Req),
+        <<"from_time">> => capi_handler_utils:get_time('fromTime', Req),
+        <<"to_time">> => capi_handler_utils:get_time('toTime', Req),
+        <<"payment_status">> => genlib_map:get('paymentStatus', Req),
+        <<"payment_flow">> => genlib_map:get('paymentFlow', Req),
+        <<"payment_method">> => encode_payment_method(genlib_map:get('paymentMethod', Req)),
+        <<"payment_terminal_provider">> => genlib_map:get('paymentTerminalProvider', Req),
+        <<"payment_customer_id">> => genlib_map:get('customerID', Req),
+        <<"payment_id">> => genlib_map:get('paymentID', Req),
+        <<"payment_email">> => genlib_map:get('payerEmail', Req),
+        <<"payment_ip">> => genlib_map:get('payerIP', Req),
+        <<"payment_fingerprint">> => genlib_map:get('payerFingerprint', Req),
+        <<"payment_token_provider">> => genlib_map:get('bankCardTokenProvider', Req),
+        <<"payment_system">> => genlib_map:get('bankCardPaymentSystem', Req),
+        <<"payment_first6">> => genlib_map:get('first6', Req),
+        <<"payment_last4">> => genlib_map:get('last4', Req),
+        <<"payment_rrn">> => genlib_map:get('rrn', Req),
+        <<"payment_approval_code">> => genlib_map:get('approvalCode', Req),
+        <<"refund_id">> => genlib_map:get('refundID', Req),
+        <<"refund_status">> => genlib_map:get('refundStatus', Req),
+        <<"invoice_status">> => genlib_map:get('invoiceStatus', Req),
+        <<"payout_id">> => genlib_map:get('payoutID', Req),
+        <<"payout_type">> => encode_payout_type(genlib_map:get('payoutToolType', Req))
+    }.
+
+make_authorization_query(OperationID, Context, Req) ->
+    #{
+        id => OperationID,
+        party => capi_handler_utils:get_party_id(Context),
+        shop => genlib_map:get('shopID', Req),
+        invoice => genlib_map:get('invoiceID', Req),
+        payment => genlib_map:get('paymentID', Req),
+        customer => genlib_map:get('customerID', Req),
+        payout => genlib_map:get('payoutID', Req),
+        refund => genlib_map:get('refundID', Req)
+    }.
 
 process_search_request(QueryType, Query, Req, Context, Opts = #{thrift_fun := ThriftFun}) ->
     QueryParams = #{
