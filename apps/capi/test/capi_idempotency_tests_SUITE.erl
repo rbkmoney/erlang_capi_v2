@@ -113,8 +113,10 @@ init_per_group(payment_creation, Config) ->
     {ok, #{
         <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
     }} = capi_client_invoices:create_invoice(capi_ct_helper:get_context(Token, ExtraProperties), Req),
+    SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
+    Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
-    [{context, capi_ct_helper:get_context(InvAccToken)} | Config];
+    [{context, capi_ct_helper:get_context(InvAccToken)}, {group_apps, Apps1} | Config];
 init_per_group(GroupName, Config) when
     GroupName =:= invoice_creation orelse
         GroupName =:= refund_creation
@@ -444,9 +446,12 @@ create_payment(BenderKey, Requests, Config) ->
     Tid = capi_ct_helper_bender:create_storage(),
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('StartPayment', {_, _, IPP}) ->
-                #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
-                {ok, ?PAYPROC_PAYMENT(ID, EID)}
+            {invoicing, fun
+                ('Get', _) ->
+                    {ok, ?PAYPROC_INVOICE};
+                ('StartPayment', {_, _, IPP}) ->
+                    #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
+                    {ok, ?PAYPROC_PAYMENT(ID, EID)}
             end},
             {bender, fun('GenerateID', {_, _, CtxMsgPack}) ->
                 capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
@@ -493,11 +498,14 @@ create_refunds(BenderKey, Requests, Config) ->
     Tid = capi_ct_helper_bender:create_storage(),
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun(
-                'RefundPayment',
-                {_, _, _, #payproc_InvoicePaymentRefundParams{id = ID, external_id = EID}}
-            ) ->
-                {ok, ?REFUND(ID, EID)}
+            {invoicing, fun
+                ('Get', _) ->
+                    {ok, ?PAYPROC_INVOICE([?PAYPROC_PAYMENT])};
+                (
+                    'RefundPayment',
+                    {_, _, _, #payproc_InvoicePaymentRefundParams{id = ID, external_id = EID}}
+                ) ->
+                    {ok, ?REFUND(ID, EID)}
             end},
             {bender, fun('GenerateID', {_, _, CtxMsgPack}) ->
                 capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)

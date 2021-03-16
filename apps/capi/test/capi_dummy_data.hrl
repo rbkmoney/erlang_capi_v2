@@ -303,6 +303,11 @@
     external_id = EID
 }).
 
+-define(PAYPROC_REFUND(ID, EID), #payproc_InvoicePaymentRefund{
+    refund = ?REFUND(ID, EID),
+    sessions = []
+}).
+
 -define(CHARGEBACK, ?CHARGEBACK(?STRING)).
 
 -define(PAYPROC_CHARGEBACK, ?PAYPROC_CHARGEBACK(?STRING)).

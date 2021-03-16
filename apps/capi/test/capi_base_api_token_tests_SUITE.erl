@@ -40,9 +40,10 @@
     rescind_invoice_ok_test/1,
     fulfill_invoice_ok_test/1,
     get_merchant_payment_status_test/1,
+    create_payment_error_test/1,
     create_refund/1,
-    create_refund_legacy/1,
-    create_refund_error/1,
+    create_refund_blocked_error/1,
+    create_refund_expired_error/1,
     create_partial_refund/1,
     create_partial_refund_without_currency/1,
     get_refund_by_id/1,
@@ -112,6 +113,7 @@
     get_payment_institution_by_ref/1,
     get_payment_institution_payment_terms/1,
     get_payment_institution_payout_terms/1,
+    get_payment_institution_payout_schedules/1,
     check_no_payment_by_external_id_test/1,
     check_no_internal_id_for_external_id_test/1,
     retrieve_payment_by_external_id_test/1,
@@ -160,16 +162,6 @@ groups() ->
             rescind_invoice_ok_test,
             fulfill_invoice_ok_test,
             get_merchant_payment_status_test,
-            create_refund,
-            create_refund_legacy,
-            create_refund_error,
-            create_partial_refund,
-            create_partial_refund_without_currency,
-            get_chargeback_by_id,
-            get_chargebacks,
-            get_refund_by_id,
-            get_refunds,
-            get_refund_by_external_id,
             update_invoice_template_ok_test,
             delete_invoice_template_ok_test,
             get_my_party_ok_test,
@@ -214,10 +206,6 @@ groups() ->
             download_report_file_not_found_test,
             get_category_by_ref_ok_test,
             get_schedule_by_ref_ok_test,
-            get_payment_institutions,
-            get_payment_institution_by_ref,
-            get_payment_institution_payment_terms,
-            get_payment_institution_payout_terms,
             delete_customer_ok_test,
             check_no_payment_by_external_id_test,
             retrieve_payment_by_external_id_test,
@@ -236,7 +224,24 @@ groups() ->
             activate_shop_for_party_ok_test,
             activate_shop_for_party_error_test,
 
+            create_payment_error_test,
+            create_refund,
+            create_refund_blocked_error,
+            create_refund_expired_error,
+            create_partial_refund,
+            create_partial_refund_without_currency,
+            get_chargeback_by_id,
+            get_chargebacks,
+            get_refund_by_id,
+            get_refunds,
+            get_refund_by_external_id,
             check_no_internal_id_for_external_id_test,
+
+            get_payment_institutions,
+            get_payment_institution_by_ref,
+            get_payment_institution_payment_terms,
+            get_payment_institution_payout_terms,
+            get_payment_institution_payout_schedules,
 
             create_webhook_ok_test,
             create_webhook_limit_exceeded_test,
@@ -491,14 +496,16 @@ check_no_internal_id_for_external_id_test(Config) ->
         ],
         Config
     ),
-    capi_ct_helper_bouncer:mock_bouncer_compare_payment_op_ctx(
-        <<"CreatePayment">>, ?STRING, ?STRING, ?STRING, ?STRING, Config
+    _ = capi_ct_helper_bouncer:mock_bouncer_compare_payment_op_ctx(
+        <<"GetPaymentByExternalID">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
     ),
-    {error,
-        {404, #{
-            <<"message">> := <<"Payment not found">>
-        }}} =
-        capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
+    %% Ugly test case, but after full integration with bouncer we would expect
+    %% {error, {401, #{}}}.
+    {error, {_, 500}} = capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
 
 -spec create_customer_ok_test(config()) -> _.
 create_customer_ok_test(Config) ->
@@ -584,25 +591,55 @@ get_failed_payment_with_invalid_cvv(Config) ->
     % mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
     capi_client_payments:get_payment_by_id(?config(context, Config), ?STRING, ?STRING).
 
--spec create_refund_legacy(config()) -> _.
-create_refund_legacy(Config) ->
+-spec create_payment_error_test(config()) -> _.
+create_payment_error_test(Config) ->
     BenderKey = <<"bender_key">>,
-    Req = #{
-        <<"reason">> => ?STRING,
-        <<"externalID">> => ?STRING
-    },
-    Ctx = capi_msgp_marshalling:marshal(#{
-        <<"version">> => 1,
-        <<"params_hash">> => erlang:phash2(Req)
-    }),
+    ExternalID = <<"merch_id">>,
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end},
-            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
+            {invoicing, fun
+                ('Get', _) ->
+                    {ok, ?PAYPROC_INVOICE};
+                ('StartPayment', {_, _, IPP}) ->
+                    #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
+                    {ok, ?PAYPROC_PAYMENT(ID, EID)}
+            end},
+            {bender, fun('GenerateID', _) ->
+                {ok, capi_ct_helper_bender:get_result(BenderKey)}
+            end}
         ],
         Config
     ),
-    {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
+    _ = capi_ct_helper_bouncer:mock_bouncer_compare_payment_op_ctx(
+        <<"CreatePayment">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
+    PaymentToolToken = get_encrypted_token(visa, ?EXP_DATE(2, 2020)),
+    Req = ?PAYMENT_PARAMS(ExternalID, PaymentToolToken),
+
+    {error, {_, 500}} = capi_client_payments:create_payment(?config(context, Config), Req, ?STRING).
+% TODO use after cut off uac.
+% {error, {401, #{}}} = capi_client_payments:create_payment(Context, Req, ?STRING).
+
+get_encrypted_token(PS, ExpDate) ->
+    get_encrypted_token(PS, ExpDate, undefined).
+
+get_encrypted_token(PS, ExpDate, IsCvvEmpty) ->
+    PaymentTool =
+        {bank_card, #domain_BankCard{
+            token = ?TEST_PAYMENT_TOKEN(PS),
+            payment_system = PS,
+            bin = <<"411111">>,
+            last_digits = <<"1111">>,
+            exp_date = ExpDate,
+            cardholder_name = <<"Degus Degusovich">>,
+            is_cvv_empty = IsCvvEmpty
+        }},
+    capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined).
 
 -spec create_refund(config()) -> _.
 create_refund(Config) ->
@@ -611,27 +648,68 @@ create_refund(Config) ->
     Tid = capi_ct_helper_bender:create_storage(),
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end},
+            {invoicing, fun
+                ('Get', _) ->
+                    {ok, ?PAYPROC_INVOICE([?PAYPROC_PAYMENT])};
+                ('RefundPayment', _) ->
+                    {ok, ?REFUND}
+            end},
             {generator, fun('GenerateID', _) ->
                 capi_ct_helper_bender:generate_id(BenderKey)
             end}
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_compare_payment_op_ctx(
+        <<"CreateRefund">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
     capi_ct_helper_bender:del_storage(Tid).
 
--spec create_refund_error(config()) -> _.
-create_refund_error(Config) ->
+-spec create_refund_blocked_error(config()) -> _.
+create_refund_blocked_error(Config) ->
     BenderKey = <<"bender_key">>,
     Req = #{<<"reason">> => ?STRING},
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun
+                ('Get', _) ->
+                    Invoice = ?PAYPROC_INVOICE_WITH_ID(<<"42">>),
+                    {ok, Invoice#payproc_Invoice{payments = [?PAYPROC_PAYMENT]}};
                 ('RefundPayment', {_, <<"42">>, _, _}) ->
                     {throwing, #payproc_InvalidPartyStatus{
                         status = {blocking, {blocked, #domain_Blocked{reason = ?STRING, since = ?TIMESTAMP}}}
-                    }};
+                    }}
+            end},
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(BenderKey) end}
+        ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_compare_payment_op_ctx(
+        <<"CreateRefund">>,
+        <<"42">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
+    {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"42">>, ?STRING).
+
+-spec create_refund_expired_error(config()) -> _.
+create_refund_expired_error(Config) ->
+    BenderKey = <<"bender_key">>,
+    Req = #{<<"reason">> => ?STRING},
+    _ = capi_ct_helper:mock_services(
+        [
+            {invoicing, fun
+                ('Get', _) ->
+                    Invoice = ?PAYPROC_INVOICE_WITH_ID(<<"43">>),
+                    {ok, Invoice#payproc_Invoice{payments = [?PAYPROC_PAYMENT]}};
                 ('RefundPayment', {_, <<"43">>, _, _}) ->
                     {throwing, #payproc_InvalidContractStatus{status = {expired, #domain_ContractExpired{}}}}
             end},
@@ -639,7 +717,14 @@ create_refund_error(Config) ->
         ],
         Config
     ),
-    {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"42">>, ?STRING),
+    _ = capi_ct_helper_bouncer:mock_bouncer_compare_payment_op_ctx(
+        <<"CreateRefund">>,
+        <<"43">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"43">>, ?STRING).
 
 -spec create_partial_refund(config()) -> _.
@@ -647,19 +732,23 @@ create_partial_refund(Config) ->
     BenderKey = <<"bender_key">>,
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun(
-                'RefundPayment',
-                {
-                    _,
-                    _,
-                    _,
-                    #payproc_InvoicePaymentRefundParams{
-                        cash = ?CASH,
-                        cart = ?THRIFT_INVOICE_CART
+            {invoicing, fun
+                ('Get', _) ->
+                    P = ?PAYPROC_PAYMENT,
+                    {ok, ?PAYPROC_INVOICE([P])};
+                (
+                    'RefundPayment',
+                    {
+                        _,
+                        _,
+                        _,
+                        #payproc_InvoicePaymentRefundParams{
+                            cash = ?CASH,
+                            cart = ?THRIFT_INVOICE_CART
+                        }
                     }
-                }
-            ) ->
-                {ok, ?REFUND}
+                ) ->
+                    {ok, ?REFUND}
             end},
             {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(BenderKey) end}
         ],
@@ -671,7 +760,14 @@ create_partial_refund(Config) ->
         <<"amount">> => ?INTEGER,
         <<"cart">> => ?INVOICE_CART
     },
-
+    _ = capi_ct_helper_bouncer:mock_bouncer_compare_payment_op_ctx(
+        <<"CreateRefund">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec create_partial_refund_without_currency(config()) -> _.
@@ -683,36 +779,80 @@ create_partial_refund_without_currency(Config) ->
     },
     _ = capi_ct_helper:mock_services(
         [
-            {
-                invoicing,
-                fun
-                    ('GetPayment', _) ->
-                        {ok, ?PAYPROC_PAYMENT};
-                    ('RefundPayment', _) ->
-                        {ok, ?REFUND}
-                end
-            },
+            {invoicing, fun
+                ('GetPayment', _) ->
+                    {ok, ?PAYPROC_PAYMENT};
+                ('Get', _) ->
+                    P = ?PAYPROC_PAYMENT,
+                    {ok, ?PAYPROC_INVOICE([P])};
+                ('RefundPayment', _) ->
+                    {ok, ?REFUND}
+            end},
             {generator, fun('GenerateID', _) ->
                 capi_ct_helper_bender:generate_id(BenderKey)
             end}
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_compare_payment_op_ctx(
+        <<"CreateRefund">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec get_refund_by_id(config()) -> _.
 get_refund_by_id(Config) ->
-    _ = capi_ct_helper:mock_services([{invoicing, fun('GetPaymentRefund', _) -> {ok, ?REFUND} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {invoicing, fun('Get', _) ->
+                P = ?PAYPROC_PAYMENT,
+                Payment = P#payproc_InvoicePayment{refunds = [?PAYPROC_REFUND(?STRING, ?STRING)]},
+                {ok, ?PAYPROC_INVOICE([Payment])}
+            end}
+        ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_compare_refund_op_ctx(
+        <<"GetRefundByID">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_payments:get_refund_by_id(?config(context, Config), ?STRING, ?STRING, ?STRING).
 
 -spec get_refunds(config()) -> _.
 get_refunds(Config) ->
-    _ = capi_ct_helper:mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {invoicing, fun('Get', _) ->
+                P = ?PAYPROC_PAYMENT,
+                Payment = P#payproc_InvoicePayment{refunds = [?PAYPROC_REFUND(?STRING, ?STRING)]},
+                {ok, ?PAYPROC_INVOICE([Payment])}
+            end}
+        ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_compare_payment_op_ctx(
+        <<"GetRefunds">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_payments:get_refunds(?config(context, Config), ?STRING, ?STRING).
 
 -spec get_refund_by_external_id(config()) -> _.
 get_refund_by_external_id(Config) ->
     ExternalID = <<"merch_id">>,
+    RefundID = capi_utils:get_unique_id(),
     BenderContext = capi_msgp_marshalling:marshal(#{
         <<"context_data">> => #{
             <<"invoice_id">> => ?STRING,
@@ -722,12 +862,25 @@ get_refund_by_external_id(Config) ->
     }),
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('GetPaymentRefund', _) -> {ok, ?REFUND} end},
+            {invoicing, fun('Get', _) ->
+                P = ?PAYPROC_PAYMENT,
+                Payment = P#payproc_InvoicePayment{refunds = [?PAYPROC_REFUND(RefundID, ExternalID)]},
+                {ok, ?PAYPROC_INVOICE([Payment])}
+            end},
             {bender, fun('GetInternalID', _) ->
-                InternalKey = capi_utils:get_unique_id(),
+                InternalKey = RefundID,
                 {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)}
             end}
         ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_compare_refund_op_ctx(
+        <<"GetRefundByExternalID">>,
+        ?STRING,
+        ?STRING,
+        RefundID,
+        ?STRING,
+        ?STRING,
         Config
     ),
     {ok, _} = capi_client_payments:get_refund_by_external_id(?config(context, Config), ExternalID).
@@ -738,17 +891,40 @@ get_refund_by_external_id(Config) ->
 get_chargeback_by_id(Config) ->
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('GetPaymentChargeback', _) ->
-                {ok, ?CHARGEBACK}
+            {invoicing, fun('Get', _) ->
+                {ok, ?PAYPROC_INVOICE([?PAYPROC_PAYMENT])}
             end}
         ],
         Config
     ),
-    {ok, _} = capi_client_payments:get_chargeback_by_id(?config(context, Config), ?STRING, ?STRING, ?STRING).
+    _ = capi_ct_helper_bouncer:mock_bouncer_compare_payment_op_ctx(
+        <<"GetChargebacks">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
+    {ok, _} = capi_client_payments:get_chargebacks(?config(context, Config), ?STRING, ?STRING).
 
 -spec get_chargebacks(config()) -> _.
 get_chargebacks(Config) ->
-    _ = capi_ct_helper:mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {invoicing, fun('Get', _) ->
+                {ok, ?PAYPROC_INVOICE([?PAYPROC_PAYMENT])}
+            end}
+        ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_compare_payment_op_ctx(
+        <<"GetChargebacks">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_payments:get_chargebacks(?config(context, Config), ?STRING, ?STRING).
 
 %
@@ -1654,7 +1830,6 @@ check_no_payment_by_external_id_test(Config) ->
         [
             {invoicing, fun('Get', _) ->
                 {ok, ?PAYPROC_INVOICE}
-                % {throwing, #payproc_InvoicePaymentNotFound{}}
             end},
             {bender, fun('GetInternalID', _) ->
                 InternalKey = capi_utils:get_unique_id(),
@@ -1695,7 +1870,8 @@ retrieve_payment_by_external_id_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Get', _) ->
-                {ok, ?PAYPROC_INVOICE([?PAYPROC_PAYMENT(PaymentID, ExternalID)])} end},
+                {ok, ?PAYPROC_INVOICE([?PAYPROC_PAYMENT(PaymentID, ExternalID)])}
+            end},
             {bender, fun('GetInternalID', _) ->
                 {ok, capi_ct_helper_bender:get_internal_id_result(PaymentID, BenderContext)}
             end}
@@ -1709,6 +1885,7 @@ retrieve_payment_by_external_id_test(Config) ->
 
 -spec get_payment_institutions(config()) -> _.
 get_payment_institutions(Config) ->
+    _ = capi_ct_helper_bouncer:mock_bouncer_compare_op_ctx(<<"GetPaymentInstitutions">>, Config),
     {ok, [_Something]} = capi_client_payment_institutions:get_payment_institutions(?config(context, Config)),
     {ok, []} =
         capi_client_payment_institutions:get_payment_institutions(?config(context, Config), <<"RUS">>, <<"live">>),
@@ -1717,6 +1894,7 @@ get_payment_institutions(Config) ->
 
 -spec get_payment_institution_by_ref(config()) -> _.
 get_payment_institution_by_ref(Config) ->
+    _ = capi_ct_helper_bouncer:mock_bouncer_compare_op_ctx(<<"GetPaymentInstitutionByRef">>, Config),
     {ok, _} = capi_client_payment_institutions:get_payment_institution_by_ref(?config(context, Config), ?INTEGER).
 
 -spec get_payment_institution_payment_terms(config()) -> _.
@@ -1727,6 +1905,7 @@ get_payment_institution_payment_terms(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_compare_op_ctx(<<"GetPaymentInstitutionPaymentTerms">>, Config),
     {ok, _} =
         capi_client_payment_institutions:get_payment_institution_payment_terms(?config(context, Config), ?INTEGER).
 
@@ -1738,11 +1917,23 @@ get_payment_institution_payout_terms(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_compare_op_ctx(<<"GetPaymentInstitutionPayoutMethods">>, Config),
     {ok, _} = capi_client_payment_institutions:get_payment_institution_payout_methods(
         ?config(context, Config),
         ?INTEGER,
         <<"RUB">>
+    ).
+
+-spec get_payment_institution_payout_schedules(config()) -> _.
+get_payment_institution_payout_schedules(Config) ->
+    _ = capi_ct_helper:mock_services(
+        [
+            {party_management, fun('ComputePaymentInstitutionTerms', _) -> {ok, ?TERM_SET} end}
+        ],
+        Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_compare_op_ctx(<<"GetPaymentInstitutionPayoutSchedules">>, Config),
+
     {ok, _} = capi_client_payment_institutions:get_payment_institution_payout_schedules(
         ?config(context, Config),
         ?INTEGER,

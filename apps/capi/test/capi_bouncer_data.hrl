@@ -51,7 +51,7 @@
     id = ID,
     invoice = ?CTX_ENTITY(InvoiceID),
     payment = ?CTX_ENTITY(PaymentID),
-    refund = ?CTX_ENTITY(PaymentID)
+    refund = ?CTX_ENTITY(RefundID)
 }).
 
 -define(CTX_INVOICE_TPL_OP(ID, InvoiceTemplateID), #bctx_v1_CommonAPIOperation{
@@ -121,17 +121,17 @@
 }).
 
 -define(compareContext(Expect), fun(Context) ->
-    case (Context) of
+    case Context of
         Expect ->
             {ok, ?JUDGEMENT(?ALLOWED)};
         _ ->
-            {ok, ?JUDGEMENT(?FORBIDDEN)}
+            {throwing, #bdcs_InvalidContext{}}
     end
 end).
 
 -define(assertContextMatches(Expect), fun(Context) ->
-        ?assertMatch(Expect, Context),
-        {ok, ?JUDGEMENT(?ALLOWED)}
-    end).
+    ?assertMatch(Expect, Context),
+    {ok, ?JUDGEMENT(?ALLOWED)}
+end).
 
 -endif.

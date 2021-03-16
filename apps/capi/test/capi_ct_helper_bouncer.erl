@@ -13,10 +13,12 @@
 -export([mock_bouncer_assert_payment_op_ctx/6]).
 -export([mock_bouncer_compare_payment_op_ctx/5]).
 -export([mock_bouncer_compare_payment_op_ctx/6]).
+-export([mock_bouncer_compare_refund_op_ctx/7]).
 -export([mock_bouncer_assert_invoice_tpl_op_ctx/5]).
 -export([mock_bouncer_assert_customer_op_ctx/5]).
 -export([mock_bouncer_assert_claim_op_ctx/4]).
 -export([mock_bouncer_assert_webhook_op_ctx/4]).
+-export([mock_bouncer_compare_op_ctx/2]).
 
 -export([mock_bouncer_client/1]).
 -export([mock_bouncer_arbiter/2]).
@@ -28,6 +30,17 @@
 mock_bouncer_assert_op_ctx(Op, Config) ->
     mock_bouncer_arbiter(
         ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_CAPI_OP(Op))
+            }
+        ),
+        Config
+    ).
+
+-spec mock_bouncer_compare_op_ctx(_, _) -> _.
+mock_bouncer_compare_op_ctx(Op, Config) ->
+    mock_bouncer_arbiter(
+        ?compareContext(
             #bctx_v1_ContextFragment{
                 capi = ?CTX_CAPI(?CTX_CAPI_OP(Op))
             }
@@ -124,6 +137,19 @@ mock_bouncer_compare_payment_op_ctx(Op, InvoiceID, PaymentID, PartyID, ShopID, C
         Config
     ).
 
+-spec mock_bouncer_compare_refund_op_ctx(_, _, _, _, _, _, _) -> _.
+mock_bouncer_compare_refund_op_ctx(Op, InvoiceID, PaymentID, RefundID, PartyID, ShopID, Config) ->
+    mock_bouncer_arbiter(
+        ?compareContext(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_REFUND_OP(Op, InvoiceID, PaymentID, RefundID)),
+                payment_processing = #bctx_v1_ContextPaymentProcessing{
+                    invoice = ?CTX_INVOICE(InvoiceID, PartyID, ShopID, [?CTX_PAYMENT(PaymentID)])
+                }
+            }
+        ),
+        Config
+    ).
 
 -spec mock_bouncer_assert_invoice_tpl_op_ctx(_, _, _, _, _) -> _.
 mock_bouncer_assert_invoice_tpl_op_ctx(Op, InvoiceTemplateID, PartyID, ShopID, Config) ->

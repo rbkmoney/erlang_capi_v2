@@ -414,8 +414,6 @@ authorize_operation(
                 {forbidden, Reason}
         end,
     AuthResult = authorize_operation(Prototypes, Ctx),
-    ct:print("OldAuthResult ~p AuthResult ~p", [OldAuthResult, AuthResult]),
-    ct:print("OperationACL ~p~nAuthContext:~p~n", [OperationACL, AuthContext]),
     handle_auth_result(OldAuthResult, AuthResult).
 
 handle_auth_result(allowed, allowed) ->
