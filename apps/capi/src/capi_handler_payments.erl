@@ -332,11 +332,11 @@ prepare(OperationID = 'CreateRefund', Req, Context) ->
                         ),
                         {ok, ErrorResp};
                     #payproc_InsufficientAccountBalance{} ->
-                        {ok,
-                            logic_error(
-                                insufficentAccountBalance,
-                                <<"Operation can not be conducted because of insufficient funds on the merchant account">>
-                            )};
+                        ErrResp  = logic_error(
+                            insufficentAccountBalance,
+                            <<"Operation can not be conducted because of insufficient funds on the merchant account">>
+                        ),
+                        {ok, ErrResp};
                     #payproc_InvoicePaymentAmountExceeded{} ->
                         ErrorResp = logic_error(
                             invoicePaymentAmountExceeded,

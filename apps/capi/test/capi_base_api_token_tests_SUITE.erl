@@ -49,7 +49,6 @@
     get_refund_by_id/1,
     get_refunds/1,
     get_chargeback_by_id/1,
-    get_chargebacks/1,
     get_refund_by_external_id/1,
     update_invoice_template_ok_test/1,
     delete_invoice_template_ok_test/1,
@@ -231,7 +230,6 @@ groups() ->
             create_partial_refund,
             create_partial_refund_without_currency,
             get_chargeback_by_id,
-            get_chargebacks,
             get_refund_by_id,
             get_refunds,
             get_refund_by_external_id,
@@ -889,26 +887,6 @@ get_refund_by_external_id(Config) ->
 
 -spec get_chargeback_by_id(config()) -> _.
 get_chargeback_by_id(Config) ->
-    _ = capi_ct_helper:mock_services(
-        [
-            {invoicing, fun('Get', _) ->
-                {ok, ?PAYPROC_INVOICE([?PAYPROC_PAYMENT])}
-            end}
-        ],
-        Config
-    ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_compare_payment_op_ctx(
-        <<"GetChargebacks">>,
-        ?STRING,
-        ?STRING,
-        ?STRING,
-        ?STRING,
-        Config
-    ),
-    {ok, _} = capi_client_payments:get_chargebacks(?config(context, Config), ?STRING, ?STRING).
-
--spec get_chargebacks(config()) -> _.
-get_chargebacks(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Get', _) ->
