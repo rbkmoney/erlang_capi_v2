@@ -84,10 +84,12 @@
     }
 ]).
 
--define(INVOICE_BANK_ACCOUNT, {russian, #domain_InvoiceRussianBankAccount{
-    account = <<"12345678901234567890">>,
-    bank_bik = <<"123456789">>
-}}).
+-define(INVOICE_BANK_ACCOUNT,
+    {russian, #domain_InvoiceRussianBankAccount{
+        account = <<"12345678901234567890">>,
+        bank_bik = <<"123456789">>
+    }}
+).
 
 -define(PAYPROC_INVOICE(Payments), #payproc_Invoice{
     invoice = ?INVOICE,
