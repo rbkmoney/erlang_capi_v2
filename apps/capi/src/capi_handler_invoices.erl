@@ -284,7 +284,8 @@ encode_invoice_details(Params) ->
     #domain_InvoiceDetails{
         product = genlib_map:get(<<"product">>, Params),
         description = genlib_map:get(<<"description">>, Params),
-        cart = capi_handler_encoder:encode_invoice_cart(Params)
+        cart = capi_handler_encoder:encode_invoice_cart(Params),
+        bank_account = capi_handler_encoder:encode_invoice_bank_account(Params)
     }.
 
 %%

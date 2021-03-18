@@ -11,6 +11,7 @@
 -export([decode_refund/2]).
 -export([decode_invoice/1]).
 -export([decode_invoice_cart/1]).
+-export([decode_invoice_bank_account/1]).
 -export([decode_invoice_line_tax_mode/1]).
 -export([decode_payment_status/2]).
 -export([decode_payment_operation_failure/2]).
@@ -372,8 +373,7 @@ decode_chargeback_reason_code(#domain_InvoicePaymentChargebackReason{code = Code
 -spec decode_invoice(capi_handler_encoder:encode_data()) -> capi_handler_decoder_utils:decode_data().
 decode_invoice(Invoice) ->
     #domain_Cash{amount = Amount, currency = Currency} = Invoice#domain_Invoice.cost,
-    #domain_InvoiceDetails{product = Product, description = Description, cart = Cart} =
-        Invoice#domain_Invoice.details,
+    Details = Invoice#domain_Invoice.details,
     capi_handler_utils:merge_and_compact(
         #{
             <<"id">> => Invoice#domain_Invoice.id,
@@ -384,9 +384,10 @@ decode_invoice(Invoice) ->
             <<"amount">> => Amount,
             <<"currency">> => capi_handler_decoder_utils:decode_currency(Currency),
             <<"metadata">> => capi_handler_decoder_utils:decode_context(Invoice#domain_Invoice.context),
-            <<"product">> => Product,
-            <<"description">> => Description,
-            <<"cart">> => decode_invoice_cart(Cart),
+            <<"product">> => Details#domain_InvoiceDetails.product,
+            <<"description">> => Details#domain_InvoiceDetails.description,
+            <<"cart">> => decode_invoice_cart(Details#domain_InvoiceDetails.cart),
+            <<"bankAccount">> => decode_invoice_bank_account(Details#domain_InvoiceDetails.bank_account),
             <<"invoiceTemplateID">> => Invoice#domain_Invoice.template_id
         },
         decode_invoice_status(Invoice#domain_Invoice.status)
@@ -419,6 +420,16 @@ decode_invoice_line(InvoiceLine = #domain_InvoiceLine{quantity = Quantity, price
         <<"cost">> => Price * Quantity,
         <<"taxMode">> => decode_invoice_line_tax_mode(InvoiceLine#domain_InvoiceLine.metadata)
     }).
+
+-spec decode_invoice_bank_account(dmsl_domain_thrift:'InvoiceBankAccount'() | undefined) ->
+    capi_handler_decoder_utils:decode_data() | undefined.
+decode_invoice_bank_account({russian, Russian}) ->
+    genlib_map:compact(#{
+        <<"account">> => Russian#domain_InvoiceRussianBankAccount.account,
+        <<"bankBik">> => Russian#domain_InvoiceRussianBankAccount.bank_bik
+    });
+decode_invoice_bank_account(undefined) ->
+    undefined.
 
 -spec decode_invoice_line_tax_mode(map()) -> capi_handler_decoder_utils:decode_data() | undefined.
 decode_invoice_line_tax_mode(#{<<"TaxMode">> := {str, TM}}) ->

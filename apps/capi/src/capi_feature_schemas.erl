@@ -36,6 +36,10 @@
 -define(price, 30).
 -define(tax, 31).
 -define(rate, 32).
+-define(bank_account, 33).
+-define(account_type, 34).
+-define(account, 35).
+-define(bank_bik, 36).
 
 -export([payment/0]).
 -export([invoice/0]).
@@ -102,7 +106,8 @@ invoice() ->
         ?currency => [<<"currency">>],
         ?product => [<<"product">>],
         ?due_date => [<<"dueDate">>],
-        ?cart => [<<"cart">>, {set, cart_line_schema()}]
+        ?cart => [<<"cart">>, {set, cart_line_schema()}],
+        ?bank_account => [<<"bankAccount">>, bank_account_schema()]
     }.
 
 -spec refund() -> schema().
@@ -126,6 +131,14 @@ cart_line_schema() ->
                 ?rate => [<<"rate">>]
             }
         ]
+    }.
+
+-spec bank_account_schema() -> schema().
+bank_account_schema() ->
+    #{
+        ?account_type => [<<"accountType">>],
+        ?account => [<<"account">>],
+        ?bank_bik => [<<"bankBik">>]
     }.
 
 -ifdef(TEST).
@@ -344,12 +357,18 @@ read_invoice_features_test() ->
         ?product => capi_idemp_features:hash(Prod2),
         ?price => capi_idemp_features:hash(Price2)
     },
+    BankAccount = #{
+        ?account_type => capi_idemp_features:hash(<<"InvoiceRussianBankAccount">>),
+        ?account => capi_idemp_features:hash(<<"12345678901234567890">>),
+        ?bank_bik => capi_idemp_features:hash(<<"123456789">>)
+    },
     Invoice = #{
         ?amount => undefined,
         ?currency => capi_idemp_features:hash(Cur),
         ?shop_id => capi_idemp_features:hash(ShopID),
         ?product => undefined,
         ?due_date => capi_idemp_features:hash(DueDate),
+        ?bank_account => BankAccount,
         ?cart => [
             [1, Product],
             [0, Product2]
@@ -361,6 +380,11 @@ read_invoice_features_test() ->
         <<"shopID">> => ShopID,
         <<"currency">> => Cur,
         <<"description">> => <<"Wild birds.">>,
+        <<"bankAccount">> => #{
+            <<"accountType">> => <<"InvoiceRussianBankAccount">>,
+            <<"account">> => <<"12345678901234567890">>,
+            <<"bankBik">> => <<"123456789">>
+        },
         <<"cart">> => [
             #{<<"product">> => Prod2, <<"quantity">> => 1, <<"price">> => Price2},
             #{<<"product">> => Prod1, <<"quantity">> => 1, <<"price">> => Price1, <<"not feature">> => <<"hmm">>}
