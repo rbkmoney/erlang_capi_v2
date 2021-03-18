@@ -14,18 +14,6 @@
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
-prepare(OperationID, Req, Context) when
-    OperationID =:= 'GetPayoutTools' orelse
-        OperationID =:= 'GetPayoutToolByID' orelse
-        OperationID =:= 'GetPayout' orelse
-        OperationID =:= 'CreatePayout' orelse
-        OperationID =:= 'GetScheduleByRef' orelse
-        OperationID =:= 'GetPayoutToolsForParty' orelse
-        OperationID =:= 'GetPayoutToolByIDForParty'
-->
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
-    Process = fun() -> process_request(OperationID, Context, Req) end,
-    {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID, Req, Context) when OperationID =:= 'GetPayout' ->
     PayoutID = maps:get(payoutID, Req),
     OperationContext = #{
@@ -35,8 +23,8 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayout' ->
     },
     Payout =
         case capi_handler_utils:service_call({payouts, 'Get', {PayoutID}}, Context) of
-            {ok, Payout} ->
-                Payout;
+            {ok, Result} ->
+                Result;
             {exception, #'payout_processing_PayoutNotFound'{}} ->
                 capi_handler:respond(general_error(404, <<"Payout not found">>))
         end,

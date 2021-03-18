@@ -70,6 +70,12 @@
     webhook = ?CTX_ENTITY(WebhookID)
 }).
 
+-define(CTX_PAYOUT_OP(ID, PayoutID, PartyID), #bctx_v1_CommonAPIOperation{
+    id = ID,
+    payout = ?CTX_ENTITY(PayoutID),
+    party = ?CTX_ENTITY(PartyID)
+}).
+
 -define(CTX_CLAIM_OP(ID, PartyID, ClaimID), #bctx_v1_CommonAPIOperation{
     id = ID,
     party = ?CTX_ENTITY(PartyID),
@@ -106,6 +112,13 @@
 -define(CTX_WEBHOOK(ID, PartyID), #bctx_v1_Webhook{
     id = ID,
     party = ?CTX_ENTITY(PartyID)
+}).
+
+-define(CTX_PAYOUT(ID, PartyID, ContractID, ShopID), #bctx_v1_Payout{
+    id = ID,
+    party = ?CTX_ENTITY(PartyID),
+    contract = ?CTX_ENTITY(ContractID),
+    shop = ?CTX_ENTITY(ShopID)
 }).
 
 -define(CTX_REPORT(ID, PartyID, ShopID, Files), #bctx_v1_Report{
