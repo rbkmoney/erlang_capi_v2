@@ -425,6 +425,7 @@ decode_invoice_line(InvoiceLine = #domain_InvoiceLine{quantity = Quantity, price
     capi_handler_decoder_utils:decode_data() | undefined.
 decode_invoice_bank_account({russian, Russian}) ->
     genlib_map:compact(#{
+        <<"accountType">> => <<"InvoiceRussianBankAccount">>,
         <<"account">> => Russian#domain_InvoiceRussianBankAccount.account,
         <<"bankBik">> => Russian#domain_InvoiceRussianBankAccount.bank_bik
     });
