@@ -37,9 +37,8 @@
 -define(tax, 31).
 -define(rate, 32).
 -define(bank_account, 33).
--define(account_type, 34).
--define(account, 35).
--define(bank_bik, 36).
+-define(account, 34).
+-define(bank_bik, 35).
 
 -export([payment/0]).
 -export([invoice/0]).
@@ -136,7 +135,7 @@ cart_line_schema() ->
 -spec bank_account_schema() -> schema().
 bank_account_schema() ->
     #{
-        ?account_type => [<<"accountType">>],
+        ?discriminator => [<<"accountType">>],
         ?account => [<<"account">>],
         ?bank_bik => [<<"bankBik">>]
     }.
@@ -358,7 +357,7 @@ read_invoice_features_test() ->
         ?price => capi_idemp_features:hash(Price2)
     },
     BankAccount = #{
-        ?account_type => capi_idemp_features:hash(<<"InvoiceRussianBankAccount">>),
+        ?discriminator => capi_idemp_features:hash(<<"InvoiceRussianBankAccount">>),
         ?account => capi_idemp_features:hash(<<"12345678901234567890">>),
         ?bank_bik => capi_idemp_features:hash(<<"123456789">>)
     },
