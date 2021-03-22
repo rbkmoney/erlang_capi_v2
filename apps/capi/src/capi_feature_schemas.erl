@@ -39,10 +39,14 @@
 -define(bank_account, 33).
 -define(account, 34).
 -define(bank_bik, 35).
+-define(payment_resource, 36).
+-define(payment_session, 37).
+-define(payment_tool_token, 38).
 
 -export([payment/0]).
 -export([invoice/0]).
 -export([refund/0]).
+-export([customer_binding_params/0]).
 
 -spec payment() -> schema().
 payment() ->
@@ -138,6 +142,18 @@ bank_account_schema() ->
         ?discriminator => [<<"accountType">>],
         ?account => [<<"account">>],
         ?bank_bik => [<<"bankBik">>]
+    }.
+
+-spec customer_binding_params() -> schema().
+customer_binding_params() ->
+    #{
+        ?payment_resource => [
+            <<"paymentResource">>,
+            #{
+                ?payment_session => [<<"paymentSession">>],
+                ?payment_tool_token => [<<"paymentToolToken">>]
+            }
+        ]
     }.
 
 -ifdef(TEST).
