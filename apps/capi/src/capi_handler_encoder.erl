@@ -10,6 +10,7 @@
 -export([encode_cash/2]).
 -export([encode_currency/1]).
 -export([encode_invoice_cart/1]).
+-export([encode_invoice_bank_account/1]).
 -export([encode_stat_request/1]).
 -export([encode_invoice_context/1]).
 -export([encode_payment_context/1]).
@@ -179,6 +180,18 @@ encode_invoice_line_tax_mode(#{<<"type">> := <<"InvoiceLineTaxVAT">>} = TaxMode)
     %% for more info about taxMode look here:
     %% https://github.com/rbkmoney/starrys/blob/master/docs/settings.md
     genlib_map:get(<<"rate">>, TaxMode).
+
+-spec encode_invoice_bank_account(request_data()) -> dmsl_domain_thrift:'InvoiceBankAccount'() | undefined.
+encode_invoice_bank_account(Params) ->
+    do_encode_invoice_bank_account(genlib_map:get(<<"bankAccount">>, Params)).
+
+do_encode_invoice_bank_account(#{<<"accountType">> := <<"InvoiceRussianBankAccount">>} = Account) ->
+    {russian, #domain_InvoiceRussianBankAccount{
+        account = maps:get(<<"account">>, Account),
+        bank_bik = maps:get(<<"bankBik">>, Account)
+    }};
+do_encode_invoice_bank_account(undefined) ->
+    undefined.
 
 -define(DEFAULT_INVOICE_META, #{}).
 
