@@ -271,7 +271,7 @@ encode_customer_binding_params(
     {ClientInfo, PaymentSession} =
         capi_handler_utils:unwrap_payment_session(maps:get(<<"paymentSession">>, PaymentResource)),
 
-    Schema = idemp_features:customer_binding_params(),
+    Schema = capi_idemp_features:customer_binding_params(),
     BenderParams = capi_bender:get_params(Schema, CustomerBindingParams),
 
     ExternalID = maps:get(<<"externalID">>, CustomerBindingParams, undefined),
