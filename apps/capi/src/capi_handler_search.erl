@@ -16,22 +16,11 @@
 prepare(OperationID, Req, Context) when
     OperationID =:= 'SearchInvoices' orelse
         OperationID =:= 'SearchPayments' orelse
-        OperationID =:= 'SearchRefunds'
+        OperationID =:= 'SearchRefunds' orelse
+        OperationID =:= 'SearchPayouts'
 ->
     OperationContext = make_authorization_query(OperationID, Context, Req),
-    Prototypes = [
-        {operation, OperationContext},
-        {payproc, OperationContext}
-    ],
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)} end,
-    Process = fun() -> process_request(OperationID, Context, Req) end,
-    {ok, #{authorize => Authorize, process => Process}};
-prepare(OperationID, Req, Context) when OperationID =:= 'SearchPayouts' ->
-    OperationContext = make_authorization_query(OperationID, Context, Req),
-    Prototypes = [
-        {operation, OperationContext},
-        {payouts, OperationContext}
-    ],
+    Prototypes = [{operation, OperationContext}],
     Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)} end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};

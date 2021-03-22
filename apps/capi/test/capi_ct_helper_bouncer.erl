@@ -16,7 +16,7 @@
 -export([mock_bouncer_assert_claim_op_ctx/4]).
 -export([mock_bouncer_assert_webhook_op_ctx/4]).
 -export([mock_bouncer_assert_payout_op_ctx/6]).
--export([mock_bouncer_assert_payout_op_ctx/7]).
+-export([mock_bouncer_assert_search_op_ctx/9]).
 
 -export([mock_bouncer_client/1]).
 -export([mock_bouncer_arbiter/2]).
@@ -152,17 +152,34 @@ mock_bouncer_assert_webhook_op_ctx(Op, WebhookID, PartyID, Config) ->
 
 -spec mock_bouncer_assert_payout_op_ctx(_, _, _, _, _, _) -> _.
 mock_bouncer_assert_payout_op_ctx(Op, PayoutID, PartyID, ContractID, ShopID, Config) ->
-    mock_bouncer_assert_payout_op_ctx(Op, PayoutID, PartyID, PartyID, ContractID, ShopID, Config).
-
--spec mock_bouncer_assert_payout_op_ctx(_, _, _, _, _, _, _) -> _.
-mock_bouncer_assert_payout_op_ctx(Op, PayoutID, OpPartyID, PartyID, ContractID, ShopID, Config) ->
     mock_bouncer_arbiter(
         ?assertContextMatches(
             #bctx_v1_ContextFragment{
-                capi = ?CTX_CAPI(?CTX_PAYOUT_OP(Op, PayoutID, OpPartyID)),
+                capi = ?CTX_CAPI(?CTX_PAYOUT_OP(Op, PayoutID, PartyID)),
                 payouts = #bctx_v1_ContextPayouts{
                     payout = ?CTX_PAYOUT(PayoutID, PartyID, ContractID, ShopID)
                 }
+            }
+        ),
+        Config
+    ).
+
+-spec mock_bouncer_assert_search_op_ctx(_, _, _, _, _, _, _, _, _) -> _.
+mock_bouncer_assert_search_op_ctx(Op, PartyID, ShopID, InvoiceID, PaymentID, CustomerID, PayoutID, RefundID, Config) ->
+    SearchCtx = ?CTX_SEARCH_OP(
+        Op,
+        PartyID,
+        ShopID,
+        InvoiceID,
+        PaymentID,
+        CustomerID,
+        PayoutID,
+        RefundID
+    ),
+    mock_bouncer_arbiter(
+        ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(SearchCtx)
             }
         ),
         Config

@@ -1223,6 +1223,7 @@ get_contract_adjustment_by_id_ok_test(Config) ->
 -spec get_payout_tools_ok_test(config()) -> _.
 get_payout_tools_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
+
     {ok, _} = capi_client_payouts:get_payout_tools(?config(context, Config), ?STRING),
     {ok, _} = capi_client_payouts:get_payout_tools_for_party(?config(context, Config), ?STRING, ?STRING).
 
@@ -1276,7 +1277,14 @@ get_payout(Config) ->
 get_payout_fail(Config) ->
     Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, [?PAYOUT_PROC_PAYOUT_SUMMARY_ITEM]),
     _ = capi_ct_helper:mock_services([{payouts, fun('Get', _) -> {ok, Payout} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_forbidden(), Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_payout_op_ctx(
+        <<"GetPayout">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {error, {404, _}} = capi_client_payouts:get_payout(?config(context_with_diff_party, Config), ?STRING).
 
 -spec create_webhook_ok_test(config()) -> _.
@@ -1403,6 +1411,17 @@ search_invoices_ok_test(Config) ->
         [{merchant_stat, fun('GetInvoices', _) -> {ok, ?STAT_RESPONSE_INVOICES} end}],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_search_op_ctx(
+        <<"SearchInvoice">>,
+        ?STRING,
+        ?STRING,
+        <<"testInvoiceID">>,
+        <<"testPaymentID">>,
+        <<"testCustomerID">>,
+        undefined,
+        undefined,
+        Config
+    ),
     ok = search_invoices_ok_test_(<<"applepay">>, Config),
     ok = search_invoices_ok_test_(<<"yandexpay">>, Config).
 
@@ -1419,6 +1438,7 @@ search_invoices_ok_test_(BankCardTokenProvider, Config) ->
         {paymentMethod, <<"bankCard">>},
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
+        {customerID, <<"testCustomerID">>},
         {payerFingerprint, <<"blablablalbalbal">>},
         {first6, <<"424242">>},
         {last4, <<"2222">>},
@@ -1435,6 +1455,17 @@ search_invoices_ok_test_(BankCardTokenProvider, Config) ->
 search_payments_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [{merchant_stat, fun('GetPayments', _) -> {ok, ?STAT_RESPONSE_PAYMENTS} end}],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_search_op_ctx(
+        <<"SearchPayments">>,
+        ?STRING,
+        ?STRING,
+        <<"testInvoiceID">>,
+        <<"testPaymentID">>,
+        undefined,
+        undefined,
+        undefined,
         Config
     ),
     ok = search_payments_ok_(<<"applepay">>, Config),
@@ -1471,6 +1502,17 @@ search_refunds_ok_test(Config) ->
         [{merchant_stat, fun('GetPayments', _) -> {ok, ?STAT_RESPONSE_REFUNDS} end}],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_search_op_ctx(
+        <<"SearchRefunds">>,
+        ?STRING,
+        <<"testShopID">>,
+        <<"testInvoiceID">>,
+        <<"testPaymentID">>,
+        undefined,
+        undefined,
+        <<"testRefundID">>,
+        Config
+    ),
     Query = [
         {limit, 2},
         {offset, 2},
@@ -1491,6 +1533,17 @@ search_refunds_ok_test(Config) ->
 search_payouts_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [{merchant_stat, fun('GetPayouts', _) -> {ok, ?STAT_RESPONSE_PAYOUTS} end}],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_search_op_ctx(
+        <<"SearchPayout">>,
+        ?STRING,
+        <<"testShopID">>,
+        <<"testInvoiceID">>,
+        <<"testPaymentID">>,
+        undefined,
+        <<"testPayoutID">>,
+        <<"testRefundID">>,
         Config
     ),
     Query = [
@@ -1693,6 +1746,7 @@ get_category_by_ref_ok_test(Config) ->
 
 -spec get_schedule_by_ref_ok_test(config()) -> _.
 get_schedule_by_ref_ok_test(Config) ->
+    _ = capi_ct_helper_bouncer:judge_always_allowed(),
     {ok, _} = capi_client_payouts:get_schedule_by_ref(?config(context, Config), ?INTEGER).
 
 -spec check_no_payment_by_external_id_test(config()) -> _.

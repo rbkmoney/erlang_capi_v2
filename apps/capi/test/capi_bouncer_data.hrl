@@ -76,6 +76,29 @@
     party = ?CTX_ENTITY(PartyID)
 }).
 
+-define(
+    CTX_SEARCH_OP(
+        ID,
+        PartyID,
+        ShopID,
+        InvoiceID,
+        PaymentID,
+        CustomerID,
+        PayoutID,
+        RefundID
+    ),
+    #bctx_v1_CommonAPIOperation{
+        id = ID,
+        party = ?CTX_ENTITY(PartyID),
+        shop = ?CTX_ENTITY(ShopID),
+        invoice = ?CTX_ENTITY(InvoiceID),
+        payment = ?CTX_ENTITY(PaymentID),
+        customer = ?CTX_ENTITY(CustomerID),
+        payout = ?CTX_ENTITY(PayoutID),
+        refund = ?CTX_ENTITY(RefundID)
+    }
+).
+
 -define(CTX_CLAIM_OP(ID, PartyID, ClaimID), #bctx_v1_CommonAPIOperation{
     id = ID,
     party = ?CTX_ENTITY(PartyID),
