@@ -82,7 +82,9 @@
     get_contract_adjustments_ok_test/1,
     get_contract_adjustment_by_id_ok_test/1,
     get_payout_tools_ok_test/1,
+    get_payout_tools_for_party_ok_test/1,
     get_payout_tool_by_id/1,
+    get_payout_tool_by_id_for_party/1,
     create_payout/1,
     get_payout/1,
     create_payout_autorization_error/1,
@@ -188,7 +190,9 @@ groups() ->
             get_contract_adjustments_ok_test,
             get_contract_adjustment_by_id_ok_test,
             get_payout_tools_ok_test,
+            get_payout_tools_for_party_ok_test,
             get_payout_tool_by_id,
+            get_payout_tool_by_id_for_party,
             create_payout,
             create_payout_autorization_error,
             get_payout,
@@ -279,8 +283,7 @@ init_per_group(operations_by_base_api_token, Config) ->
     {ok, Token2} = capi_ct_helper:issue_token(<<"TEST2">>, BasePermissions, unlimited, #{}),
     Config2 = [{context_with_diff_party, capi_ct_helper:get_context(Token2)} | Config],
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    [{context, capi_ct_helper:get_context(Token)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config2];
+    [{context, capi_ct_helper:get_context(Token)}, {group_test_sup, SupPid} | Config2];
 init_per_group(operations_by_base_api_token_with_new_auth, Config) ->
     BasePermissions = get_base_permissions(),
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
@@ -1223,16 +1226,27 @@ get_contract_adjustment_by_id_ok_test(Config) ->
 -spec get_payout_tools_ok_test(config()) -> _.
 get_payout_tools_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetPayoutTools">>, ?STRING, Config),
+    {ok, _} = capi_client_payouts:get_payout_tools(?config(context, Config), ?STRING).
 
-    {ok, _} = capi_client_payouts:get_payout_tools(?config(context, Config), ?STRING),
+-spec get_payout_tools_for_party_ok_test(config()) -> _.
+get_payout_tools_for_party_ok_test(Config) ->
+    _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetPayoutToolsForParty">>, ?STRING, Config),
     {ok, _} = capi_client_payouts:get_payout_tools_for_party(?config(context, Config), ?STRING, ?STRING).
 
 -spec get_payout_tool_by_id(config()) -> _.
 get_payout_tool_by_id(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetPayoutToolByID">>, ?STRING, Config),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_RU),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_US),
-    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?WALLET_TOOL),
+    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?WALLET_TOOL).
+
+-spec get_payout_tool_by_id_for_party(config()) -> _.
+get_payout_tool_by_id_for_party(Config) ->
+    _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetPayoutToolByIDForParty">>, ?STRING, Config),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id_for_party(
         ?config(context, Config),
         ?STRING,
@@ -1244,6 +1258,7 @@ get_payout_tool_by_id(Config) ->
 create_payout(Config) ->
     Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, []),
     _ = capi_ct_helper:mock_services([{payouts, fun('CreatePayout', _) -> {ok, Payout} end}], Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"CreatePayout">>, ?STRING, ?STRING, Config),
     {ok, _} = capi_client_payouts:create_payout(?config(context, Config), ?PAYOUT_PARAMS, ?STRING).
 
 -spec create_payout_autorization_error(config()) -> _.
