@@ -15,15 +15,14 @@
 -export_type([context_data/0]).
 -export_type([difference/0]).
 
--export([gen_by_snowflake/4]).
 -export([gen_by_snowflake/3]).
+-export([gen_by_snowflake/4]).
 -export([gen_by_sequence/4]).
 -export([gen_by_sequence/5]).
 -export([gen_by_sequence/6]).
 -export([gen_by_constant/4]).
 -export([gen_by_constant/5]).
 -export([get_idempotent_key/3]).
--export([get_params/2]).
 -export([get_internal_id/2]).
 
 %% deprecated
@@ -87,12 +86,6 @@ get_idempotent_key(Prefix, PartyID, undefined) ->
     get_idempotent_key(Prefix, PartyID, gen_external_id());
 get_idempotent_key(Prefix, PartyID, ExternalID) ->
     <<"capi/", Prefix/binary, "/", PartyID/binary, "/", ExternalID/binary>>.
-
--spec get_params(capi_idemp_features:schema(), capi_idemp_features:request()) -> params().
-get_params(Schema, Request) ->
-    Hash = erlang:phash2(Request),
-    Features = capi_idemp_features:read(Schema, Request),
-    {Hash, Features}.
 
 -spec get_internal_id(binary(), woody_context()) -> {ok, binary(), context_data()} | {error, internal_id_not_found}.
 get_internal_id(ExternalID, WoodyContext) ->

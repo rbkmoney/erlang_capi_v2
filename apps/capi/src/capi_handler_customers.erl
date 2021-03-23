@@ -271,31 +271,21 @@ encode_customer_binding_params(
     {ClientInfo, PaymentSession} =
         capi_handler_utils:unwrap_payment_session(maps:get(<<"paymentSession">>, PaymentResource)),
 
-    Schema = capi_feature_schemas:customer_binding_params(),
-    BenderParams = capi_bender:get_params(Schema, CustomerBindingParams),
-
     ExternalID = maps:get(<<"externalID">>, CustomerBindingParams, undefined),
     UserID = capi_handler_utils:get_user_id(Context),
-    IdempotentKey = capi_bender:get_idempotent_key(
-        <<"EncodeCustomerBindingParams">>,
-        UserID,
-        ExternalID
+
+    IdempKey = capi_bender_idemp:build_idempotent_key(
+        {<<"EncodeCustomerBindingParams">>, UserID, ExternalID}
+    ),
+    Identity = capi_bender_idemp:build_identity(
+        {schema, capi_feature_schemas:customer_binding_params(), CustomerBindingParams}
     ),
 
-    RecPaymentToolID =
-        case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyContext) of
-            {ok, ID} ->
-                ID;
-            {error, {external_id_conflict, ID, undefined}} ->
-                logger:warning("This externalID: ~p, used in another request.~n", [ID]),
-                throw({external_id_conflict, ID, ExternalID});
-            {error, {external_id_conflict, ID, Difference}} ->
-                ReadableDiff = capi_idemp_features:list_diff_fields(Schema, Difference),
-                logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, ReadableDiff]),
-                throw({external_id_conflict, ID, ExternalID})
-        end,
+    CustomerBindingID = capi_bender_idemp:try_gen_snowflake(IdempKey, Identity, WoodyContext),
+    RecPaymentToolID = capi_bender_idemp:try_gen_snowflake(IdempKey, Identity, WoodyContext),
 
     #payproc_CustomerBindingParams{
+        customer_binding_id = CustomerBindingID,
         rec_payment_tool_id = RecPaymentToolID,
         payment_resource = #domain_DisposablePaymentResource{
             payment_tool = PaymentTool,
