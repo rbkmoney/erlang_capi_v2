@@ -38,10 +38,9 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayout' ->
         {operation, OperationContext},
         {payouts, #{payout => Payout}}
     ],
-    Authorize =
-        fun() ->
-            {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
-        end,
+    Authorize = fun() ->
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end,
     Process = fun() -> {ok, {200, #{}, decode_payout(Payout)}} end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID, Req, Context) when OperationID =:= 'CreatePayout' ->
@@ -53,10 +52,9 @@ prepare(OperationID, Req, Context) when OperationID =:= 'CreatePayout' ->
         party => PartyID,
         shop => maps:get(<<"shopID">>, PayoutParams)
     },
-    Authorize =
-        fun() ->
-            {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
-        end,
+    Authorize = fun() ->
+        {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
+    end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID, Req, Context) when
@@ -67,34 +65,31 @@ prepare(OperationID, Req, Context) when
         id => OperationID,
         party => capi_handler_utils:get_party_id(Context)
     },
-    Authorize =
-        fun() ->
-            {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
-        end,
+    Authorize = fun() ->
+        {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
+    end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID, Req, Context) when
-        OperationID =:= 'GetPayoutToolsForParty' orelse
+    OperationID =:= 'GetPayoutToolsForParty' orelse
         OperationID =:= 'GetPayoutToolByIDForParty'
 ->
     OperationContext = #{
         id => OperationID,
         party => maps:get('partyID', Req)
     },
-    Authorize =
-        fun() ->
-            {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
-        end,
+    Authorize = fun() ->
+        {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
+    end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID, Req, Context) when OperationID =:= 'GetScheduleByRef' ->
     OperationContext = #{
         id => OperationID
     },
-    Authorize =
-        fun() ->
-            {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
-        end,
+    Authorize = fun() ->
+        {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
+    end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->

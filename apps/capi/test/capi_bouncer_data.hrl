@@ -76,17 +76,16 @@
     party = ?CTX_ENTITY(PartyID)
 }).
 
--define(
-    CTX_SEARCH_OP(
-        ID,
-        PartyID,
-        ShopID,
-        InvoiceID,
-        PaymentID,
-        CustomerID,
-        PayoutID,
-        RefundID
-    ),
+-define(CTX_SEARCH_OP(
+    ID,
+    PartyID,
+    ShopID,
+    InvoiceID,
+    PaymentID,
+    CustomerID,
+    PayoutID,
+    RefundID
+),
     #bctx_v1_CommonAPIOperation{
         id = ID,
         party = ?CTX_ENTITY(PartyID),
