@@ -21,6 +21,7 @@
     swagger_context := swag_server:request_context(),
     woody_context := woody_context:ctx()
 }.
+
 -type throw(_T) :: no_return().
 
 -type request_state() :: #{
