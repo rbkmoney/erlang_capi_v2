@@ -16,7 +16,8 @@
 
 -define(DETAILS, #domain_InvoiceDetails{
     product = ?STRING,
-    description = ?STRING
+    description = ?STRING,
+    bank_account = ?INVOICE_BANK_ACCOUNT
 }).
 
 -define(CASH, #domain_Cash{
@@ -82,6 +83,13 @@
         <<"quantity">> => ?INTEGER
     }
 ]).
+
+-define(INVOICE_BANK_ACCOUNT,
+    {russian, #domain_InvoiceRussianBankAccount{
+        account = <<"12345678901234567890">>,
+        bank_bik = <<"123456789">>
+    }}
+).
 
 -define(PAYPROC_INVOICE(Payments), #payproc_Invoice{
     invoice = ?INVOICE,
@@ -1270,7 +1278,12 @@
     <<"metadata">> => #{<<"invoice_dummy_metadata">> => <<"test_value">>},
     <<"dueDate">> => ?TIMESTAMP,
     <<"product">> => <<"test_product">>,
-    <<"description">> => <<"test_invoice_description">>
+    <<"description">> => <<"test_invoice_description">>,
+    <<"bankAccount">> => #{
+        <<"accountType">> => <<"InvoiceRussianBankAccount">>,
+        <<"account">> => <<"12345678901234567890">>,
+        <<"bankBik">> => <<"123456789">>
+    }
 }).
 
 -define(CUSTOMER_PARAMS, #{

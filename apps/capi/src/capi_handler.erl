@@ -5,7 +5,7 @@
 -type error_type() :: swag_server_logic_handler:error_type().
 
 %% API callbacks
--export([authorize_api_key/3]).
+-export([authorize_api_key/4]).
 -export([map_error/2]).
 -export([handle_request/4]).
 -export([respond/1]).
@@ -21,6 +21,7 @@
     swagger_context := swag_server:request_context(),
     woody_context := woody_context:ctx()
 }.
+
 -type throw(_T) :: no_return().
 
 -type request_state() :: #{
@@ -51,9 +52,9 @@
 -define(REALM, <<"external">>).
 -define(DOMAIN, <<"common-api">>).
 
--spec authorize_api_key(swag_server:operation_id(), swag_server:api_key(), handler_opts()) ->
+-spec authorize_api_key(operation_id(), swag_server:api_key(), request_context(), handler_opts()) ->
     Result :: false | {true, capi_auth:context()}.
-authorize_api_key(OperationID, ApiKey, _HandlerOpts) ->
+authorize_api_key(OperationID, ApiKey, _Context, _HandlerOpts) ->
     case uac:authorize_api_key(ApiKey, #{}) of
         {ok, Context} ->
             check_blacklist(ApiKey, Context);
