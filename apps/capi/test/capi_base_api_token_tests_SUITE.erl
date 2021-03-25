@@ -209,11 +209,11 @@ groups() ->
             check_no_invoice_by_external_id_test
         ]},
         {operations_by_base_api_token_with_new_auth, [], [
-			create_customer_ok_test,
+            create_customer_ok_test,
             create_customer_autorization_error_test,
             delete_customer_ok_test,
             create_customer_access_token_ok_test,
-            
+
             create_invoice_ok_test,
             create_invoice_autorization_error_test,
             get_invoice_by_external_id,
@@ -470,8 +470,9 @@ create_invoice_with_template_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_tpl_op_ctx(
         <<"CreateInvoiceWithTemplate">>,
+        ?STRING,
         ?STRING,
         ?STRING,
         Config
