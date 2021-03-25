@@ -28,6 +28,7 @@
 -export([create_invoice_fail_test/1]).
 -export([create_invoice_idemp_cart_ok_test/1]).
 -export([create_invoice_idemp_cart_fail_test/1]).
+-export([create_invoice_idemp_bank_account_fail_test/1]).
 -export([create_refund_idemp_ok_test/1]).
 -export([create_refund_idemp_fail_test/1]).
 
@@ -66,7 +67,8 @@ groups() ->
             create_invoice_legacy_fail_test,
             create_invoice_fail_test,
             create_invoice_idemp_cart_fail_test,
-            create_invoice_idemp_cart_ok_test
+            create_invoice_idemp_cart_ok_test,
+            create_invoice_idemp_bank_account_fail_test
         ]},
         {refund_creation, [], [
             create_refund_idemp_ok_test,
@@ -395,6 +397,25 @@ create_invoice_idemp_cart_fail_test(Config) ->
     ?assertEqual(Unused, UnusedParams),
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response2),
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response3).
+
+-spec create_invoice_idemp_bank_account_fail_test(config()) -> _.
+create_invoice_idemp_bank_account_fail_test(Config) ->
+    BenderKey = <<"bender_key">>,
+    ExternalID = <<"merch_id">>,
+    Req = invoice_params(ExternalID),
+    Account1 = #{
+        <<"accountType">> => <<"InvoiceRussianBankAccount">>,
+        <<"account">> => <<"12345678901234567890">>,
+        <<"bankBik">> => <<"123456789">>
+    },
+    Account2 = Account1#{<<"bankBik">> => <<"987654321">>},
+    Req1 = Req#{<<"bankAccount">> => Account1},
+    Req2 = Req#{<<"bankAccount">> => Account2},
+    [
+        {{ok, _}, _},
+        {Response, _}
+    ] = create_invoices(BenderKey, [Req1, Req2], Config),
+    ?assertEqual(response_error(409, ExternalID, BenderKey), Response).
 
 -spec create_refund_idemp_ok_test(config()) -> _.
 create_refund_idemp_ok_test(Config) ->

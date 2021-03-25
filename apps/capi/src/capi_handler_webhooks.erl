@@ -6,6 +6,7 @@
 -behaviour(capi_handler).
 
 -export([prepare/3]).
+
 -import(capi_handler_utils, [general_error/2, logic_error/2]).
 
 -spec prepare(
