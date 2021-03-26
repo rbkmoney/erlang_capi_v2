@@ -61,14 +61,13 @@ init([]) ->
 all() ->
     [
         {group, operations_by_invoice_access_token_after_invoice_creation},
-        {group, operations_by_invoice_access_token_after_token_creation}
+        {group, operations_by_invoice_access_token_after_token_creation},
+        {group, operations_by_invoice_access_token_after_invoice_creation_with_new_auth},
+        {group, operations_by_invoice_access_token_after_token_creation_with_new_auth}
     ].
 
 invoice_access_token_tests() ->
     [
-        get_invoice_ok_test,
-        get_invoice_events_ok_test,
-        get_invoice_payment_methods_ok_test,
         create_payment_ok_test,
         create_payment_expired_test,
         create_payment_qiwi_access_token_ok_test,
@@ -86,11 +85,22 @@ invoice_access_token_tests() ->
         get_recurrent_payments_ok_test
     ].
 
+invoice_access_token_tests_with_new_auth() ->
+    [
+        get_invoice_ok_test,
+        get_invoice_events_ok_test,
+        get_invoice_payment_methods_ok_test
+    ].
+
 -spec groups() -> [{group_name(), list(), [test_case_name()]}].
 groups() ->
     [
         {operations_by_invoice_access_token_after_invoice_creation, [], invoice_access_token_tests()},
-        {operations_by_invoice_access_token_after_token_creation, [], invoice_access_token_tests()}
+        {operations_by_invoice_access_token_after_token_creation, [], invoice_access_token_tests()},
+        {operations_by_invoice_access_token_after_invoice_creation_with_new_auth, [],
+            invoice_access_token_tests_with_new_auth()},
+        {operations_by_invoice_access_token_after_token_creation_with_new_auth, [],
+            invoice_access_token_tests_with_new_auth()}
     ].
 
 %%
@@ -118,6 +128,7 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
         ],
         MockServiceSup
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"CreateInvoice">>, ?STRING, ?STRING, MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"amount">> => ?INTEGER,
@@ -144,6 +155,13 @@ init_per_group(operations_by_invoice_access_token_after_token_creation, Config) 
         ],
         MockServiceSup
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_op_ctx(
+        <<"CreateInvoiceAccessToken">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        MockServiceSup
+    ),
     {ok, #{<<"payload">> := InvAccToken}} = capi_client_invoices:create_invoice_access_token(
         capi_ct_helper:get_context(Token),
         ?STRING
@@ -152,6 +170,55 @@ init_per_group(operations_by_invoice_access_token_after_token_creation, Config) 
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
     Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     [{context, capi_ct_helper:get_context(InvAccToken)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config];
+init_per_group(operations_by_invoice_access_token_after_invoice_creation_with_new_auth, Config) ->
+    MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
+    ExtraProperties = #{<<"ip_replacement_allowed">> => true},
+    {ok, Token} = capi_ct_helper:issue_token([{[invoices], write}], unlimited, ExtraProperties),
+    _ = capi_ct_helper:mock_services(
+        [
+            {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end},
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
+        ],
+        MockServiceSup
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"CreateInvoice">>, ?STRING, ?STRING, MockServiceSup),
+    Req = #{
+        <<"shopID">> => ?STRING,
+        <<"amount">> => ?INTEGER,
+        <<"currency">> => ?RUB,
+        <<"metadata">> => #{<<"invoice_dummy_metadata">> => <<"test_value">>},
+        <<"dueDate">> => ?TIMESTAMP,
+        <<"product">> => <<"test_product">>,
+        <<"description">> => <<"test_invoice_description">>
+    },
+    {ok, #{
+        <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
+    }} = capi_client_invoices:create_invoice(capi_ct_helper:get_context(Token, ExtraProperties), Req),
+    capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
+    [{context, capi_ct_helper:get_context(InvAccToken)} | Config];
+init_per_group(operations_by_invoice_access_token_after_token_creation_with_new_auth, Config) ->
+    MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
+    {ok, Token} = capi_ct_helper:issue_token([{[invoices], write}], unlimited),
+    _ = capi_ct_helper:mock_services(
+        [
+            {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end},
+            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
+        ],
+        MockServiceSup
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_op_ctx(
+        <<"CreateInvoiceAccessToken">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        MockServiceSup
+    ),
+    {ok, #{<<"payload">> := InvAccToken}} = capi_client_invoices:create_invoice_access_token(
+        capi_ct_helper:get_context(Token),
+        ?STRING
+    ),
+    capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
+    [{context, capi_ct_helper:get_context(InvAccToken)} | Config];
 init_per_group(_, Config) ->
     Config.
 
@@ -174,6 +241,13 @@ end_per_testcase(_Name, C) ->
 -spec get_invoice_ok_test(config()) -> _.
 get_invoice_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}], Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_op_ctx(
+        <<"GetInvoiceByID">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_invoices:get_invoice_by_id(?config(context, Config), ?STRING).
 
 -spec get_invoice_events_ok_test(config()) -> _.
@@ -184,23 +258,33 @@ get_invoice_events_ok_test(Config) ->
     end,
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('GetEvents', {_, _, #payproc_EventRange{'after' = ID, limit = N}}) ->
-                {ok,
-                    lists:sublist(
-                        [
-                            ?INVOICE_EVENT(1),
-                            ?INVOICE_EVENT(2),
-                            ?INVOICE_EVENT_PRIVATE(3),
-                            ?INVOICE_EVENT(4),
-                            ?INVOICE_EVENT_PRIVATE(5),
-                            ?INVOICE_EVENT_PRIVATE(6),
-                            ?INVOICE_EVENT(7)
-                        ],
-                        Inc(ID),
-                        N
-                    )}
+            {invoicing, fun
+                ('GetEvents', {_, _, #payproc_EventRange{'after' = ID, limit = N}}) ->
+                    {ok,
+                        lists:sublist(
+                            [
+                                ?INVOICE_EVENT(1),
+                                ?INVOICE_EVENT(2),
+                                ?INVOICE_EVENT_PRIVATE(3),
+                                ?INVOICE_EVENT(4),
+                                ?INVOICE_EVENT_PRIVATE(5),
+                                ?INVOICE_EVENT_PRIVATE(6),
+                                ?INVOICE_EVENT(7)
+                            ],
+                            Inc(ID),
+                            N
+                        )};
+                ('Get', _) ->
+                    {ok, ?PAYPROC_INVOICE}
             end}
         ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_op_ctx(
+        <<"GetInvoiceEvents">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
         Config
     ),
     {ok, [#{<<"id">> := 1}, #{<<"id">> := 2}, #{<<"id">> := 4}]} =
@@ -212,9 +296,19 @@ get_invoice_events_ok_test(Config) ->
 get_invoice_payment_methods_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('ComputeTerms', _) -> {ok, ?TERM_SET} end},
+            {invoicing, fun
+                ('ComputeTerms', _) -> {ok, ?TERM_SET};
+                ('Get', _) -> {ok, ?PAYPROC_INVOICE}
+            end},
             {party_management, fun('Get', _) -> {ok, ?PARTY} end}
         ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_op_ctx(
+        <<"GetInvoicePaymentMethods">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
         Config
     ),
     {ok, _} = capi_client_invoices:get_invoice_payment_methods(?config(context, Config), ?STRING).
