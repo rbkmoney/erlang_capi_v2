@@ -155,15 +155,6 @@ all() ->
 groups() ->
     [
         {operations_by_base_api_token, [], [
-            create_invoice_ok_test,
-            create_invoice_autorization_error_test,
-            get_invoice_by_external_id,
-            create_invoice_access_token_ok_test,
-            create_invoice_template_ok_test,
-            create_invoice_template_autorization_error_test,
-            create_invoice_with_template_test,
-            rescind_invoice_ok_test,
-            fulfill_invoice_ok_test,
             get_merchant_payment_status_test,
             create_refund,
             create_refund_legacy,
@@ -175,8 +166,6 @@ groups() ->
             get_refund_by_id,
             get_refunds,
             get_refund_by_external_id,
-            update_invoice_template_ok_test,
-            delete_invoice_template_ok_test,
             get_shop_by_id_ok_test,
             get_shops_ok_test,
             activate_shop_ok_test,
@@ -219,6 +208,18 @@ groups() ->
             create_customer_autorization_error_test,
             delete_customer_ok_test,
             create_customer_access_token_ok_test,
+
+            create_invoice_ok_test,
+            create_invoice_autorization_error_test,
+            get_invoice_by_external_id,
+            create_invoice_access_token_ok_test,
+            create_invoice_template_ok_test,
+            create_invoice_template_autorization_error_test,
+            create_invoice_with_template_test,
+            rescind_invoice_ok_test,
+            fulfill_invoice_ok_test,
+            update_invoice_template_ok_test,
+            delete_invoice_template_ok_test,
 
             get_my_party_ok_test,
             suspend_my_party_ok_test,
@@ -338,6 +339,7 @@ create_invoice_ok_test(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"CreateInvoice">>, ?STRING, ?STRING, Config),
     {ok, _} = capi_client_invoices:create_invoice(?config(context, Config), ?INVOICE_PARAMS).
 
 -spec create_invoice_autorization_error_test(config()) -> _.
@@ -351,6 +353,7 @@ create_invoice_autorization_error_test(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"CreateInvoice">>, ?STRING, ?STRING, Config),
     ?assertMatch(
         {error, {400, #{<<"code">> := <<"invalidPartyID">>}}},
         capi_client_invoices:create_invoice(
@@ -373,11 +376,26 @@ get_invoice_by_external_id(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_op_ctx(
+        <<"GetInvoiceByExternalID">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
+
     {ok, _} = capi_client_invoices:get_invoice_by_external_id(?config(context, Config), ExternalID).
 
 -spec create_invoice_access_token_ok_test(config()) -> _.
 create_invoice_access_token_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}], Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_op_ctx(
+        <<"CreateInvoiceAccessToken">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_invoices:create_invoice_access_token(?config(context, Config), ?STRING).
 
 -spec create_invoice_template_ok_test(config()) -> _.
@@ -390,6 +408,7 @@ create_invoice_template_ok_test(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"CreateInvoiceTemplate">>, ?STRING, ?STRING, Config),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"lifetime">> => capi_ct_helper:get_lifetime(),
@@ -423,6 +442,7 @@ create_invoice_template_autorization_error_test(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"CreateInvoiceTemplate">>, ?STRING, ?STRING, Config),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"lifetime">> => capi_ct_helper:get_lifetime(),
@@ -458,6 +478,13 @@ create_invoice_with_template_test(Config) ->
             end},
             {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
         ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_tpl_op_ctx(
+        <<"CreateInvoiceWithTemplate">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
         Config
     ),
     ReqTemp = #{
@@ -572,12 +599,42 @@ create_customer_access_token_ok_test(Config) ->
 
 -spec rescind_invoice_ok_test(config()) -> _.
 rescind_invoice_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{invoicing, fun('Rescind', _) -> {ok, ok} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {invoicing, fun
+                ('Rescind', _) -> {ok, ok};
+                ('Get', _) -> {ok, ?PAYPROC_INVOICE}
+            end}
+        ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_op_ctx(
+        <<"RescindInvoice">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     ok = capi_client_invoices:rescind_invoice(?config(context, Config), ?STRING, ?STRING).
 
 -spec fulfill_invoice_ok_test(config()) -> _.
 fulfill_invoice_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{invoicing, fun('Fulfill', _) -> {ok, ok} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {invoicing, fun
+                ('Fulfill', _) -> {ok, ok};
+                ('Get', _) -> {ok, ?PAYPROC_INVOICE}
+            end}
+        ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_op_ctx(
+        <<"FulfillInvoice">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     ok = capi_client_invoices:fulfill_invoice(?config(context, Config), ?STRING, ?STRING).
 
 -spec get_merchant_payment_status_test(config()) -> _.
@@ -783,7 +840,22 @@ get_chargebacks(Config) ->
 
 -spec update_invoice_template_ok_test(config()) -> _.
 update_invoice_template_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{invoice_templating, fun('Update', _) -> {ok, ?INVOICE_TPL} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {invoice_templating, fun
+                ('Update', _) -> {ok, ?INVOICE_TPL};
+                ('Get', _) -> {ok, ?INVOICE_TPL}
+            end}
+        ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_tpl_op_ctx(
+        <<"UpdateInvoiceTemplate">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     Req = #{
         <<"lifetime">> => capi_ct_helper:get_lifetime(),
         <<"metadata">> => #{<<"invoice_template_dummy_metadata">> => <<"test_value">>}
@@ -813,7 +885,22 @@ update_invoice_template_ok_test(Config) ->
 
 -spec delete_invoice_template_ok_test(config()) -> _.
 delete_invoice_template_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{invoice_templating, fun('Delete', _) -> {ok, ok} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {invoice_templating, fun
+                ('Delete', _) -> {ok, ok};
+                ('Get', _) -> {ok, ?INVOICE_TPL}
+            end}
+        ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_tpl_op_ctx(
+        <<"DeleteInvoiceTemplate">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     ok = capi_client_invoice_templates:delete(?config(context, Config), ?STRING).
 
 -spec get_account_by_id_ok_test(config()) -> _.
