@@ -77,6 +77,12 @@ init_per_group(operations_by_invoice_template_access_token, Config) ->
         [{invoice_templating, fun('Create', _) -> {ok, ?INVOICE_TPL} end}],
         MockServiceSup
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(
+        <<"CreateInvoiceTemplate">>,
+        ?STRING,
+        ?STRING,
+        MockServiceSup
+    ),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"lifetime">> => capi_ct_helper:get_lifetime(),
@@ -96,15 +102,12 @@ init_per_group(operations_by_invoice_template_access_token, Config) ->
         <<"invoiceTemplateAccessToken">> := #{<<"payload">> := InvTemplAccToken}
     }} = capi_client_invoice_templates:create(capi_ct_helper:get_context(Token), Req),
     capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
-    SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    [{context, capi_ct_helper:get_context(InvTemplAccToken)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config];
+    [{context, capi_ct_helper:get_context(InvTemplAccToken)} | Config];
 init_per_group(_, Config) ->
     Config.
 
 -spec end_per_group(group_name(), config()) -> _.
-end_per_group(_Group, C) ->
-    _ = capi_utils:maybe(?config(group_test_sup, C), fun capi_ct_helper:stop_mocked_service_sup/1),
+end_per_group(_Group, _C) ->
     ok.
 
 -spec init_per_testcase(test_case_name(), config()) -> config().
@@ -130,6 +133,12 @@ create_invoice_with_tpl_ok_test(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(
+        <<"CreateInvoiceWithTemplate">>,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     Req = #{
         <<"amount">> => ?INTEGER,
         <<"currency">> => ?RUB,
@@ -140,15 +149,25 @@ create_invoice_with_tpl_ok_test(Config) ->
 -spec get_invoice_template_ok_test(config()) -> _.
 get_invoice_template_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{invoice_templating, fun('Get', _) -> {ok, ?INVOICE_TPL} end}], Config),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"GetInvoiceTemplateByID">>, ?STRING, ?STRING, Config),
     {ok, _} = capi_client_invoice_templates:get_template_by_id(?config(context, Config), ?STRING).
 
 -spec get_invoice_payment_methods_by_tpl_id_ok_test(config()) -> _.
 get_invoice_payment_methods_by_tpl_id_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
-            {invoice_templating, fun('ComputeTerms', _) -> {ok, ?TERM_SET} end},
+            {invoice_templating, fun
+                ('ComputeTerms', _) -> {ok, ?TERM_SET};
+                ('Get', _) -> {ok, ?INVOICE_TPL}
+            end},
             {party_management, fun('Get', _) -> {ok, ?PARTY} end}
         ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(
+        <<"GetInvoicePaymentMethodsByTemplateID">>,
+        ?STRING,
+        ?STRING,
         Config
     ),
     {ok, _} = capi_client_invoice_templates:get_invoice_payment_methods(?config(context, Config), ?STRING).
