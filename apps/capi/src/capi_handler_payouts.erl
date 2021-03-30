@@ -91,7 +91,6 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutTools' ->
             {exception, #payproc_ContractNotFound{}} ->
                 {ok, general_error(404, <<"Contract not found">>)}
         end
-
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolByID' ->
@@ -117,9 +116,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolByID' ->
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
-prepare(OperationID, Req, Context) when
-    OperationID =:= 'GetPayoutToolsForParty'
-->
+prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolsForParty' ->
     PartyID = maps:get('partyID', Req),
     OperationContext = #{
         id => OperationID,
@@ -138,9 +135,7 @@ prepare(OperationID, Req, Context) when
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
-prepare(OperationID, Req, Context) when
-        OperationID =:= 'GetPayoutToolByIDForParty'
-->
+prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolByIDForParty' ->
     PartyID = maps:get('partyID', Req),
     OperationContext = #{
         id => OperationID,

@@ -13,55 +13,62 @@
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
-prepare(OperationID, Req, Context) when
-    OperationID =:= 'SearchInvoices' orelse
-        OperationID =:= 'SearchPayments' orelse
-        OperationID =:= 'SearchRefunds' orelse
-        OperationID =:= 'SearchPayouts'
-->
+prepare(OperationID, Req, Context) when OperationID =:= 'SearchInvoices' ->
     OperationContext = make_authorization_query(OperationID, Context, Req),
     Prototypes = [{operation, OperationContext}],
     Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)} end,
-    Process = fun() -> process_request(OperationID, Context, Req) end,
+    Process = fun() ->
+        Query = make_query(Context, Req),
+        Opts = #{
+            thrift_fun => 'GetInvoices',
+            decode_fun => fun decode_stat_invoice/2
+        },
+        process_search_request(invoices, Query, Req, Context, Opts)
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID, Req, Context) when OperationID =:= 'SearchPayments' ->
+    OperationContext = make_authorization_query(OperationID, Context, Req),
+    Prototypes = [{operation, OperationContext}],
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)} end,
+    Process = fun() ->
+        Query = make_query(Context, Req),
+        Opts = #{
+            thrift_fun => 'GetPayments',
+            decode_fun => fun decode_stat_payment/2
+        },
+        process_search_request(payments, Query, Req, Context, Opts)
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID, Req, Context) when OperationID =:= 'SearchRefunds' ->
+    OperationContext = make_authorization_query(OperationID, Context, Req),
+    Prototypes = [{operation, OperationContext}],
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)} end,
+    Process = fun() ->
+        Query = make_query(Context, Req),
+        Opts = #{
+            %% TODO no special fun for refunds so we can use any
+            %% should be fixed in new magista
+            thrift_fun => 'GetPayments',
+            decode_fun => fun decode_stat_refund/2
+        },
+        process_search_request(refunds, Query, Req, Context, Opts)
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID, Req, Context) when OperationID =:= 'SearchPayouts' ->
+    OperationContext = make_authorization_query(OperationID, Context, Req),
+    Prototypes = [{operation, OperationContext}],
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)} end,
+    Process = fun() ->
+        Query = make_query(Context, Req),
+        Opts = #{
+            thrift_fun => 'GetPayouts',
+            decode_fun => fun decode_stat_payout/2
+        },
+        process_search_request(payouts, Query, Req, Context, Opts)
+    end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
-
--spec process_request(
-    OperationID :: capi_handler:operation_id(),
-    Context :: capi_handler:processing_context(),
-    ReqState :: capi_handler:request_state()
-) -> {ok, capi_handler:response()}.
-process_request('SearchInvoices', Context, Req) ->
-    Query = make_query(Context, Req),
-    Opts = #{
-        thrift_fun => 'GetInvoices',
-        decode_fun => fun decode_stat_invoice/2
-    },
-    process_search_request(invoices, Query, Req, Context, Opts);
-process_request('SearchPayments', Context, Req) ->
-    Query = make_query(Context, Req),
-    Opts = #{
-        thrift_fun => 'GetPayments',
-        decode_fun => fun decode_stat_payment/2
-    },
-    process_search_request(payments, Query, Req, Context, Opts);
-process_request('SearchPayouts', Context, Req) ->
-    Query = make_query(Context, Req),
-    Opts = #{
-        thrift_fun => 'GetPayouts',
-        decode_fun => fun decode_stat_payout/2
-    },
-    process_search_request(payouts, Query, Req, Context, Opts);
-process_request('SearchRefunds', Context, Req) ->
-    Query = make_query(Context, Req),
-    Opts = #{
-        %% TODO no special fun for refunds so we can use any
-        %% should be fixed in new magista
-        thrift_fun => 'GetPayments',
-        decode_fun => fun decode_stat_refund/2
-    },
-    process_search_request(refunds, Query, Req, Context, Opts).
 
 %%
 
