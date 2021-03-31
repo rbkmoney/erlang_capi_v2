@@ -33,7 +33,7 @@ create_storage() ->
 del_storage(Tid) ->
     ets:delete(Tid).
 
--spec with_storage(fun(() -> Result) | fun((tid) -> Result)) -> Result when Result :: term.
+-spec with_storage(fun(() -> Result) | fun((tid()) -> Result)) -> Result when Result :: term.
 with_storage(Fun) ->
     Tid = capi_ct_helper_bender:create_storage(),
     Result =

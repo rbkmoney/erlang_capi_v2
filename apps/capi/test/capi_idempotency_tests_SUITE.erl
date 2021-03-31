@@ -641,6 +641,7 @@ get_encrypted_token(PS, ExpDate, IsCvvEmpty) ->
 encrypt_payment_tool(PaymentTool) ->
     capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined).
 
+-spec create_customer_bindings(binary(), list(), term()) -> list().
 create_customer_bindings(BenderKey, Requests, Config) ->
     Context = ?config(context, Config),
     capi_ct_helper_bender:with_storage(
