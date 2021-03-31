@@ -160,7 +160,7 @@ try_gen_constant(IdempotentKey, Identity, ConstantID, WoodyContext, Context) ->
     IdSchema = {constant, #bender_ConstantSchema{internal_id = ConstantID}},
     try_generate_id(IdSchema, IdempotentKey, Identity, WoodyContext, Context).
 
--spec make_idempotent_key(idempotent_key_params()) -> idempotent_key().
+-spec make_idempotent_key(idempotent_key_params()) -> idempotent_key() | undefined.
 make_idempotent_key(IdempotentKey) when is_binary(IdempotentKey) ->
     IdempotentKey;
 make_idempotent_key({Prefix, PartyID, ExternalID}) when is_atom(Prefix) ->
