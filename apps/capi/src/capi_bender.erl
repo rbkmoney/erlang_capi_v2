@@ -7,7 +7,7 @@
 -type idempotent_key_prefix() :: binary() | atom().
 -type external_id() :: binary().
 -type issuer_id() :: dmsl_domain_thrift:'PartyID'() | dmsl_payment_processing_thrift:'UserID'().
--type idempotent_key() :: binary().
+-type idempotent_key() :: binary() | undefined.
 -type idempotent_key_params() :: idempotent_key() | {idempotent_key_prefix(), issuer_id(), external_id()}.
 -type identity() :: {identity, identity_hash(), identity_features(), identity_schema()}.
 -type identity_params() ::
@@ -160,7 +160,7 @@ try_gen_constant(IdempotentKey, Identity, ConstantID, WoodyContext, Context) ->
     IdSchema = {constant, #bender_ConstantSchema{internal_id = ConstantID}},
     try_generate_id(IdSchema, IdempotentKey, Identity, WoodyContext, Context).
 
--spec make_idempotent_key(idempotent_key_params()) -> idempotent_key() | undefined.
+-spec make_idempotent_key(idempotent_key_params()) -> idempotent_key().
 make_idempotent_key(IdempotentKey) when is_binary(IdempotentKey) ->
     IdempotentKey;
 make_idempotent_key({Prefix, PartyID, ExternalID}) when is_atom(Prefix) ->

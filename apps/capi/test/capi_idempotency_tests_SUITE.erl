@@ -276,7 +276,6 @@ create_invoice_ok_test(Config) ->
             {invoicing, fun('Create', {_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}}) ->
                 {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
             end},
-
             {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
         ],
         Config
