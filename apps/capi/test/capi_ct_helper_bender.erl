@@ -12,6 +12,7 @@
 -export([no_internal_id/0]).
 -export([create_storage/0]).
 -export([del_storage/1]).
+-export([with_storage/1]).
 -export([get_internal_id/3]).
 -export([generate_id/1]).
 
@@ -31,6 +32,17 @@ create_storage() ->
 
 del_storage(Tid) ->
     ets:delete(Tid).
+
+-spec with_storage(fun(() -> term) | fun((tid) -> term)) -> term.
+with_storage(Fun) ->
+    Tid = capi_ct_helper_bender:create_storage(),
+    Result =
+        case function_arity(Fun) of
+            0 -> Fun();
+            1 -> Fun(Tid)
+        end,
+    _ = capi_ct_helper_bender:del_storage(Tid),
+    Result.
 
 get_internal_id(Tid, IdempotentKey, MsgPack) ->
     case ets:lookup(Tid, IdempotentKey) of
@@ -68,3 +80,6 @@ get_internal_id_result(ID, Ctx) ->
 
 no_internal_id() ->
     #bender_InternalIDNotFound{}.
+
+function_arity(Fun) ->
+    proplists:get_value(arity, erlang:fun_info(Fun)).

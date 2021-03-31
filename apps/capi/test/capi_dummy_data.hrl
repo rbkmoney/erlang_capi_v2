@@ -1176,9 +1176,11 @@
     metadata = {obj, #{}}
 }).
 
--define(CUSTOMER_BINDING, #payproc_CustomerBinding{
-    id = ?STRING,
-    rec_payment_tool_id = ?STRING,
+-define(CUSTOMER_BINDING, ?CUSTOMER_BINDING(?STRING, ?STRING)).
+
+-define(CUSTOMER_BINDING(ID, RECID), #payproc_CustomerBinding{
+    id = ID,
+    rec_payment_tool_id = RECID,
     payment_resource = ?DISP_PAYMENT_RESOURCE,
     status = {succeeded, #payproc_CustomerBindingSucceeded{}}
 }).

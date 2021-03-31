@@ -14,7 +14,7 @@
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare('CreateCustomer' = OperationID, Req, Context) ->
-    CustomerParams = maps:get('Customer', Req),
+    CustomerParams = maps:get('CustomerParams', Req),
     UserID = capi_handler_utils:get_user_id(Context),
     PartyID = maps:get(<<"partyID">>, CustomerParams, UserID),
     ShopID = maps:get(<<"shopID">>, CustomerParams),
@@ -112,7 +112,7 @@ prepare('CreateCustomerAccessToken' = OperationID, Req, Context) ->
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
-prepare('CreateBinding' = OperationID, Req, Context) ->
+prepare('CreateBinding' = OperationID, Req, Context = #{woody_context := WoodyContext}) ->
     CustomerID = maps:get(customerID, Req),
     Authorize = fun() ->
         Prototypes = [
@@ -124,12 +124,35 @@ prepare('CreateBinding' = OperationID, Req, Context) ->
     Process = fun() ->
         Result =
             try
-                CustomerBindingParams = encode_customer_binding_params(maps:get('CustomerBindingParams', Req), Context),
-                Call = {customer_management, 'StartBinding', {CustomerID, CustomerBindingParams}},
+                CustomerBindingParams = maps:get('CustomerBindingParams', Req),
+                ExternalID = maps:get(<<"externalID">>, CustomerBindingParams, undefined),
+                UserID = capi_handler_utils:get_user_id(Context),
+
+                IdempKey = capi_bender:make_idempotent_key(
+                    {<<"CreateBinding">>, UserID, ExternalID}
+                ),
+                Identity = capi_bender:make_identity(
+                    {schema, capi_feature_schemas:customer_binding_params(), CustomerBindingParams}
+                ),
+
+                CustomerBindingID = capi_bender:try_gen_snowflake(IdempKey, Identity, WoodyContext),
+                RecPaymentToolID = capi_bender:try_gen_snowflake(IdempKey, Identity, WoodyContext),
+
+                EncodedCustomerBindingParams = encode_customer_binding_params(
+                    CustomerBindingID,
+                    RecPaymentToolID,
+                    CustomerBindingParams
+                ),
+
+                Call = {customer_management, 'StartBinding', {CustomerID, EncodedCustomerBindingParams}},
                 capi_handler_utils:service_call(Call, Context)
             catch
-                throw:invalid_token -> {error, invalid_token};
-                throw:invalid_payment_session -> {error, invalid_payment_session}
+                throw:invalid_token ->
+                    {error, invalid_token};
+                throw:invalid_payment_session ->
+                    {error, invalid_payment_session};
+                throw:Error = {external_id_conflict, _, _, _} ->
+                    {error, Error}
             end,
         case Result of
             {ok, CustomerBinding} ->
@@ -149,7 +172,9 @@ prepare('CreateBinding' = OperationID, Req, Context) ->
             {error, invalid_token} ->
                 {ok, logic_error(invalidPaymentToolToken, <<"Specified payment tool token is invalid">>)};
             {error, invalid_payment_session} ->
-                {ok, logic_error(invalidPaymentSession, <<"Specified payment session is invalid">>)}
+                {ok, logic_error(invalidPaymentSession, <<"Specified payment session is invalid">>)};
+            {error, {external_id_conflict, ID, UsedExternalID, _Schema}} ->
+                {ok, logic_error(externalIDConflict, {ID, UsedExternalID})}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -262,27 +287,15 @@ encode_customer_metadata(Meta) ->
     capi_json_marshalling:marshal(Meta).
 
 encode_customer_binding_params(
-    CustomerBindingParams = #{<<"paymentResource">> := PaymentResource},
-    Context = #{woody_context := WoodyContext}
+    CustomerBindingID,
+    RecPaymentToolID,
+    #{<<"paymentResource">> := PaymentResource}
 ) ->
     PaymentToolToken = maps:get(<<"paymentToolToken">>, PaymentResource),
     PaymentTool = encode_payment_tool_token(PaymentToolToken),
 
     {ClientInfo, PaymentSession} =
         capi_handler_utils:unwrap_payment_session(maps:get(<<"paymentSession">>, PaymentResource)),
-
-    ExternalID = maps:get(<<"externalID">>, CustomerBindingParams, undefined),
-    UserID = capi_handler_utils:get_user_id(Context),
-
-    IdempKey = capi_bender_idemp:build_idempotent_key(
-        {<<"EncodeCustomerBindingParams">>, UserID, ExternalID}
-    ),
-    Identity = capi_bender_idemp:build_identity(
-        {schema, capi_feature_schemas:customer_binding_params(), CustomerBindingParams}
-    ),
-
-    CustomerBindingID = capi_bender_idemp:try_gen_snowflake(IdempKey, Identity, WoodyContext),
-    RecPaymentToolID = capi_bender_idemp:try_gen_snowflake(IdempKey, Identity, WoodyContext),
 
     #payproc_CustomerBindingParams{
         customer_binding_id = CustomerBindingID,
