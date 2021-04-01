@@ -42,6 +42,13 @@
 
 -behaviour(supervisor).
 
+-dialyzer(
+    {[no_return, no_match], [
+        create_customer_binding_ok_test/1,
+        create_customer_binding_fail_test/1
+    ]}
+).
+
 -spec init([]) -> {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
     {ok, {#{strategy => one_for_all, intensity => 1, period => 1}, []}}.
@@ -641,7 +648,6 @@ get_encrypted_token(PS, ExpDate, IsCvvEmpty) ->
 encrypt_payment_tool(PaymentTool) ->
     capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined).
 
--spec create_customer_bindings(binary(), list(), term()) -> list().
 create_customer_bindings(BenderKey, Requests, Config) ->
     Context = ?config(context, Config),
     capi_ct_helper_bender:with_storage(
