@@ -16,12 +16,7 @@
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare(OperationID = 'GetPaymentInstitutions', Req, #{woody_context := WoodyContext} = Context) ->
-    Authorize = fun() ->
-        Prototypes = [
-            {operation, #{id => OperationID}}
-        ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
-    end,
+    Authorize = mk_authorize_operation(OperationID, Context, Req),
     Process = fun() ->
         try
             Residence = capi_handler_encoder:encode_residence(genlib_map:get(residence, Req)),
@@ -47,12 +42,7 @@ prepare(OperationID = 'GetPaymentInstitutions', Req, #{woody_context := WoodyCon
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetPaymentInstitutionByRef', Req, Context) ->
-    Authorize = fun() ->
-        Prototypes = [
-            {operation, #{id => OperationID}}
-        ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
-    end,
+    Authorize = mk_authorize_operation(OperationID, Context, Req),
     Process = fun() ->
         PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
         case capi_domain:get({payment_institution, ?payment_institution_ref(PaymentInstitutionID)}, Context) of
@@ -64,12 +54,7 @@ prepare(OperationID = 'GetPaymentInstitutionByRef', Req, Context) ->
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetPaymentInstitutionPaymentTerms', Req, Context) ->
-    Authorize = fun() ->
-        Prototypes = [
-            {operation, #{id => OperationID}}
-        ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
-    end,
+    Authorize = mk_authorize_operation(OperationID, Context, Req),
     Process = fun() ->
         PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
         case compute_payment_institution_terms(PaymentInstitutionID, #payproc_Varset{}, Context) of
@@ -81,12 +66,7 @@ prepare(OperationID = 'GetPaymentInstitutionPaymentTerms', Req, Context) ->
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetPaymentInstitutionPayoutMethods', Req, Context) ->
-    Authorize = fun() ->
-        Prototypes = [
-            {operation, #{id => OperationID}}
-        ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
-    end,
+    Authorize = mk_authorize_operation(OperationID, Context, Req),
     Process = fun() ->
         PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
         case compute_payment_institution_terms(PaymentInstitutionID, prepare_request_varset(Req, Context), Context) of
@@ -100,12 +80,7 @@ prepare(OperationID = 'GetPaymentInstitutionPayoutMethods', Req, Context) ->
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetPaymentInstitutionPayoutSchedules', Req, Context) ->
-    Authorize = fun() ->
-        Prototypes = [
-            {operation, #{id => OperationID}}
-        ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
-    end,
+    Authorize = mk_authorize_operation(OperationID, Context, Req),
     Process = fun() ->
         PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
         case compute_payment_institution_terms(PaymentInstitutionID, prepare_request_varset(Req, Context), Context) of
@@ -122,6 +97,14 @@ prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 %%
+
+mk_authorize_operation(OperationID, Context, Req) ->
+    fun() ->
+        Prototypes = [
+            {operation, #{id => OperationID}}
+        ],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end.
 
 check_payment_institution(Realm, Residence, PaymentInstitution) ->
     check_payment_institution_realm(Realm, PaymentInstitution) andalso

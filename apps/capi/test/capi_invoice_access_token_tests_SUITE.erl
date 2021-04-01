@@ -254,7 +254,6 @@ create_payment_ok_test(Config) ->
 
 -spec create_payment_expired_test(config()) -> _.
 create_payment_expired_test(Config) ->
-    BenderKey = <<"bender_key">>,
     PaymentTool = {bank_card, ?BANK_CARD},
     _ = capi_ct_helper:mock_services(
         [
@@ -264,9 +263,6 @@ create_payment_expired_test(Config) ->
                 ('StartPayment', {_, _, IPP}) ->
                     #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
                     {ok, ?PAYPROC_PAYMENT(ID, EID)}
-            end},
-            {bender, fun('GenerateID', _) ->
-                {ok, capi_ct_helper_bender:get_result(BenderKey)}
             end}
         ],
         Config
