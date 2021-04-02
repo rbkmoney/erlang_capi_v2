@@ -1230,11 +1230,13 @@
 }).
 
 -define(TEST_PAYMENT_TOKEN, ?TEST_PAYMENT_TOKEN(visa)).
-
 -define(TEST_PAYMENT_TOKEN(PaymentSystem),
+    ?TEST_PAYMENT_TOKEN(PaymentSystem, ?STRING)
+).
+-define(TEST_PAYMENT_TOKEN(PaymentSystem, Token),
     capi_utils:map_to_base64url(#{
         <<"type">> => <<"bank_card">>,
-        <<"token">> => ?STRING,
+        <<"token">> => Token,
         <<"payment_system">> => atom_to_binary(PaymentSystem, utf8),
         <<"bin">> => <<"411111">>,
         <<"masked_pan">> => <<"1111">>

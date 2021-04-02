@@ -283,8 +283,22 @@ generate_binding_ids(CustomerBindingParams, Context = #{woody_context := WoodyCo
     IdempKey = capi_bender:make_idempotent_key(
         {<<"CreateBinding">>, UserID, ExternalID}
     ),
+
+    PaymentTool = maps:get(<<"paymentResource">>, CustomerBindingParams),
+    PaymentToolToken = maps:get(<<"paymentToolToken">>, PaymentTool),
+    CustomerBindingParamsEncrypted =
+        maps:put(
+            <<"paymentResource">>,
+            maps:put(
+                <<"paymentTool">>,
+                decrypt_payment_tool_token_map(PaymentToolToken),
+                maps:remove(<<"paymentToolToken">>, PaymentTool)
+            ),
+            CustomerBindingParams
+        ),
+
     Identity = capi_bender:make_identity(
-        {schema, capi_feature_schemas:customer_binding_params(), CustomerBindingParams}
+        {schema, capi_feature_schemas:customer_binding_params(), CustomerBindingParamsEncrypted}
     ),
 
     CustomerBindingID = capi_bender:try_gen_snowflake(IdempKey, Identity, WoodyContext),
@@ -334,6 +348,23 @@ encode_legacy_payment_tool_token(Token) ->
         capi_handler_encoder:encode_payment_tool(capi_utils:base64url_to_map(Token))
     catch
         error:badarg ->
+            erlang:throw(invalid_token)
+    end.
+
+decrypt_payment_tool_token_map(Token) ->
+    case capi_crypto:decrypt_payment_tool_token(Token) of
+        {ok, {PaymentTool, ValidUntil}} ->
+            case capi_utils:deadline_is_reached(ValidUntil) of
+                true ->
+                    logger:warning("Payment tool token expired: ~p", [capi_utils:deadline_to_binary(ValidUntil)]),
+                    erlang:throw(invalid_token);
+                _ ->
+                    capi_handler_decoder_party:decode_payment_tool(PaymentTool)
+            end;
+        unrecognized ->
+            capi_utils:base64url_to_map(Token);
+        {error, {decryption_failed, Error}} ->
+            logger:warning("Payment tool token decryption failed: ~p", [Error]),
             erlang:throw(invalid_token)
     end.
 

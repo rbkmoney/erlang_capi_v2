@@ -486,7 +486,15 @@ create_customer_binding_ok_test(Config) ->
     Req2 = Req1#{<<"externalID">> => genlib:unique()},
 
     [BindingResult1, BindingResult2] = create_customer_bindings(BenderKey, [Req1, Req2], Config),
-    ?assertMatch({{ok, _}, _}, BindingResult1),
+    ?assertMatch(
+        {{ok, _}, [
+            [<<"externalID">>],
+            [<<"paymentResource">>, <<"paymentTool">>, <<"bin">>],
+            [<<"paymentResource">>, <<"paymentTool">>, <<"masked_pan">>],
+            [<<"paymentResource">>, <<"paymentTool">>, <<"payment_system">>]
+        ]},
+        BindingResult1
+    ),
     ?assertEqual(BindingResult1, BindingResult2).
 
 -spec create_customer_binding_fail_test(config()) -> _.
@@ -497,19 +505,23 @@ create_customer_binding_fail_test(Config) ->
         <<"externalID">> => ExternalID,
         <<"paymentResource">> => #{
             <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
-            <<"paymentToolToken">> => ?TEST_PAYMENT_TOKEN(visa)
+            <<"paymentToolToken">> => ?TEST_PAYMENT_TOKEN(visa, <<"TOKEN1">>)
         }
     },
     Req2 = Req1#{
         <<"paymentResource">> => #{
             <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
-            <<"paymentToolToken">> => ?TEST_PAYMENT_TOKEN(mastercard)
+            <<"paymentToolToken">> => ?TEST_PAYMENT_TOKEN(mastercard, <<"TOKEN2">>)
         }
     },
 
     [BindingResult1, BindingResult2] = create_customer_bindings(BenderKey, [Req1, Req2], Config),
     ?assertMatch({{ok, _}, _}, BindingResult1),
-    ?assertEqual({response_error(409, ExternalID, BenderKey), [[<<"externalID">>]]}, BindingResult2).
+    {ActualBindingResult2, _UnusedParams} = BindingResult2,
+    ?assertEqual(
+        response_error(409, ExternalID, BenderKey),
+        ActualBindingResult2
+    ).
 
 %% Internal functions
 
