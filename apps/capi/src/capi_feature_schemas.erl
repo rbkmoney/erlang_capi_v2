@@ -10,7 +10,7 @@
 -define(flow, 4).
 -define(hold_exp, 5).
 -define(payer, 6).
--define(tool, 7).
+-define(payment_tool, 7).
 -define(token, 8).
 -define(bank_card, 9).
 -define(expdate, 10).
@@ -39,10 +39,13 @@
 -define(bank_account, 33).
 -define(account, 34).
 -define(bank_bik, 35).
+-define(payment_resource, 36).
+-define(payment_session, 37).
 
 -export([payment/0]).
 -export([invoice/0]).
 -export([refund/0]).
+-export([customer_binding_params/0]).
 
 -spec payment() -> schema().
 payment() ->
@@ -60,31 +63,7 @@ payment() ->
             <<"payer">>,
             #{
                 ?discriminator => [<<"payerType">>],
-                ?tool => [
-                    <<"paymentTool">>,
-                    #{
-                        ?discriminator => [<<"type">>],
-                        ?bank_card => #{
-                            ?token => [<<"token">>],
-                            ?expdate => [<<"exp_date">>]
-                        },
-                        ?terminal => #{
-                            ?discriminator => [<<"terminal_type">>]
-                        },
-                        ?wallet => #{
-                            ?provider => [<<"provider">>],
-                            ?id => [<<"id">>],
-                            ?token => [<<"token">>]
-                        },
-                        ?crypto => #{
-                            ?currency => [<<"currency">>]
-                        },
-                        ?mobile_commerce => #{
-                            ?operator => [<<"operator">>],
-                            ?phone => [<<"phone">>]
-                        }
-                    }
-                ],
+                ?payment_tool => [<<"paymentTool">>, payment_tool_schema()],
                 ?customer => [<<"customerID">>],
                 ?recurrent => [
                     <<"recurrentParentPayment">>,
@@ -115,6 +94,43 @@ refund() ->
         ?amount => [<<"amount">>],
         ?currency => [<<"currency">>],
         ?cart => [<<"cart">>, {set, cart_line_schema()}]
+    }.
+
+-spec customer_binding_params() -> schema().
+customer_binding_params() ->
+    #{
+        ?payment_resource => [
+            <<"paymentResource">>,
+            #{
+                ?payment_session => [<<"paymentSession">>],
+                ?payment_tool => [<<"paymentTool">>, payment_tool_schema()]
+            }
+        ]
+    }.
+
+-spec payment_tool_schema() -> schema().
+payment_tool_schema() ->
+    #{
+        ?discriminator => [<<"type">>],
+        ?bank_card => #{
+            ?token => [<<"token">>],
+            ?expdate => [<<"exp_date">>]
+        },
+        ?terminal => #{
+            ?discriminator => [<<"terminal_type">>]
+        },
+        ?wallet => #{
+            ?provider => [<<"provider">>],
+            ?id => [<<"id">>],
+            ?token => [<<"token">>]
+        },
+        ?crypto => #{
+            ?currency => [<<"currency">>]
+        },
+        ?mobile_commerce => #{
+            ?operator => [<<"operator">>],
+            ?phone => [<<"phone">>]
+        }
     }.
 
 -spec cart_line_schema() -> schema().
@@ -194,7 +210,7 @@ read_payment_features_test() ->
             ?discriminator => capi_idemp_features:hash(PayerType),
             ?customer => undefined,
             ?recurrent => undefined,
-            ?tool => #{
+            ?payment_tool => #{
                 ?discriminator => capi_idemp_features:hash(ToolType),
                 ?bank_card => #{
                     ?expdate => capi_idemp_features:hash(ExpDate),
@@ -330,7 +346,7 @@ read_payment_customer_features_value_test() ->
                 ?discriminator => capi_idemp_features:hash(PayerType),
                 ?customer => capi_idemp_features:hash(CustomerID),
                 ?recurrent => undefined,
-                ?tool => undefined
+                ?payment_tool => undefined
             }
         },
         Features

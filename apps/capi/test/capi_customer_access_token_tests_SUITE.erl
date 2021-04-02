@@ -143,7 +143,7 @@ create_binding_ok_test(Config) ->
                 ('Get', _) -> {ok, ?CUSTOMER};
                 ('StartBinding', _) -> {ok, ?CUSTOMER_BINDING}
             end},
-            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender key">>)} end}
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
         ],
         Config
     ),
@@ -158,7 +158,13 @@ create_binding_ok_test(Config) ->
 
 -spec create_binding_expired_test(config()) -> _.
 create_binding_expired_test(Config) ->
-    _ = capi_ct_helper:mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end},
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
+        ],
+        Config
+    ),
     PaymentTool = {bank_card, ?BANK_CARD},
     ValidUntil = capi_utils:deadline_from_timeout(0),
     PaymentToolToken = capi_crypto:create_encrypted_payment_tool_token(PaymentTool, ValidUntil),
@@ -173,7 +179,12 @@ create_binding_expired_test(Config) ->
 
 -spec get_bindings_ok_test(config()) -> _.
 get_bindings_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}
+        ],
+        Config
+    ),
     {ok, _} = capi_client_customers:get_bindings(?config(context, Config), ?STRING).
 
 -spec get_binding_ok_test(config()) -> _.

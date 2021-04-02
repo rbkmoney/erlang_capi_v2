@@ -229,7 +229,7 @@ prepare('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
                 {ok, logic_error(invalidRequest, <<"Amount is required for the currency">>)};
             throw:{bad_invoice_params, amount_no_currency} ->
                 {ok, logic_error(invalidRequest, <<"Currency is required for the amount">>)};
-            throw:{external_id_conflict, InvoiceID, ExternalID} ->
+            throw:{external_id_conflict, InvoiceID, ExternalID, _Schema} ->
                 {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
         end
     end,
@@ -275,31 +275,15 @@ prepare(_OperationID, _Req, _Context) ->
 
 %%
 
-create_invoice(PartyID, InvoiceTplID, #{<<"externalID">> := ExternalID} = InvoiceParams, Context, BenderPrefix) ->
+create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, BenderPrefix) ->
     #{woody_context := WoodyCtx} = Context,
     % CAPI#344: Since the prefixes are different, it's possible to create 2 copies of the same Invoice with the same
     % externalId by using `CreateInvoice` and `CreateInvoiceWithTemplate` together
-    IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
-    Hash = erlang:phash2({InvoiceTplID, InvoiceParams}),
-    Schema = capi_feature_schemas:invoice(),
-    Features = capi_idemp_features:read(Schema, InvoiceParams),
-    BenderParams = {Hash, Features},
-    case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
-        {ok, InvoiceID} ->
-            CallArgs = {encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams)},
-            Call = {invoicing, 'CreateWithTemplate', CallArgs},
-            capi_handler_utils:service_call_with([user_info], Call, Context);
-        {error, {external_id_conflict, ID, undefined}} ->
-            throw({external_id_conflict, ID, ExternalID});
-        {error, {external_id_conflict, ID, Difference}} ->
-            ReadableDiff = capi_idemp_features:list_diff_fields(Schema, Difference),
-            logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, ReadableDiff]),
-            throw({external_id_conflict, ID, ExternalID})
-    end;
-create_invoice(_PartyID, InvoiceTplID, InvoiceParams, #{woody_context := WoodyCtx} = Context, _) ->
-    {ok, {InvoiceID, _}} = bender_generator_client:gen_snowflake(WoodyCtx),
-    InvoiceParamsWithEID = InvoiceParams#{<<"externalID">> => undefined},
-    CallArgs = {encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParamsWithEID)},
+    ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
+    IdempotentKey = capi_bender:make_idempotent_key({BenderPrefix, PartyID, ExternalID}),
+    Identity = capi_bender:make_identity({schema, capi_feature_schemas:invoice(), InvoiceParams}),
+    InvoiceID = capi_bender:try_gen_snowflake(IdempotentKey, Identity, WoodyCtx),
+    CallArgs = {encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams)},
     Call = {invoicing, 'CreateWithTemplate', CallArgs},
     capi_handler_utils:service_call_with([user_info], Call, Context).
 
