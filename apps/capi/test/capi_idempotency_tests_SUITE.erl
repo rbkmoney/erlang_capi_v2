@@ -106,8 +106,7 @@ init_per_group(payment_creation, Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end},
-            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end},
-            {bender, fun('GenerateID', {_, _, Ctx}) -> {ok, capi_ct_helper_bender:get_result(genlib:unique(), Ctx)} end}
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
         ],
         MockServiceSup
     ),
