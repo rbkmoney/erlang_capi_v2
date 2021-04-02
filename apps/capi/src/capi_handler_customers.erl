@@ -112,7 +112,7 @@ prepare('CreateCustomerAccessToken' = OperationID, Req, Context) ->
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
-prepare('CreateBinding' = OperationID, Req, Context = #{woody_context := WoodyContext}) ->
+prepare('CreateBinding' = OperationID, Req, Context) ->
     CustomerID = maps:get(customerID, Req),
     Authorize = fun() ->
         Prototypes = [
@@ -125,18 +125,8 @@ prepare('CreateBinding' = OperationID, Req, Context = #{woody_context := WoodyCo
         Result =
             try
                 CustomerBindingParams = maps:get('CustomerBindingParams', Req),
-                ExternalID = maps:get(<<"externalID">>, CustomerBindingParams, undefined),
-                UserID = capi_handler_utils:get_user_id(Context),
 
-                IdempKey = capi_bender:make_idempotent_key(
-                    {<<"CreateBinding">>, UserID, ExternalID}
-                ),
-                Identity = capi_bender:make_identity(
-                    {schema, capi_feature_schemas:customer_binding_params(), CustomerBindingParams}
-                ),
-
-                CustomerBindingID = capi_bender:try_gen_snowflake(IdempKey, Identity, WoodyContext),
-                RecPaymentToolID = capi_bender:try_gen_snowflake(IdempKey, Identity, WoodyContext),
+                {CustomerBindingID, RecPaymentToolID} = generate_binding_ids(CustomerBindingParams, Context),
 
                 EncodedCustomerBindingParams = encode_customer_binding_params(
                     CustomerBindingID,
@@ -285,6 +275,21 @@ encode_customer_params(PartyID, Params) ->
 
 encode_customer_metadata(Meta) ->
     capi_json_marshalling:marshal(Meta).
+
+generate_binding_ids(CustomerBindingParams, Context = #{woody_context := WoodyContext}) ->
+    ExternalID = maps:get(<<"externalID">>, CustomerBindingParams, undefined),
+    UserID = capi_handler_utils:get_user_id(Context),
+
+    IdempKey = capi_bender:make_idempotent_key(
+        {<<"CreateBinding">>, UserID, ExternalID}
+    ),
+    Identity = capi_bender:make_identity(
+        {schema, capi_feature_schemas:customer_binding_params(), CustomerBindingParams}
+    ),
+
+    CustomerBindingID = capi_bender:try_gen_snowflake(IdempKey, Identity, WoodyContext),
+    RecPaymentToolID = capi_bender:try_gen_snowflake(IdempKey, Identity, WoodyContext),
+    {CustomerBindingID, RecPaymentToolID}.
 
 encode_customer_binding_params(
     CustomerBindingID,
