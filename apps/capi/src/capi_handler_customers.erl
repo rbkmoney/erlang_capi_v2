@@ -126,7 +126,11 @@ prepare('CreateBinding' = OperationID, Req, Context) ->
             try
                 CustomerBindingParams = maps:get('CustomerBindingParams', Req),
 
-                {CustomerBindingID, RecPaymentToolID} = generate_binding_ids(CustomerBindingParams, Context),
+                {CustomerBindingID, RecPaymentToolID} = generate_binding_ids(
+                    OperationID,
+                    CustomerBindingParams,
+                    Context
+                ),
 
                 EncodedCustomerBindingParams = encode_customer_binding_params(
                     CustomerBindingID,
@@ -276,7 +280,7 @@ encode_customer_params(PartyID, Params) ->
 encode_customer_metadata(Meta) ->
     capi_json_marshalling:marshal(Meta).
 
-generate_binding_ids(CustomerBindingParams, Context = #{woody_context := WoodyContext}) ->
+generate_binding_ids(OperationID, CustomerBindingParams, Context = #{woody_context := WoodyContext}) ->
     ExternalID = maps:get(<<"externalID">>, CustomerBindingParams, undefined),
     UserID = capi_handler_utils:get_user_id(Context),
 
