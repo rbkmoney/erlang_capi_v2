@@ -29,6 +29,8 @@
 -export([create_invoice_idemp_cart_ok_test/1]).
 -export([create_invoice_idemp_cart_fail_test/1]).
 -export([create_invoice_idemp_bank_account_fail_test/1]).
+-export([create_invoice_template_ok_test/1]).
+-export([create_invoice_template_fail_test/1]).
 -export([create_refund_idemp_ok_test/1]).
 -export([create_refund_idemp_fail_test/1]).
 -export([create_customer_binding_ok_test/1]).
@@ -52,7 +54,8 @@ all() ->
         {group, payment_creation},
         {group, invoice_creation},
         {group, refund_creation},
-        {group, customer_binding_creation}
+        {group, customer_binding_creation},
+        {group, invoice_template_creation}
     ].
 
 -spec groups() -> [{group_name(), list(), [test_case_name()]}].
@@ -72,6 +75,10 @@ groups() ->
             create_invoice_idemp_cart_fail_test,
             create_invoice_idemp_cart_ok_test,
             create_invoice_idemp_bank_account_fail_test
+        ]},
+        {invoice_template_creation, [], [
+            create_invoice_template_ok_test,
+            create_invoice_template_fail_test
         ]},
         {refund_creation, [], [
             create_refund_idemp_ok_test,
@@ -133,7 +140,8 @@ init_per_group(payment_creation, Config) ->
 init_per_group(GroupName, Config) when
     GroupName =:= invoice_creation orelse
         GroupName =:= refund_creation orelse
-        GroupName =:= customer_binding_creation
+        GroupName =:= customer_binding_creation orelse
+        GroupName =:= invoice_template_creation
 ->
     BasePermissions = [
         {[invoices], write},
@@ -430,6 +438,65 @@ create_invoice_idemp_bank_account_fail_test(Config) ->
     ] = create_invoices(BenderKey, [Req1, Req2], Config),
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response).
 
+-spec create_invoice_template_ok_test(config()) -> _.
+create_invoice_template_ok_test(Config) ->
+    BenderKey = <<"create_invoice_template_ok_test_bender_key">>,
+    Req1 = #{
+        <<"externalID">> => genlib:unique(),
+        <<"shopID">> => <<"1">>,
+        <<"lifetime">> => #{
+            <<"days">> => ?INTEGER,
+            <<"months">> => ?INTEGER,
+            <<"years">> => ?INTEGER
+        },
+        <<"details">> => invoice_template_details(),
+        <<"description">> => <<"Sample text">>
+    },
+    Req2 = Req1#{<<"description">> => <<"whatever">>},
+
+    Result = create_invoice_templates(BenderKey, [Req1, Req2], Config),
+
+    ?assertMatch(
+        [
+            {{ok, #{<<"invoiceTemplate">> := _}}, _},
+            {{ok, #{<<"invoiceTemplate">> := _}}, _}
+        ],
+        Result
+    ),
+
+    [
+        {{ok, #{<<"invoiceTemplate">> := Template1}}, UnusedParams1},
+        {{ok, #{<<"invoiceTemplate">> := Template2}}, UnusedParams2}
+    ] = Result,
+
+    ?assertEqual(Template1, Template2),
+    ?assertEqual(UnusedParams1, UnusedParams2).
+
+-spec create_invoice_template_fail_test(config()) -> _.
+create_invoice_template_fail_test(Config) ->
+    BenderKey = <<"create_invoice_template_fail_test_bender_key">>,
+    ExternalID = genlib:unique(),
+    Req1 = #{
+        <<"externalID">> => ExternalID,
+        <<"shopID">> => <<"1">>,
+        <<"lifetime">> => #{
+            <<"days">> => ?INTEGER,
+            <<"months">> => ?INTEGER,
+            <<"years">> => ?INTEGER
+        },
+        <<"details">> => invoice_template_details(),
+        <<"description">> => <<"Sample text">>
+    },
+    Req2 = Req1#{<<"shopID">> => <<"2">>},
+
+    [CreateResult1, CreateResult2] = create_invoice_templates(BenderKey, [Req1, Req2], Config),
+    ?assertMatch({{ok, _}, _}, CreateResult1),
+    {ActualCreateResult2, _UnusedParams} = CreateResult2,
+    ?assertEqual(
+        response_error(409, ExternalID, BenderKey),
+        ActualCreateResult2
+    ).
+
 -spec create_refund_idemp_ok_test(config()) -> _.
 create_refund_idemp_ok_test(Config) ->
     BenderKey = <<"bender_key">>,
@@ -679,6 +746,42 @@ create_customer_bindings(BenderKey, Requests, Config) ->
             ),
             [
                 with_feature_storage(fun() -> capi_client_customers:create_binding(Context, ?STRING, R) end)
+                || R <- Requests
+            ]
+        end
+    ).
+
+invoice_template_details() ->
+    #{
+        <<"templateType">> => <<"InvoiceTemplateSingleLine">>,
+        <<"product">> => <<"test_invoice_template_product">>,
+        <<"price">> => #{
+            <<"costType">> => <<"InvoiceTemplateLineCostFixed">>,
+            <<"currency">> => ?RUB,
+            <<"amount">> => ?INTEGER
+        }
+    }.
+
+create_invoice_templates(BenderKey, Requests, Config) ->
+    Context = ?config(context, Config),
+    capi_ct_helper_bender:with_storage(
+        fun(StorageID) ->
+            _ = capi_ct_helper:mock_services(
+                [
+                    {invoice_templating, fun(
+                        'Create',
+                        {_, #payproc_InvoiceTemplateCreateParams{template_id = TemplateID}}
+                    ) ->
+                        {ok, ?INVOICE_TPL(TemplateID)}
+                    end},
+                    {bender, fun('GenerateID', {_Key, _, CtxMsgPack}) ->
+                        capi_ct_helper_bender:get_internal_id(StorageID, BenderKey, CtxMsgPack)
+                    end}
+                ],
+                Config
+            ),
+            [
+                with_feature_storage(fun() -> capi_client_invoice_templates:create(Context, R) end)
                 || R <- Requests
             ]
         end

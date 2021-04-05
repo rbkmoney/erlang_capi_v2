@@ -27,7 +27,8 @@ prepare('CreateInvoiceTemplate' = OperationID, Req, Context) ->
     Process = fun() ->
         ExtraProperties = capi_handler_utils:get_extra_properties(Context),
         try
-            CallArgs = {encode_invoice_tpl_create_params(PartyID, InvoiceTemplateParams)},
+            InvoiceTemplateID = generate_invoice_template_id(OperationID, InvoiceTemplateParams, PartyID, Context),
+            CallArgs = {encode_invoice_tpl_create_params(InvoiceTemplateID, PartyID, InvoiceTemplateParams)},
             capi_handler_utils:service_call_with(
                 [user_info],
                 {invoice_templating, 'Create', CallArgs},
@@ -54,7 +55,9 @@ prepare('CreateInvoiceTemplate' = OperationID, Req, Context) ->
             throw:invoice_cart_empty ->
                 {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
             throw:zero_invoice_lifetime ->
-                {ok, logic_error(invalidRequest, <<"Lifetime cannot be zero">>)}
+                {ok, logic_error(invalidRequest, <<"Lifetime cannot be zero">>)};
+            throw:{external_id_conflict, ID, UsedExternalID, _Schema} ->
+                {ok, logic_error(externalIDConflict, {ID, UsedExternalID})}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -291,10 +294,17 @@ get_invoice_template(ID, Context) ->
     Call = {invoice_templating, 'Get', {ID}},
     capi_handler_utils:service_call_with([user_info], Call, Context).
 
-encode_invoice_tpl_create_params(PartyID, Params) ->
+generate_invoice_template_id(OperationID, TemplateParams, PartyID, #{woody_context := WoodyContext}) ->
+    ExternalID = maps:get(<<"externalID">>, TemplateParams, undefined),
+    IdempKey = {OperationID, PartyID, ExternalID},
+    Identity = {schema, capi_feature_schemas:invoice_template_create_params(), TemplateParams},
+    capi_bender:try_gen_snowflake(IdempKey, Identity, WoodyContext).
+
+encode_invoice_tpl_create_params(InvoiceTemplateID, PartyID, Params) ->
     Details = encode_invoice_tpl_details(genlib_map:get(<<"details">>, Params)),
     Product = get_product_from_tpl_details(Details),
     #payproc_InvoiceTemplateCreateParams{
+        template_id = InvoiceTemplateID,
         party_id = PartyID,
         shop_id = genlib_map:get(<<"shopID">>, Params),
         invoice_lifetime = encode_lifetime(Params),

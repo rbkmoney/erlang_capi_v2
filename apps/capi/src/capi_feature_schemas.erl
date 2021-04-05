@@ -41,9 +41,25 @@
 -define(bank_bik, 35).
 -define(payment_resource, 36).
 -define(payment_session, 37).
+-define(party_id, 39).
+-define(description, 40).
+-define(lifetime, 41).
+-define(details, 42).
+-define(template_type, 43).
+-define(days, 44).
+-define(months, 45).
+-define(years, 46).
+-define(single_line, 47).
+-define(multiline, 48).
+-define(range, 49).
+-define(fixed, 50).
+-define(unlim, 51).
+-define(lower_bound, 52).
+-define(upper_bound, 53).
 
 -export([payment/0]).
 -export([invoice/0]).
+-export([invoice_template_create_params/0]).
 -export([refund/0]).
 -export([customer_binding_params/0]).
 
@@ -86,6 +102,26 @@ invoice() ->
         ?due_date => [<<"dueDate">>],
         ?cart => [<<"cart">>, {set, cart_line_schema()}],
         ?bank_account => [<<"bankAccount">>, bank_account_schema()]
+    }.
+
+-spec invoice_template_create_params() -> schema().
+invoice_template_create_params() ->
+    #{
+        ?shop_id => [<<"shopID">>],
+        ?party_id => [<<"partyID">>],
+        ?lifetime => [<<"lifetime">>, lifetime_schema()],
+        ?details => [<<"details">>, invoice_template_details_schema()]
+    }.
+
+-spec invoice_template_details_schema() -> schema().
+invoice_template_details_schema() ->
+    #{
+        ?discriminator => [<<"templateType">>],
+        ?single_line => invoice_template_single_line_schema(),
+        ?multiline => #{
+            ?currency => [<<"currency">>],
+            ?cart => [<<"cart">>, {set, cart_line_schema()}]
+        }
     }.
 
 -spec refund() -> schema().
@@ -139,13 +175,14 @@ cart_line_schema() ->
         ?product => [<<"product">>],
         ?quantity => [<<"quantity">>],
         ?price => [<<"price">>],
-        ?tax => [
-            <<"taxMode">>,
-            #{
-                ?discriminator => [<<"type">>],
-                ?rate => [<<"rate">>]
-            }
-        ]
+        ?tax => [<<"taxMode">>, tax_mode_schema()]
+    }.
+
+-spec tax_mode_schema() -> schema().
+tax_mode_schema() ->
+    #{
+        ?discriminator => [<<"type">>],
+        ?rate => [<<"rate">>]
     }.
 
 -spec bank_account_schema() -> schema().
@@ -154,6 +191,44 @@ bank_account_schema() ->
         ?discriminator => [<<"accountType">>],
         ?account => [<<"account">>],
         ?bank_bik => [<<"bankBik">>]
+    }.
+
+-spec invoice_template_single_line_schema() -> schema().
+invoice_template_single_line_schema() ->
+    #{
+        ?product => [<<"product">>],
+        ?price => [<<"price">>, invoice_template_line_cost()],
+        ?tax => [<<"taxMode">>, tax_mode_schema()]
+    }.
+
+invoice_template_line_cost() ->
+    #{
+        ?discriminator => [<<"costType">>],
+        ?range => #{
+            ?currency => [<<"currency">>],
+            ?range => [<<"range">>, cost_amount_range()]
+        },
+        ?fixed => #{
+            ?currency => [<<"currency">>],
+            ?amount => [<<"amount">>]
+        }
+        %% Unlim has no params: therefore, commented out JIC its schema changes
+        %% ?unlim => #{}
+    }.
+
+-spec cost_amount_range() -> schema().
+cost_amount_range() ->
+    #{
+        ?upper_bound => [<<"upperBound">>],
+        ?lower_bound => [<<"lowerBound">>]
+    }.
+
+-spec lifetime_schema() -> schema().
+lifetime_schema() ->
+    #{
+        ?days => [<<"days">>],
+        ?months => [<<"months">>],
+        ?years => [<<"years">>]
     }.
 
 -ifdef(TEST).

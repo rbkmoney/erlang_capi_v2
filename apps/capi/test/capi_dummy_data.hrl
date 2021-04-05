@@ -126,8 +126,9 @@
     ]
 }).
 
--define(INVOICE_TPL, #domain_InvoiceTemplate{
-    id = ?STRING,
+-define(INVOICE_TPL, ?INVOICE_TPL(?STRING)).
+-define(INVOICE_TPL(InvoiceID), #domain_InvoiceTemplate{
+    id = InvoiceID,
     details =
         {product, #domain_InvoiceTemplateProduct{
             product = ?STRING,
