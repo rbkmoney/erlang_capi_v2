@@ -1166,8 +1166,9 @@
             ])}
 }).
 
--define(CUSTOMER, #payproc_Customer{
-    id = ?STRING,
+-define(CUSTOMER, ?CUSTOMER(?STRING)).
+-define(CUSTOMER(ID), #payproc_Customer{
+    id = ID,
     owner_id = ?STRING,
     shop_id = ?STRING,
     status = {ready, #payproc_CustomerReady{}},

@@ -35,6 +35,8 @@
 -export([create_invoice_with_template_fail_test/1]).
 -export([create_refund_idemp_ok_test/1]).
 -export([create_refund_idemp_fail_test/1]).
+-export([create_customer_ok_test/1]).
+-export([create_customer_fail_test/1]).
 -export([create_customer_binding_ok_test/1]).
 -export([create_customer_binding_fail_test/1]).
 
@@ -55,10 +57,12 @@ all() ->
     [
         {group, payment_creation},
         {group, invoice_creation},
-        {group, refund_creation},
-        {group, customer_binding_creation},
         {group, invoice_template_creation},
-        {group, invoice_with_template_creation}
+        {group, invoice_with_template_creation},
+        {group, refund_creation},
+        {group, invoice_template_creation},
+        {group, customer_creation},
+        {group, customer_binding_creation}
     ].
 
 -spec groups() -> [{group_name(), list(), [test_case_name()]}].
@@ -90,6 +94,10 @@ groups() ->
         {refund_creation, [], [
             create_refund_idemp_ok_test,
             create_refund_idemp_fail_test
+        ]},
+        {customer_creation, [], [
+            create_customer_ok_test,
+            create_customer_fail_test
         ]},
         {customer_binding_creation, [], [
             create_customer_binding_ok_test,
@@ -195,7 +203,8 @@ init_per_group(GroupName, Config) when
     GroupName =:= invoice_creation orelse
         GroupName =:= refund_creation orelse
         GroupName =:= customer_binding_creation orelse
-        GroupName =:= invoice_template_creation
+        GroupName =:= invoice_template_creation orelse
+        GroupName =:= customer_creation
 ->
     BasePermissions = base_permissions(),
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
@@ -665,6 +674,40 @@ create_refund_idemp_fail_test(Config) ->
     ?assertEqual(Unused, Unused2),
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response2).
 
+-spec create_customer_ok_test(config()) -> _.
+create_customer_ok_test(Config) ->
+    BenderKey = <<"create_customer_ok_test">>,
+    Req1 = ?CUSTOMER_PARAMS#{<<"externalID">> => genlib:unique()},
+    Req2 = Req1#{<<"externalID">> => genlib:unique()},
+
+    Result = create_customers(BenderKey, [Req1, Req2], Config),
+
+    ?assertMatch(
+        [{{ok, #{<<"customer">> := _}}, _}, {{ok, #{<<"customer">> := _}}, _}],
+        Result
+    ),
+
+    [{{ok, #{<<"customer">> := Customer1}}, UnusedFeatures1}, {{ok, #{<<"customer">> := Customer2}}, UnusedFeatures2}] =
+        Result,
+
+    ?assertEqual(Customer1, Customer2),
+    ?assertEqual(UnusedFeatures1, UnusedFeatures2),
+    ?assertEqual(UnusedFeatures1, [[<<"externalID">>], [<<"metadata">>, <<"text">>]]).
+
+-spec create_customer_fail_test(config()) -> _.
+create_customer_fail_test(Config) ->
+    BenderKey = <<"create_customer_fail_test">>,
+    ExternalID = genlib:unique(),
+    Req1 = ?CUSTOMER_PARAMS#{<<"externalID">> => ExternalID, <<"shopID">> => <<"1">>},
+    Req2 = Req1#{<<"shopID">> => <<"2">>},
+
+    [CustomerResult1, CustomerResult2] = create_customers(BenderKey, [Req1, Req2], Config),
+    ?assertMatch({{ok, _}, _}, CustomerResult1),
+    ?assertEqual(
+        {response_error(409, ExternalID, BenderKey), [[<<"externalID">>], [<<"metadata">>, <<"text">>]]},
+        CustomerResult2
+    ).
+
 -spec create_customer_binding_ok_test(config()) -> _.
 create_customer_binding_ok_test(Config) ->
     BenderKey = <<"customer_binding_bender_key">>,
@@ -841,6 +884,31 @@ get_encrypted_token(PS, ExpDate, IsCvvEmpty) ->
 
 encrypt_payment_tool(PaymentTool) ->
     capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined).
+
+create_customers(BenderKey, Requests, Config) ->
+    Context = ?config(context, Config),
+    capi_ct_helper_bender:with_storage(
+        fun(StorageID) ->
+            _ = capi_ct_helper:mock_services(
+                [
+                    {customer_management, fun(
+                        'Create',
+                        {#payproc_CustomerParams{customer_id = CustomerID}}
+                    ) ->
+                        {ok, ?CUSTOMER(CustomerID)}
+                    end},
+                    {bender, fun('GenerateID', {_, _, CtxMsgPack}) ->
+                        capi_ct_helper_bender:get_internal_id(StorageID, BenderKey, CtxMsgPack)
+                    end}
+                ],
+                Config
+            ),
+            [
+                with_feature_storage(fun() -> capi_client_customers:create_customer(Context, R) end)
+                || R <- Requests
+            ]
+        end
+    ).
 
 create_customer_bindings(BenderKey, Requests, Config) ->
     Context = ?config(context, Config),
