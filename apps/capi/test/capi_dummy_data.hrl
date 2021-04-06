@@ -1176,11 +1176,9 @@
     metadata = {obj, #{}}
 }).
 
--define(CUSTOMER_BINDING, ?CUSTOMER_BINDING(?STRING, ?STRING)).
-
--define(CUSTOMER_BINDING(ID, RECID), #payproc_CustomerBinding{
-    id = ID,
-    rec_payment_tool_id = RECID,
+-define(CUSTOMER_BINDING, #payproc_CustomerBinding{
+    id = ?STRING,
+    rec_payment_tool_id = ?STRING,
     payment_resource = ?DISP_PAYMENT_RESOURCE,
     status = {succeeded, #payproc_CustomerBindingSucceeded{}}
 }).
@@ -1230,13 +1228,11 @@
 }).
 
 -define(TEST_PAYMENT_TOKEN, ?TEST_PAYMENT_TOKEN(visa)).
+
 -define(TEST_PAYMENT_TOKEN(PaymentSystem),
-    ?TEST_PAYMENT_TOKEN(PaymentSystem, ?STRING)
-).
--define(TEST_PAYMENT_TOKEN(PaymentSystem, Token),
     capi_utils:map_to_base64url(#{
         <<"type">> => <<"bank_card">>,
-        <<"token">> => Token,
+        <<"token">> => ?STRING,
         <<"payment_system">> => atom_to_binary(PaymentSystem, utf8),
         <<"bin">> => <<"411111">>,
         <<"masked_pan">> => <<"1111">>

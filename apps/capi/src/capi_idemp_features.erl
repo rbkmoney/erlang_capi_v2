@@ -2,22 +2,13 @@
 
 -include("capi_feature_schemas.hrl").
 
--type request_key() :: binary().
+-type request() :: #{binary() := request_value()}.
 -type request_value() :: integer() | binary() | request() | [request()].
--type request() :: #{request_key() := request_value()}.
-
+-type difference() :: features().
 -type feature_name() :: integer().
 -type feature_value() :: integer() | features() | [feature_value()] | undefined.
 -type features() :: #{feature_name() := feature_value()}.
--type schema() ::
-    #{
-        feature_name() := [request_key() | schema() | {set, schema()}]
-    }
-    | #{
-        ?discriminator := [request_key()],
-        feature_name() := schema()
-    }.
--type difference() :: features().
+-type schema() :: #{feature_name() := [binary() | schema() | {set, schema()}]}.
 
 -type event() ::
     {invalid_schema_fragment, feature_name(), request()}

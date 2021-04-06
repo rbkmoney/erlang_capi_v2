@@ -61,7 +61,7 @@ prepare('CreateInvoice' = OperationID, Req, Context) ->
                 {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
             invalid_invoice_cost ->
                 {ok, logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)};
-            {external_id_conflict, InvoiceID, ExternalID, _Schema} ->
+            {external_id_conflict, InvoiceID, ExternalID} ->
                 {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
         end
     end,
@@ -287,15 +287,28 @@ prepare(_OperationID, _Req, _Context) ->
 
 %%
 
-create_invoice(PartyID, InvoiceParams, Context, BenderPrefix) ->
+create_invoice(PartyID, #{<<"externalID">> := ExternalID} = InvoiceParams, Context, BenderPrefix) ->
     #{woody_context := WoodyCtx} = Context,
-    ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
-    IdempotentKey = capi_bender:make_idempotent_key({BenderPrefix, PartyID, ExternalID}),
-    Identity = capi_bender:make_identity(
-        {schema, capi_feature_schemas:invoice(), InvoiceParams}
-    ),
-    InvoiceID = capi_bender:try_gen_snowflake(IdempotentKey, Identity, WoodyCtx),
-    Call = {invoicing, 'Create', {encode_invoice_params(InvoiceID, PartyID, InvoiceParams)}},
+    IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
+    Hash = erlang:phash2(InvoiceParams),
+    Schema = capi_feature_schemas:invoice(),
+    Features = capi_idemp_features:read(Schema, InvoiceParams),
+    BenderParams = {Hash, Features},
+    case capi_bender:gen_by_snowflake(IdempotentKey, BenderParams, WoodyCtx) of
+        {ok, ID} ->
+            Call = {invoicing, 'Create', {encode_invoice_params(ID, PartyID, InvoiceParams)}},
+            capi_handler_utils:service_call_with([user_info], Call, Context);
+        {error, {external_id_conflict, ID, undefined}} ->
+            logger:warning("This externalID: ~p, used in another request.~n", [ID]),
+            throw({external_id_conflict, ID, ExternalID});
+        {error, {external_id_conflict, ID, Difference}} ->
+            ReadableDiff = capi_idemp_features:list_diff_fields(Schema, Difference),
+            logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, ReadableDiff]),
+            throw({external_id_conflict, ID, ExternalID})
+    end;
+create_invoice(PartyID, InvoiceParams, #{woody_context := WoodyCtx} = Context, _) ->
+    {ok, {ID, _}} = bender_generator_client:gen_snowflake(WoodyCtx),
+    Call = {invoicing, 'Create', {encode_invoice_params(ID, PartyID, InvoiceParams)}},
     capi_handler_utils:service_call_with([user_info], Call, Context).
 
 encode_invoice_params(ID, PartyID, InvoiceParams) ->
@@ -457,7 +470,7 @@ decode_refund_for_event(#domain_InvoicePaymentRefund{cash = undefined} = Refund,
 
 get_invoice_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
-    InvoiceKey = capi_bender:make_idempotent_key({'CreateInvoice', PartyID, ExternalID}),
+    InvoiceKey = capi_bender:get_idempotent_key('CreateInvoice', PartyID, ExternalID),
     case capi_bender:get_internal_id(InvoiceKey, WoodyContext) of
         {ok, InvoiceID, _CtxData} ->
             case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
