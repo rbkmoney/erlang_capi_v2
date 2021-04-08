@@ -302,13 +302,14 @@ generate_binding_ids(OperationID, CustomerBindingParams, Context = #{woody_conte
         {schema, capi_feature_schemas:customer_binding_params(), CustomerBindingParamsEncrypted}
     ),
 
+    OperationIDBin = erlang:atom_to_binary(OperationID),
     CustomerBindingID = capi_bender:try_gen_snowflake(
-        {<<"CreateBinding+CustomerBindingID">>, UserID, ExternalID},
+        {<<OperationIDBin/binary, "+CustomerBindingID">>, UserID, ExternalID},
         Identity,
         WoodyContext
     ),
     RecPaymentToolID = capi_bender:try_gen_snowflake(
-        {<<"CreateBinding+RecPaymentToolID">>, UserID, ExternalID},
+        {<<OperationIDBin/binary, "+RecPaymentToolID">>, UserID, ExternalID},
         Identity,
         WoodyContext
     ),

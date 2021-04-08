@@ -283,8 +283,8 @@ create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, BenderPrefix) ->
     % CAPI#344: Since the prefixes are different, it's possible to create 2 copies of the same Invoice with the same
     % externalId by using `CreateInvoice` and `CreateInvoiceWithTemplate` together
     ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
-    IdempotentKey = capi_bender:make_idempotent_key({BenderPrefix, PartyID, ExternalID}),
-    Identity = capi_bender:make_identity({schema, capi_feature_schemas:invoice(), InvoiceParams}),
+    IdempotentKey = {BenderPrefix, PartyID, ExternalID},
+    Identity = {schema, capi_feature_schemas:invoice(), InvoiceParams},
     InvoiceID = capi_bender:try_gen_snowflake(IdempotentKey, Identity, WoodyCtx),
     CallArgs = {encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams)},
     Call = {invoicing, 'CreateWithTemplate', CallArgs},

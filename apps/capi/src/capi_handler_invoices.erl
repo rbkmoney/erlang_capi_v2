@@ -290,10 +290,8 @@ prepare(_OperationID, _Req, _Context) ->
 create_invoice(PartyID, InvoiceParams, Context, BenderPrefix) ->
     #{woody_context := WoodyCtx} = Context,
     ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
-    IdempotentKey = capi_bender:make_idempotent_key({BenderPrefix, PartyID, ExternalID}),
-    Identity = capi_bender:make_identity(
-        {schema, capi_feature_schemas:invoice(), InvoiceParams}
-    ),
+    IdempotentKey = {BenderPrefix, PartyID, ExternalID},
+    Identity = {schema, capi_feature_schemas:invoice(), InvoiceParams},
     InvoiceID = capi_bender:try_gen_snowflake(IdempotentKey, Identity, WoodyCtx),
     Call = {invoicing, 'Create', {encode_invoice_params(InvoiceID, PartyID, InvoiceParams)}},
     capi_handler_utils:service_call_with([user_info], Call, Context).
@@ -457,7 +455,7 @@ decode_refund_for_event(#domain_InvoicePaymentRefund{cash = undefined} = Refund,
 
 get_invoice_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
-    InvoiceKey = capi_bender:make_idempotent_key({'CreateInvoice', PartyID, ExternalID}),
+    InvoiceKey = {'CreateInvoice', PartyID, ExternalID},
     case capi_bender:get_internal_id(InvoiceKey, WoodyContext) of
         {ok, InvoiceID, _CtxData} ->
             case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of

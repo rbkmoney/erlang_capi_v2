@@ -60,7 +60,6 @@
 -export([gen_constant/5]).
 -export([try_gen_constant/4]).
 -export([try_gen_constant/5]).
--export([make_idempotent_key/1]).
 -export([make_identity/1]).
 -export([get_internal_id/2]).
 
@@ -172,19 +171,6 @@ try_gen_constant(IdempotentKey, Identity, ConstantID, WoodyContext, Context) ->
     IdSchema = {constant, #bender_ConstantSchema{internal_id = ConstantID}},
     try_generate_id(IdSchema, IdempotentKey, Identity, WoodyContext, Context).
 
--spec make_idempotent_key(idempotent_key_params()) -> idempotent_key() | undefined.
-make_idempotent_key(IdempotentKey) when is_binary(IdempotentKey) ->
-    IdempotentKey;
-make_idempotent_key({Prefix, PartyID, ExternalID}) when is_atom(Prefix) ->
-    make_idempotent_key({atom_to_binary(Prefix, utf8), PartyID, ExternalID});
-make_idempotent_key(undefined) ->
-    undefined;
-make_idempotent_key({_Prefix, _PartyID, undefined}) ->
-    %% If external ID is undefined, no reason to generate it: noone can really use it
-    undefined;
-make_idempotent_key({Prefix, PartyID, ExternalID}) ->
-    <<"capi/", Prefix/binary, "/", PartyID/binary, "/", ExternalID/binary>>.
-
 -spec make_identity(identity_params()) -> identity().
 make_identity({schema, Schema, Data}) ->
     Hash = erlang:phash2(Data),
@@ -255,6 +241,19 @@ generate_id(BenderIdSchema, IdempKeyParams, IdempIdentity, WoodyContext, CtxData
         undefined -> generator_generate_id(BenderIdSchema, WoodyContext);
         IdempKey -> bender_generate_id(BenderIdSchema, IdempKey, IdempIdentity, WoodyContext, CtxData)
     end.
+
+-spec make_idempotent_key(idempotent_key_params()) -> idempotent_key() | undefined.
+make_idempotent_key(IdempotentKey) when is_binary(IdempotentKey) ->
+    IdempotentKey;
+make_idempotent_key({Prefix, PartyID, ExternalID}) when is_atom(Prefix) ->
+    make_idempotent_key({atom_to_binary(Prefix, utf8), PartyID, ExternalID});
+make_idempotent_key(undefined) ->
+    undefined;
+make_idempotent_key({_Prefix, _PartyID, undefined}) ->
+    %% If external ID is undefined, no reason to generate it: noone can really use it
+    undefined;
+make_idempotent_key({Prefix, PartyID, ExternalID}) ->
+    <<"capi/", Prefix/binary, "/", PartyID/binary, "/", ExternalID/binary>>.
 
 bender_generate_id(BenderIdSchema, IdempKey, IdempIdentity, WoodyContext, CtxData) ->
     {identity, Hash, Features, Schema} = make_identity(IdempIdentity),
