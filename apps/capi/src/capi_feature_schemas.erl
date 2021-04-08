@@ -223,6 +223,7 @@ lifetime_schema() ->
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("capi_dummy_data.hrl").
 
 deep_merge(M1, M2) ->
     maps:fold(
@@ -236,6 +237,15 @@ deep_merge(M1, M2) ->
         M1,
         M2
     ).
+
+hash(Term) ->
+    capi_idemp_features:hash(Term).
+read(Schema, Request) ->
+    capi_idemp_features:read(Schema, Request).
+compare(Features1, Features2) ->
+    capi_idemp_features:compare(Features1, Features2).
+list_diff_fields(Schema, Diff) ->
+    capi_idemp_features:list_diff_fields(Schema, Diff).
 
 -spec test() -> _.
 
@@ -268,18 +278,18 @@ read_payment_features_test() ->
         ?invoice_id => undefined,
         ?make_recurrent => undefined,
         ?flow => #{
-            ?discriminator => capi_idemp_features:hash(Flow),
+            ?discriminator => hash(Flow),
             ?hold_exp => undefined
         },
         ?payer => #{
-            ?discriminator => capi_idemp_features:hash(PayerType),
+            ?discriminator => hash(PayerType),
             ?customer => undefined,
             ?recurrent => undefined,
             ?payment_tool => #{
-                ?discriminator => capi_idemp_features:hash(ToolType),
+                ?discriminator => hash(ToolType),
                 ?bank_card => #{
-                    ?expdate => capi_idemp_features:hash(ExpDate),
-                    ?token => capi_idemp_features:hash(Token)
+                    ?exp_date => hash(ExpDate),
+                    ?token => hash(Token)
                 },
                 ?crypto => #{?currency => undefined},
                 ?mobile_commerce => #{
@@ -290,7 +300,7 @@ read_payment_features_test() ->
                 ?wallet => #{
                     ?id => undefined,
                     ?provider => undefined,
-                    ?token => capi_idemp_features:hash(Token)
+                    ?token => hash(Token)
                 }
             }
         }
@@ -320,7 +330,7 @@ compare_payment_bank_card_test() ->
         [
             <<"payer.paymentTool.token">>
         ],
-        capi_idemp_features:list_diff_fields(Schema, Diff)
+        list_diff_fields(Schema, Diff)
     ).
 
 -spec compare_different_payment_tool_test() -> _.
@@ -373,7 +383,7 @@ feature_multi_accessor_test() ->
                         <<"$type">> => [<<"type">>],
                         <<"bank_card">> => #{
                             <<"token">> => [<<"token">>],
-                            <<"expdate">> => [<<"exp_date">>]
+                            <<"exp_date">> => [<<"exp_date">>]
                         }
                     }
                 ]
@@ -408,8 +418,8 @@ read_payment_customer_features_value_test() ->
             ?make_recurrent => undefined,
             ?flow => undefined,
             ?payer => #{
-                ?discriminator => capi_idemp_features:hash(PayerType),
-                ?customer => capi_idemp_features:hash(CustomerID),
+                ?discriminator => hash(PayerType),
+                ?customer => hash(CustomerID),
                 ?recurrent => undefined,
                 ?payment_tool => undefined
             }
@@ -428,26 +438,26 @@ read_invoice_features_test() ->
     Price2 = 20000,
     Quantity = 1,
     Product = #{
-        ?product => capi_idemp_features:hash(Prod1),
-        ?quantity => capi_idemp_features:hash(Quantity),
-        ?price => capi_idemp_features:hash(Price1),
+        ?product => hash(Prod1),
+        ?quantity => hash(Quantity),
+        ?price => hash(Price1),
         ?tax => undefined
     },
     Product2 = Product#{
-        ?product => capi_idemp_features:hash(Prod2),
-        ?price => capi_idemp_features:hash(Price2)
+        ?product => hash(Prod2),
+        ?price => hash(Price2)
     },
     BankAccount = #{
-        ?discriminator => capi_idemp_features:hash(<<"InvoiceRussianBankAccount">>),
-        ?account => capi_idemp_features:hash(<<"12345678901234567890">>),
-        ?bank_bik => capi_idemp_features:hash(<<"123456789">>)
+        ?discriminator => hash(<<"InvoiceRussianBankAccount">>),
+        ?account => hash(<<"12345678901234567890">>),
+        ?bank_bik => hash(<<"123456789">>)
     },
     Invoice = #{
         ?amount => undefined,
-        ?currency => capi_idemp_features:hash(Cur),
-        ?shop_id => capi_idemp_features:hash(ShopID),
+        ?currency => hash(Cur),
+        ?shop_id => hash(ShopID),
         ?product => undefined,
-        ?due_date => capi_idemp_features:hash(DueDate),
+        ?due_date => hash(DueDate),
         ?bank_account => BankAccount,
         ?cart => [
             [1, Product],
@@ -547,6 +557,78 @@ compare_invoices_features_test() ->
         capi_idemp_features:list_diff_fields(Schema, Diff)
     ),
     ?assert(capi_idemp_features:compare(Invoice1, Invoice1#{?cart => undefined})).
+
+-spec read_customer_binding_features_test() -> _.
+read_customer_binding_features_test() ->
+    Session = ?TEST_PAYMENT_SESSION(<<"Session">>),
+    Tool = ?TEST_PAYMENT_TOOL(visa, <<"TOKEN">>),
+    Request = payment_resource(Session, Tool),
+    Features = #{
+        ?payment_resource => #{
+            ?payment_session => hash(Session),
+            ?payment_tool => #{
+                ?discriminator => hash(<<"bank_card">>),
+                ?bank_card => #{
+                    ?token => hash(<<"TOKEN">>),
+                    ?exp_date => hash(<<"12/2012">>)
+                },
+
+                ?terminal => #{
+                    ?discriminator => undefined
+                },
+                ?wallet => #{
+                    ?provider => undefined,
+                    ?id => undefined,
+                    ?token => hash(<<"TOKEN">>)
+                },
+                ?crypto => #{
+                    ?currency => undefined
+                },
+                ?mobile_commerce => #{
+                    ?operator => undefined,
+                    ?phone => undefined
+                }
+            }
+        }
+    },
+
+    ?assertEqual(
+        Features,
+        capi_idemp_features:read(customer_binding(), Request)
+    ).
+
+-spec compare_customer_binding_features_test() -> _.
+compare_customer_binding_features_test() ->
+    Session1 = ?TEST_PAYMENT_SESSION(<<"Session1">>),
+    Tool1 = ?TEST_PAYMENT_TOOL(visa),
+    Request1 = payment_resource(Session1, Tool1),
+
+    Session2 = ?TEST_PAYMENT_SESSION(<<"Session2">>),
+    Tool2 = ?TEST_PAYMENT_TOOL(mastercard)#{<<"exp_date">> => <<"01/2020">>},
+    Request2 = payment_resource(Session2, Tool2),
+
+    Schema = customer_binding(),
+
+    F1 = read(Schema, Request1),
+    F2 = read(Schema, Request2),
+
+    ?assertEqual(true, compare(F1, F1)),
+    {false, Diff} = compare(F1, F2),
+    ?assertEqual(
+        [
+            <<"paymentResource.paymentTool.exp_date">>,
+            <<"paymentResource.paymentSession">>
+        ],
+        list_diff_fields(Schema, Diff)
+    ).
+
+payment_resource(Session, Tool) ->
+    #{
+        <<"paymentResource">> => #{
+            <<"paymentSession">> => Session,
+            <<"paymentTool">> => Tool
+        }
+    }.
 
 payment_params(ExternalID, MakeRecurrent) ->
     genlib_map:compact(#{

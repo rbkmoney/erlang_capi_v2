@@ -1235,18 +1235,25 @@
     ?TEST_PAYMENT_TOKEN(PaymentSystem, ?STRING)
 ).
 -define(TEST_PAYMENT_TOKEN(PaymentSystem, Token),
-    capi_utils:map_to_base64url(#{
-        <<"type">> => <<"bank_card">>,
-        <<"token">> => Token,
-        <<"payment_system">> => atom_to_binary(PaymentSystem, utf8),
-        <<"bin">> => <<"411111">>,
-        <<"masked_pan">> => <<"1111">>
-    })
+    capi_utils:map_to_base64url(?TEST_PAYMENT_TOOL(PaymentSystem, Token))
 ).
 
--define(TEST_PAYMENT_SESSION,
+-define(TEST_PAYMENT_TOOL, ?TEST_PAYMENT_TOOL(visa)).
+-define(TEST_PAYMENT_TOOL(PaymentSystem), ?TEST_PAYMENT_TOOL(PaymentSystem, ?STRING)).
+-define(TEST_PAYMENT_TOOL(PaymentSystem, Token), #{
+    <<"type">> => <<"bank_card">>,
+    <<"token">> => Token,
+    <<"payment_system">> => atom_to_binary(PaymentSystem, utf8),
+    <<"bin">> => <<"411111">>,
+    <<"masked_pan">> => <<"1111">>,
+    <<"exp_date">> => <<"12/2012">>
+}).
+
+-define(TEST_PAYMENT_SESSION, ?TEST_PAYMENT_SESSION(?STRING)).
+
+-define(TEST_PAYMENT_SESSION(Session),
     capi_utils:map_to_base64url(#{
-        <<"paymentSession">> => ?STRING,
+        <<"paymentSession">> => Session,
         <<"clientInfo">> => #{
             <<"fingerprint">> => <<"test fingerprint">>,
             <<"ip">> => <<"::ffff:127.0.0.1">>
