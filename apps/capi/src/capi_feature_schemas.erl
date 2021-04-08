@@ -51,9 +51,8 @@
 -define(multiline, 45).
 -define(range, 46).
 -define(fixed, 47).
--define(unlim, 48).
--define(lower_bound, 49).
--define(upper_bound, 50).
+-define(lower_bound, 48).
+-define(upper_bound, 49).
 
 -export([payment/0]).
 -export([invoice/0]).
@@ -205,8 +204,7 @@ invoice_template_line_cost() ->
             ?currency => [<<"currency">>],
             ?amount => [<<"amount">>]
         }
-        %% Unlim has no params: therefore, commented out JIC its schema changes
-        %% ?unlim => #{}
+        %% Unlim has no params and is fully contained in discriminator
     }.
 
 -spec cost_amount_range() -> schema().
