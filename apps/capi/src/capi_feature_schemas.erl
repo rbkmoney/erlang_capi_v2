@@ -59,7 +59,7 @@
 
 -export([payment/0]).
 -export([invoice/0]).
--export([invoice_template_create_params/0]).
+-export([invoice_template/0]).
 -export([refund/0]).
 -export([customer_binding_params/0]).
 
@@ -104,8 +104,8 @@ invoice() ->
         ?bank_account => [<<"bankAccount">>, bank_account_schema()]
     }.
 
--spec invoice_template_create_params() -> schema().
-invoice_template_create_params() ->
+-spec invoice_template() -> schema().
+invoice_template() ->
     #{
         ?shop_id => [<<"shopID">>],
         ?party_id => [<<"partyID">>],

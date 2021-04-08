@@ -297,7 +297,7 @@ get_invoice_template(ID, Context) ->
 generate_invoice_template_id(OperationID, TemplateParams, PartyID, #{woody_context := WoodyContext}) ->
     ExternalID = maps:get(<<"externalID">>, TemplateParams, undefined),
     IdempKey = {OperationID, PartyID, ExternalID},
-    Identity = {schema, capi_feature_schemas:invoice_template_create_params(), TemplateParams},
+    Identity = {schema, capi_feature_schemas:invoice_template(), TemplateParams},
     capi_bender:try_gen_snowflake(IdempKey, Identity, WoodyContext).
 
 encode_invoice_tpl_create_params(InvoiceTemplateID, PartyID, Params) ->
