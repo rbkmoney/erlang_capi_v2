@@ -280,10 +280,6 @@ generate_binding_ids(CustomerBindingParams, Context = #{woody_context := WoodyCo
     ExternalID = maps:get(<<"externalID">>, CustomerBindingParams, undefined),
     UserID = capi_handler_utils:get_user_id(Context),
 
-    IdempKey = capi_bender:make_idempotent_key(
-        {<<"CreateBinding">>, UserID, ExternalID}
-    ),
-
     PaymentResource = maps:get(<<"paymentResource">>, CustomerBindingParams),
     PaymentToolToken = maps:get(<<"paymentToolToken">>, PaymentResource),
     PaymentTool = capi_handler_decoder_party:decode_payment_tool(encode_payment_tool_token(PaymentToolToken)),
@@ -302,8 +298,16 @@ generate_binding_ids(CustomerBindingParams, Context = #{woody_context := WoodyCo
         {schema, capi_feature_schemas:customer_binding_params(), CustomerBindingParamsEncrypted}
     ),
 
-    CustomerBindingID = capi_bender:try_gen_snowflake(IdempKey, Identity, WoodyContext),
-    RecPaymentToolID = capi_bender:try_gen_snowflake(IdempKey, Identity, WoodyContext),
+    CustomerBindingID = capi_bender:try_gen_snowflake(
+        {<<"CreateBinding+CustomerBindingID">>, UserID, ExternalID},
+        Identity,
+        WoodyContext
+    ),
+    RecPaymentToolID = capi_bender:try_gen_snowflake(
+        {<<"CreateBinding+RecPaymentToolID">>, UserID, ExternalID},
+        Identity,
+        WoodyContext
+    ),
     {CustomerBindingID, RecPaymentToolID}.
 
 encode_customer_binding_params(
