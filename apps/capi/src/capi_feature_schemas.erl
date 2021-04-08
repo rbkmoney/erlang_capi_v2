@@ -41,21 +41,21 @@
 -define(bank_bik, 35).
 -define(payment_resource, 36).
 -define(payment_session, 37).
--define(party_id, 39).
--define(description, 40).
--define(lifetime, 41).
--define(details, 42).
--define(template_type, 43).
--define(days, 44).
--define(months, 45).
--define(years, 46).
--define(single_line, 47).
--define(multiline, 48).
--define(range, 49).
--define(fixed, 50).
--define(unlim, 51).
--define(lower_bound, 52).
--define(upper_bound, 53).
+-define(party_id, 38).
+-define(description, 39).
+-define(lifetime, 40).
+-define(details, 41).
+-define(template_type, 42).
+-define(days, 43).
+-define(months, 44).
+-define(years, 45).
+-define(single_line, 46).
+-define(multiline, 47).
+-define(range, 48).
+-define(fixed, 49).
+-define(unlim, 50).
+-define(lower_bound, 51).
+-define(upper_bound, 52).
 
 -export([payment/0]).
 -export([invoice/0]).
