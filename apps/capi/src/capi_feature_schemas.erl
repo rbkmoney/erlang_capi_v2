@@ -43,16 +43,15 @@
 -define(payment_session, 37).
 -define(lifetime, 38).
 -define(details, 39).
--define(template_type, 40).
--define(days, 41).
--define(months, 42).
--define(years, 43).
--define(single_line, 44).
--define(multiline, 45).
--define(range, 46).
--define(fixed, 47).
--define(lower_bound, 48).
--define(upper_bound, 49).
+-define(days, 40).
+-define(months, 41).
+-define(years, 42).
+-define(single_line, 43).
+-define(multiline, 44).
+-define(range, 45).
+-define(fixed, 46).
+-define(lower_bound, 47).
+-define(upper_bound, 48).
 
 -export([payment/0]).
 -export([invoice/0]).
