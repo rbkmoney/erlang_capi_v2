@@ -117,7 +117,11 @@ invoice_template_create_params() ->
 invoice_template_details_schema() ->
     #{
         ?discriminator => [<<"templateType">>],
-        ?single_line => invoice_template_single_line_schema(),
+        ?single_line => #{
+            ?product => [<<"product">>],
+            ?price => [<<"price">>, invoice_template_line_cost()],
+            ?tax => [<<"taxMode">>, tax_mode_schema()]
+        },
         ?multiline => #{
             ?currency => [<<"currency">>],
             ?cart => [<<"cart">>, {set, cart_line_schema()}]
@@ -191,14 +195,6 @@ bank_account_schema() ->
         ?discriminator => [<<"accountType">>],
         ?account => [<<"account">>],
         ?bank_bik => [<<"bankBik">>]
-    }.
-
--spec invoice_template_single_line_schema() -> schema().
-invoice_template_single_line_schema() ->
-    #{
-        ?product => [<<"product">>],
-        ?price => [<<"price">>, invoice_template_line_cost()],
-        ?tax => [<<"taxMode">>, tax_mode_schema()]
     }.
 
 invoice_template_line_cost() ->
