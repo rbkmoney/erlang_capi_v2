@@ -41,21 +41,19 @@
 -define(bank_bik, 35).
 -define(payment_resource, 36).
 -define(payment_session, 37).
--define(party_id, 38).
--define(description, 39).
--define(lifetime, 40).
--define(details, 41).
--define(template_type, 42).
--define(days, 43).
--define(months, 44).
--define(years, 45).
--define(single_line, 46).
--define(multiline, 47).
--define(range, 48).
--define(fixed, 49).
--define(unlim, 50).
--define(lower_bound, 51).
--define(upper_bound, 52).
+-define(lifetime, 38).
+-define(details, 39).
+-define(template_type, 40).
+-define(days, 41).
+-define(months, 42).
+-define(years, 43).
+-define(single_line, 44).
+-define(multiline, 45).
+-define(range, 46).
+-define(fixed, 47).
+-define(unlim, 48).
+-define(lower_bound, 49).
+-define(upper_bound, 50).
 
 -export([payment/0]).
 -export([invoice/0]).
@@ -108,7 +106,6 @@ invoice() ->
 invoice_template() ->
     #{
         ?shop_id => [<<"shopID">>],
-        ?party_id => [<<"partyID">>],
         ?lifetime => [<<"lifetime">>, lifetime_schema()],
         ?details => [<<"details">>, invoice_template_details_schema()]
     }.
