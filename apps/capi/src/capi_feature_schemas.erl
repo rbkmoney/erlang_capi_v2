@@ -13,7 +13,7 @@
 -define(payment_tool, 7).
 -define(token, 8).
 -define(bank_card, 9).
--define(expdate, 10).
+-define(exp_date, 10).
 -define(terminal, 11).
 -define(terminal_type, 12).
 -define(wallet, 13).
@@ -149,7 +149,7 @@ payment_tool_schema() ->
         ?discriminator => [<<"type">>],
         ?bank_card => #{
             ?token => [<<"token">>],
-            ?expdate => [<<"exp_date">>]
+            ?exp_date => [<<"exp_date">>]
         },
         ?terminal => #{
             ?discriminator => [<<"terminal_type">>]
