@@ -470,7 +470,8 @@ create_invoice_template_ok_test(Config) ->
     ] = Result,
 
     ?assertEqual(Template1, Template2),
-    ?assertEqual(UnusedParams1, UnusedParams2).
+    ?assertEqual(UnusedParams1, UnusedParams2),
+    ?assertEqual(UnusedParams1, [[<<"description">>], [<<"externalID">>]]).
 
 -spec create_invoice_template_fail_test(config()) -> _.
 create_invoice_template_fail_test(Config) ->
