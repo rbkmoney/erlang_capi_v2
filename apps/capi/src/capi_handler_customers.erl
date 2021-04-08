@@ -299,7 +299,7 @@ generate_binding_ids(OperationID, CustomerBindingParams, Context = #{woody_conte
         ),
 
     Identity = capi_bender:make_identity(
-        {schema, capi_feature_schemas:customer_binding_params(), CustomerBindingParamsEncrypted}
+        {schema, capi_feature_schemas:customer_binding(), CustomerBindingParamsEncrypted}
     ),
 
     OperationIDBin = erlang:atom_to_binary(OperationID),

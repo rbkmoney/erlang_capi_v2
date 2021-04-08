@@ -59,7 +59,7 @@
 -export([invoice/0]).
 -export([invoice_template/0]).
 -export([refund/0]).
--export([customer_binding_params/0]).
+-export([customer_binding/0]).
 
 -spec payment() -> schema().
 payment() ->
@@ -133,8 +133,8 @@ refund() ->
         ?cart => [<<"cart">>, {set, cart_line_schema()}]
     }.
 
--spec customer_binding_params() -> schema().
-customer_binding_params() ->
+-spec customer_binding() -> schema().
+customer_binding() ->
     #{
         ?payment_resource => [
             <<"paymentResource">>,
