@@ -52,6 +52,7 @@
 -define(fixed, 46).
 -define(lower_bound, 47).
 -define(upper_bound, 48).
+-define(invoice_template_id, 49).
 
 -export([payment/0]).
 -export([invoice/0]).
@@ -97,7 +98,8 @@ invoice() ->
         ?product => [<<"product">>],
         ?due_date => [<<"dueDate">>],
         ?cart => [<<"cart">>, {set, cart_line_schema()}],
-        ?bank_account => [<<"bankAccount">>, bank_account_schema()]
+        ?bank_account => [<<"bankAccount">>, bank_account_schema()],
+        ?invoice_template_id => [<<"invoiceTemplateID">>]
     }.
 
 -spec invoice_template() -> schema().
@@ -446,7 +448,8 @@ read_invoice_features_test() ->
         ?cart => [
             [1, Product],
             [0, Product2]
-        ]
+        ],
+        ?invoice_template_id => undefined
     },
     Request = #{
         <<"externalID">> => <<"externalID">>,
@@ -467,7 +470,12 @@ read_invoice_features_test() ->
     },
 
     Features = read(invoice(), Request),
-    ?assertEqual(Invoice, Features).
+    ?assertEqual(Invoice, Features),
+
+    TemplateID = <<"42">>,
+    RequestWithTemplate = Request#{<<"invoiceTemplateID">> => TemplateID},
+    FeaturesWithTemplate = read(invoice(), RequestWithTemplate),
+    ?assertEqual(hash(TemplateID), maps:get(?invoice_template_id, FeaturesWithTemplate)).
 
 -spec compare_invoices_features_test() -> _.
 compare_invoices_features_test() ->

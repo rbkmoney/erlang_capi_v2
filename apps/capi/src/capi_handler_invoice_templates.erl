@@ -284,7 +284,8 @@ create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, BenderPrefix) ->
     % externalId by using `CreateInvoice` and `CreateInvoiceWithTemplate` together
     ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
     IdempotentKey = {BenderPrefix, PartyID, ExternalID},
-    Identity = {schema, capi_feature_schemas:invoice(), InvoiceParams},
+    InvoiceParamsWithTemplate = maps:put(<<"invoiceTemplateID">>, InvoiceTplID, InvoiceParams),
+    Identity = {schema, capi_feature_schemas:invoice(), InvoiceParamsWithTemplate},
     InvoiceID = capi_bender:try_gen_snowflake(IdempotentKey, Identity, WoodyCtx),
     CallArgs = {encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams)},
     Call = {invoicing, 'CreateWithTemplate', CallArgs},
