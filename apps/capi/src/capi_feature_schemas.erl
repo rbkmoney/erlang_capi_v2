@@ -238,6 +238,9 @@ deep_merge(M1, M2) ->
         M2
     ).
 
+deep_fetch(Map, Keys) ->
+    lists:foldl(fun(K, M) -> maps:get(K, M) end, Map, Keys).
+
 hash(Term) ->
     capi_idemp_features:hash(Term).
 read(Schema, Request) ->
@@ -305,7 +308,7 @@ read_payment_features_test() ->
             }
         }
     },
-    Features = capi_idemp_features:read(payment(), Request),
+    Features = read(payment(), Request),
     ?assertEqual(Payer, Features).
 
 -spec compare_payment_bank_card_test() -> _.
@@ -321,17 +324,9 @@ compare_payment_bank_card_test() ->
     Request1 = payment_params(PaymentTool1),
     Request2 = payment_params(PaymentTool2),
 
-    Schema = payment(),
-    F1 = capi_idemp_features:read(Schema, Request1),
-    F2 = capi_idemp_features:read(Schema, Request2),
-    ?assertEqual(true, capi_idemp_features:compare(F1, F1)),
-    {false, Diff} = capi_idemp_features:compare(F1, F2),
-    ?assertEqual(
-        [
-            <<"payer.paymentTool.token">>
-        ],
-        list_diff_fields(Schema, Diff)
-    ).
+    common_compare_tests(payment(), Request1, Request2, [
+        <<"payer.paymentTool.token">>
+    ]).
 
 -spec compare_different_payment_tool_test() -> _.
 compare_different_payment_tool_test() ->
@@ -344,12 +339,8 @@ compare_different_payment_tool_test() ->
     },
     Request1 = payment_params(PaymentTool1),
     Request2 = payment_params(PaymentTool2),
-    Schema = payment(),
-    F1 = capi_idemp_features:read(Schema, Request1),
-    F2 = capi_idemp_features:read(Schema, Request2),
-    ?assertEqual(true, capi_idemp_features:compare(F1, F1)),
-    {false, Diff} = capi_idemp_features:compare(F1, F2),
-    ?assertEqual([<<"payer.paymentTool">>], capi_idemp_features:list_diff_fields(Schema, Diff)).
+
+    common_compare_tests(payment(), Request1, Request2, [<<"payer.paymentTool">>]).
 
 -spec feature_multi_accessor_test() -> _.
 feature_multi_accessor_test() ->
@@ -390,16 +381,9 @@ feature_multi_accessor_test() ->
             }
         ]
     },
-    F1 = capi_idemp_features:read(Schema, Request1),
-    F2 = capi_idemp_features:read(Schema, Request2),
-    ?assertEqual(true, capi_idemp_features:compare(F1, F1)),
-    {false, Diff} = capi_idemp_features:compare(F1, F2),
-    ?assertEqual(
-        [
-            <<"payer.paymentTool.wrapper.token">>
-        ],
-        capi_idemp_features:list_diff_fields(Schema, Diff)
-    ).
+    common_compare_tests(Schema, Request1, Request2, [
+        <<"payer.paymentTool.wrapper.token">>
+    ]).
 
 -spec read_payment_customer_features_value_test() -> _.
 read_payment_customer_features_value_test() ->
@@ -411,7 +395,7 @@ read_payment_customer_features_value_test() ->
             <<"customerID">> => CustomerID
         }
     },
-    Features = capi_idemp_features:read(payment(), Request),
+    Features = read(payment(), Request),
     ?assertEqual(
         #{
             ?invoice_id => undefined,
@@ -482,7 +466,7 @@ read_invoice_features_test() ->
         <<"metadata">> => #{}
     },
 
-    Features = capi_idemp_features:read(invoice(), Request),
+    Features = read(invoice(), Request),
     ?assertEqual(Invoice, Features).
 
 -spec compare_invoices_features_test() -> _.
@@ -514,8 +498,8 @@ compare_invoices_features_test() ->
         <<"cart">> => [#{<<"product">> => Prod2, <<"price">> => Price2, <<"quantity">> => undefined}]
     }),
     Schema = invoice(),
-    Invoice1 = capi_idemp_features:read(Schema, Request1),
-    InvoiceChg1 = capi_idemp_features:read(Schema, Request1#{
+    Invoice1 = read(Schema, Request1),
+    InvoiceChg1 = read(Schema, Request1#{
         <<"cart">> => [
             Product#{
                 <<"price">> => Price2,
@@ -525,8 +509,8 @@ compare_invoices_features_test() ->
             }
         ]
     }),
-    Invoice2 = capi_idemp_features:read(Schema, Request2),
-    InvoiceWithFullCart = capi_idemp_features:read(Schema, Request3),
+    Invoice2 = read(Schema, Request2),
+    InvoiceWithFullCart = read(Schema, Request3),
     ?assertEqual(
         {false, #{
             ?cart => #{
@@ -538,25 +522,25 @@ compare_invoices_features_test() ->
                 }
             }
         }},
-        capi_idemp_features:compare(Invoice2, Invoice1)
+        compare(Invoice2, Invoice1)
     ),
-    ?assert(capi_idemp_features:compare(Invoice1, Invoice1)),
+    ?assert(compare(Invoice1, Invoice1)),
     %% Feature was deleted
-    ?assert(capi_idemp_features:compare(InvoiceWithFullCart, Invoice2)),
+    ?assert(compare(InvoiceWithFullCart, Invoice2)),
     %% Feature was add
-    ?assert(capi_idemp_features:compare(Invoice2, InvoiceWithFullCart)),
+    ?assert(compare(Invoice2, InvoiceWithFullCart)),
     %% When second request didn't contain feature, this situation detected as conflict.
     ?assertEqual(
         {false, #{?cart => ?difference}},
-        capi_idemp_features:compare(Invoice1#{?cart => undefined}, Invoice1)
+        compare(Invoice1#{?cart => undefined}, Invoice1)
     ),
 
-    {false, Diff} = capi_idemp_features:compare(Invoice1, InvoiceChg1),
+    {false, Diff} = compare(Invoice1, InvoiceChg1),
     ?assertEqual(
         [<<"cart.0.price">>, <<"cart.0.taxMode.rate">>],
-        capi_idemp_features:list_diff_fields(Schema, Diff)
+        list_diff_fields(Schema, Diff)
     ),
-    ?assert(capi_idemp_features:compare(Invoice1, Invoice1#{?cart => undefined})).
+    ?assert(compare(Invoice1, Invoice1#{?cart => undefined})).
 
 -spec read_customer_binding_features_test() -> _.
 read_customer_binding_features_test() ->
@@ -594,7 +578,7 @@ read_customer_binding_features_test() ->
 
     ?assertEqual(
         Features,
-        capi_idemp_features:read(customer_binding(), Request)
+        read(customer_binding(), Request)
     ).
 
 -spec compare_customer_binding_features_test() -> _.
@@ -607,20 +591,93 @@ compare_customer_binding_features_test() ->
     Tool2 = ?TEST_PAYMENT_TOOL(mastercard)#{<<"exp_date">> => <<"01/2020">>},
     Request2 = payment_resource(Session2, Tool2),
 
-    Schema = customer_binding(),
+    common_compare_tests(customer_binding(), Request1, Request2, [
+        <<"paymentResource.paymentTool.exp_date">>,
+        <<"paymentResource.paymentSession">>
+    ]).
 
-    F1 = read(Schema, Request1),
-    F2 = read(Schema, Request2),
+%% Add invoice_template tests
 
-    ?assertEqual(true, compare(F1, F1)),
-    {false, Diff} = compare(F1, F2),
+-spec read_invoice_template_features_test() -> _.
+read_invoice_template_features_test() ->
+    ShopID = <<"1">>,
+    Request = #{
+        <<"shopID">> => ShopID,
+        <<"lifetime">> => lifetime_dummy(1, 2, 3),
+        <<"details">> => ?INVOICE_TMPL_DETAILS_PARAMS(42)
+    },
+    Features = #{
+        ?shop_id => hash(ShopID),
+        ?lifetime => #{
+            ?days => hash(1),
+            ?months => hash(2),
+            ?years => hash(3)
+        },
+        ?details => #{
+            ?discriminator => hash(<<"InvoiceTemplateMultiLine">>),
+            ?single_line => #{
+                ?product => undefined,
+                ?price => undefined,
+                ?tax => undefined
+            },
+            ?multiline => #{
+                ?currency => 53964746,
+                ?cart => [
+                    [
+                        1,
+                        #{
+                            ?product => hash(?STRING),
+                            ?quantity => hash(42),
+                            ?price => hash(?INTEGER),
+                            ?tax => #{?discriminator => hash(<<"InvoiceLineTaxVAT">>), ?rate => hash(<<"18%">>)}
+                        }
+                    ],
+                    [
+                        0,
+                        #{
+                            ?product => hash(?STRING),
+                            ?quantity => hash(42),
+                            ?price => hash(?INTEGER),
+                            ?tax => undefined
+                        }
+                    ]
+                ]
+            }
+        }
+    },
+
     ?assertEqual(
-        [
-            <<"paymentResource.paymentTool.exp_date">>,
-            <<"paymentResource.paymentSession">>
-        ],
-        list_diff_fields(Schema, Diff)
+        Features,
+        read(invoice_template(), Request)
     ).
+
+-spec compare_invoice_template_features_test() -> _.
+compare_invoice_template_features_test() ->
+    ShopID1 = <<"1">>,
+    ShopID2 = <<"2">>,
+    Request1 = #{
+        <<"shopID">> => ShopID1,
+        <<"lifetime">> => lifetime_dummy(1, 2, 3),
+        <<"details">> => ?INVOICE_TMPL_DETAILS_PARAMS(42)
+    },
+    Request2 = deep_merge(
+        Request1,
+        #{
+            <<"shopID">> => ShopID2,
+            <<"lifetime">> => lifetime_dummy(1, 2, 42),
+            <<"details">> => #{
+                <<"currency">> => ?USD,
+                <<"cart">> => [hd(deep_fetch(Request1, [<<"details">>, <<"cart">>]))]
+            }
+        }
+    ),
+
+    common_compare_tests(invoice_template(), Request1, Request2, [
+        <<"shopID">>,
+        <<"lifetime.years">>,
+        <<"details.currency">>,
+        <<"details.cart">>
+    ]).
 
 payment_resource(Session, Tool) ->
     #{
@@ -666,5 +723,20 @@ bank_card() ->
         <<"cardholder_name">> => <<"Degus Degusovich">>,
         <<"is_cvv_empty">> => false
     }.
+
+lifetime_dummy(Days, Months, Years) ->
+    #{
+        <<"days">> => Days,
+        <<"months">> => Months,
+        <<"years">> => Years
+    }.
+
+common_compare_tests(Schema, Request1, Request2, DiffFeatures) ->
+    F1 = read(Schema, Request1),
+    F2 = read(Schema, Request2),
+
+    ?assertEqual(true, compare(F1, F1)),
+    {false, Diff} = compare(F1, F2),
+    ?assertEqual(DiffFeatures, list_diff_fields(Schema, Diff)).
 
 -endif.

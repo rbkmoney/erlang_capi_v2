@@ -1261,19 +1261,20 @@
     })
 ).
 
--define(INVOICE_TMPL_DETAILS_PARAMS, #{
+-define(INVOICE_TMPL_DETAILS_PARAMS, ?INVOICE_TMPL_DETAILS_PARAMS(?INTEGER)).
+-define(INVOICE_TMPL_DETAILS_PARAMS(Quantity), #{
     <<"templateType">> => <<"InvoiceTemplateMultiLine">>,
     <<"currency">> => ?RUB,
     <<"cart">> => [
         #{
             <<"product">> => ?STRING,
             <<"price">> => ?INTEGER,
-            <<"quantity">> => ?INTEGER
+            <<"quantity">> => Quantity
         },
         #{
             <<"product">> => ?STRING,
             <<"price">> => ?INTEGER,
-            <<"quantity">> => ?INTEGER,
+            <<"quantity">> => Quantity,
             <<"taxMode">> => #{
                 <<"type">> => <<"InvoiceLineTaxVAT">>,
                 <<"rate">> => <<"18%">>

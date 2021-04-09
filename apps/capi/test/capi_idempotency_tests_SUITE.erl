@@ -449,7 +449,7 @@ create_invoice_template_ok_test(Config) ->
             <<"months">> => ?INTEGER,
             <<"years">> => ?INTEGER
         },
-        <<"details">> => invoice_template_details(),
+        <<"details">> => ?INVOICE_TMPL_DETAILS_PARAMS,
         <<"description">> => <<"Sample text">>
     },
     Req2 = Req1#{<<"description">> => <<"whatever">>},
@@ -485,7 +485,7 @@ create_invoice_template_fail_test(Config) ->
             <<"months">> => ?INTEGER,
             <<"years">> => ?INTEGER
         },
-        <<"details">> => invoice_template_details(),
+        <<"details">> => ?INVOICE_TMPL_DETAILS_PARAMS,
         <<"description">> => <<"Sample text">>
     },
     Req2 = Req1#{<<"shopID">> => <<"2">>},
@@ -751,17 +751,6 @@ create_customer_bindings(BenderKey, Requests, Config) ->
             ]
         end
     ).
-
-invoice_template_details() ->
-    #{
-        <<"templateType">> => <<"InvoiceTemplateSingleLine">>,
-        <<"product">> => <<"test_invoice_template_product">>,
-        <<"price">> => #{
-            <<"costType">> => <<"InvoiceTemplateLineCostFixed">>,
-            <<"currency">> => ?RUB,
-            <<"amount">> => ?INTEGER
-        }
-    }.
 
 create_invoice_templates(BenderKey, Requests, Config) ->
     Context = ?config(context, Config),

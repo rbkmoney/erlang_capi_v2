@@ -183,7 +183,8 @@ make_identity({schema, Schema, Data, HashedData}) ->
 make_identity(Identity = {identity, _Hash, _Features, _Schema}) ->
     Identity.
 
--spec get_internal_id(binary(), woody_context()) -> {ok, binary(), context_data()} | {error, internal_id_not_found}.
+-spec get_internal_id(idempotent_key_params(), woody_context()) ->
+    {ok, binary(), context_data()} | {error, internal_id_not_found}.
 get_internal_id(IdempotentKeyParams, WoodyContext) ->
     IdempotentKey = make_idempotent_key(IdempotentKeyParams),
     case capi_woody_client:call_service(bender, 'GetInternalID', {IdempotentKey}, WoodyContext) of
