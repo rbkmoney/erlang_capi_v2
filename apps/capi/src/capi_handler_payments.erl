@@ -29,41 +29,48 @@ prepare(OperationID = 'CreatePayment', Req, Context) ->
     Process = fun() ->
         try
             Invoice = unwrap(InvoiceResult),
-            Payment = unwrap(create_payment(Invoice, PaymentParams, Context, OperationID)),
-            {ok, {201, #{}, decode_invoice_payment(InvoiceID, Payment, Context)}}
+            case create_payment(Invoice, PaymentParams, Context, OperationID) of
+                {ok, Payment} ->
+                    {ok, {201, #{}, decode_invoice_payment(InvoiceID, Payment, Context)}};
+                {exception, #payproc_InvalidInvoiceStatus{}} ->
+                    {ok, logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)};
+                {exception, #payproc_InvoicePaymentPending{}} ->
+                    ErrorResp = logic_error(
+                        invoicePaymentPending,
+                        <<"Invoice payment pending">>
+                    ),
+                    {ok, ErrorResp};
+                {exception, #'InvalidRequest'{errors = Errors}} ->
+                    FormattedErrors = capi_handler_utils:format_request_errors(Errors),
+                    {ok, logic_error(invalidRequest, FormattedErrors)};
+                {exception, #payproc_InvalidPartyStatus{}} ->
+                    {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
+                {exception, #payproc_InvalidShopStatus{}} ->
+                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
+                {exception, #payproc_InvalidContractStatus{}} ->
+                    ErrorResp = logic_error(
+                        invalidContractStatus,
+                        <<"Invalid contract status">>
+                    ),
+                    {ok, ErrorResp};
+                {exception, #payproc_InvalidRecurrentParentPayment{}} ->
+                    ErrorResp = logic_error(
+                        invalidRecurrentParent,
+                        <<"Specified recurrent parent is invalid">>
+                    ),
+                    {ok, ErrorResp};
+                {exception, #payproc_InvalidUser{}} ->
+                    {ok, general_error(404, <<"Invoice not found">>)};
+                {exception, #payproc_InvoiceNotFound{}} ->
+                    {ok, general_error(404, <<"Invoice not found">>)};
+                {error, {external_id_conflict, PaymentID, ExternalID}} ->
+                    {ok, logic_error(externalIDConflict, {PaymentID, ExternalID})}
+            end
         catch
-            throw:Error ->
-                case Error of
-                    invoice_not_found ->
-                        {ok, general_error(404, <<"Invoice not found">>)};
-                    invalid_user ->
-                        {ok, general_error(404, <<"Invoice not found">>)};
-                    invalid_token ->
-                        {ok, logic_error(invalidPaymentToolToken, <<"Specified payment tool token is invalid">>)};
-                    invalid_payment_session ->
-                        {ok, logic_error(invalidPaymentSession, <<"Specified payment session is invalid">>)};
-                    invalid_processing_deadline ->
-                        {ok, logic_error(invalidProcessingDeadline, <<"Specified processing deadline is invalid">>)};
-                    {external_id_conflict, PaymentID, ExternalID} ->
-                        {ok, logic_error(externalIDConflict, {PaymentID, ExternalID})};
-                    invalid_invoice_status ->
-                        {ok, logic_error(invalidInvoiceStatus, <<"Invalid invoice status">>)};
-                    invoice_payment_pending ->
-                        ErrorResp = logic_error(invoicePaymentPending, <<"Invoice payment pending">>),
-                        {ok, ErrorResp};
-                    {invalid_request, FormattedErrors} ->
-                        {ok, logic_error(invalidRequest, FormattedErrors)};
-                    invalid_party_status ->
-                        {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
-                    invalid_shop_status ->
-                        {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
-                    invalid_contract_status ->
-                        ErrorResp = logic_error(invalidContractStatus, <<"Invalid contract status">>),
-                        {ok, ErrorResp};
-                    invalid_recurrent_parent_payment ->
-                        ErrorResp = logic_error(invalidRecurrentParent, <<"Specified recurrent parent is invalid">>),
-                        {ok, ErrorResp}
-                end
+            throw:invalid_user ->
+                {ok, general_error(404, <<"Invoice not found">>)};
+            throw:invoice_not_found ->
+                {ok, general_error(404, <<"Invoice not found">>)}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -117,7 +124,7 @@ prepare(OperationID = 'GetPaymentByID', Req, Context) ->
 prepare(OperationID = 'GetPaymentByExternalID', Req, Context) ->
     ExternalID = maps:get(externalID, Req),
     {BouncerPrototypes, ProcessFun} =
-        case get_by_internal_id(ExternalID, Context) of
+        case get_by_external_id(ExternalID, Context) of
             {ok, {InvoiceID, PaymentID}} ->
                 InvoiceResult = get_invoice_by_id(InvoiceID, Context),
                 Prototypes = [
@@ -536,32 +543,7 @@ create_payment(Invoice, PaymentParams, #{woody_context := WoodyCtx} = Context, _
 start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context) ->
     InvoicePaymentParams = encode_invoice_payment_params(ID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift),
     Call = {invoicing, 'StartPayment', {InvoiceID, InvoicePaymentParams}},
-    case capi_handler_utils:service_call_with([user_info], Call, Context) of
-        {ok, Payment} ->
-            {ok, Payment};
-        {exception, Exception} ->
-            case Exception of
-                #payproc_InvalidInvoiceStatus{} ->
-                    {error, invalid_invoice_status};
-                #payproc_InvoicePaymentPending{} ->
-                    {error, invoice_payment_pending};
-                #'InvalidRequest'{errors = Errors} ->
-                    FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                    {error, invalid_request, FormattedErrors};
-                #payproc_InvalidPartyStatus{} ->
-                    {error, invalid_party_status};
-                #payproc_InvalidShopStatus{} ->
-                    {error, invalid_shop_status};
-                #payproc_InvalidContractStatus{} ->
-                    {error, invalid_contract_status};
-                #payproc_InvalidRecurrentParentPayment{} ->
-                    {error, invalid_recurrent_parent_payment};
-                #payproc_InvalidUser{} ->
-                    {error, invalid_user};
-                #payproc_InvoiceNotFound{} ->
-                    {error, invoice_not_found}
-            end
-    end.
+    capi_handler_utils:service_call_with([user_info], Call, Context).
 
 find_payment_by_id(PaymentID, #payproc_Invoice{payments = Payments}) ->
     Fun = fun(#payproc_InvoicePayment{payment = #domain_InvoicePayment{id = ID}}) ->
@@ -624,10 +606,10 @@ unwrap({ok, Value}) ->
 unwrap({error, Error}) ->
     throw(Error).
 
--spec get_by_internal_id(binary(), capi_handler:processing_context()) ->
+-spec get_by_external_id(binary(), capi_handler:processing_context()) ->
     {ok, {binary(), binary()}}
     | {error, internal_id_not_found}.
-get_by_internal_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
+get_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     PaymentKey = capi_bender:get_idempotent_key('CreatePayment', PartyID, ExternalID),
     case capi_bender:get_internal_id(PaymentKey, WoodyContext) of
