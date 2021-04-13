@@ -67,6 +67,24 @@ prepare(OperationID = 'CreatePayment', Req, Context) ->
                     {ok, logic_error(externalIDConflict, {PaymentID, ExternalID})}
             end
         catch
+            throw:invalid_token ->
+                {ok,
+                    logic_error(
+                        invalidPaymentToolToken,
+                        <<"Specified payment tool token is invalid">>
+                    )};
+            throw:invalid_payment_session ->
+                {ok,
+                    logic_error(
+                        invalidPaymentSession,
+                        <<"Specified payment session is invalid">>
+                    )};
+            throw:invalid_processing_deadline ->
+                {ok,
+                    logic_error(
+                        invalidProcessingDeadline,
+                        <<"Specified processing deadline is invalid">>
+                    )};
             throw:invalid_user ->
                 {ok, general_error(404, <<"Invoice not found">>)};
             throw:invoice_not_found ->
