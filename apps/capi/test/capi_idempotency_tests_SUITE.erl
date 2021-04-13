@@ -449,8 +449,12 @@ create_invoice_template_ok_test(Config) ->
             <<"months">> => ?INTEGER,
             <<"years">> => ?INTEGER
         },
+        <<"partyID">> => <<"2">>,
         <<"details">> => ?INVOICE_TMPL_DETAILS_PARAMS,
-        <<"description">> => <<"Sample text">>
+        <<"description">> => <<"Sample text">>,
+        <<"metadata">> => #{
+            <<"key">> => <<"value">>
+        }
     },
     Req2 = Req1#{<<"description">> => <<"whatever">>},
 
@@ -471,7 +475,12 @@ create_invoice_template_ok_test(Config) ->
 
     ?assertEqual(Template1, Template2),
     ?assertEqual(UnusedParams1, UnusedParams2),
-    ?assertEqual(UnusedParams1, [[<<"description">>], [<<"externalID">>]]).
+    ?assertEqual(UnusedParams1, [
+        [<<"description">>],
+        [<<"externalID">>],
+        [<<"metadata">>, <<"key">>],
+        [<<"partyID">>]
+    ]).
 
 -spec create_invoice_template_fail_test(config()) -> _.
 create_invoice_template_fail_test(Config) ->
