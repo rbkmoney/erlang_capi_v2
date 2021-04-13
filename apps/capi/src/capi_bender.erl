@@ -8,7 +8,7 @@
 -type external_id() :: binary().
 -type issuer_id() :: dmsl_domain_thrift:'PartyID'() | dmsl_payment_processing_thrift:'UserID'().
 -type idempotent_key() :: binary().
--type idempotent_key_params() :: idempotent_key() | {idempotent_key_prefix(), issuer_id(), external_id() | undefined}.
+-type idempotent_key_params() :: {idempotent_key_prefix(), issuer_id(), external_id() | undefined}.
 -type identity() :: {identity, identity_hash(), identity_features(), identity_schema()}.
 -type identity_params() ::
     {schema, identity_schema(), capi_idemp_features:request()}
@@ -244,12 +244,8 @@ generate_id(BenderIdSchema, IdempKeyParams, IdempIdentity, WoodyContext, CtxData
     end.
 
 -spec make_idempotent_key(idempotent_key_params()) -> idempotent_key() | undefined.
-make_idempotent_key(IdempotentKey) when is_binary(IdempotentKey) ->
-    IdempotentKey;
 make_idempotent_key({Prefix, PartyID, ExternalID}) when is_atom(Prefix) ->
     make_idempotent_key({atom_to_binary(Prefix, utf8), PartyID, ExternalID});
-make_idempotent_key(undefined) ->
-    undefined;
 make_idempotent_key({_Prefix, _PartyID, undefined}) ->
     %% If external ID is undefined, no reason to generate it: noone can really use it
     undefined;
