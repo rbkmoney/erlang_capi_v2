@@ -217,9 +217,7 @@ build_bender_ctx(Features, Ctx) ->
     }.
 
 get_external_id({_BenderPrefix, _PartyOrUserID, ExternalID}) ->
-    ExternalID;
-get_external_id(IdempotentKey) when is_binary(IdempotentKey) ->
-    lists:last(binary:split(IdempotentKey, <<"/">>, [global, trim_all])).
+    ExternalID.
 
 try_generate_id(BenderIdSchema, IdempotentKey, Identity, WoodyContext, CtxData) ->
     case generate_id(BenderIdSchema, IdempotentKey, Identity, WoodyContext, CtxData) of
