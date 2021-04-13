@@ -629,7 +629,7 @@ read_invoice_template_features_test() ->
                 ?tax => undefined
             },
             ?multiline => #{
-                ?currency => 53964746,
+                ?currency => hash(<<"USD">>),
                 ?cart => [
                     [
                         1,
