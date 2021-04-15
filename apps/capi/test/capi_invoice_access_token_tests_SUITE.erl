@@ -120,7 +120,7 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
         ],
         MockServiceSup
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"CreateInvoice">>, ?STRING, ?STRING, MockServiceSup),
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"CreateInvoice">>, ?STRING, ?STRING, MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"amount">> => ?INTEGER,
@@ -145,7 +145,7 @@ init_per_group(operations_by_invoice_access_token_after_token_creation, Config) 
         ],
         MockServiceSup
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
         <<"CreateInvoiceAccessToken">>,
         ?STRING,
         ?STRING,
@@ -180,7 +180,7 @@ end_per_testcase(_Name, C) ->
 -spec get_invoice_ok_test(config()) -> _.
 get_invoice_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
         <<"GetInvoiceByID">>,
         ?STRING,
         ?STRING,
@@ -219,7 +219,7 @@ get_invoice_events_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
         <<"GetInvoiceEvents">>,
         ?STRING,
         ?STRING,
@@ -243,7 +243,7 @@ get_invoice_payment_methods_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
         <<"GetInvoicePaymentMethods">>,
         ?STRING,
         ?STRING,
@@ -271,7 +271,7 @@ create_payment_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_compare_payment_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_compare_payment_op_ctx(
         <<"CreatePayment">>,
         ?STRING,
         ?STRING,

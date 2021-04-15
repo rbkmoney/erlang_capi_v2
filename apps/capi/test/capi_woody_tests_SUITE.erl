@@ -82,7 +82,7 @@ init_per_group(woody_errors, Config) ->
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
     Context = capi_ct_helper:get_context(Token),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+    Apps1 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     [{context, Context}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config];
 init_per_group(_, Config) ->
     Config.

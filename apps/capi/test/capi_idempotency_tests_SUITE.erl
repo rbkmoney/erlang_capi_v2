@@ -110,7 +110,7 @@ init_per_group(payment_creation, Config) ->
         ],
         MockServiceSup
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"CreateInvoice">>, ?STRING, ?STRING, MockServiceSup),
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"CreateInvoice">>, ?STRING, ?STRING, MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"amount">> => ?INTEGER,
@@ -120,13 +120,13 @@ init_per_group(payment_creation, Config) ->
         <<"product">> => <<"test_product">>,
         <<"description">> => <<"test_invoice_description">>
     },
-    % <<<<<<< HEAD
-    %     {ok, #{
-    %         <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
-    %     }} = capi_client_invoices:create_invoice(capi_ct_helper:get_context(Token, ExtraProperties), Req),
+% <<<<<<< HEAD
+%     {ok, #{
+%         <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
+%     }} = capi_client_invoices:create_invoice(capi_ct_helper:get_context(Token, ExtraProperties), Req),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    % =======
+    Apps1 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+% =======
     {{ok, #{
             <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
         }},
@@ -135,7 +135,7 @@ init_per_group(payment_creation, Config) ->
             capi_client_invoices:create_invoice(capi_ct_helper:get_context(Token, ExtraProperties), Req)
         end),
 
-    % >>>>>>> master
+% >>>>>>> master
     capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
     [{context, capi_ct_helper:get_context(InvAccToken)}, {group_apps, Apps1} | Config];
 init_per_group(GroupName, Config) when
@@ -158,7 +158,7 @@ init_per_group(GroupName, Config) when
     {ok, Token2} = capi_ct_helper:issue_token(<<"TEST2">>, BasePermissions, unlimited, #{}),
     Config2 = [{context_with_diff_party, capi_ct_helper:get_context(Token2)} | Config],
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+    Apps1 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     [{context, capi_ct_helper:get_context(Token)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config2];
 init_per_group(_, Config) ->
     Config.
