@@ -531,32 +531,20 @@ create_payment(Invoice, #{<<"externalID">> := ExternalID} = PaymentParams, Conte
     #payproc_Invoice{invoice = #domain_Invoice{id = InvoiceID, owner_id = PartyID}} = Invoice,
     IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
     {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
+
     PaymentParamsFull = PaymentParams#{<<"invoiceID">> => InvoiceID},
     PaymentParamsDecrypted = PaymentParamsFull#{<<"payer">> => Payer},
-    Hash = erlang:phash2(PaymentParams),
-    Schema = capi_feature_schemas:payment(),
-    Features = capi_idemp_features:read(Schema, PaymentParamsDecrypted),
-    Params = {Hash, Features},
+
+    Identity = capi_bender:make_identity(
+        {schema, capi_feature_schemas:payment(), PaymentParamsDecrypted, PaymentParams}
+    ),
+    SequenceID = InvoiceID,
+    SequenceParams = #{},
     #{woody_context := WoodyCtx} = Context,
     %% We put `invoice_id` in a context here because `get_payment_by_external_id()` needs it to work
     CtxData = #{<<"invoice_id">> => InvoiceID},
-    case capi_bender:gen_by_sequence(IdempotentKey, InvoiceID, Params, WoodyCtx, CtxData) of
-        {ok, ID} ->
-            start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context);
-        {error, {external_id_conflict, ID, undefined}} ->
-            {error, {external_id_conflict, ID, ExternalID}};
-        {error, {external_id_conflict, ID, Difference}} ->
-            ReadableDiff = capi_idemp_features:list_diff_fields(Schema, Difference),
-            logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, ReadableDiff]),
-            {error, {external_id_conflict, ID, ExternalID}}
-    end;
-create_payment(Invoice, PaymentParams, #{woody_context := WoodyCtx} = Context, _) ->
-    #payproc_Invoice{invoice = #domain_Invoice{id = InvoiceID}} = Invoice,
-    ExternalID = undefined,
-    {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
-    PaymentParamsDecrypted = PaymentParams#{<<"payer">> => Payer},
-    {ok, {ID, _}} = bender_generator_client:gen_sequence(InvoiceID, WoodyCtx, #{}),
-    start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context).
+    PaymentID = capi_bender:try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyCtx, CtxData),
+    start_payment(PaymentID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context).
 
 start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context) ->
     InvoicePaymentParams = encode_invoice_payment_params(ID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift),
@@ -751,8 +739,8 @@ decode_invoice_payment(InvoiceID, InvoicePayment, Context) ->
 
 get_refund_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
-    RefundKey = capi_bender:get_idempotent_key('CreateRefund', PartyID, ExternalID),
-    case capi_bender:get_internal_id(RefundKey, WoodyContext) of
+    IdempotentKey = capi_bender:make_idempotent_key({'CreateRefund', PartyID, ExternalID}),
+    case capi_bender:get_internal_id(IdempotentKey, WoodyContext) of
         {ok, RefundID, CtxData} ->
             InvoiceID = maps:get(<<"invoice_id">>, CtxData),
             PaymentID = maps:get(<<"payment_id">>, CtxData),
@@ -774,33 +762,18 @@ encode_processing_deadline(Deadline) ->
 default_processing_deadline() ->
     genlib_app:env(capi, default_processing_deadline, ?DEFAULT_PROCESSING_DEADLINE).
 
-create_refund(InvoiceID, PaymentID, #{<<"externalID">> := ExternalID} = RefundParams, Context, BenderPrefix) ->
-    PartyID = capi_handler_utils:get_party_id(Context),
-    #{woody_context := WoodyCtx} = Context,
-    IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
-    SequenceID = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
-    SequenceParams = #{minimum => 100},
-    Hash = erlang:phash2(RefundParams),
-    RefundParamsFull = RefundParams#{<<"invoiceID">> => InvoiceID, <<"paymentID">> => PaymentID},
-    Schema = capi_feature_schemas:refund(),
-    Features = capi_idemp_features:read(Schema, RefundParamsFull),
-    Params = {Hash, Features},
-    case capi_bender:gen_by_sequence(IdempotentKey, SequenceID, Params, WoodyCtx, #{}, SequenceParams) of
-        {ok, ID} ->
-            refund_payment(ID, InvoiceID, PaymentID, RefundParams, Context);
-        {error, {external_id_conflict, ID, undefined}} ->
-            {error, {external_id_conflict, ID, ExternalID}};
-        {error, {external_id_conflict, ID, Difference}} ->
-            ReadableDiff = capi_idemp_features:list_diff_fields(Schema, Difference),
-            logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, ReadableDiff]),
-            {error, {external_id_conflict, ID, ExternalID}}
-    end;
 create_refund(InvoiceID, PaymentID, RefundParams, Context, BenderPrefix) ->
-    #{woody_context := WoodyCtx} = Context,
+    PartyID = capi_handler_utils:get_party_id(Context),
+    RefundParamsFull = RefundParams#{<<"invoiceID">> => InvoiceID, <<"paymentID">> => PaymentID},
+
+    ExternalID = maps:get(<<"externalID">>, RefundParams, undefined),
+    IdempotentKey = capi_bender:make_idempotent_key({BenderPrefix, PartyID, ExternalID}),
+    Identity = {schema, capi_feature_schemas:refund(), RefundParamsFull, RefundParams},
     SequenceID = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
     SequenceParams = #{minimum => 100},
-    {ok, {ID, _}} = bender_generator_client:gen_sequence(SequenceID, WoodyCtx, SequenceParams),
-    refund_payment(ID, InvoiceID, PaymentID, RefundParams, Context).
+    #{woody_context := WoodyCtx} = Context,
+    RefundID = capi_bender:try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyCtx),
+    refund_payment(RefundID, InvoiceID, PaymentID, RefundParams, Context).
 
 refund_payment(RefundID, InvoiceID, PaymentID, RefundParams, Context) ->
     ExternalID = maps:get(<<"externalID">>, RefundParams, undefined),

@@ -219,15 +219,21 @@ get_operation_access('GetPaymentRateStats', _) ->
     [{[party], read}];
 get_operation_access('GetPaymentMethodStats', _) ->
     [{[party], read}];
-get_operation_access('GetMyParty', _) ->
-    [{[party], read}];
 get_operation_access('ActivateShop', _) ->
     [{[party], write}];
 get_operation_access('SuspendShop', _) ->
     [{[party], write}];
+get_operation_access('GetMyParty', _) ->
+    [{[party], read}];
 get_operation_access('SuspendMyParty', _) ->
     [{[party], write}];
 get_operation_access('ActivateMyParty', _) ->
+    [{[party], write}];
+get_operation_access('GetPartyByID', _) ->
+    [{[party], read}];
+get_operation_access('SuspendPartyByID', _) ->
+    [{[party], write}];
+get_operation_access('ActivatePartyByID', _) ->
     [{[party], write}];
 get_operation_access('CreateClaim', _) ->
     [{[party], write}];
@@ -436,7 +442,7 @@ authorize_operation(Prototypes, #{swagger_context := ReqCtx, woody_context := Wo
             try
                 capi_bouncer:judge(Fragments1, WoodyCtx)
             catch
-                error:{woody_error, _} ->
+                error:{woody_error, _Error} ->
                     % TODO
                     % This is temporary safeguard around bouncer integration put here so that
                     % external requests would remain undisturbed by bouncer intermittent failures.

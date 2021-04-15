@@ -28,8 +28,11 @@
 -export([create_invoice_fail_test/1]).
 -export([create_invoice_idemp_cart_ok_test/1]).
 -export([create_invoice_idemp_cart_fail_test/1]).
+-export([create_invoice_idemp_bank_account_fail_test/1]).
 -export([create_refund_idemp_ok_test/1]).
 -export([create_refund_idemp_fail_test/1]).
+-export([create_customer_binding_ok_test/1]).
+-export([create_customer_binding_fail_test/1]).
 
 -type test_case_name() :: atom().
 -type config() :: [{atom(), any()}].
@@ -48,7 +51,8 @@ all() ->
     [
         {group, payment_creation},
         {group, invoice_creation},
-        {group, refund_creation}
+        {group, refund_creation},
+        {group, customer_binding_creation}
     ].
 
 -spec groups() -> [{group_name(), list(), [test_case_name()]}].
@@ -66,11 +70,16 @@ groups() ->
             create_invoice_legacy_fail_test,
             create_invoice_fail_test,
             create_invoice_idemp_cart_fail_test,
-            create_invoice_idemp_cart_ok_test
+            create_invoice_idemp_cart_ok_test,
+            create_invoice_idemp_bank_account_fail_test
         ]},
         {refund_creation, [], [
             create_refund_idemp_ok_test,
             create_refund_idemp_fail_test
+        ]},
+        {customer_binding_creation, [], [
+            create_customer_binding_ok_test,
+            create_customer_binding_fail_test
         ]}
     ].
 
@@ -101,6 +110,7 @@ init_per_group(payment_creation, Config) ->
         ],
         MockServiceSup
     ),
+    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"CreateInvoice">>, ?STRING, ?STRING, MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"amount">> => ?INTEGER,
@@ -110,16 +120,28 @@ init_per_group(payment_creation, Config) ->
         <<"product">> => <<"test_product">>,
         <<"description">> => <<"test_invoice_description">>
     },
-    {ok, #{
-        <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
-    }} = capi_client_invoices:create_invoice(capi_ct_helper:get_context(Token, ExtraProperties), Req),
+% <<<<<<< HEAD
+%     {ok, #{
+%         <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
+%     }} = capi_client_invoices:create_invoice(capi_ct_helper:get_context(Token, ExtraProperties), Req),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
     Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+% =======
+    {{ok, #{
+            <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
+        }},
+        _} =
+        with_feature_storage(fun() ->
+            capi_client_invoices:create_invoice(capi_ct_helper:get_context(Token, ExtraProperties), Req)
+        end),
+
+% >>>>>>> master
     capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
     [{context, capi_ct_helper:get_context(InvAccToken)}, {group_apps, Apps1} | Config];
 init_per_group(GroupName, Config) when
     GroupName =:= invoice_creation orelse
-        GroupName =:= refund_creation
+        GroupName =:= refund_creation orelse
+        GroupName =:= customer_binding_creation
 ->
     BasePermissions = [
         {[invoices], write},
@@ -397,6 +419,25 @@ create_invoice_idemp_cart_fail_test(Config) ->
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response2),
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response3).
 
+-spec create_invoice_idemp_bank_account_fail_test(config()) -> _.
+create_invoice_idemp_bank_account_fail_test(Config) ->
+    BenderKey = <<"bender_key">>,
+    ExternalID = <<"merch_id">>,
+    Req = invoice_params(ExternalID),
+    Account1 = #{
+        <<"accountType">> => <<"InvoiceRussianBankAccount">>,
+        <<"account">> => <<"12345678901234567890">>,
+        <<"bankBik">> => <<"123456789">>
+    },
+    Account2 = Account1#{<<"bankBik">> => <<"987654321">>},
+    Req1 = Req#{<<"bankAccount">> => Account1},
+    Req2 = Req#{<<"bankAccount">> => Account2},
+    [
+        {{ok, _}, _},
+        {Response, _}
+    ] = create_invoices(BenderKey, [Req1, Req2], Config),
+    ?assertEqual(response_error(409, ExternalID, BenderKey), Response).
+
 -spec create_refund_idemp_ok_test(config()) -> _.
 create_refund_idemp_ok_test(Config) ->
     BenderKey = <<"bender_key">>,
@@ -439,6 +480,56 @@ create_refund_idemp_fail_test(Config) ->
     ?assertEqual(Unused, Unused1),
     ?assertEqual(Unused, Unused2),
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response2).
+
+-spec create_customer_binding_ok_test(config()) -> _.
+create_customer_binding_ok_test(Config) ->
+    BenderKey = <<"customer_binding_bender_key">>,
+    Req1 = #{
+        <<"externalID">> => genlib:unique(),
+        <<"paymentResource">> => #{
+            <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
+            <<"paymentToolToken">> => ?TEST_PAYMENT_TOKEN
+        }
+    },
+    Req2 = Req1#{<<"externalID">> => genlib:unique()},
+
+    [BindingResult1, BindingResult2] = create_customer_bindings(BenderKey, [Req1, Req2], Config),
+    ?assertMatch(
+        {{ok, _}, [
+            [<<"externalID">>],
+            [<<"paymentResource">>, <<"paymentTool">>, <<"bin">>],
+            [<<"paymentResource">>, <<"paymentTool">>, <<"masked_pan">>],
+            [<<"paymentResource">>, <<"paymentTool">>, <<"payment_system">>]
+        ]},
+        BindingResult1
+    ),
+    ?assertEqual(BindingResult1, BindingResult2).
+
+-spec create_customer_binding_fail_test(config()) -> _.
+create_customer_binding_fail_test(Config) ->
+    BenderKey = <<"customer_binding_bender_key">>,
+    ExternalID = genlib:unique(),
+    Req1 = #{
+        <<"externalID">> => ExternalID,
+        <<"paymentResource">> => #{
+            <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
+            <<"paymentToolToken">> => ?TEST_PAYMENT_TOKEN(visa, <<"TOKEN1">>)
+        }
+    },
+    Req2 = Req1#{
+        <<"paymentResource">> => #{
+            <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
+            <<"paymentToolToken">> => ?TEST_PAYMENT_TOKEN(mastercard, <<"TOKEN2">>)
+        }
+    },
+
+    [BindingResult1, BindingResult2] = create_customer_bindings(BenderKey, [Req1, Req2], Config),
+    ?assertMatch({{ok, _}, _}, BindingResult1),
+    {ActualBindingResult2, _UnusedParams} = BindingResult2,
+    ?assertEqual(
+        response_error(409, ExternalID, BenderKey),
+        ActualBindingResult2
+    ).
 
 %% Internal functions
 
@@ -574,6 +665,45 @@ get_encrypted_token(PS, ExpDate, IsCvvEmpty) ->
 
 encrypt_payment_tool(PaymentTool) ->
     capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined).
+
+create_customer_bindings(BenderKey, Requests, Config) ->
+    Context = ?config(context, Config),
+    capi_ct_helper_bender:with_storage(
+        fun(StorageID) ->
+            _ = capi_ct_helper:mock_services(
+                [
+                    {customer_management, fun
+                        ('Get', _) ->
+                            {ok, ?CUSTOMER};
+                        (
+                            'StartBinding',
+                            {_, #payproc_CustomerBindingParams{
+                                customer_binding_id = BindingID,
+                                rec_payment_tool_id = RecPaymentToolID
+                            }}
+                        ) ->
+                            {ok, ?CUSTOMER_BINDING(BindingID, RecPaymentToolID)}
+                    end},
+
+                    {bender, fun('GenerateID', {_, _, CtxMsgPack}) ->
+                        capi_ct_helper_bender:get_internal_id(StorageID, BenderKey, CtxMsgPack)
+                    end}
+                ],
+                Config
+            ),
+            [
+                with_feature_storage(fun() -> capi_client_customers:create_binding(Context, ?STRING, R) end)
+                || R <- Requests
+            ]
+        end
+    ).
+
+with_feature_storage(Fun) ->
+    capi_ct_features_reader_event_handler:create_storage(),
+    Result = Fun(),
+    UnusedParams = capi_ct_features_reader_event_handler:get_unused_params(),
+    capi_ct_features_reader_event_handler:delete_storage(),
+    {Result, UnusedParams}.
 
 response_error(409, EID, ID) ->
     {error,

@@ -19,10 +19,13 @@
 -export([mock_bouncer_assert_claim_op_ctx/4]).
 -export([mock_bouncer_assert_webhook_op_ctx/4]).
 -export([mock_bouncer_compare_op_ctx/2]).
+-export([mock_bouncer_assert_payout_op_ctx/6]).
+-export([mock_bouncer_assert_search_op_ctx/9]).
 
 -export([mock_bouncer_client/1]).
 -export([mock_bouncer_arbiter/2]).
 -export([judge_always_allowed/0]).
+-export([judge_always_forbidden/0]).
 
 %%
 
@@ -204,6 +207,41 @@ mock_bouncer_assert_webhook_op_ctx(Op, WebhookID, PartyID, Config) ->
         Config
     ).
 
+-spec mock_bouncer_assert_payout_op_ctx(_, _, _, _, _, _) -> _.
+mock_bouncer_assert_payout_op_ctx(Op, PayoutID, PartyID, ContractID, ShopID, Config) ->
+    mock_bouncer_arbiter(
+        ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_PAYOUT_OP(Op, PayoutID, PartyID)),
+                payouts = #bctx_v1_ContextPayouts{
+                    payout = ?CTX_PAYOUT(PayoutID, PartyID, ContractID, ShopID)
+                }
+            }
+        ),
+        Config
+    ).
+
+-spec mock_bouncer_assert_search_op_ctx(_, _, _, _, _, _, _, _, _) -> _.
+mock_bouncer_assert_search_op_ctx(Op, PartyID, ShopID, InvoiceID, PaymentID, CustomerID, PayoutID, RefundID, Config) ->
+    SearchCtx = ?CTX_SEARCH_OP(
+        Op,
+        PartyID,
+        ShopID,
+        InvoiceID,
+        PaymentID,
+        CustomerID,
+        PayoutID,
+        RefundID
+    ),
+    mock_bouncer_arbiter(
+        ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(SearchCtx)
+            }
+        ),
+        Config
+    ).
+
 %%
 start_bouncer_client(ServiceURLs) ->
     ServiceClients = maps:map(fun(_, URL) -> #{url => URL} end, ServiceURLs),
@@ -265,6 +303,10 @@ decode_bouncer_fragment(#bctx_ContextFragment{type = v1_thrift_binary, content =
 -spec judge_always_allowed() -> _.
 judge_always_allowed() ->
     fun(_) -> {ok, ?JUDGEMENT(?ALLOWED)} end.
+
+-spec judge_always_forbidden() -> _.
+judge_always_forbidden() ->
+    fun(_) -> {ok, ?JUDGEMENT(?FORBIDDEN)} end.
 
 combine_fragments(Fragments) ->
     [Fragment | Rest] = maps:values(Fragments),

@@ -16,7 +16,8 @@
 
 -define(DETAILS, #domain_InvoiceDetails{
     product = ?STRING,
-    description = ?STRING
+    description = ?STRING,
+    bank_account = ?INVOICE_BANK_ACCOUNT
 }).
 
 -define(CASH, #domain_Cash{
@@ -82,6 +83,13 @@
         <<"quantity">> => ?INTEGER
     }
 ]).
+
+-define(INVOICE_BANK_ACCOUNT,
+    {russian, #domain_InvoiceRussianBankAccount{
+        account = <<"12345678901234567890">>,
+        bank_bik = <<"123456789">>
+    }}
+).
 
 -define(PAYPROC_INVOICE(Payments), #payproc_Invoice{
     invoice = ?INVOICE,
@@ -1173,9 +1181,11 @@
     metadata = {obj, #{}}
 }).
 
--define(CUSTOMER_BINDING, #payproc_CustomerBinding{
-    id = ?STRING,
-    rec_payment_tool_id = ?STRING,
+-define(CUSTOMER_BINDING, ?CUSTOMER_BINDING(?STRING, ?STRING)).
+
+-define(CUSTOMER_BINDING(ID, RECID), #payproc_CustomerBinding{
+    id = ID,
+    rec_payment_tool_id = RECID,
     payment_resource = ?DISP_PAYMENT_RESOURCE,
     status = {succeeded, #payproc_CustomerBindingSucceeded{}}
 }).
@@ -1225,11 +1235,13 @@
 }).
 
 -define(TEST_PAYMENT_TOKEN, ?TEST_PAYMENT_TOKEN(visa)).
-
 -define(TEST_PAYMENT_TOKEN(PaymentSystem),
+    ?TEST_PAYMENT_TOKEN(PaymentSystem, ?STRING)
+).
+-define(TEST_PAYMENT_TOKEN(PaymentSystem, Token),
     capi_utils:map_to_base64url(#{
         <<"type">> => <<"bank_card">>,
-        <<"token">> => ?STRING,
+        <<"token">> => Token,
         <<"payment_system">> => atom_to_binary(PaymentSystem, utf8),
         <<"bin">> => <<"411111">>,
         <<"masked_pan">> => <<"1111">>
@@ -1275,7 +1287,12 @@
     <<"metadata">> => #{<<"invoice_dummy_metadata">> => <<"test_value">>},
     <<"dueDate">> => ?TIMESTAMP,
     <<"product">> => <<"test_product">>,
-    <<"description">> => <<"test_invoice_description">>
+    <<"description">> => <<"test_invoice_description">>,
+    <<"bankAccount">> => #{
+        <<"accountType">> => <<"InvoiceRussianBankAccount">>,
+        <<"account">> => <<"12345678901234567890">>,
+        <<"bankBik">> => <<"123456789">>
+    }
 }).
 
 -define(CUSTOMER_PARAMS, #{
