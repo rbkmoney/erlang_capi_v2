@@ -62,9 +62,7 @@ prepare(OperationID = 'CreatePayment', Req, Context) ->
                 {exception, #payproc_InvalidUser{}} ->
                     {ok, general_error(404, <<"Invoice not found">>)};
                 {exception, #payproc_InvoiceNotFound{}} ->
-                    {ok, general_error(404, <<"Invoice not found">>)};
-                {error, {external_id_conflict, PaymentID, ExternalID}} ->
-                    {ok, logic_error(externalIDConflict, {PaymentID, ExternalID})}
+                    {ok, general_error(404, <<"Invoice not found">>)}
             end
         catch
             throw:invalid_token ->
@@ -88,7 +86,9 @@ prepare(OperationID = 'CreatePayment', Req, Context) ->
             throw:invalid_user ->
                 {ok, general_error(404, <<"Invoice not found">>)};
             throw:invoice_not_found ->
-                {ok, general_error(404, <<"Invoice not found">>)}
+                {ok, general_error(404, <<"Invoice not found">>)};
+            throw:{external_id_conflict, PaymentID, ExternalID, _Schema} ->
+                {ok, logic_error(externalIDConflict, {PaymentID, ExternalID})}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -351,12 +351,12 @@ prepare(OperationID = 'CreateRefund', Req, Context) ->
                     #'InvalidRequest'{errors = Errors} ->
                         FormattedErrors = capi_handler_utils:format_request_errors(Errors),
                         {ok, logic_error(invalidRequest, FormattedErrors)}
-                end;
-            {error, {external_id_conflict, RefundID, ExternalID}} ->
-                {ok, logic_error(externalIDConflict, {RefundID, ExternalID})}
+                end
         catch
             throw:invoice_cart_empty ->
-                {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)}
+                {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
+            throw:{external_id_conflict, RefundID, ExternalID, _Schema} ->
+                {ok, logic_error(externalIDConflict, {RefundID, ExternalID})}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -527,9 +527,10 @@ prepare(_OperationID, _Req, _Context) ->
 
 %%
 
-create_payment(Invoice, #{<<"externalID">> := ExternalID} = PaymentParams, Context, BenderPrefix) ->
+create_payment(Invoice, PaymentParams, Context, BenderPrefix) ->
+    ExternalID = maps:get(<<"externalID">>, PaymentParams, undefined),
     #payproc_Invoice{invoice = #domain_Invoice{id = InvoiceID, owner_id = PartyID}} = Invoice,
-    IdempotentKey = capi_bender:get_idempotent_key(BenderPrefix, PartyID, ExternalID),
+    IdempotentKey = capi_bender:make_idempotent_key({BenderPrefix, PartyID, ExternalID}),
     {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
 
     PaymentParamsFull = PaymentParams#{<<"invoiceID">> => InvoiceID},
@@ -617,7 +618,7 @@ unwrap({error, Error}) ->
     | {error, internal_id_not_found}.
 get_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
-    PaymentKey = capi_bender:get_idempotent_key('CreatePayment', PartyID, ExternalID),
+    PaymentKey = capi_bender:make_idempotent_key({'CreatePayment', PartyID, ExternalID}),
     case capi_bender:get_internal_id(PaymentKey, WoodyContext) of
         {ok, PaymentID, CtxData} ->
             InvoiceID = maps:get(<<"invoice_id">>, CtxData),

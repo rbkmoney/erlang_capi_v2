@@ -310,8 +310,10 @@ init_per_group(operations_by_base_api_token, Config) ->
     [{context, capi_ct_helper:get_context(Token)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config2];
 init_per_group(operations_by_base_api_token_with_new_auth, Config) ->
     BasePermissions = get_base_permissions(),
+    {ok, Token2} = capi_ct_helper:issue_token(<<"TEST2">>, BasePermissions, unlimited, #{}),
+    Config2 = [{context_with_diff_party, capi_ct_helper:get_context(Token2)} | Config],
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
-    [{context, capi_ct_helper:get_context(Token)} | Config];
+    [{context, capi_ct_helper:get_context(Token)} | Config2];
 init_per_group(_, Config) ->
     Config.
 
