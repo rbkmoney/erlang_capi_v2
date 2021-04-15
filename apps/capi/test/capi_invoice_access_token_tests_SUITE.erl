@@ -88,7 +88,6 @@ invoice_access_token_tests() ->
         create_second_recurrent_payment_ok_test
     ].
 
-
 -spec groups() -> [{group_name(), list(), [test_case_name()]}].
 groups() ->
     [
