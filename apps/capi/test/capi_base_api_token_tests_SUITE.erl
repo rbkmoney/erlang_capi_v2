@@ -409,7 +409,8 @@ create_invoice_template_ok_test(Config) ->
         [
             {invoice_templating, fun('Create', {_, #payproc_InvoiceTemplateCreateParams{party_id = ?STRING}}) ->
                 {ok, ?INVOICE_TPL}
-            end}
+            end},
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
         ],
         Config
     ),
@@ -443,7 +444,8 @@ create_invoice_template_autorization_error_test(Config) ->
                 {_, #payproc_InvoiceTemplateCreateParams{party_id = <<"WrongPartyID">>}}
             ) ->
                 {throwing, #payproc_InvalidUser{}}
-            end}
+            end},
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
         ],
         Config
     ),
@@ -481,6 +483,7 @@ create_invoice_with_template_test(Config) ->
             ) ->
                 {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
             end},
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end},
             {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
         ],
         Config

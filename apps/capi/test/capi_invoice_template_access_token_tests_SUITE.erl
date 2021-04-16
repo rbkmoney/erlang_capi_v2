@@ -74,7 +74,10 @@ init_per_group(operations_by_invoice_template_access_token, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
     {ok, Token} = capi_ct_helper:issue_token([{[party], write}], unlimited),
     _ = capi_ct_helper:mock_services(
-        [{invoice_templating, fun('Create', _) -> {ok, ?INVOICE_TPL} end}],
+        [
+            {invoice_templating, fun('Create', _) -> {ok, ?INVOICE_TPL} end},
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
+        ],
         MockServiceSup
     ),
     _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(

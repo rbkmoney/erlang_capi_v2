@@ -13,7 +13,7 @@
 -define(payment_tool, 7).
 -define(token, 8).
 -define(bank_card, 9).
--define(expdate, 10).
+-define(exp_date, 10).
 -define(terminal, 11).
 -define(terminal_type, 12).
 -define(wallet, 13).
@@ -41,11 +41,24 @@
 -define(bank_bik, 35).
 -define(payment_resource, 36).
 -define(payment_session, 37).
+-define(lifetime, 38).
+-define(details, 39).
+-define(days, 40).
+-define(months, 41).
+-define(years, 42).
+-define(single_line, 43).
+-define(multiline, 44).
+-define(range, 45).
+-define(fixed, 46).
+-define(lower_bound, 47).
+-define(upper_bound, 48).
+-define(invoice_template_id, 49).
 
 -export([payment/0]).
 -export([invoice/0]).
+-export([invoice_template/0]).
 -export([refund/0]).
--export([customer_binding_params/0]).
+-export([customer_binding/0]).
 
 -spec payment() -> schema().
 payment() ->
@@ -85,7 +98,31 @@ invoice() ->
         ?product => [<<"product">>],
         ?due_date => [<<"dueDate">>],
         ?cart => [<<"cart">>, {set, cart_line_schema()}],
-        ?bank_account => [<<"bankAccount">>, bank_account_schema()]
+        ?bank_account => [<<"bankAccount">>, bank_account_schema()],
+        ?invoice_template_id => [<<"invoiceTemplateID">>]
+    }.
+
+-spec invoice_template() -> schema().
+invoice_template() ->
+    #{
+        ?shop_id => [<<"shopID">>],
+        ?lifetime => [<<"lifetime">>, lifetime_schema()],
+        ?details => [<<"details">>, invoice_template_details_schema()]
+    }.
+
+-spec invoice_template_details_schema() -> schema().
+invoice_template_details_schema() ->
+    #{
+        ?discriminator => [<<"templateType">>],
+        ?single_line => #{
+            ?product => [<<"product">>],
+            ?price => [<<"price">>, invoice_template_line_cost()],
+            ?tax => [<<"taxMode">>, tax_mode_schema()]
+        },
+        ?multiline => #{
+            ?currency => [<<"currency">>],
+            ?cart => [<<"cart">>, {set, cart_line_schema()}]
+        }
     }.
 
 -spec refund() -> schema().
@@ -96,8 +133,8 @@ refund() ->
         ?cart => [<<"cart">>, {set, cart_line_schema()}]
     }.
 
--spec customer_binding_params() -> schema().
-customer_binding_params() ->
+-spec customer_binding() -> schema().
+customer_binding() ->
     #{
         ?payment_resource => [
             <<"paymentResource">>,
@@ -114,7 +151,7 @@ payment_tool_schema() ->
         ?discriminator => [<<"type">>],
         ?bank_card => #{
             ?token => [<<"token">>],
-            ?expdate => [<<"exp_date">>]
+            ?exp_date => [<<"exp_date">>]
         },
         ?terminal => #{
             ?discriminator => [<<"terminal_type">>]
@@ -139,13 +176,14 @@ cart_line_schema() ->
         ?product => [<<"product">>],
         ?quantity => [<<"quantity">>],
         ?price => [<<"price">>],
-        ?tax => [
-            <<"taxMode">>,
-            #{
-                ?discriminator => [<<"type">>],
-                ?rate => [<<"rate">>]
-            }
-        ]
+        ?tax => [<<"taxMode">>, tax_mode_schema()]
+    }.
+
+-spec tax_mode_schema() -> schema().
+tax_mode_schema() ->
+    #{
+        ?discriminator => [<<"type">>],
+        ?rate => [<<"rate">>]
     }.
 
 -spec bank_account_schema() -> schema().
@@ -156,8 +194,38 @@ bank_account_schema() ->
         ?bank_bik => [<<"bankBik">>]
     }.
 
+invoice_template_line_cost() ->
+    #{
+        ?discriminator => [<<"costType">>],
+        ?range => #{
+            ?currency => [<<"currency">>],
+            ?range => [<<"range">>, cost_amount_range()]
+        },
+        ?fixed => #{
+            ?currency => [<<"currency">>],
+            ?amount => [<<"amount">>]
+        }
+        %% Unlim has no params and is fully contained in discriminator
+    }.
+
+-spec cost_amount_range() -> schema().
+cost_amount_range() ->
+    #{
+        ?upper_bound => [<<"upperBound">>],
+        ?lower_bound => [<<"lowerBound">>]
+    }.
+
+-spec lifetime_schema() -> schema().
+lifetime_schema() ->
+    #{
+        ?days => [<<"days">>],
+        ?months => [<<"months">>],
+        ?years => [<<"years">>]
+    }.
+
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("capi_dummy_data.hrl").
 
 deep_merge(M1, M2) ->
     maps:fold(
@@ -171,6 +239,18 @@ deep_merge(M1, M2) ->
         M1,
         M2
     ).
+
+deep_fetch(Map, Keys) ->
+    lists:foldl(fun(K, M) -> maps:get(K, M) end, Map, Keys).
+
+hash(Term) ->
+    capi_idemp_features:hash(Term).
+read(Schema, Request) ->
+    capi_idemp_features:read(Schema, Request).
+compare(Features1, Features2) ->
+    capi_idemp_features:compare(Features1, Features2).
+list_diff_fields(Schema, Diff) ->
+    capi_idemp_features:list_diff_fields(Schema, Diff).
 
 -spec test() -> _.
 
@@ -203,18 +283,18 @@ read_payment_features_test() ->
         ?invoice_id => undefined,
         ?make_recurrent => undefined,
         ?flow => #{
-            ?discriminator => capi_idemp_features:hash(Flow),
+            ?discriminator => hash(Flow),
             ?hold_exp => undefined
         },
         ?payer => #{
-            ?discriminator => capi_idemp_features:hash(PayerType),
+            ?discriminator => hash(PayerType),
             ?customer => undefined,
             ?recurrent => undefined,
             ?payment_tool => #{
-                ?discriminator => capi_idemp_features:hash(ToolType),
+                ?discriminator => hash(ToolType),
                 ?bank_card => #{
-                    ?expdate => capi_idemp_features:hash(ExpDate),
-                    ?token => capi_idemp_features:hash(Token)
+                    ?exp_date => hash(ExpDate),
+                    ?token => hash(Token)
                 },
                 ?crypto => #{?currency => undefined},
                 ?mobile_commerce => #{
@@ -225,12 +305,12 @@ read_payment_features_test() ->
                 ?wallet => #{
                     ?id => undefined,
                     ?provider => undefined,
-                    ?token => capi_idemp_features:hash(Token)
+                    ?token => hash(Token)
                 }
             }
         }
     },
-    Features = capi_idemp_features:read(payment(), Request),
+    Features = read(payment(), Request),
     ?assertEqual(Payer, Features).
 
 -spec compare_payment_bank_card_test() -> _.
@@ -246,17 +326,9 @@ compare_payment_bank_card_test() ->
     Request1 = payment_params(PaymentTool1),
     Request2 = payment_params(PaymentTool2),
 
-    Schema = payment(),
-    F1 = capi_idemp_features:read(Schema, Request1),
-    F2 = capi_idemp_features:read(Schema, Request2),
-    ?assertEqual(true, capi_idemp_features:compare(F1, F1)),
-    {false, Diff} = capi_idemp_features:compare(F1, F2),
-    ?assertEqual(
-        [
-            <<"payer.paymentTool.token">>
-        ],
-        capi_idemp_features:list_diff_fields(Schema, Diff)
-    ).
+    common_compare_tests(payment(), Request1, Request2, [
+        <<"payer.paymentTool.token">>
+    ]).
 
 -spec compare_different_payment_tool_test() -> _.
 compare_different_payment_tool_test() ->
@@ -269,12 +341,8 @@ compare_different_payment_tool_test() ->
     },
     Request1 = payment_params(PaymentTool1),
     Request2 = payment_params(PaymentTool2),
-    Schema = payment(),
-    F1 = capi_idemp_features:read(Schema, Request1),
-    F2 = capi_idemp_features:read(Schema, Request2),
-    ?assertEqual(true, capi_idemp_features:compare(F1, F1)),
-    {false, Diff} = capi_idemp_features:compare(F1, F2),
-    ?assertEqual([<<"payer.paymentTool">>], capi_idemp_features:list_diff_fields(Schema, Diff)).
+
+    common_compare_tests(payment(), Request1, Request2, [<<"payer.paymentTool">>]).
 
 -spec feature_multi_accessor_test() -> _.
 feature_multi_accessor_test() ->
@@ -308,23 +376,16 @@ feature_multi_accessor_test() ->
                         <<"$type">> => [<<"type">>],
                         <<"bank_card">> => #{
                             <<"token">> => [<<"token">>],
-                            <<"expdate">> => [<<"exp_date">>]
+                            <<"exp_date">> => [<<"exp_date">>]
                         }
                     }
                 ]
             }
         ]
     },
-    F1 = capi_idemp_features:read(Schema, Request1),
-    F2 = capi_idemp_features:read(Schema, Request2),
-    ?assertEqual(true, capi_idemp_features:compare(F1, F1)),
-    {false, Diff} = capi_idemp_features:compare(F1, F2),
-    ?assertEqual(
-        [
-            <<"payer.paymentTool.wrapper.token">>
-        ],
-        capi_idemp_features:list_diff_fields(Schema, Diff)
-    ).
+    common_compare_tests(Schema, Request1, Request2, [
+        <<"payer.paymentTool.wrapper.token">>
+    ]).
 
 -spec read_payment_customer_features_value_test() -> _.
 read_payment_customer_features_value_test() ->
@@ -336,15 +397,15 @@ read_payment_customer_features_value_test() ->
             <<"customerID">> => CustomerID
         }
     },
-    Features = capi_idemp_features:read(payment(), Request),
+    Features = read(payment(), Request),
     ?assertEqual(
         #{
             ?invoice_id => undefined,
             ?make_recurrent => undefined,
             ?flow => undefined,
             ?payer => #{
-                ?discriminator => capi_idemp_features:hash(PayerType),
-                ?customer => capi_idemp_features:hash(CustomerID),
+                ?discriminator => hash(PayerType),
+                ?customer => hash(CustomerID),
                 ?recurrent => undefined,
                 ?payment_tool => undefined
             }
@@ -363,31 +424,32 @@ read_invoice_features_test() ->
     Price2 = 20000,
     Quantity = 1,
     Product = #{
-        ?product => capi_idemp_features:hash(Prod1),
-        ?quantity => capi_idemp_features:hash(Quantity),
-        ?price => capi_idemp_features:hash(Price1),
+        ?product => hash(Prod1),
+        ?quantity => hash(Quantity),
+        ?price => hash(Price1),
         ?tax => undefined
     },
     Product2 = Product#{
-        ?product => capi_idemp_features:hash(Prod2),
-        ?price => capi_idemp_features:hash(Price2)
+        ?product => hash(Prod2),
+        ?price => hash(Price2)
     },
     BankAccount = #{
-        ?discriminator => capi_idemp_features:hash(<<"InvoiceRussianBankAccount">>),
-        ?account => capi_idemp_features:hash(<<"12345678901234567890">>),
-        ?bank_bik => capi_idemp_features:hash(<<"123456789">>)
+        ?discriminator => hash(<<"InvoiceRussianBankAccount">>),
+        ?account => hash(<<"12345678901234567890">>),
+        ?bank_bik => hash(<<"123456789">>)
     },
     Invoice = #{
         ?amount => undefined,
-        ?currency => capi_idemp_features:hash(Cur),
-        ?shop_id => capi_idemp_features:hash(ShopID),
+        ?currency => hash(Cur),
+        ?shop_id => hash(ShopID),
         ?product => undefined,
-        ?due_date => capi_idemp_features:hash(DueDate),
+        ?due_date => hash(DueDate),
         ?bank_account => BankAccount,
         ?cart => [
             [1, Product],
             [0, Product2]
-        ]
+        ],
+        ?invoice_template_id => undefined
     },
     Request = #{
         <<"externalID">> => <<"externalID">>,
@@ -407,8 +469,13 @@ read_invoice_features_test() ->
         <<"metadata">> => #{}
     },
 
-    Features = capi_idemp_features:read(invoice(), Request),
-    ?assertEqual(Invoice, Features).
+    Features = read(invoice(), Request),
+    ?assertEqual(Invoice, Features),
+
+    TemplateID = <<"42">>,
+    RequestWithTemplate = Request#{<<"invoiceTemplateID">> => TemplateID},
+    FeaturesWithTemplate = read(invoice(), RequestWithTemplate),
+    ?assertEqual(hash(TemplateID), maps:get(?invoice_template_id, FeaturesWithTemplate)).
 
 -spec compare_invoices_features_test() -> _.
 compare_invoices_features_test() ->
@@ -439,8 +506,8 @@ compare_invoices_features_test() ->
         <<"cart">> => [#{<<"product">> => Prod2, <<"price">> => Price2, <<"quantity">> => undefined}]
     }),
     Schema = invoice(),
-    Invoice1 = capi_idemp_features:read(Schema, Request1),
-    InvoiceChg1 = capi_idemp_features:read(Schema, Request1#{
+    Invoice1 = read(Schema, Request1),
+    InvoiceChg1 = read(Schema, Request1#{
         <<"cart">> => [
             Product#{
                 <<"price">> => Price2,
@@ -450,8 +517,8 @@ compare_invoices_features_test() ->
             }
         ]
     }),
-    Invoice2 = capi_idemp_features:read(Schema, Request2),
-    InvoiceWithFullCart = capi_idemp_features:read(Schema, Request3),
+    Invoice2 = read(Schema, Request2),
+    InvoiceWithFullCart = read(Schema, Request3),
     ?assertEqual(
         {false, #{
             ?cart => #{
@@ -463,25 +530,170 @@ compare_invoices_features_test() ->
                 }
             }
         }},
-        capi_idemp_features:compare(Invoice2, Invoice1)
+        compare(Invoice2, Invoice1)
     ),
-    ?assert(capi_idemp_features:compare(Invoice1, Invoice1)),
+    ?assert(compare(Invoice1, Invoice1)),
     %% Feature was deleted
-    ?assert(capi_idemp_features:compare(InvoiceWithFullCart, Invoice2)),
+    ?assert(compare(InvoiceWithFullCart, Invoice2)),
     %% Feature was add
-    ?assert(capi_idemp_features:compare(Invoice2, InvoiceWithFullCart)),
+    ?assert(compare(Invoice2, InvoiceWithFullCart)),
     %% When second request didn't contain feature, this situation detected as conflict.
     ?assertEqual(
         {false, #{?cart => ?difference}},
-        capi_idemp_features:compare(Invoice1#{?cart => undefined}, Invoice1)
+        compare(Invoice1#{?cart => undefined}, Invoice1)
     ),
 
-    {false, Diff} = capi_idemp_features:compare(Invoice1, InvoiceChg1),
+    {false, Diff} = compare(Invoice1, InvoiceChg1),
     ?assertEqual(
         [<<"cart.0.price">>, <<"cart.0.taxMode.rate">>],
-        capi_idemp_features:list_diff_fields(Schema, Diff)
+        list_diff_fields(Schema, Diff)
     ),
-    ?assert(capi_idemp_features:compare(Invoice1, Invoice1#{?cart => undefined})).
+    ?assert(compare(Invoice1, Invoice1#{?cart => undefined})).
+
+-spec read_customer_binding_features_test() -> _.
+read_customer_binding_features_test() ->
+    Session = ?TEST_PAYMENT_SESSION(<<"Session">>),
+    Tool = ?TEST_PAYMENT_TOOL(visa, <<"TOKEN">>),
+    Request = payment_resource(Session, Tool),
+    Features = #{
+        ?payment_resource => #{
+            ?payment_session => hash(Session),
+            ?payment_tool => #{
+                ?discriminator => hash(<<"bank_card">>),
+                ?bank_card => #{
+                    ?token => hash(<<"TOKEN">>),
+                    ?exp_date => hash(<<"12/2012">>)
+                },
+
+                ?terminal => #{
+                    ?discriminator => undefined
+                },
+                ?wallet => #{
+                    ?provider => undefined,
+                    ?id => undefined,
+                    ?token => hash(<<"TOKEN">>)
+                },
+                ?crypto => #{
+                    ?currency => undefined
+                },
+                ?mobile_commerce => #{
+                    ?operator => undefined,
+                    ?phone => undefined
+                }
+            }
+        }
+    },
+
+    ?assertEqual(
+        Features,
+        read(customer_binding(), Request)
+    ).
+
+-spec compare_customer_binding_features_test() -> _.
+compare_customer_binding_features_test() ->
+    Session1 = ?TEST_PAYMENT_SESSION(<<"Session1">>),
+    Tool1 = ?TEST_PAYMENT_TOOL(visa),
+    Request1 = payment_resource(Session1, Tool1),
+
+    Session2 = ?TEST_PAYMENT_SESSION(<<"Session2">>),
+    Tool2 = ?TEST_PAYMENT_TOOL(mastercard)#{<<"exp_date">> => <<"01/2020">>},
+    Request2 = payment_resource(Session2, Tool2),
+
+    common_compare_tests(customer_binding(), Request1, Request2, [
+        <<"paymentResource.paymentTool.exp_date">>,
+        <<"paymentResource.paymentSession">>
+    ]).
+
+%% Add invoice_template tests
+
+-spec read_invoice_template_features_test() -> _.
+read_invoice_template_features_test() ->
+    ShopID = <<"1">>,
+    Request = #{
+        <<"shopID">> => ShopID,
+        <<"lifetime">> => lifetime_dummy(1, 2, 3),
+        <<"details">> => ?INVOICE_TMPL_DETAILS_PARAMS(42)
+    },
+    Features = #{
+        ?shop_id => hash(ShopID),
+        ?lifetime => #{
+            ?days => hash(1),
+            ?months => hash(2),
+            ?years => hash(3)
+        },
+        ?details => #{
+            ?discriminator => hash(<<"InvoiceTemplateMultiLine">>),
+            ?single_line => #{
+                ?product => undefined,
+                ?price => undefined,
+                ?tax => undefined
+            },
+            ?multiline => #{
+                ?currency => hash(<<"RUB">>),
+                ?cart => [
+                    [
+                        1,
+                        #{
+                            ?product => hash(?STRING),
+                            ?quantity => hash(42),
+                            ?price => hash(?INTEGER),
+                            ?tax => #{?discriminator => hash(<<"InvoiceLineTaxVAT">>), ?rate => hash(<<"18%">>)}
+                        }
+                    ],
+                    [
+                        0,
+                        #{
+                            ?product => hash(?STRING),
+                            ?quantity => hash(42),
+                            ?price => hash(?INTEGER),
+                            ?tax => undefined
+                        }
+                    ]
+                ]
+            }
+        }
+    },
+
+    ?assertEqual(
+        Features,
+        read(invoice_template(), Request)
+    ).
+
+-spec compare_invoice_template_features_test() -> _.
+compare_invoice_template_features_test() ->
+    ShopID1 = <<"1">>,
+    ShopID2 = <<"2">>,
+    Request1 = #{
+        <<"shopID">> => ShopID1,
+        <<"lifetime">> => lifetime_dummy(1, 2, 3),
+        <<"details">> => ?INVOICE_TMPL_DETAILS_PARAMS(42)
+    },
+    Request2 = deep_merge(
+        Request1,
+        #{
+            <<"shopID">> => ShopID2,
+            <<"lifetime">> => lifetime_dummy(1, 2, 42),
+            <<"details">> => #{
+                <<"currency">> => ?USD,
+                <<"cart">> => [hd(deep_fetch(Request1, [<<"details">>, <<"cart">>]))]
+            }
+        }
+    ),
+
+    common_compare_tests(invoice_template(), Request1, Request2, [
+        <<"shopID">>,
+        <<"lifetime.years">>,
+        <<"details.currency">>,
+        <<"details.cart">>
+    ]).
+
+payment_resource(Session, Tool) ->
+    #{
+        <<"paymentResource">> => #{
+            <<"paymentSession">> => Session,
+            <<"paymentTool">> => Tool
+        }
+    }.
 
 payment_params(ExternalID, MakeRecurrent) ->
     genlib_map:compact(#{
@@ -519,5 +731,20 @@ bank_card() ->
         <<"cardholder_name">> => <<"Degus Degusovich">>,
         <<"is_cvv_empty">> => false
     }.
+
+lifetime_dummy(Days, Months, Years) ->
+    #{
+        <<"days">> => Days,
+        <<"months">> => Months,
+        <<"years">> => Years
+    }.
+
+common_compare_tests(Schema, Request1, Request2, DiffFeatures) ->
+    F1 = read(Schema, Request1),
+    F2 = read(Schema, Request2),
+
+    ?assertEqual(true, compare(F1, F1)),
+    {false, Diff} = compare(F1, F2),
+    ?assertEqual(DiffFeatures, list_diff_fields(Schema, Diff)).
 
 -endif.

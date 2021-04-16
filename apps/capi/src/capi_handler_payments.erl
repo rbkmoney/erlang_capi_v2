@@ -421,7 +421,7 @@ process_request('GetChargebackByID', Context, Req) ->
 
 create_payment(InvoiceID, PartyID, PaymentParams, Context, BenderPrefix) ->
     ExternalID = maps:get(<<"externalID">>, PaymentParams, undefined),
-    IdempotentKey = capi_bender:make_idempotent_key({BenderPrefix, PartyID, ExternalID}),
+    IdempotentKey = {BenderPrefix, PartyID, ExternalID},
     {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
 
     PaymentParamsFull = PaymentParams#{<<"invoiceID">> => InvoiceID},
@@ -556,7 +556,7 @@ decode_invoice_payment(InvoiceID, InvoicePayment, Context) ->
 
 get_refund_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
-    IdempotentKey = capi_bender:make_idempotent_key({'CreateRefund', PartyID, ExternalID}),
+    IdempotentKey = {'CreateRefund', PartyID, ExternalID},
     case capi_bender:get_internal_id(IdempotentKey, WoodyContext) of
         {ok, RefundID, CtxData} ->
             InvoiceID = maps:get(<<"invoice_id">>, CtxData, undefined),
@@ -576,7 +576,7 @@ get_refund(InvoiceID, PaymentID, RefundID, Context) ->
 -spec get_payment_by_external_id(binary(), capi_handler:processing_context()) -> woody:result().
 get_payment_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
-    IdempotentKey = capi_bender:make_idempotent_key({'CreatePayment', PartyID, ExternalID}),
+    IdempotentKey = {'CreatePayment', PartyID, ExternalID},
     case capi_bender:get_internal_id(IdempotentKey, WoodyContext) of
         {ok, PaymentID, CtxData} ->
             InvoiceID = maps:get(<<"invoice_id">>, CtxData, undefined),
@@ -613,7 +613,7 @@ create_refund(InvoiceID, PaymentID, RefundParams, Context, BenderPrefix) ->
     RefundParamsFull = RefundParams#{<<"invoiceID">> => InvoiceID, <<"paymentID">> => PaymentID},
 
     ExternalID = maps:get(<<"externalID">>, RefundParams, undefined),
-    IdempotentKey = capi_bender:make_idempotent_key({BenderPrefix, PartyID, ExternalID}),
+    IdempotentKey = {BenderPrefix, PartyID, ExternalID},
     Identity = {schema, capi_feature_schemas:refund(), RefundParamsFull, RefundParams},
     SequenceID = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
     SequenceParams = #{minimum => 100},
