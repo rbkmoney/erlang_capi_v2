@@ -640,7 +640,7 @@ get_encrypted_token(PS, ExpDate, IsCvvEmpty) ->
     encrypt_payment_tool(
         {bank_card, #domain_BankCard{
             token = ?TEST_PAYMENT_TOKEN(PS),
-            payment_system = PS,
+            payment_system_deprecated = PS,
             bin = <<"411111">>,
             last_digits = <<"1111">>,
             exp_date = ExpDate,

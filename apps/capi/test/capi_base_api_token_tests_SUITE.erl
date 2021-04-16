@@ -2091,7 +2091,7 @@ check_support_decrypt_v1_test(_Config) ->
                 cc = <<"7">>,
                 ctn = <<"9210001122">>
             },
-            operator = megafone
+            operator_deprecated = megafone
         }},
         PaymentTool
     ),
@@ -2113,7 +2113,7 @@ check_support_decrypt_v2_test(_Config) ->
                 cc = <<"7">>,
                 ctn = <<"9210001122">>
             },
-            operator = megafone
+            operator_deprecated = megafone
         }},
         PaymentTool
     ),
