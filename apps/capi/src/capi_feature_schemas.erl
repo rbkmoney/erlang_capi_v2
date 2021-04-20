@@ -245,10 +245,13 @@ deep_fetch(Map, Keys) ->
 
 hash(Term) ->
     capi_idemp_features:hash(Term).
+
 read(Schema, Request) ->
     capi_idemp_features:read(Schema, Request).
+
 compare(Features1, Features2) ->
     capi_idemp_features:compare(Features1, Features2).
+
 list_diff_fields(Schema, Diff) ->
     capi_idemp_features:list_diff_fields(Schema, Diff).
 

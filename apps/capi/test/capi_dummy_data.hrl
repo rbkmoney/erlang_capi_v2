@@ -1234,6 +1234,7 @@
 -define(TEST_PAYMENT_TOKEN(PaymentSystem),
     ?TEST_PAYMENT_TOKEN(PaymentSystem, ?STRING)
 ).
+
 -define(TEST_PAYMENT_TOKEN(PaymentSystem, Token),
     capi_utils:map_to_base64url(?TEST_PAYMENT_TOOL(PaymentSystem, Token))
 ).

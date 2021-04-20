@@ -14,6 +14,7 @@
     {schema, identity_schema(), capi_idemp_features:request()}
     | {schema, identity_schema(), capi_idemp_features:request(), HashedRequest :: capi_idemp_features:request()}
     | identity().
+
 -type identity_hash() :: non_neg_integer().
 -type identity_features() :: capi_idemp_features:features().
 -type identity_schema() :: capi_idemp_features:schema().

@@ -479,7 +479,10 @@ decode_payment_method(tokenized_bank_card_deprecated, TokenizedBankCards) ->
     decode_tokenized_bank_cards(TokenizedBankCards);
 decode_payment_method(bank_card, Cards) ->
     {Regular, Tokenized} =
-        lists:partition(fun(#domain_BankCardPaymentMethod{token_provider_deprecated = TP}) -> TP =:= undefined end, Cards),
+        lists:partition(
+            fun(#domain_BankCardPaymentMethod{token_provider_deprecated = TP}) -> TP =:= undefined end,
+            Cards
+        ),
     [
         #{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun decode_bank_card/1, Regular)}
         | decode_tokenized_bank_cards(Tokenized)
@@ -504,13 +507,15 @@ decode_bank_card(#domain_BankCardPaymentMethod{payment_system_deprecated = PS}) 
 decode_tokenized_bank_cards([#domain_BankCardPaymentMethod{} | _] = TokenizedBankCards) ->
     PropTokenizedBankCards = [
         {TP, PS}
-        || #domain_BankCardPaymentMethod{payment_system_deprecated = PS, token_provider_deprecated = TP} <- TokenizedBankCards
+        || #domain_BankCardPaymentMethod{payment_system_deprecated = PS, token_provider_deprecated = TP} <-
+               TokenizedBankCards
     ],
     do_decode_tokenized_bank_cards(PropTokenizedBankCards);
 decode_tokenized_bank_cards([#domain_TokenizedBankCard{} | _] = TokenizedBankCards) ->
     PropTokenizedBankCards = [
         {TP, PS}
-        || #domain_TokenizedBankCard{payment_system_deprecated = PS, token_provider_deprecated = TP} <- TokenizedBankCards
+        || #domain_TokenizedBankCard{payment_system_deprecated = PS, token_provider_deprecated = TP} <-
+               TokenizedBankCards
     ],
     do_decode_tokenized_bank_cards(PropTokenizedBankCards);
 decode_tokenized_bank_cards([]) ->
