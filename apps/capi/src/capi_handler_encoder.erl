@@ -56,10 +56,10 @@ encode_payment_tool(PaymentTool) ->
 encode_bank_card(BankCard) ->
     {bank_card, #domain_BankCard{
         token = maps:get(<<"token">>, BankCard),
-        payment_system = encode_payment_system(maps:get(<<"payment_system">>, BankCard)),
+        payment_system_deprecated = encode_payment_system(maps:get(<<"payment_system">>, BankCard)),
         bin = maps:get(<<"bin">>, BankCard, <<>>),
         last_digits = maps:get(<<"masked_pan">>, BankCard),
-        token_provider = encode_token_provider(genlib_map:get(<<"token_provider">>, BankCard)),
+        token_provider_deprecated = encode_token_provider(genlib_map:get(<<"token_provider">>, BankCard)),
         issuer_country = encode_residence(genlib_map:get(<<"issuer_country">>, BankCard)),
         bank_name = genlib_map:get(<<"bank_name">>, BankCard),
         metadata = encode_bank_card_metadata(genlib_map:get(<<"metadata">>, BankCard)),
@@ -98,12 +98,12 @@ encode_residence(Residence) when is_binary(Residence) ->
 
 encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
     {payment_terminal, #domain_PaymentTerminal{
-        terminal_type = binary_to_existing_atom(Type, utf8)
+        terminal_type_deprecated = binary_to_existing_atom(Type, utf8)
     }}.
 
 encode_digital_wallet(#{<<"provider">> := Provider, <<"id">> := ID} = Wallet) ->
     {digital_wallet, #domain_DigitalWallet{
-        provider = binary_to_existing_atom(Provider, utf8),
+        provider_deprecated = binary_to_existing_atom(Provider, utf8),
         id = ID,
         token = maps:get(<<"token">>, Wallet, undefined)
     }}.
