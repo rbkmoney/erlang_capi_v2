@@ -526,14 +526,6 @@ create_invoice_template_ok_test(Config) ->
 
     Result = create_invoice_templates(BenderKey, [Req1, Req2], Config),
 
-    ?assertMatch(
-        [
-            {{ok, #{<<"invoiceTemplate">> := _}}, _},
-            {{ok, #{<<"invoiceTemplate">> := _}}, _}
-        ],
-        Result
-    ),
-
     [
         {{ok, #{<<"invoiceTemplate">> := Template1}}, UnusedParams1},
         {{ok, #{<<"invoiceTemplate">> := Template2}}, UnusedParams2}
@@ -681,11 +673,6 @@ create_customer_ok_test(Config) ->
     Req2 = Req1#{<<"externalID">> => genlib:unique()},
 
     Result = create_customers(BenderKey, [Req1, Req2], Config),
-
-    ?assertMatch(
-        [{{ok, #{<<"customer">> := _}}, _}, {{ok, #{<<"customer">> := _}}, _}],
-        Result
-    ),
 
     [{{ok, #{<<"customer">> := Customer1}}, UnusedFeatures1}, {{ok, #{<<"customer">> := Customer2}}, UnusedFeatures2}] =
         Result,
