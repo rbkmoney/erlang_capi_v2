@@ -17,6 +17,7 @@
         ?discriminator := [request_key()],
         feature_name() := schema()
     }.
+
 -type difference() :: features().
 
 -type event() ::
