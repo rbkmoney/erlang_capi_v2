@@ -27,8 +27,7 @@ prepare('CreateCustomer' = OperationID, Req, Context) ->
             CustomerID = generate_customer_id(OperationID, PartyID, CustomerParams, Context),
             EncodedCustomerParams = encode_customer_params(CustomerID, PartyID, CustomerParams),
             Call = {customer_management, 'Create', {EncodedCustomerParams}},
-            Result = capi_handler_utils:service_call(Call, Context),
-            case Result of
+            case  capi_handler_utils:service_call(Call, Context) of
                 {ok, Customer} ->
                     {ok, {201, #{}, make_customer_and_token(Customer, PartyID)}};
                 {exception, #payproc_InvalidUser{}} ->
