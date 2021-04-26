@@ -23,23 +23,29 @@ prepare('CreateCustomer' = OperationID, Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        EncodedCustomerParams = encode_customer_params(PartyID, CustomerParams),
-        Call = {customer_management, 'Create', {EncodedCustomerParams}},
-        case capi_handler_utils:service_call(Call, Context) of
-            {ok, Customer} ->
-                {ok, {201, #{}, make_customer_and_token(Customer, PartyID)}};
-            {exception, #payproc_InvalidUser{}} ->
-                {ok, logic_error(invalidPartyID, <<"Party not found">>)};
-            {exception, #payproc_InvalidPartyStatus{}} ->
-                {ok, logic_error(<<"invalidPartyStatus">>, <<"Invalid party status">>)};
-            {exception, #payproc_InvalidShopStatus{}} ->
-                {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
-            {exception, #payproc_ShopNotFound{}} ->
-                {ok, logic_error(invalidShopID, <<"Shop not found">>)};
-            {exception, #payproc_PartyNotFound{}} ->
-                {ok, logic_error(<<"invalidPartyID">>, <<"Party not found">>)};
-            {exception, #payproc_OperationNotPermitted{}} ->
-                {ok, logic_error(operationNotPermitted, <<"Operation not permitted">>)}
+        try
+            CustomerID = generate_customer_id(OperationID, PartyID, CustomerParams, Context),
+            EncodedCustomerParams = encode_customer_params(CustomerID, PartyID, CustomerParams),
+            Call = {customer_management, 'Create', {EncodedCustomerParams}},
+            case capi_handler_utils:service_call(Call, Context) of
+                {ok, Customer} ->
+                    {ok, {201, #{}, make_customer_and_token(Customer, PartyID)}};
+                {exception, #payproc_InvalidUser{}} ->
+                    {ok, logic_error(invalidPartyID, <<"Party not found">>)};
+                {exception, #payproc_InvalidPartyStatus{}} ->
+                    {ok, logic_error(<<"invalidPartyStatus">>, <<"Invalid party status">>)};
+                {exception, #payproc_InvalidShopStatus{}} ->
+                    {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
+                {exception, #payproc_ShopNotFound{}} ->
+                    {ok, logic_error(invalidShopID, <<"Shop not found">>)};
+                {exception, #payproc_PartyNotFound{}} ->
+                    {ok, logic_error(<<"invalidPartyID">>, <<"Party not found">>)};
+                {exception, #payproc_OperationNotPermitted{}} ->
+                    {ok, logic_error(operationNotPermitted, <<"Operation not permitted">>)}
+            end
+        catch
+            throw:{external_id_conflict, ID, UsedExternalID, _Schema} ->
+                {ok, logic_error(externalIDConflict, {ID, UsedExternalID})}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -269,8 +275,15 @@ get_customer_by_id(CustomerID, Context) ->
     EventRange = #payproc_EventRange{},
     capi_handler_utils:service_call({customer_management, 'Get', {CustomerID, EventRange}}, Context).
 
-encode_customer_params(PartyID, Params) ->
+generate_customer_id(OperationID, PartyID, CustomerParams, #{woody_context := WoodyContext}) ->
+    ExternalID = maps:get(<<"externalID">>, CustomerParams, undefined),
+    IdempKey = {OperationID, PartyID, ExternalID},
+    Identity = {schema, capi_feature_schemas:customer(), CustomerParams},
+    capi_bender:try_gen_snowflake(IdempKey, Identity, WoodyContext).
+
+encode_customer_params(CustomerID, PartyID, Params) ->
     #payproc_CustomerParams{
+        customer_id = CustomerID,
         party_id = PartyID,
         shop_id = genlib_map:get(<<"shopID">>, Params),
         contact_info = capi_handler_encoder:encode_contact_info(genlib_map:get(<<"contactInfo">>, Params)),

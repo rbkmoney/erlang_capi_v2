@@ -541,7 +541,10 @@ create_invoice_with_template_test(Config) ->
 -spec create_customer_ok_test(config()) -> _.
 create_customer_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
-        [{customer_management, fun('Create', {#payproc_CustomerParams{party_id = ?STRING}}) -> {ok, ?CUSTOMER} end}],
+        [
+            {customer_management, fun('Create', {#payproc_CustomerParams{party_id = ?STRING}}) -> {ok, ?CUSTOMER} end},
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
+        ],
         Config
     ),
     _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"CreateCustomer">>, ?STRING, ?STRING, Config),
@@ -553,7 +556,8 @@ create_customer_autorization_error_test(Config) ->
         [
             {customer_management, fun('Create', {#payproc_CustomerParams{party_id = <<"WrongPartyID">>}}) ->
                 {throwing, #payproc_InvalidUser{}}
-            end}
+            end},
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
         ],
         Config
     ),

@@ -53,12 +53,16 @@
 -define(lower_bound, 47).
 -define(upper_bound, 48).
 -define(invoice_template_id, 49).
+-define(contact_info, 50).
+-define(email, 51).
+-define(phone_number, 52).
 
 -export([payment/0]).
 -export([invoice/0]).
 -export([invoice_template/0]).
 -export([refund/0]).
 -export([customer_binding/0]).
+-export([customer/0]).
 
 -spec payment() -> schema().
 payment() ->
@@ -131,6 +135,13 @@ refund() ->
         ?amount => [<<"amount">>],
         ?currency => [<<"currency">>],
         ?cart => [<<"cart">>, {set, cart_line_schema()}]
+    }.
+
+-spec customer() -> schema().
+customer() ->
+    #{
+        ?shop_id => [<<"shopID">>],
+        ?contact_info => [<<"contactInfo">>, contact_info_schema()]
     }.
 
 -spec customer_binding() -> schema().
@@ -221,6 +232,13 @@ lifetime_schema() ->
         ?days => [<<"days">>],
         ?months => [<<"months">>],
         ?years => [<<"years">>]
+    }.
+
+-spec contact_info_schema() -> schema().
+contact_info_schema() ->
+    #{
+        ?email => [<<"email">>],
+        ?phone_number => [<<"phoneNumber">>]
     }.
 
 -ifdef(TEST).
@@ -553,6 +571,48 @@ compare_invoices_features_test() ->
     ),
     ?assert(compare(Invoice1, Invoice1#{?cart => undefined})).
 
+-spec read_customer_features_test() -> _.
+read_customer_features_test() ->
+    Request = ?CUSTOMER_PARAMS,
+    Features = #{
+        ?shop_id => hash(?STRING),
+        ?contact_info => #{
+            ?email => hash(<<"bla@bla.ru">>),
+            ?phone_number => undefined
+        }
+    },
+    ?assertEqual(
+        Features,
+        read(customer(), Request)
+    ).
+
+-spec compare_customer_features_test() -> _.
+compare_customer_features_test() ->
+    Request = ?CUSTOMER_PARAMS,
+    RequestSame = Request#{
+        <<"partyID">> => <<"ANOTHER PARTY">>,
+
+        <<"metadata">> => #{<<"text">> => <<"sample text">>}
+    },
+    RequestDifferent = Request#{
+        <<"shopID">> => hash(<<"Another shop">>),
+        <<"contactInfo">> => #{
+            <<"email">> => hash(<<"bla@example.com">>),
+            <<"phoneNumber">> => <<"8-800-555-35-35">>
+        }
+    },
+    common_compare_tests(
+        customer(),
+        Request,
+        RequestSame,
+        RequestDifferent,
+        [
+            <<"shopID">>,
+            <<"contactInfo.email">>,
+            <<"contactInfo.phoneNumber">>
+        ]
+    ).
+
 -spec read_customer_binding_features_test() -> _.
 read_customer_binding_features_test() ->
     Session = ?TEST_PAYMENT_SESSION(<<"Session">>),
@@ -742,12 +802,24 @@ lifetime_dummy(Days, Months, Years) ->
         <<"years">> => Years
     }.
 
-common_compare_tests(Schema, Request1, Request2, DiffFeatures) ->
-    F1 = read(Schema, Request1),
-    F2 = read(Schema, Request2),
+common_compare_tests(Schema, Request, RequestDifferent, DiffFeatures) ->
+    common_compare_tests(Schema, Request, Request, RequestDifferent, DiffFeatures).
 
-    ?assertEqual(true, compare(F1, F1)),
-    {false, Diff} = compare(F1, F2),
-    ?assertEqual(DiffFeatures, list_diff_fields(Schema, Diff)).
+common_compare_tests(Schema, Request, RequestWithIgnoredFields, RequestDifferent, DiffFeatures) ->
+    Features = read(Schema, Request),
+    FeaturesIgnored = read(Schema, RequestWithIgnoredFields),
+    FeaturesDifferent = read(Schema, RequestDifferent),
+
+    %% Equal to self
+    ?assertEqual(true, compare(Features, Features)),
+    %% Equal to feature-wise same request
+    ?assertEqual(true, compare(Features, FeaturesIgnored)),
+
+    %% Has correct diff with different request
+    Result = compare(Features, FeaturesDifferent),
+    ?assertMatch({false, _}, Result),
+
+    {false, Diff} = Result,
+    ?assertEqual(lists:sort(DiffFeatures), lists:sort(list_diff_fields(Schema, Diff))).
 
 -endif.
