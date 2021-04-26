@@ -489,7 +489,7 @@ decode_payment_method(bank_card, Cards) ->
     ];
 decode_payment_method(payment_terminal, Providers) ->
     [#{<<"method">> => <<"PaymentTerminal">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}];
-decode_payment_method(digital_wallet, Providers) ->
+decode_payment_method(digital_wallet_deprecated, Providers) ->
     [#{<<"method">> => <<"DigitalWallet">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}];
 decode_payment_method(crypto_currency_deprecated, CryptoCurrencies) ->
     Decoder = fun capi_handler_decoder_utils:convert_crypto_currency_to_swag/1,
