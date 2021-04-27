@@ -1162,6 +1162,15 @@
                         {bank_card, #domain_BankCardPaymentMethod{
                             payment_system_deprecated = visa
                         }}
+                },
+                #domain_PaymentMethodRef{
+                    id = {digital_wallet_deprecated, qiwi}
+                },
+                #domain_PaymentMethodRef{
+                    id = {mobile_deprecated, tele2}
+                },
+                #domain_PaymentMethodRef{
+                    id = {payment_terminal_deprecated, euroset}
                 }
             ])}
 }).
