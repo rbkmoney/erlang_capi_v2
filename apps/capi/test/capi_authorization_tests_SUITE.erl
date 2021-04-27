@@ -2,7 +2,7 @@
 
 -include_lib("common_test/include/ct.hrl").
 
--include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
+-include_lib("damsel/include/dmsl_domain_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 -include_lib("jose/include/jose_jwk.hrl").
 
@@ -29,7 +29,6 @@
     authorization_bad_token_error_test/1
 ]).
 
--define(badresp(Code), {error, {invalid_response_code, Code}}).
 -define(emptyresp(Code), {error, {Code, #{}}}).
 
 -type test_case_name() :: atom().

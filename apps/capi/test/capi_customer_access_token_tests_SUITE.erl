@@ -2,10 +2,8 @@
 
 -include_lib("common_test/include/ct.hrl").
 
--include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
--include_lib("jose/include/jose_jwk.hrl").
 
 -export([all/0]).
 -export([groups/0]).
@@ -26,12 +24,6 @@
     get_binding_ok_test/1,
     get_customer_events_ok_test/1
 ]).
-
--define(CAPI_PORT, 8080).
--define(CAPI_HOST_NAME, "localhost").
--define(CAPI_URL, ?CAPI_HOST_NAME ++ ":" ++ integer_to_list(?CAPI_PORT)).
-
--define(badresp(Code), {error, {invalid_response_code, Code}}).
 
 -type test_case_name() :: atom().
 -type config() :: [{atom(), any()}].
