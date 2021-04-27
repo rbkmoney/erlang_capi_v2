@@ -41,7 +41,7 @@
     rescind_invoice_ok_test/1,
     fulfill_invoice_ok_test/1,
     get_merchant_payment_status_test/1,
-    create_payment_error_test/1,
+    create_payment_ok_test/1,
     create_refund/1,
     create_refund_blocked_error/1,
     create_refund_expired_error/1,
@@ -242,7 +242,7 @@ groups() ->
             activate_shop_for_party_ok_test,
             activate_shop_for_party_error_test,
 
-            create_payment_error_test,
+            create_payment_ok_test,
             check_no_payment_by_external_id_test,
             create_refund,
             create_refund_blocked_error,
@@ -707,8 +707,8 @@ get_failed_payment_with_invalid_cvv(Config) ->
     % mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
     capi_client_payments:get_payment_by_id(?config(context, Config), ?STRING, ?STRING).
 
--spec create_payment_error_test(config()) -> _.
-create_payment_error_test(Config) ->
+-spec create_payment_ok_test(config()) -> _.
+create_payment_ok_test(Config) ->
     BenderKey = <<"bender_key">>,
     ExternalID = <<"merch_id">>,
     _ = capi_ct_helper:mock_services(
@@ -731,15 +731,12 @@ create_payment_error_test(Config) ->
         ?STRING,
         ?STRING,
         ?STRING,
-        ?STRING,
         Config
     ),
     PaymentToolToken = get_encrypted_token(visa, ?EXP_DATE(2, 2020)),
     Req = ?PAYMENT_PARAMS(ExternalID, PaymentToolToken),
 
-    {error, {_, 500}} = capi_client_payments:create_payment(?config(context, Config), Req, ?STRING).
-% TODO use after cut off uac.
-% {error, {401, #{}}} = capi_client_payments:create_payment(Context, Req, ?STRING).
+    {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req, ?STRING).
 
 get_encrypted_token(PS, ExpDate) ->
     get_encrypted_token(PS, ExpDate, undefined).

@@ -120,13 +120,8 @@ init_per_group(payment_creation, Config) ->
         <<"product">> => <<"test_product">>,
         <<"description">> => <<"test_invoice_description">>
     },
-    % <<<<<<< HEAD
-    %     {ok, #{
-    %         <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
-    %     }} = capi_client_invoices:create_invoice(capi_ct_helper:get_context(Token, ExtraProperties), Req),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
     Apps1 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    % =======
     {{ok, #{
             <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
         }},
@@ -135,7 +130,6 @@ init_per_group(payment_creation, Config) ->
             capi_client_invoices:create_invoice(capi_ct_helper:get_context(Token, ExtraProperties), Req)
         end),
 
-    % >>>>>>> master
     capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
     [{context, capi_ct_helper:get_context(InvAccToken)}, {group_apps, Apps1} | Config];
 init_per_group(GroupName, Config) when
