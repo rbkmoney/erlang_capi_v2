@@ -5,15 +5,12 @@
 
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_errors_thrift.hrl").
--include_lib("damsel/include/dmsl_accounter_thrift.hrl").
--include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 -include_lib("damsel/include/dmsl_webhooker_thrift.hrl").
 -include_lib("damsel/include/dmsl_merch_stat_thrift.hrl").
 -include_lib("reporter_proto/include/reporter_reports_thrift.hrl").
 -include_lib("damsel/include/dmsl_payout_processing_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 -include_lib("capi_bouncer_data.hrl").
--include_lib("jose/include/jose_jwk.hrl").
 
 -export([all/0]).
 -export([groups/0]).
@@ -131,10 +128,6 @@
     check_support_decrypt_v1_test/1,
     check_support_decrypt_v2_test/1
 ]).
-
--define(CAPI_PORT, 8080).
--define(CAPI_HOST_NAME, "localhost").
--define(CAPI_URL, ?CAPI_HOST_NAME ++ ":" ++ integer_to_list(?CAPI_PORT)).
 
 -type test_case_name() :: atom().
 -type config() :: [{atom(), any()}].
