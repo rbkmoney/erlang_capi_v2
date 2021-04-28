@@ -133,8 +133,9 @@ create_invoice_with_tpl_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_tpl_op_ctx(
         <<"CreateInvoiceWithTemplate">>,
+        ?STRING,
         ?STRING,
         ?STRING,
         Config
@@ -149,7 +150,13 @@ create_invoice_with_tpl_ok_test(Config) ->
 -spec get_invoice_template_ok_test(config()) -> _.
 get_invoice_template_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{invoice_templating, fun('Get', _) -> {ok, ?INVOICE_TPL} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"GetInvoiceTemplateByID">>, ?STRING, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_tpl_op_ctx(
+        <<"GetInvoiceTemplateByID">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_invoice_templates:get_template_by_id(?config(context, Config), ?STRING).
 
 -spec get_invoice_payment_methods_by_tpl_id_ok_test(config()) -> _.
@@ -164,8 +171,9 @@ get_invoice_payment_methods_by_tpl_id_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_tpl_op_ctx(
         <<"GetInvoicePaymentMethodsByTemplateID">>,
+        ?STRING,
         ?STRING,
         ?STRING,
         Config

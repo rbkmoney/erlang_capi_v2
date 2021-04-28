@@ -271,7 +271,7 @@ create_payment_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_compare_payment_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
         <<"CreatePayment">>,
         ?STRING,
         ?STRING,

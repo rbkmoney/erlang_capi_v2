@@ -81,6 +81,39 @@
     party = ?CTX_ENTITY(PartyID)
 }).
 
+-define(CTX_SEARCH_INVOICE_OP(ID, PartyID, ShopID, InvoiceID, PaymentID, CustomerID), #bctx_v1_CommonAPIOperation{
+    id = ID,
+    party = ?CTX_ENTITY(PartyID),
+    shop = ?CTX_ENTITY(ShopID),
+    invoice = ?CTX_ENTITY(InvoiceID),
+    payment = ?CTX_ENTITY(PaymentID),
+    customer = ?CTX_ENTITY(CustomerID)
+}).
+
+-define(CTX_SEARCH_PAYMENT_OP(ID, PartyID, ShopID, InvoiceID, PaymentID), #bctx_v1_CommonAPIOperation{
+    id = ID,
+    party = ?CTX_ENTITY(PartyID),
+    shop = ?CTX_ENTITY(ShopID),
+    invoice = ?CTX_ENTITY(InvoiceID),
+    payment = ?CTX_ENTITY(PaymentID)
+}).
+
+-define(CTX_SEARCH_PAYOUT_OP(ID, PartyID, ShopID, PayoutID), #bctx_v1_CommonAPIOperation{
+    id = ID,
+    party = ?CTX_ENTITY(PartyID),
+    shop = ?CTX_ENTITY(ShopID),
+    payout = ?CTX_ENTITY(PayoutID)
+}).
+
+-define(CTX_SEARCH_REFUND_OP(ID, PartyID, ShopID, InvoiceID, PaymentID, RefundID), #bctx_v1_CommonAPIOperation{
+    id = ID,
+    party = ?CTX_ENTITY(PartyID),
+    shop = ?CTX_ENTITY(ShopID),
+    invoice = ?CTX_ENTITY(InvoiceID),
+    payment = ?CTX_ENTITY(PaymentID),
+    refund = ?CTX_ENTITY(RefundID)
+}).
+
 -define(CTX_SEARCH_OP(
     ID,
     PartyID,
@@ -155,18 +188,15 @@
     files = Files
 }).
 
--define(compareContext(Expect), fun(Context) ->
-    case Context of
-        Expect ->
-            {ok, ?JUDGEMENT(?ALLOWED)};
-        _ ->
+-define(assertContextMatches(Expect), fun(Context) ->
+    try
+        ?assertMatch(Expect, Context),
+        {ok, ?JUDGEMENT(?ALLOWED)}
+    catch
+        error:AssertMatchError ->
+            logger:error("~p", [AssertMatchError]),
             {throwing, #bdcs_InvalidContext{}}
     end
-end).
-
--define(assertContextMatches(Expect), fun(Context) ->
-    ?assertMatch(Expect, Context),
-    {ok, ?JUDGEMENT(?ALLOWED)}
 end).
 
 -endif.

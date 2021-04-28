@@ -110,7 +110,6 @@ init_per_group(payment_creation, Config) ->
         ],
         MockServiceSup
     ),
-    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"CreateInvoice">>, ?STRING, ?STRING, MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"amount">> => ?INTEGER,
