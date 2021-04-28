@@ -296,17 +296,13 @@ end_per_suite(C) ->
 init_per_group(operations_by_base_api_token, Config) ->
     BasePermissions = get_base_permissions(),
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
-    {ok, Token2} = capi_ct_helper:issue_token(<<"TEST2">>, BasePermissions, unlimited, #{}),
-    Config2 = [{context_with_diff_party, capi_ct_helper:get_context(Token2)} | Config],
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
     Apps1 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    [{context, capi_ct_helper:get_context(Token)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config2];
+    [{context, capi_ct_helper:get_context(Token)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config];
 init_per_group(operations_by_base_api_token_with_new_auth, Config) ->
     BasePermissions = get_base_permissions(),
-    {ok, Token2} = capi_ct_helper:issue_token(<<"TEST2">>, BasePermissions, unlimited, #{}),
-    Config2 = [{context_with_diff_party, capi_ct_helper:get_context(Token2)} | Config],
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
-    [{context, capi_ct_helper:get_context(Token)} | Config2];
+    [{context, capi_ct_helper:get_context(Token)} | Config];
 init_per_group(_, Config) ->
     Config.
 
@@ -703,26 +699,11 @@ create_payment_ok_test(Config) ->
         ?STRING,
         Config
     ),
-    PaymentToolToken = get_encrypted_token(visa, ?EXP_DATE(2, 2020)),
+    PaymentTool = {bank_card, ?BANK_CARD(visa, ?EXP_DATE(2, 2020), <<"Degus">>)},
+    PaymentToolToken = capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined),
     Req = ?PAYMENT_PARAMS(ExternalID, PaymentToolToken),
 
     {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req, ?STRING).
-
-get_encrypted_token(PS, ExpDate) ->
-    get_encrypted_token(PS, ExpDate, undefined).
-
-get_encrypted_token(PS, ExpDate, IsCvvEmpty) ->
-    PaymentTool =
-        {bank_card, #domain_BankCard{
-            token = ?TEST_PAYMENT_TOKEN(PS),
-            payment_system = PS,
-            bin = <<"411111">>,
-            last_digits = <<"1111">>,
-            exp_date = ExpDate,
-            cardholder_name = <<"Degus Degusovich">>,
-            is_cvv_empty = IsCvvEmpty
-        }},
-    capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined).
 
 -spec create_refund(config()) -> _.
 create_refund(Config) ->
@@ -762,9 +743,9 @@ create_refund_blocked_error(Config) ->
         [
             {invoicing, fun
                 ('Get', _) ->
-                    Invoice = ?PAYPROC_INVOICE_WITH_ID(<<"42">>),
+                    Invoice = ?PAYPROC_INVOICE,
                     {ok, Invoice#payproc_Invoice{payments = [?PAYPROC_PAYMENT]}};
-                ('RefundPayment', {_, <<"42">>, _, _}) ->
+                ('RefundPayment', {_, ?STRING, _, _}) ->
                     {throwing, #payproc_InvalidPartyStatus{
                         status = {blocking, {blocked, #domain_Blocked{reason = ?STRING, since = ?TIMESTAMP}}}
                     }}
@@ -775,13 +756,13 @@ create_refund_blocked_error(Config) ->
     ),
     _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
         <<"CreateRefund">>,
-        <<"42">>,
+        ?STRING,
         ?STRING,
         ?STRING,
         ?STRING,
         Config
     ),
-    {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"42">>, ?STRING).
+    {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec create_refund_expired_error(config()) -> _.
 create_refund_expired_error(Config) ->
@@ -791,9 +772,9 @@ create_refund_expired_error(Config) ->
         [
             {invoicing, fun
                 ('Get', _) ->
-                    Invoice = ?PAYPROC_INVOICE_WITH_ID(<<"43">>),
+                    Invoice = ?PAYPROC_INVOICE,
                     {ok, Invoice#payproc_Invoice{payments = [?PAYPROC_PAYMENT]}};
-                ('RefundPayment', {_, <<"43">>, _, _}) ->
+                ('RefundPayment', {_, ?STRING, _, _}) ->
                     {throwing, #payproc_InvalidContractStatus{status = {expired, #domain_ContractExpired{}}}}
             end},
             {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(BenderKey) end}
@@ -802,13 +783,13 @@ create_refund_expired_error(Config) ->
     ),
     _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
         <<"CreateRefund">>,
-        <<"43">>,
+        ?STRING,
         ?STRING,
         ?STRING,
         ?STRING,
         Config
     ),
-    {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"43">>, ?STRING).
+    {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec create_partial_refund(config()) -> _.
 create_partial_refund(Config) ->
@@ -1628,16 +1609,17 @@ get_payout(Config) ->
 
 -spec get_payout_fail(config()) -> _.
 get_payout_fail(Config) ->
-    Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, [?PAYOUT_PROC_PAYOUT_SUMMARY_ITEM]),
+    PartyID = <<"Wrong party id">>,
+    Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, PartyID, [?PAYOUT_PROC_PAYOUT_SUMMARY_ITEM]),
     _ = capi_ct_helper:mock_services([{payouts, fun('Get', _) -> {ok, Payout} end}], Config),
     _ = capi_ct_helper_bouncer:mock_assert_payout_op_ctx(
         <<"GetPayout">>,
         ?STRING,
-        <<"TEST2">>,
+        ?STRING,
         Config
     ),
 
-    {error, {404, _}} = capi_client_payouts:get_payout(?config(context_with_diff_party, Config), ?STRING).
+    {error, {404, _}} = capi_client_payouts:get_payout(?config(context, Config), ?STRING).
 
 -spec create_webhook_ok_test(config()) -> _.
 create_webhook_ok_test(Config) ->

@@ -1194,9 +1194,11 @@
     bank_card = ?BANK_CARD
 }).
 
--define(PAYOUT(Type, PayoutSummary), #'payout_processing_Payout'{
+-define(PAYOUT(Type, PayoutSummary), ?PAYOUT(Type, ?STRING, PayoutSummary)).
+
+-define(PAYOUT(Type, PartyID, PayoutSummary), #'payout_processing_Payout'{
     id = ?STRING,
-    party_id = ?STRING,
+    party_id = PartyID,
     shop_id = ?STRING,
     contract_id = ?STRING,
     created_at = ?TIMESTAMP,
