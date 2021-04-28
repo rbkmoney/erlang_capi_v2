@@ -482,25 +482,33 @@ decode_payment_method(bank_card, Cards) ->
         | decode_tokenized_bank_cards(Tokenized)
     ];
 decode_payment_method(payment_terminal, Providers) ->
-    [#{
-        <<"method">> => <<"PaymentTerminal">>,
-        <<"providers">> => [Id || #domain_PaymentServiceRef{id = Id} <- Providers]
-    }];
+    [
+        #{
+            <<"method">> => <<"PaymentTerminal">>,
+            <<"providers">> => [Id || #domain_PaymentServiceRef{id = Id} <- Providers]
+        }
+    ];
 decode_payment_method(digital_wallet, Providers) ->
-    [#{
-        <<"method">> => <<"DigitalWallet">>,
-        <<"providers">> => [Id || #domain_PaymentServiceRef{id = Id} <- Providers]
-    }];
+    [
+        #{
+            <<"method">> => <<"DigitalWallet">>,
+            <<"providers">> => [Id || #domain_PaymentServiceRef{id = Id} <- Providers]
+        }
+    ];
 decode_payment_method(crypto_currency, CryptoCurrencies) ->
-    [#{
-        <<"method">> => <<"CryptoWallet">>,
-        <<"cryptoCurrencies">> => [Id || #domain_CryptoCurrencyRef{id = Id} <- CryptoCurrencies]
-    }];
+    [
+        #{
+            <<"method">> => <<"CryptoWallet">>,
+            <<"cryptoCurrencies">> => [Id || #domain_CryptoCurrencyRef{id = Id} <- CryptoCurrencies]
+        }
+    ];
 decode_payment_method(mobile, MobileOperators) ->
-    [#{
-        <<"method">> => <<"MobileCommerce">>,
-        <<"operators">> => [Id || #domain_MobileOperatorRef{id = Id} <- MobileOperators]
-    }];
+    [
+        #{
+            <<"method">> => <<"MobileCommerce">>,
+            <<"operators">> => [Id || #domain_MobileOperatorRef{id = Id} <- MobileOperators]
+        }
+    ];
 decode_payment_method(empty_cvv_bank_card_deprecated, PaymentSystems) ->
     [#{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems)}];
 decode_payment_method(bank_card_deprecated, PaymentSystems) ->
