@@ -418,8 +418,8 @@ create_payment_with_googlepay_encrypt_ok_test(Config) ->
                                             bank_card,
                                             #domain_BankCard{
                                                 is_cvv_empty = undefined,
-                                                token_provider = undefined,
-                                                payment_system = mastercard
+                                                token_provider_deprecated = undefined,
+                                                payment_system_deprecated = mastercard
                                             }
                                         }
                                     }
@@ -644,7 +644,7 @@ get_failed_payment_with_invalid_cvv(Config) ->
 get_encrypted_token({qiwi, Phone, TokenID}) ->
     PaymentTool =
         {digital_wallet, #domain_DigitalWallet{
-            provider = qiwi,
+            provider_deprecated = qiwi,
             id = Phone,
             token = TokenID
         }},
@@ -657,7 +657,7 @@ get_encrypted_token(PS, ExpDate, IsCvvEmpty) ->
     PaymentTool =
         {bank_card, #domain_BankCard{
             token = ?TEST_PAYMENT_TOKEN(PS),
-            payment_system = PS,
+            payment_system_deprecated = PS,
             bin = <<"411111">>,
             last_digits = <<"1111">>,
             exp_date = ExpDate,

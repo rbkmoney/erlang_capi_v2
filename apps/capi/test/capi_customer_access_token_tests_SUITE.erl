@@ -75,7 +75,13 @@ end_per_suite(C) ->
 -spec init_per_group(group_name(), config()) -> config().
 init_per_group(operations_by_customer_access_token_after_customer_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    _ = capi_ct_helper:mock_services([{customer_management, fun('Create', _) -> {ok, ?CUSTOMER} end}], MockServiceSup),
+    _ = capi_ct_helper:mock_services(
+        [
+            {customer_management, fun('Create', _) -> {ok, ?CUSTOMER} end},
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
+        ],
+        MockServiceSup
+    ),
     _ = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), MockServiceSup),
     {ok, Token} = capi_ct_helper:issue_token([{[customers], write}], unlimited),
     Req = #{

@@ -17,6 +17,7 @@
         ?discriminator := [request_key()],
         feature_name() := schema()
     }.
+
 -type difference() :: features().
 
 -type event() ::
@@ -155,8 +156,9 @@ list_diff_fields_(Diff, Schema, Acc) when is_map(Schema) ->
             (_Feature, ?difference, [Key | _SchemaPart], {PathsAcc, PathRev}) ->
                 Path = lists:reverse([Key | PathRev]),
                 {[Path | PathsAcc], PathRev};
-            (_Feature, DiffPart, SchemaPart, AccIn) ->
-                list_diff_fields_(DiffPart, SchemaPart, AccIn)
+            (_Feature, DiffPart, SchemaPart, {_PathsAcc, PathRev} = AccIn) ->
+                {NewPathsAcc, _NewPathRev} = list_diff_fields_(DiffPart, SchemaPart, AccIn),
+                {NewPathsAcc, PathRev}
         end,
         Acc,
         Diff,

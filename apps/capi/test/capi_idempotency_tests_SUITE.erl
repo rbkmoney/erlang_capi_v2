@@ -28,8 +28,14 @@
 -export([create_invoice_idemp_cart_ok_test/1]).
 -export([create_invoice_idemp_cart_fail_test/1]).
 -export([create_invoice_idemp_bank_account_fail_test/1]).
+-export([create_invoice_template_ok_test/1]).
+-export([create_invoice_template_fail_test/1]).
+-export([create_invoice_with_template_ok_test/1]).
+-export([create_invoice_with_template_fail_test/1]).
 -export([create_refund_idemp_ok_test/1]).
 -export([create_refund_idemp_fail_test/1]).
+-export([create_customer_ok_test/1]).
+-export([create_customer_fail_test/1]).
 -export([create_customer_binding_ok_test/1]).
 -export([create_customer_binding_fail_test/1]).
 
@@ -50,7 +56,11 @@ all() ->
     [
         {group, payment_creation},
         {group, invoice_creation},
+        {group, invoice_template_creation},
+        {group, invoice_with_template_creation},
         {group, refund_creation},
+        {group, invoice_template_creation},
+        {group, customer_creation},
         {group, customer_binding_creation}
     ].
 
@@ -72,9 +82,21 @@ groups() ->
             create_invoice_idemp_cart_ok_test,
             create_invoice_idemp_bank_account_fail_test
         ]},
+        {invoice_template_creation, [], [
+            create_invoice_template_ok_test,
+            create_invoice_template_fail_test
+        ]},
+        {invoice_with_template_creation, [], [
+            create_invoice_with_template_ok_test,
+            create_invoice_with_template_fail_test
+        ]},
         {refund_creation, [], [
             create_refund_idemp_ok_test,
             create_refund_idemp_fail_test
+        ]},
+        {customer_creation, [], [
+            create_customer_ok_test,
+            create_customer_fail_test
         ]},
         {customer_binding_creation, [], [
             create_customer_binding_ok_test,
@@ -133,19 +155,12 @@ init_per_group(payment_creation, Config) ->
 init_per_group(GroupName, Config) when
     GroupName =:= invoice_creation orelse
         GroupName =:= refund_creation orelse
-        GroupName =:= customer_binding_creation
+        GroupName =:= customer_binding_creation orelse
+        GroupName =:= invoice_template_creation orelse
+        GroupName =:= customer_creation orelse
+        GroupName =:= invoice_with_template_creation
 ->
-    BasePermissions = [
-        {[invoices], write},
-        {[invoices], read},
-        {[party], write},
-        {[party], read},
-        {[invoices, payments], write},
-        {[invoices, payments], read},
-        {[customers], write},
-        {[payouts], write},
-        {[payouts], read}
-    ],
+    BasePermissions = base_permissions(),
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
     {ok, Token2} = capi_ct_helper:issue_token(<<"TEST2">>, BasePermissions, unlimited, #{}),
     Config2 = [{context_with_diff_party, capi_ct_helper:get_context(Token2)} | Config],
@@ -168,6 +183,19 @@ init_per_testcase(_Name, C) ->
 end_per_testcase(_Name, C) ->
     capi_ct_helper:stop_mocked_service_sup(?config(test_sup, C)),
     ok.
+
+base_permissions() ->
+    [
+        {[invoices], write},
+        {[invoices], read},
+        {[party], write},
+        {[party], read},
+        {[invoices, payments], write},
+        {[invoices, payments], read},
+        {[customers], write},
+        {[payouts], write},
+        {[payouts], read}
+    ].
 
 %% TESTS
 
@@ -430,6 +458,125 @@ create_invoice_idemp_bank_account_fail_test(Config) ->
     ] = create_invoices(BenderKey, [Req1, Req2], Config),
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response).
 
+-spec create_invoice_template_ok_test(config()) -> _.
+create_invoice_template_ok_test(Config) ->
+    BenderKey = <<"create_invoice_template_ok_test_bender_key">>,
+    Req1 = #{
+        <<"externalID">> => genlib:unique(),
+        <<"shopID">> => <<"1">>,
+        <<"lifetime">> => #{
+            <<"days">> => ?INTEGER,
+            <<"months">> => ?INTEGER,
+            <<"years">> => ?INTEGER
+        },
+        <<"partyID">> => <<"2">>,
+        <<"details">> => ?INVOICE_TMPL_DETAILS_PARAMS,
+        <<"description">> => <<"Sample text">>,
+        <<"metadata">> => #{
+            <<"key">> => <<"value">>
+        }
+    },
+    Req2 = Req1#{<<"description">> => <<"whatever">>},
+
+    Result = create_invoice_templates(BenderKey, [Req1, Req2], Config),
+
+    [
+        {{ok, #{<<"invoiceTemplate">> := Template1}}, UnusedParams1},
+        {{ok, #{<<"invoiceTemplate">> := Template2}}, UnusedParams2}
+    ] = Result,
+
+    ?assertEqual(Template1, Template2),
+    ?assertEqual(UnusedParams1, UnusedParams2),
+    ?assertEqual(
+        [
+            [<<"description">>],
+            [<<"externalID">>],
+            [<<"metadata">>, <<"key">>],
+            [<<"partyID">>]
+        ],
+        UnusedParams1
+    ).
+
+-spec create_invoice_template_fail_test(config()) -> _.
+create_invoice_template_fail_test(Config) ->
+    BenderKey = <<"create_invoice_template_fail_test_bender_key">>,
+    ExternalID = genlib:unique(),
+    Req1 = #{
+        <<"externalID">> => ExternalID,
+        <<"shopID">> => <<"1">>,
+        <<"lifetime">> => #{
+            <<"days">> => ?INTEGER,
+            <<"months">> => ?INTEGER,
+            <<"years">> => ?INTEGER
+        },
+        <<"details">> => ?INVOICE_TMPL_DETAILS_PARAMS,
+        <<"description">> => <<"Sample text">>
+    },
+    Req2 = Req1#{<<"shopID">> => <<"2">>},
+
+    [CreateResult1, CreateResult2] = create_invoice_templates(BenderKey, [Req1, Req2], Config),
+    ?assertMatch({{ok, _}, _}, CreateResult1),
+    {ActualCreateResult2, _UnusedParams} = CreateResult2,
+    ?assertEqual(
+        response_error(409, ExternalID, BenderKey),
+        ActualCreateResult2
+    ).
+
+-spec create_invoice_with_template_ok_test(config()) -> _.
+create_invoice_with_template_ok_test(Config) ->
+    BenderKey = <<"create_invoice_with_template_ok_test">>,
+    InvoiceTemplateID = ?STRING,
+    Req1 = #{
+        <<"externalID">> => genlib:unique(),
+        <<"amount">> => ?INTEGER,
+        <<"currency">> => ?USD,
+        <<"metadata">> => #{<<"key">> => <<"value">>}
+    },
+    Req2 = Req1#{<<"metadata">> => #{<<"key">> => <<"another_value">>}},
+
+    Result = create_invoices_with_templates(
+        BenderKey,
+        [
+            {InvoiceTemplateID, Req1},
+            {InvoiceTemplateID, Req2}
+        ],
+        Config
+    ),
+
+    [
+        {{ok, #{<<"invoice">> := Invoice1}}, UnusedParams1},
+        {{ok, #{<<"invoice">> := Invoice2}}, UnusedParams2}
+    ] = Result,
+
+    ?assertEqual(Invoice1, Invoice2),
+    ?assertEqual(UnusedParams1, UnusedParams2),
+    ?assertEqual([[<<"externalID">>], [<<"metadata">>, <<"key">>]], UnusedParams1).
+
+-spec create_invoice_with_template_fail_test(config()) -> _.
+create_invoice_with_template_fail_test(Config) ->
+    BenderKey = <<"create_invoice_with_template_fail_test">>,
+    InvoiceTemplateID = ?STRING,
+    ExternalID = genlib:unique(),
+    Req1 = #{
+        <<"externalID">> => ExternalID,
+        <<"amount">> => ?INTEGER,
+        <<"currency">> => ?USD,
+        <<"metadata">> => #{<<"key">> => <<"value">>}
+    },
+    Req2 = Req1#{<<"amount">> => ?INTEGER + 1},
+
+    [CreateResult1, CreateResult2] = create_invoices_with_templates(
+        BenderKey,
+        [{InvoiceTemplateID, Req1}, {InvoiceTemplateID, Req2}],
+        Config
+    ),
+    ?assertMatch({{ok, _}, _}, CreateResult1),
+    {ActualCreateResult2, _UnusedParams} = CreateResult2,
+    ?assertEqual(
+        response_error(409, ExternalID, BenderKey),
+        ActualCreateResult2
+    ).
+
 -spec create_refund_idemp_ok_test(config()) -> _.
 create_refund_idemp_ok_test(Config) ->
     BenderKey = <<"bender_key">>,
@@ -472,6 +619,35 @@ create_refund_idemp_fail_test(Config) ->
     ?assertEqual(Unused, Unused1),
     ?assertEqual(Unused, Unused2),
     ?assertEqual(response_error(409, ExternalID, BenderKey), Response2).
+
+-spec create_customer_ok_test(config()) -> _.
+create_customer_ok_test(Config) ->
+    BenderKey = <<"create_customer_ok_test">>,
+    Req1 = ?CUSTOMER_PARAMS#{<<"externalID">> => genlib:unique()},
+    Req2 = Req1#{<<"externalID">> => genlib:unique()},
+
+    Result = create_customers(BenderKey, [Req1, Req2], Config),
+
+    [{{ok, #{<<"customer">> := Customer1}}, UnusedFeatures1}, {{ok, #{<<"customer">> := Customer2}}, UnusedFeatures2}] =
+        Result,
+
+    ?assertEqual(Customer1, Customer2),
+    ?assertEqual(UnusedFeatures1, UnusedFeatures2),
+    ?assertEqual(UnusedFeatures1, [[<<"externalID">>], [<<"metadata">>, <<"text">>]]).
+
+-spec create_customer_fail_test(config()) -> _.
+create_customer_fail_test(Config) ->
+    BenderKey = <<"create_customer_fail_test">>,
+    ExternalID = genlib:unique(),
+    Req1 = ?CUSTOMER_PARAMS#{<<"externalID">> => ExternalID, <<"shopID">> => <<"1">>},
+    Req2 = Req1#{<<"shopID">> => <<"2">>},
+
+    [CustomerResult1, CustomerResult2] = create_customers(BenderKey, [Req1, Req2], Config),
+    ?assertMatch({{ok, _}, _}, CustomerResult1),
+    ?assertEqual(
+        {response_error(409, ExternalID, BenderKey), [[<<"externalID">>], [<<"metadata">>, <<"text">>]]},
+        CustomerResult2
+    ).
 
 -spec create_customer_binding_ok_test(config()) -> _.
 create_customer_binding_ok_test(Config) ->
@@ -571,11 +747,9 @@ create_invoices(BenderKey, Requests, Config) ->
     Results.
 
 create_invoice_(Req, Config) ->
-    _AccPid = capi_ct_features_reader_event_handler:create_storage(),
-    Res = capi_client_invoices:create_invoice(?config(context, Config), Req),
-    UnusedParams = capi_ct_features_reader_event_handler:get_unused_params(),
-    capi_ct_features_reader_event_handler:delete_storage(),
-    {Res, UnusedParams}.
+    with_feature_storage(fun() ->
+        capi_client_invoices:create_invoice(?config(context, Config), Req)
+    end).
 
 create_refunds(BenderKey, Requests, Config) ->
     Tid = capi_ct_helper_bender:create_storage(),
@@ -646,7 +820,7 @@ get_encrypted_token(PS, ExpDate, IsCvvEmpty) ->
     encrypt_payment_tool(
         {bank_card, #domain_BankCard{
             token = ?TEST_PAYMENT_TOKEN(PS),
-            payment_system = PS,
+            payment_system_deprecated = PS,
             bin = <<"411111">>,
             last_digits = <<"1111">>,
             exp_date = ExpDate,
@@ -657,6 +831,31 @@ get_encrypted_token(PS, ExpDate, IsCvvEmpty) ->
 
 encrypt_payment_tool(PaymentTool) ->
     capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined).
+
+create_customers(BenderKey, Requests, Config) ->
+    Context = ?config(context, Config),
+    capi_ct_helper_bender:with_storage(
+        fun(StorageID) ->
+            _ = capi_ct_helper:mock_services(
+                [
+                    {customer_management, fun(
+                        'Create',
+                        {#payproc_CustomerParams{customer_id = CustomerID}}
+                    ) ->
+                        {ok, ?CUSTOMER(CustomerID)}
+                    end},
+                    {bender, fun('GenerateID', {_, _, CtxMsgPack}) ->
+                        capi_ct_helper_bender:get_internal_id(StorageID, BenderKey, CtxMsgPack)
+                    end}
+                ],
+                Config
+            ),
+            [
+                with_feature_storage(fun() -> capi_client_customers:create_customer(Context, R) end)
+                || R <- Requests
+            ]
+        end
+    ).
 
 create_customer_bindings(BenderKey, Requests, Config) ->
     Context = ?config(context, Config),
@@ -686,6 +885,61 @@ create_customer_bindings(BenderKey, Requests, Config) ->
             [
                 with_feature_storage(fun() -> capi_client_customers:create_binding(Context, ?STRING, R) end)
                 || R <- Requests
+            ]
+        end
+    ).
+
+create_invoice_templates(BenderKey, Requests, Config) ->
+    Context = ?config(context, Config),
+    capi_ct_helper_bender:with_storage(
+        fun(StorageID) ->
+            _ = capi_ct_helper:mock_services(
+                [
+                    {invoice_templating, fun(
+                        'Create',
+                        {_, #payproc_InvoiceTemplateCreateParams{template_id = TemplateID}}
+                    ) ->
+                        {ok, ?INVOICE_TPL(TemplateID)}
+                    end},
+                    {bender, fun('GenerateID', {_Key, _, CtxMsgPack}) ->
+                        capi_ct_helper_bender:get_internal_id(StorageID, BenderKey, CtxMsgPack)
+                    end}
+                ],
+                Config
+            ),
+            [
+                with_feature_storage(fun() -> capi_client_invoice_templates:create(Context, R) end)
+                || R <- Requests
+            ]
+        end
+    ).
+
+create_invoices_with_templates(BenderKey, Requests, Config) ->
+    Context = ?config(context, Config),
+    capi_ct_helper_bender:with_storage(
+        fun(StorageID) ->
+            _ = capi_ct_helper:mock_services(
+                [
+                    {invoice_templating, fun('Get', _) ->
+                        {ok, ?INVOICE_TPL}
+                    end},
+                    {invoicing, fun(
+                        'CreateWithTemplate',
+                        {_UserInfo, #payproc_InvoiceWithTemplateParams{id = ID, external_id = EID}}
+                    ) ->
+                        {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
+                    end},
+                    {bender, fun('GenerateID', {_, _, CtxMsgPack}) ->
+                        capi_ct_helper_bender:get_internal_id(StorageID, BenderKey, CtxMsgPack)
+                    end}
+                ],
+                Config
+            ),
+            [
+                with_feature_storage(fun() ->
+                    capi_client_invoice_templates:create_invoice(Context, InvoiceTemplateID, Request)
+                end)
+                || {InvoiceTemplateID, Request} <- Requests
             ]
         end
     ).

@@ -410,7 +410,8 @@ create_invoice_template_ok_test(Config) ->
         [
             {invoice_templating, fun('Create', {_, #payproc_InvoiceTemplateCreateParams{party_id = ?STRING}}) ->
                 {ok, ?INVOICE_TPL}
-            end}
+            end},
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
         ],
         Config
     ),
@@ -444,7 +445,8 @@ create_invoice_template_autorization_error_test(Config) ->
                 {_, #payproc_InvoiceTemplateCreateParams{party_id = <<"WrongPartyID">>}}
             ) ->
                 {throwing, #payproc_InvalidUser{}}
-            end}
+            end},
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
         ],
         Config
     ),
@@ -487,6 +489,7 @@ create_invoice_with_template_test(Config) ->
             ) ->
                 {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
             end},
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end},
             {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey)} end}
         ],
         Config
@@ -535,7 +538,10 @@ check_no_internal_id_for_external_id_test(Config) ->
 -spec create_customer_ok_test(config()) -> _.
 create_customer_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
-        [{customer_management, fun('Create', {#payproc_CustomerParams{party_id = ?STRING}}) -> {ok, ?CUSTOMER} end}],
+        [
+            {customer_management, fun('Create', {#payproc_CustomerParams{party_id = ?STRING}}) -> {ok, ?CUSTOMER} end},
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
+        ],
         Config
     ),
     _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"CreateCustomer">>, ?STRING, ?STRING, Config),
@@ -547,7 +553,8 @@ create_customer_autorization_error_test(Config) ->
         [
             {customer_management, fun('Create', {#payproc_CustomerParams{party_id = <<"WrongPartyID">>}}) ->
                 {throwing, #payproc_InvalidUser{}}
-            end}
+            end},
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
         ],
         Config
     ),
@@ -2208,7 +2215,7 @@ check_support_decrypt_v1_test(_Config) ->
                 cc = <<"7">>,
                 ctn = <<"9210001122">>
             },
-            operator = megafone
+            operator_deprecated = megafone
         }},
         PaymentTool
     ),
@@ -2230,7 +2237,7 @@ check_support_decrypt_v2_test(_Config) ->
                 cc = <<"7">>,
                 ctn = <<"9210001122">>
             },
-            operator = megafone
+            operator_deprecated = megafone
         }},
         PaymentTool
     ),

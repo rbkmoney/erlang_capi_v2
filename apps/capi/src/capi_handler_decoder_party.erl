@@ -204,10 +204,10 @@ wrap_payment_tool_token(#{<<"type">> := <<"mobile_commerce">>} = MobileCommerce)
 
 decode_bank_card(#domain_BankCard{
     'token' = Token,
-    'payment_system' = PaymentSystem,
+    'payment_system_deprecated' = PaymentSystem,
     'bin' = Bin,
     'last_digits' = LastDigits,
-    'token_provider' = TokenProvider,
+    'token_provider_deprecated' = TokenProvider,
     'issuer_country' = IssuerCountry,
     'bank_name' = BankName,
     'metadata' = Metadata,
@@ -233,34 +233,6 @@ decode_bank_card(#domain_BankCard{
         % <<"tokenization_method">> => TokenizationMethod
     }).
 
-% =======
-%     'token'               = Token,
-%     'payment_system'      = PaymentSystem,
-%     'bin'                 = Bin,
-%     'last_digits'         = LastDigits,
-%     'token_provider'      = TokenProvider,
-%     'issuer_country'      = IssuerCountry,
-%     'bank_name'           = BankName,
-%     'metadata'            = Metadata,
-%     'is_cvv_empty'        = IsCVVEmpty
-%     % 'tokenization_method' = TokenizationMethod
-% }) ->
-%     capi_utils:map_to_base64url(genlib_map:compact(#{
-%         <<"type"          >>      => <<"bank_card">>,
-%         <<"token"         >>      => Token,
-%         <<"payment_system">>      => PaymentSystem,
-%         <<"bin"           >>      => Bin,
-%         <<"masked_pan"    >>      => LastDigits,
-%         <<"token_provider">>      => TokenProvider,
-%         <<"issuer_country">>      => IssuerCountry,
-%         <<"bank_name"     >>      => BankName,
-%         <<"metadata"      >>      => decode_bank_card_metadata(Metadata),
-%         <<"is_cvv_empty"  >>      => decode_bank_card_cvv_flag(IsCVVEmpty)
-%         % TODO: Uncomment or delete this when we negotiate deploying non-breaking changes
-%         % <<"tokenization_method">> => TokenizationMethod
-%     })).
-% >>>>>>> master
-
 decode_bank_card_cvv_flag(undefined) ->
     undefined;
 decode_bank_card_cvv_flag(CVVFlag) when is_atom(CVVFlag) ->
@@ -272,7 +244,7 @@ decode_bank_card_metadata(Meta) ->
     maps:map(fun(_, Data) -> capi_msgp_marshalling:unmarshal(Data) end, Meta).
 
 decode_payment_terminal(#domain_PaymentTerminal{
-    terminal_type = Type
+    terminal_type_deprecated = Type
 }) ->
     #{
         <<"type">> => <<"payment_terminal">>,
@@ -280,7 +252,7 @@ decode_payment_terminal(#domain_PaymentTerminal{
     }.
 
 decode_digital_wallet(#domain_DigitalWallet{
-    provider = Provider,
+    provider_deprecated = Provider,
     id = ID,
     token = undefined
 }) ->
@@ -290,7 +262,7 @@ decode_digital_wallet(#domain_DigitalWallet{
         <<"id">> => ID
     };
 decode_digital_wallet(#domain_DigitalWallet{
-    provider = Provider,
+    provider_deprecated = Provider,
     id = ID,
     token = Token
 }) ->
@@ -351,8 +323,8 @@ decode_bank_card_details(BankCard, V) ->
         <<"last4">> => LastDigits,
         <<"first6">> => Bin,
         <<"cardNumberMask">> => capi_handler_decoder_utils:decode_masked_pan(Bin, LastDigits),
-        <<"paymentSystem">> => genlib:to_binary(BankCard#domain_BankCard.payment_system),
-        <<"tokenProvider">> => decode_token_provider(BankCard#domain_BankCard.token_provider)
+        <<"paymentSystem">> => genlib:to_binary(BankCard#domain_BankCard.payment_system_deprecated),
+        <<"tokenProvider">> => decode_token_provider(BankCard#domain_BankCard.token_provider_deprecated)
         % TODO: Uncomment or delete this when we negotiate deploying non-breaking changes
         % <<"tokenizationMethod">> => genlib:to_binary(BankCard#domain_BankCard.tokenization_method)
     }).
@@ -362,12 +334,12 @@ decode_token_provider(Provider) when Provider /= undefined ->
 decode_token_provider(undefined) ->
     undefined.
 
-decode_payment_terminal_details(#domain_PaymentTerminal{terminal_type = Type}, V) ->
+decode_payment_terminal_details(#domain_PaymentTerminal{terminal_type_deprecated = Type}, V) ->
     V#{
         <<"provider">> => genlib:to_binary(Type)
     }.
 
-decode_digital_wallet_details(#domain_DigitalWallet{provider = qiwi, id = ID}, V) ->
+decode_digital_wallet_details(#domain_DigitalWallet{provider_deprecated = qiwi, id = ID}, V) ->
     V#{
         <<"digitalWalletDetailsType">> => <<"DigitalWalletDetailsQIWI">>,
         <<"phoneNumberMask">> => mask_phone_number(ID)

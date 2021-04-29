@@ -126,8 +126,9 @@
     ]
 }).
 
--define(INVOICE_TPL, #domain_InvoiceTemplate{
-    id = ?STRING,
+-define(INVOICE_TPL, ?INVOICE_TPL(?STRING)).
+-define(INVOICE_TPL(InvoiceID), #domain_InvoiceTemplate{
+    id = InvoiceID,
     details =
         {product, #domain_InvoiceTemplateProduct{
             product = ?STRING,
@@ -143,7 +144,7 @@
 
 -define(BANK_CARD, #domain_BankCard{
     token = ?STRING,
-    payment_system = visa,
+    payment_system_deprecated = visa,
     bin = <<"411111">>,
     last_digits = <<"411111******1111">>
 }).
@@ -151,7 +152,7 @@
 -define(BANK_CARD(PS, ExpDate, CardHolder), ?BANK_CARD(PS, ExpDate, CardHolder, undefined)).
 -define(BANK_CARD(PS, ExpDate, CardHolder, Category), #domain_BankCard{
     token = ?TEST_PAYMENT_TOKEN(PS),
-    payment_system = PS,
+    payment_system_deprecated = PS,
     exp_date = ExpDate,
     cardholder_name = CardHolder,
     category = Category,
@@ -160,7 +161,7 @@
 }).
 
 -define(DIGITAL_WALLET(Phone, TokenID), #domain_DigitalWallet{
-    provider = qiwi,
+    provider_deprecated = qiwi,
     id = Phone,
     token = TokenID
 }).
@@ -962,17 +963,17 @@
 
 -define(STAT_BANK_CARD, #merchstat_BankCard{
     token = ?STRING,
-    payment_system = visa,
+    payment_system_deprecated = visa,
     bin = <<"411111">>,
     masked_pan = <<"411111******1111">>
 }).
 
 -define(STAT_BANK_CARD_WITH_TP, #merchstat_BankCard{
     token = ?STRING,
-    payment_system = visa,
+    payment_system_deprecated = visa,
     bin = <<"411111">>,
     masked_pan = <<"411111******1111">>,
-    token_provider = applepay
+    token_provider_deprecated = applepay
 }).
 
 -define(PAYOUT_SUMMARY_ITEM, #merchstat_PayoutSummaryItem{
@@ -1120,58 +1121,68 @@
                     id = {bank_card_deprecated, visa}
                 },
                 #domain_PaymentMethodRef{
-                    id = {crypto_currency, bitcoin}
+                    id = {crypto_currency_deprecated, bitcoin}
                 },
                 #domain_PaymentMethodRef{
-                    id = {crypto_currency, bitcoin_cash}
+                    id = {crypto_currency_deprecated, bitcoin_cash}
                 },
                 #domain_PaymentMethodRef{
                     id =
                         {tokenized_bank_card_deprecated, #domain_TokenizedBankCard{
-                            payment_system = mastercard,
-                            token_provider = applepay
+                            payment_system_deprecated = mastercard,
+                            token_provider_deprecated = applepay
                         }}
                 },
                 #domain_PaymentMethodRef{
                     id =
                         {tokenized_bank_card_deprecated, #domain_TokenizedBankCard{
-                            payment_system = visa,
-                            token_provider = applepay
+                            payment_system_deprecated = visa,
+                            token_provider_deprecated = applepay
                         }}
                 },
                 #domain_PaymentMethodRef{
                     id =
                         {bank_card, #domain_BankCardPaymentMethod{
-                            payment_system = mastercard,
-                            token_provider = applepay,
+                            payment_system_deprecated = mastercard,
+                            token_provider_deprecated = applepay,
                             tokenization_method = dpan
                         }}
                 },
                 #domain_PaymentMethodRef{
                     id =
                         {bank_card, #domain_BankCardPaymentMethod{
-                            payment_system = visa,
-                            token_provider = applepay,
+                            payment_system_deprecated = visa,
+                            token_provider_deprecated = applepay,
                             tokenization_method = dpan
                         }}
                 },
                 #domain_PaymentMethodRef{
                     id =
                         {bank_card, #domain_BankCardPaymentMethod{
-                            payment_system = mastercard
+                            payment_system_deprecated = mastercard
                         }}
                 },
                 #domain_PaymentMethodRef{
                     id =
                         {bank_card, #domain_BankCardPaymentMethod{
-                            payment_system = visa
+                            payment_system_deprecated = visa
                         }}
+                },
+                #domain_PaymentMethodRef{
+                    id = {digital_wallet_deprecated, qiwi}
+                },
+                #domain_PaymentMethodRef{
+                    id = {mobile_deprecated, tele2}
+                },
+                #domain_PaymentMethodRef{
+                    id = {payment_terminal_deprecated, euroset}
                 }
             ])}
 }).
 
--define(CUSTOMER, #payproc_Customer{
-    id = ?STRING,
+-define(CUSTOMER, ?CUSTOMER(?STRING)).
+-define(CUSTOMER(ID), #payproc_Customer{
+    id = ID,
     owner_id = ?STRING,
     shop_id = ?STRING,
     status = {ready, #payproc_CustomerReady{}},
@@ -1240,19 +1251,27 @@
 -define(TEST_PAYMENT_TOKEN(PaymentSystem),
     ?TEST_PAYMENT_TOKEN(PaymentSystem, ?STRING)
 ).
+
 -define(TEST_PAYMENT_TOKEN(PaymentSystem, Token),
-    capi_utils:map_to_base64url(#{
-        <<"type">> => <<"bank_card">>,
-        <<"token">> => Token,
-        <<"payment_system">> => atom_to_binary(PaymentSystem, utf8),
-        <<"bin">> => <<"411111">>,
-        <<"masked_pan">> => <<"1111">>
-    })
+    capi_utils:map_to_base64url(?TEST_PAYMENT_TOOL(PaymentSystem, Token))
 ).
 
--define(TEST_PAYMENT_SESSION,
+-define(TEST_PAYMENT_TOOL, ?TEST_PAYMENT_TOOL(visa)).
+-define(TEST_PAYMENT_TOOL(PaymentSystem), ?TEST_PAYMENT_TOOL(PaymentSystem, ?STRING)).
+-define(TEST_PAYMENT_TOOL(PaymentSystem, Token), #{
+    <<"type">> => <<"bank_card">>,
+    <<"token">> => Token,
+    <<"payment_system">> => atom_to_binary(PaymentSystem, utf8),
+    <<"bin">> => <<"411111">>,
+    <<"masked_pan">> => <<"1111">>,
+    <<"exp_date">> => <<"12/2012">>
+}).
+
+-define(TEST_PAYMENT_SESSION, ?TEST_PAYMENT_SESSION(?STRING)).
+
+-define(TEST_PAYMENT_SESSION(Session),
     capi_utils:map_to_base64url(#{
-        <<"paymentSession">> => ?STRING,
+        <<"paymentSession">> => Session,
         <<"clientInfo">> => #{
             <<"fingerprint">> => <<"test fingerprint">>,
             <<"ip">> => <<"::ffff:127.0.0.1">>
@@ -1260,19 +1279,20 @@
     })
 ).
 
--define(INVOICE_TMPL_DETAILS_PARAMS, #{
+-define(INVOICE_TMPL_DETAILS_PARAMS, ?INVOICE_TMPL_DETAILS_PARAMS(?INTEGER)).
+-define(INVOICE_TMPL_DETAILS_PARAMS(Quantity), #{
     <<"templateType">> => <<"InvoiceTemplateMultiLine">>,
     <<"currency">> => ?RUB,
     <<"cart">> => [
         #{
             <<"product">> => ?STRING,
             <<"price">> => ?INTEGER,
-            <<"quantity">> => ?INTEGER
+            <<"quantity">> => Quantity
         },
         #{
             <<"product">> => ?STRING,
             <<"price">> => ?INTEGER,
-            <<"quantity">> => ?INTEGER,
+            <<"quantity">> => Quantity,
             <<"taxMode">> => #{
                 <<"type">> => <<"InvoiceLineTaxVAT">>,
                 <<"rate">> => <<"18%">>

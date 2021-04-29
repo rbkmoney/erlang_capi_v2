@@ -489,7 +489,7 @@ prepare(_OperationID, _Req, _Context) ->
 create_payment(Invoice, PaymentParams, Context, BenderPrefix) ->
     ExternalID = maps:get(<<"externalID">>, PaymentParams, undefined),
     #payproc_Invoice{invoice = #domain_Invoice{id = InvoiceID, owner_id = PartyID}} = Invoice,
-    IdempotentKey = capi_bender:make_idempotent_key({BenderPrefix, PartyID, ExternalID}),
+    IdempotentKey = {BenderPrefix, PartyID, ExternalID},
     {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
 
     PaymentParamsFull = PaymentParams#{<<"invoiceID">> => InvoiceID},
@@ -566,20 +566,6 @@ map_result({ok, Value}) ->
     Value;
 map_result(_) ->
     undefined.
-
--spec get_payment_by_external_id(binary(), capi_handler:processing_context()) ->
-    {ok, {binary(), binary()}}
-    | {error, internal_id_not_found}.
-get_payment_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
-    PartyID = capi_handler_utils:get_party_id(Context),
-    PaymentKey = capi_bender:make_idempotent_key({'CreatePayment', PartyID, ExternalID}),
-    case capi_bender:get_internal_id(PaymentKey, WoodyContext) of
-        {ok, PaymentID, CtxData} ->
-            InvoiceID = maps:get(<<"invoice_id">>, CtxData),
-            {ok, {InvoiceID, PaymentID}};
-        {error, internal_id_not_found} = Error ->
-            Error
-    end.
 
 decrypt_payer(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer) ->
     #{<<"paymentToolToken">> := Token} = Payer,
@@ -694,12 +680,26 @@ decode_invoice_payment(InvoiceID, InvoicePayment, Context) ->
 
 get_refund_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
-    IdempotentKey = capi_bender:make_idempotent_key({'CreateRefund', PartyID, ExternalID}),
+    IdempotentKey = {'CreateRefund', PartyID, ExternalID},
     case capi_bender:get_internal_id(IdempotentKey, WoodyContext) of
         {ok, RefundID, CtxData} ->
             InvoiceID = maps:get(<<"invoice_id">>, CtxData),
             PaymentID = maps:get(<<"payment_id">>, CtxData),
             {ok, {InvoiceID, PaymentID, RefundID}};
+        {error, internal_id_not_found} = Error ->
+            Error
+    end.
+
+-spec get_payment_by_external_id(binary(), capi_handler:processing_context()) ->
+    {ok, {binary(), binary()}}
+    | {error, internal_id_not_found}.
+get_payment_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
+    PartyID = capi_handler_utils:get_party_id(Context),
+    IdempotentKey = {'CreatePayment', PartyID, ExternalID},
+    case capi_bender:get_internal_id(IdempotentKey, WoodyContext) of
+        {ok, PaymentID, CtxData} ->
+            InvoiceID = maps:get(<<"invoice_id">>, CtxData),
+            {ok, {InvoiceID, PaymentID}};
         {error, internal_id_not_found} = Error ->
             Error
     end.
@@ -722,7 +722,7 @@ create_refund(InvoiceID, PaymentID, RefundParams, Context, BenderPrefix) ->
     RefundParamsFull = RefundParams#{<<"invoiceID">> => InvoiceID, <<"paymentID">> => PaymentID},
 
     ExternalID = maps:get(<<"externalID">>, RefundParams, undefined),
-    IdempotentKey = capi_bender:make_idempotent_key({BenderPrefix, PartyID, ExternalID}),
+    IdempotentKey = {BenderPrefix, PartyID, ExternalID},
     Identity = {schema, capi_feature_schemas:refund(), RefundParamsFull, RefundParams},
     SequenceID = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
     SequenceParams = #{minimum => 100},

@@ -471,24 +471,55 @@ decode_payment_methods({value, PaymentMethodRefs}) ->
         proplists:get_keys(PaymentMethods)
     ).
 
+decode_payment_method(bank_card, Cards) ->
+    {Regular, Tokenized} =
+        lists:partition(
+            fun(#domain_BankCardPaymentMethod{token_provider_deprecated = TP}) -> TP =:= undefined end,
+            Cards
+        ),
+    [
+        #{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun decode_bank_card/1, Regular)}
+        | decode_tokenized_bank_cards(Tokenized)
+    ];
+decode_payment_method(payment_terminal, Providers) ->
+    [
+        #{
+            <<"method">> => <<"PaymentTerminal">>,
+            <<"providers">> => [Id || #domain_PaymentServiceRef{id = Id} <- Providers]
+        }
+    ];
+decode_payment_method(digital_wallet, Providers) ->
+    [
+        #{
+            <<"method">> => <<"DigitalWallet">>,
+            <<"providers">> => [Id || #domain_PaymentServiceRef{id = Id} <- Providers]
+        }
+    ];
+decode_payment_method(crypto_currency, CryptoCurrencies) ->
+    [
+        #{
+            <<"method">> => <<"CryptoWallet">>,
+            <<"cryptoCurrencies">> => [Id || #domain_CryptoCurrencyRef{id = Id} <- CryptoCurrencies]
+        }
+    ];
+decode_payment_method(mobile, MobileOperators) ->
+    [
+        #{
+            <<"method">> => <<"MobileCommerce">>,
+            <<"operators">> => [Id || #domain_MobileOperatorRef{id = Id} <- MobileOperators]
+        }
+    ];
 decode_payment_method(empty_cvv_bank_card_deprecated, PaymentSystems) ->
     [#{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems)}];
 decode_payment_method(bank_card_deprecated, PaymentSystems) ->
     [#{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun genlib:to_binary/1, PaymentSystems)}];
 decode_payment_method(tokenized_bank_card_deprecated, TokenizedBankCards) ->
     decode_tokenized_bank_cards(TokenizedBankCards);
-decode_payment_method(bank_card, Cards) ->
-    {Regular, Tokenized} =
-        lists:partition(fun(#domain_BankCardPaymentMethod{token_provider = TP}) -> TP =:= undefined end, Cards),
-    [
-        #{<<"method">> => <<"BankCard">>, <<"paymentSystems">> => lists:map(fun decode_bank_card/1, Regular)}
-        | decode_tokenized_bank_cards(Tokenized)
-    ];
-decode_payment_method(payment_terminal, Providers) ->
+decode_payment_method(payment_terminal_deprecated, Providers) ->
     [#{<<"method">> => <<"PaymentTerminal">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}];
-decode_payment_method(digital_wallet, Providers) ->
+decode_payment_method(digital_wallet_deprecated, Providers) ->
     [#{<<"method">> => <<"DigitalWallet">>, <<"providers">> => lists:map(fun genlib:to_binary/1, Providers)}];
-decode_payment_method(crypto_currency, CryptoCurrencies) ->
+decode_payment_method(crypto_currency_deprecated, CryptoCurrencies) ->
     Decoder = fun capi_handler_decoder_utils:convert_crypto_currency_to_swag/1,
     [
         #{
@@ -496,21 +527,23 @@ decode_payment_method(crypto_currency, CryptoCurrencies) ->
             <<"cryptoCurrencies">> => lists:map(Decoder, CryptoCurrencies)
         }
     ];
-decode_payment_method(mobile, MobileOperators) ->
+decode_payment_method(mobile_deprecated, MobileOperators) ->
     [#{<<"method">> => <<"MobileCommerce">>, <<"operators">> => lists:map(fun genlib:to_binary/1, MobileOperators)}].
 
-decode_bank_card(#domain_BankCardPaymentMethod{payment_system = PS}) -> genlib:to_binary(PS).
+decode_bank_card(#domain_BankCardPaymentMethod{payment_system_deprecated = PS}) -> genlib:to_binary(PS).
 
 decode_tokenized_bank_cards([#domain_BankCardPaymentMethod{} | _] = TokenizedBankCards) ->
     PropTokenizedBankCards = [
         {TP, PS}
-        || #domain_BankCardPaymentMethod{payment_system = PS, token_provider = TP} <- TokenizedBankCards
+        || #domain_BankCardPaymentMethod{payment_system_deprecated = PS, token_provider_deprecated = TP} <-
+               TokenizedBankCards
     ],
     do_decode_tokenized_bank_cards(PropTokenizedBankCards);
 decode_tokenized_bank_cards([#domain_TokenizedBankCard{} | _] = TokenizedBankCards) ->
     PropTokenizedBankCards = [
         {TP, PS}
-        || #domain_TokenizedBankCard{payment_system = PS, token_provider = TP} <- TokenizedBankCards
+        || #domain_TokenizedBankCard{payment_system_deprecated = PS, token_provider_deprecated = TP} <-
+               TokenizedBankCards
     ],
     do_decode_tokenized_bank_cards(PropTokenizedBankCards);
 decode_tokenized_bank_cards([]) ->
