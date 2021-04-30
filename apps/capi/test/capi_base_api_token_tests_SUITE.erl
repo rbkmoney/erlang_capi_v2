@@ -688,8 +688,15 @@ create_payment_ok_test(Config) ->
             {invoicing, fun
                 ('Get', _) ->
                     {ok, ?PAYPROC_INVOICE};
-                ('StartPayment', {_, _, IPP}) ->
-                    #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
+                ('StartPayment', {_, _, PaymentParams}) ->
+                    #payproc_InvoicePaymentParams{
+                        id = ID,
+                        external_id = EID,
+                        payer = {payment_resource, _},
+                        payer_session_info = ?PAYER_SESSION_INFO,
+                        context = ?CONTENT
+                    } =
+                        PaymentParams,
                     {ok, ?PAYPROC_PAYMENT(ID, EID)}
             end},
             {bender, fun('GenerateID', _) ->
@@ -708,7 +715,6 @@ create_payment_ok_test(Config) ->
     PaymentTool = {bank_card, ?BANK_CARD(visa, ?EXP_DATE(2, 2020), <<"Degus">>)},
     PaymentToolToken = capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined),
     Req = ?PAYMENT_PARAMS(ExternalID, PaymentToolToken),
-
     {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req, ?STRING).
 
 -spec create_refund(config()) -> _.
