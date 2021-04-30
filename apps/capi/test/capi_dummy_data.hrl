@@ -312,6 +312,11 @@
     external_id = EID
 }).
 
+-define(PAYPROC_REFUND(ID, EID), #payproc_InvoicePaymentRefund{
+    refund = ?REFUND(ID, EID),
+    sessions = []
+}).
+
 -define(CHARGEBACK, ?CHARGEBACK(?STRING)).
 
 -define(PAYPROC_CHARGEBACK, ?PAYPROC_CHARGEBACK(?STRING)).
@@ -1200,9 +1205,11 @@
     bank_card = ?BANK_CARD
 }).
 
--define(PAYOUT(Type, PayoutSummary), #'payout_processing_Payout'{
+-define(PAYOUT(Type, PayoutSummary), ?PAYOUT(Type, ?STRING, PayoutSummary)).
+
+-define(PAYOUT(Type, PartyID, PayoutSummary), #'payout_processing_Payout'{
     id = ?STRING,
-    party_id = ?STRING,
+    party_id = PartyID,
     shop_id = ?STRING,
     contract_id = ?STRING,
     created_at = ?TIMESTAMP,
@@ -1335,4 +1342,19 @@
         },
         <<"how_about_null">> => null
     }
+}).
+
+-define(PAYMENT_PARAMS(EID, Token), #{
+    <<"externalID">> => EID,
+    <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
+    <<"payer">> => #{
+        <<"payerType">> => <<"PaymentResourcePayer">>,
+        <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
+        <<"paymentToolToken">> => Token,
+        <<"contactInfo">> => #{
+            <<"email">> => <<"bla@bla.ru">>
+        }
+    },
+    <<"metadata">> => ?JSON,
+    <<"processingDeadline">> => <<"5m">>
 }).

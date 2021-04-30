@@ -42,11 +42,16 @@
     payment = ?CTX_ENTITY(PaymentID)
 }).
 
+-define(CTX_PAYMENT_OP(ID, InvoiceID), #bctx_v1_CommonAPIOperation{
+    id = ID,
+    invoice = ?CTX_ENTITY(InvoiceID)
+}).
+
 -define(CTX_REFUND_OP(ID, InvoiceID, PaymentID, RefundID), #bctx_v1_CommonAPIOperation{
     id = ID,
     invoice = ?CTX_ENTITY(InvoiceID),
     payment = ?CTX_ENTITY(PaymentID),
-    refund = ?CTX_ENTITY(PaymentID)
+    refund = ?CTX_ENTITY(RefundID)
 }).
 
 -define(CTX_INVOICE_TPL_OP(ID, InvoiceTemplateID), #bctx_v1_CommonAPIOperation{
@@ -74,6 +79,39 @@
     id = ID,
     payout = ?CTX_ENTITY(PayoutID),
     party = ?CTX_ENTITY(PartyID)
+}).
+
+-define(CTX_SEARCH_INVOICE_OP(ID, PartyID, ShopID, InvoiceID, PaymentID, CustomerID), #bctx_v1_CommonAPIOperation{
+    id = ID,
+    party = ?CTX_ENTITY(PartyID),
+    shop = ?CTX_ENTITY(ShopID),
+    invoice = ?CTX_ENTITY(InvoiceID),
+    payment = ?CTX_ENTITY(PaymentID),
+    customer = ?CTX_ENTITY(CustomerID)
+}).
+
+-define(CTX_SEARCH_PAYMENT_OP(ID, PartyID, ShopID, InvoiceID, PaymentID), #bctx_v1_CommonAPIOperation{
+    id = ID,
+    party = ?CTX_ENTITY(PartyID),
+    shop = ?CTX_ENTITY(ShopID),
+    invoice = ?CTX_ENTITY(InvoiceID),
+    payment = ?CTX_ENTITY(PaymentID)
+}).
+
+-define(CTX_SEARCH_PAYOUT_OP(ID, PartyID, ShopID, PayoutID), #bctx_v1_CommonAPIOperation{
+    id = ID,
+    party = ?CTX_ENTITY(PartyID),
+    shop = ?CTX_ENTITY(ShopID),
+    payout = ?CTX_ENTITY(PayoutID)
+}).
+
+-define(CTX_SEARCH_REFUND_OP(ID, PartyID, ShopID, InvoiceID, PaymentID, RefundID), #bctx_v1_CommonAPIOperation{
+    id = ID,
+    party = ?CTX_ENTITY(PartyID),
+    shop = ?CTX_ENTITY(ShopID),
+    invoice = ?CTX_ENTITY(InvoiceID),
+    payment = ?CTX_ENTITY(PaymentID),
+    refund = ?CTX_ENTITY(RefundID)
 }).
 
 -define(CTX_SEARCH_OP(
@@ -151,8 +189,14 @@
 }).
 
 -define(assertContextMatches(Expect), fun(Context) ->
-    ?assertMatch(Expect, Context),
-    {ok, ?JUDGEMENT(?ALLOWED)}
+    try
+        ?assertMatch(Expect, Context),
+        {ok, ?JUDGEMENT(?ALLOWED)}
+    catch
+        error:AssertMatchError:Stacktrace ->
+            logger:error("failed ~p at ~p", [AssertMatchError, Stacktrace]),
+            {throwing, #bdcs_InvalidContext{}}
+    end
 end).
 
 -endif.

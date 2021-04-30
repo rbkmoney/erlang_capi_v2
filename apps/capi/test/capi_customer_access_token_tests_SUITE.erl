@@ -2,10 +2,8 @@
 
 -include_lib("common_test/include/ct.hrl").
 
--include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
--include_lib("jose/include/jose_jwk.hrl").
 
 -export([all/0]).
 -export([groups/0]).
@@ -26,12 +24,6 @@
     get_binding_ok_test/1,
     get_customer_events_ok_test/1
 ]).
-
--define(CAPI_PORT, 8080).
--define(CAPI_HOST_NAME, "localhost").
--define(CAPI_URL, ?CAPI_HOST_NAME ++ ":" ++ integer_to_list(?CAPI_PORT)).
-
--define(badresp(Code), {error, {invalid_response_code, Code}}).
 
 -type test_case_name() :: atom().
 -type config() :: [{atom(), any()}].
@@ -90,7 +82,7 @@ init_per_group(operations_by_customer_access_token_after_customer_creation, Conf
         ],
         MockServiceSup
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), MockServiceSup),
+    _ = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), MockServiceSup),
     {ok, Token} = capi_ct_helper:issue_token([{[customers], write}], unlimited),
     Req = #{
         <<"shopID">> => ?STRING,
@@ -102,12 +94,12 @@ init_per_group(operations_by_customer_access_token_after_customer_creation, Conf
     }} = capi_client_customers:create_customer(capi_ct_helper:get_context(Token), Req),
     _ = capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+    Apps = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     [{context, capi_ct_helper:get_context(CustAccToken)}, {group_apps, Apps}, {group_test_sup, SupPid} | Config];
 init_per_group(operations_by_customer_access_token_after_token_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
     _ = capi_ct_helper:mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], MockServiceSup),
-    _ = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), MockServiceSup),
+    _ = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), MockServiceSup),
     {ok, Token} = capi_ct_helper:issue_token([{[customers], write}], unlimited),
     {ok, #{<<"payload">> := CustAccToken}} = capi_client_customers:create_customer_access_token(
         capi_ct_helper:get_context(Token),
@@ -115,7 +107,7 @@ init_per_group(operations_by_customer_access_token_after_token_creation, Config)
     ),
     _ = capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+    Apps = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     [{context, capi_ct_helper:get_context(CustAccToken)}, {group_apps, Apps}, {group_test_sup, SupPid} | Config];
 init_per_group(_, Config) ->
     Config.

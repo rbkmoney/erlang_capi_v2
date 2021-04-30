@@ -5,15 +5,12 @@
 
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_errors_thrift.hrl").
--include_lib("damsel/include/dmsl_accounter_thrift.hrl").
--include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 -include_lib("damsel/include/dmsl_webhooker_thrift.hrl").
 -include_lib("damsel/include/dmsl_merch_stat_thrift.hrl").
 -include_lib("reporter_proto/include/reporter_reports_thrift.hrl").
 -include_lib("damsel/include/dmsl_payout_processing_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 -include_lib("capi_bouncer_data.hrl").
--include_lib("jose/include/jose_jwk.hrl").
 
 -export([all/0]).
 -export([groups/0]).
@@ -41,15 +38,15 @@
     rescind_invoice_ok_test/1,
     fulfill_invoice_ok_test/1,
     get_merchant_payment_status_test/1,
+    create_payment_ok_test/1,
     create_refund/1,
-    create_refund_legacy/1,
-    create_refund_error/1,
+    create_refund_blocked_error/1,
+    create_refund_expired_error/1,
     create_partial_refund/1,
     create_partial_refund_without_currency/1,
     get_refund_by_id/1,
     get_refunds/1,
     get_chargeback_by_id/1,
-    get_chargebacks/1,
     get_refund_by_external_id/1,
     update_invoice_template_ok_test/1,
     delete_invoice_template_ok_test/1,
@@ -122,6 +119,7 @@
     get_payment_institution_by_ref/1,
     get_payment_institution_payment_terms/1,
     get_payment_institution_payout_terms/1,
+    get_payment_institution_payout_schedules/1,
     check_no_payment_by_external_id_test/1,
     check_no_internal_id_for_external_id_test/1,
     retrieve_payment_by_external_id_test/1,
@@ -130,10 +128,6 @@
     check_support_decrypt_v1_test/1,
     check_support_decrypt_v2_test/1
 ]).
-
--define(CAPI_PORT, 8080).
--define(CAPI_HOST_NAME, "localhost").
--define(CAPI_URL, ?CAPI_HOST_NAME ++ ":" ++ integer_to_list(?CAPI_PORT)).
 
 -type test_case_name() :: atom().
 -type config() :: [{atom(), any()}].
@@ -158,16 +152,11 @@ groups() ->
     [
         {operations_by_base_api_token, [], [
             get_merchant_payment_status_test,
-            create_refund,
-            create_refund_legacy,
-            create_refund_error,
-            create_partial_refund,
-            create_partial_refund_without_currency,
-            get_chargeback_by_id,
-            get_chargebacks,
-            get_refund_by_id,
-            get_refunds,
-            get_refund_by_external_id,
+            update_invoice_template_ok_test,
+            delete_invoice_template_ok_test,
+            get_my_party_ok_test,
+            suspend_my_party_ok_test,
+            activate_my_party_ok_test,
             get_shop_by_id_ok_test,
             get_shops_ok_test,
             activate_shop_ok_test,
@@ -186,12 +175,8 @@ groups() ->
             download_report_file_not_found_test,
             get_category_by_ref_ok_test,
             get_schedule_by_ref_ok_test,
-            get_payment_institutions,
-            get_payment_institution_by_ref,
-            get_payment_institution_payment_terms,
-            get_payment_institution_payout_terms,
-            check_no_payment_by_external_id_test,
-            check_no_internal_id_for_external_id_test,
+            delete_customer_ok_test,
+
             retrieve_payment_by_external_id_test,
             check_no_invoice_by_external_id_test
         ]},
@@ -250,6 +235,25 @@ groups() ->
             activate_shop_for_party_ok_test,
             activate_shop_for_party_error_test,
 
+            create_payment_ok_test,
+            check_no_payment_by_external_id_test,
+            create_refund,
+            create_refund_blocked_error,
+            create_refund_expired_error,
+            create_partial_refund,
+            create_partial_refund_without_currency,
+            get_chargeback_by_id,
+            get_refund_by_id,
+            get_refunds,
+            get_refund_by_external_id,
+            check_no_internal_id_for_external_id_test,
+
+            get_payment_institutions,
+            get_payment_institution_by_ref,
+            get_payment_institution_payment_terms,
+            get_payment_institution_payout_terms,
+            get_payment_institution_payout_schedules,
+
             create_webhook_ok_test,
             create_webhook_limit_exceeded_test,
             get_webhooks,
@@ -292,17 +296,13 @@ end_per_suite(C) ->
 init_per_group(operations_by_base_api_token, Config) ->
     BasePermissions = get_base_permissions(),
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
-    {ok, Token2} = capi_ct_helper:issue_token(<<"TEST2">>, BasePermissions, unlimited, #{}),
-    Config2 = [{context_with_diff_party, capi_ct_helper:get_context(Token2)} | Config],
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    [{context, capi_ct_helper:get_context(Token)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config2];
+    Apps1 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+    [{context, capi_ct_helper:get_context(Token)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config];
 init_per_group(operations_by_base_api_token_with_new_auth, Config) ->
     BasePermissions = get_base_permissions(),
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
-    {ok, Token2} = capi_ct_helper:issue_token(<<"TEST2">>, BasePermissions, unlimited, #{}),
-    Config2 = [{context_with_diff_party, capi_ct_helper:get_context(Token2)} | Config],
-    [{context, capi_ct_helper:get_context(Token)} | Config2];
+    [{context, capi_ct_helper:get_context(Token)} | Config];
 init_per_group(_, Config) ->
     Config.
 
@@ -344,7 +344,7 @@ create_invoice_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"CreateInvoice">>, ?STRING, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"CreateInvoice">>, ?STRING, ?STRING, Config),
     {ok, _} = capi_client_invoices:create_invoice(?config(context, Config), ?INVOICE_PARAMS).
 
 -spec create_invoice_autorization_error_test(config()) -> _.
@@ -358,7 +358,7 @@ create_invoice_autorization_error_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"CreateInvoice">>, ?STRING, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"CreateInvoice">>, <<"WrongPartyID">>, ?STRING, Config),
     ?assertMatch(
         {error, {400, #{<<"code">> := <<"invalidPartyID">>}}},
         capi_client_invoices:create_invoice(
@@ -371,19 +371,19 @@ create_invoice_autorization_error_test(Config) ->
 get_invoice_by_external_id(Config) ->
     ExternalID = <<"merch_id">>,
     BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{}}),
+    InvoiceID = capi_utils:get_unique_id(),
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end},
+            {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE_WITH_ID(InvoiceID, ExternalID)} end},
             {bender, fun('GetInternalID', _) ->
-                InternalKey = capi_utils:get_unique_id(),
-                {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)}
+                {ok, capi_ct_helper_bender:get_internal_id_result(InvoiceID, BenderContext)}
             end}
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
         <<"GetInvoiceByExternalID">>,
-        ?STRING,
+        InvoiceID,
         ?STRING,
         ?STRING,
         Config
@@ -394,7 +394,7 @@ get_invoice_by_external_id(Config) ->
 -spec create_invoice_access_token_ok_test(config()) -> _.
 create_invoice_access_token_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
         <<"CreateInvoiceAccessToken">>,
         ?STRING,
         ?STRING,
@@ -414,7 +414,7 @@ create_invoice_template_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"CreateInvoiceTemplate">>, ?STRING, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"CreateInvoiceTemplate">>, ?STRING, ?STRING, Config),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"lifetime">> => capi_ct_helper:get_lifetime(),
@@ -449,7 +449,12 @@ create_invoice_template_autorization_error_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"CreateInvoiceTemplate">>, ?STRING, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(
+        <<"CreateInvoiceTemplate">>,
+        <<"WrongPartyID">>,
+        ?STRING,
+        Config
+    ),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"lifetime">> => capi_ct_helper:get_lifetime(),
@@ -488,44 +493,7 @@ create_invoice_with_template_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_tpl_op_ctx(
-        <<"CreateInvoiceWithTemplate">>,
-        ?STRING,
-        ?STRING,
-        ?STRING,
-        Config
-    ),
-    ReqTemp = #{
-        <<"shopID">> => ?STRING,
-        <<"lifetime">> => capi_ct_helper:get_lifetime(),
-        <<"description">> => <<"test_invoice_template_description">>,
-        <<"metadata">> => #{<<"invoice_template_dummy_metadata">> => <<"test_value">>}
-    },
-    Details = #{
-        <<"templateType">> => <<"InvoiceTemplateMultiLine">>,
-        <<"currency">> => ?RUB,
-        <<"cart">> => [
-            #{
-                <<"product">> => ?STRING,
-                <<"price">> => ?INTEGER,
-                <<"quantity">> => ?INTEGER
-            },
-            #{
-                <<"product">> => ?STRING,
-                <<"price">> => ?INTEGER,
-                <<"quantity">> => ?INTEGER,
-                <<"taxMode">> => #{
-                    <<"type">> => <<"InvoiceLineTaxVAT">>,
-                    <<"rate">> => <<"18%">>
-                }
-            }
-        ]
-    },
-    {ok, Template} = capi_client_invoice_templates:create(?config(context, Config), ReqTemp#{<<"details">> => Details}),
-    #{
-        <<"invoiceTemplate">> := #{<<"id">> := TemplateID},
-        <<"invoiceTemplateAccessToken">> := #{<<"payload">> := Token}
-    } = Template,
+
     Req = #{
         <<"amount">> => ?INTEGER,
         <<"currency">> => ?RUB,
@@ -533,10 +501,38 @@ create_invoice_with_template_test(Config) ->
         <<"externalID">> => ExternalID
     },
     Ctx = ?config(context, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_tpl_op_ctx(
+        <<"CreateInvoiceWithTemplate">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
+
     {ok, #{<<"invoice">> := Invoice}} =
-        capi_client_invoice_templates:create_invoice(Ctx#{token => Token}, TemplateID, Req),
+        capi_client_invoice_templates:create_invoice(Ctx, ?STRING, Req),
     ?assertEqual(BenderKey, maps:get(<<"id">>, Invoice)),
     ?assertEqual(ExternalID, maps:get(<<"externalID">>, Invoice)).
+
+-spec check_no_internal_id_for_external_id_test(config()) -> _.
+check_no_internal_id_for_external_id_test(Config) ->
+    ExternalID = capi_utils:get_unique_id(),
+    _ = capi_ct_helper:mock_services(
+        [
+            {bender, fun('GetInternalID', _) -> {throwing, capi_ct_helper_bender:no_internal_id()} end}
+        ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
+        <<"GetPaymentByExternalID">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
+    %% Ugly test case, but after full integration with bouncer we would expect
+    %% {error, {401, #{}}}.
+    {error, {_, 500}} = capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
 
 -spec create_customer_ok_test(config()) -> _.
 create_customer_ok_test(Config) ->
@@ -547,7 +543,7 @@ create_customer_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"CreateCustomer">>, ?STRING, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"CreateCustomer">>, ?STRING, ?STRING, Config),
     {ok, _} = capi_client_customers:create_customer(?config(context, Config), ?CUSTOMER_PARAMS).
 
 -spec create_customer_autorization_error_test(config()) -> _.
@@ -561,7 +557,7 @@ create_customer_autorization_error_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(
         <<"CreateCustomer">>,
         <<"WrongPartyID">>,
         ?STRING,
@@ -588,7 +584,7 @@ delete_customer_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_customer_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_customer_op_ctx(
         <<"DeleteCustomer">>,
         ?STRING,
         ?STRING,
@@ -600,7 +596,7 @@ delete_customer_ok_test(Config) ->
 -spec create_customer_access_token_ok_test(config()) -> _.
 create_customer_access_token_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_customer_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_customer_op_ctx(
         <<"CreateCustomerAccessToken">>,
         ?STRING,
         ?STRING,
@@ -620,7 +616,7 @@ rescind_invoice_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
         <<"RescindInvoice">>,
         ?STRING,
         ?STRING,
@@ -640,7 +636,7 @@ fulfill_invoice_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
         <<"FulfillInvoice">>,
         ?STRING,
         ?STRING,
@@ -675,31 +671,45 @@ get_failed_payment_with_invalid_cvv(Config) ->
             <<"Reason">>
         ),
     _ = capi_ct_helper:mock_services(
-        [{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_FAILED_PAYMENT({failure, Failure})} end}],
+        [
+            {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE([?PAYPROC_FAILED_PAYMENT({failure, Failure})])} end}
+        ],
         Config
     ),
     % mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
     capi_client_payments:get_payment_by_id(?config(context, Config), ?STRING, ?STRING).
 
--spec create_refund_legacy(config()) -> _.
-create_refund_legacy(Config) ->
+-spec create_payment_ok_test(config()) -> _.
+create_payment_ok_test(Config) ->
     BenderKey = <<"bender_key">>,
-    Req = #{
-        <<"reason">> => ?STRING,
-        <<"externalID">> => ?STRING
-    },
-    Ctx = capi_msgp_marshalling:marshal(#{
-        <<"version">> => 1,
-        <<"params_hash">> => erlang:phash2(Req)
-    }),
+    ExternalID = <<"merch_id">>,
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end},
-            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
+            {invoicing, fun
+                ('Get', _) ->
+                    {ok, ?PAYPROC_INVOICE};
+                ('StartPayment', {_, _, IPP}) ->
+                    #payproc_InvoicePaymentParams{id = ID, external_id = EID, context = ?CONTENT} = IPP,
+                    {ok, ?PAYPROC_PAYMENT(ID, EID)}
+            end},
+            {bender, fun('GenerateID', _) ->
+                {ok, capi_ct_helper_bender:get_result(BenderKey)}
+            end}
         ],
         Config
     ),
-    {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
+        <<"CreatePayment">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
+    PaymentTool = {bank_card, ?BANK_CARD(visa, ?EXP_DATE(2, 2020), <<"Degus">>)},
+    PaymentToolToken = capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined),
+    Req = ?PAYMENT_PARAMS(ExternalID, PaymentToolToken),
+
+    {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req, ?STRING).
 
 -spec create_refund(config()) -> _.
 create_refund(Config) ->
@@ -708,55 +718,107 @@ create_refund(Config) ->
     Tid = capi_ct_helper_bender:create_storage(),
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('RefundPayment', _) -> {ok, ?REFUND} end},
+            {invoicing, fun
+                ('Get', _) ->
+                    {ok, ?PAYPROC_INVOICE([?PAYPROC_PAYMENT])};
+                ('RefundPayment', _) ->
+                    {ok, ?REFUND}
+            end},
             {generator, fun('GenerateID', _) ->
                 capi_ct_helper_bender:generate_id(BenderKey)
             end}
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
+        <<"CreateRefund">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
     capi_ct_helper_bender:del_storage(Tid).
 
--spec create_refund_error(config()) -> _.
-create_refund_error(Config) ->
+-spec create_refund_blocked_error(config()) -> _.
+create_refund_blocked_error(Config) ->
     BenderKey = <<"bender_key">>,
     Req = #{<<"reason">> => ?STRING},
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun
-                ('RefundPayment', {_, <<"42">>, _, _}) ->
+                ('Get', _) ->
+                    Invoice = ?PAYPROC_INVOICE,
+                    {ok, Invoice#payproc_Invoice{payments = [?PAYPROC_PAYMENT]}};
+                ('RefundPayment', {_, ?STRING, _, _}) ->
                     {throwing, #payproc_InvalidPartyStatus{
                         status = {blocking, {blocked, #domain_Blocked{reason = ?STRING, since = ?TIMESTAMP}}}
-                    }};
-                ('RefundPayment', {_, <<"43">>, _, _}) ->
+                    }}
+            end},
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(BenderKey) end}
+        ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
+        <<"CreateRefund">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
+    {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
+
+-spec create_refund_expired_error(config()) -> _.
+create_refund_expired_error(Config) ->
+    BenderKey = <<"bender_key">>,
+    Req = #{<<"reason">> => ?STRING},
+    _ = capi_ct_helper:mock_services(
+        [
+            {invoicing, fun
+                ('Get', _) ->
+                    Invoice = ?PAYPROC_INVOICE,
+                    {ok, Invoice#payproc_Invoice{payments = [?PAYPROC_PAYMENT]}};
+                ('RefundPayment', {_, ?STRING, _, _}) ->
                     {throwing, #payproc_InvalidContractStatus{status = {expired, #domain_ContractExpired{}}}}
             end},
             {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(BenderKey) end}
         ],
         Config
     ),
-    {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"42">>, ?STRING),
-    {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, <<"43">>, ?STRING).
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
+        <<"CreateRefund">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
+    {error, {400, _}} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec create_partial_refund(config()) -> _.
 create_partial_refund(Config) ->
     BenderKey = <<"bender_key">>,
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun(
-                'RefundPayment',
-                {
-                    _,
-                    _,
-                    _,
-                    #payproc_InvoicePaymentRefundParams{
-                        cash = ?CASH,
-                        cart = ?THRIFT_INVOICE_CART
+            {invoicing, fun
+                ('Get', _) ->
+                    P = ?PAYPROC_PAYMENT,
+                    {ok, ?PAYPROC_INVOICE([P])};
+                (
+                    'RefundPayment',
+                    {
+                        _,
+                        _,
+                        _,
+                        #payproc_InvoicePaymentRefundParams{
+                            cash = ?CASH,
+                            cart = ?THRIFT_INVOICE_CART
+                        }
                     }
-                }
-            ) ->
-                {ok, ?REFUND}
+                ) ->
+                    {ok, ?REFUND}
             end},
             {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(BenderKey) end}
         ],
@@ -768,7 +830,14 @@ create_partial_refund(Config) ->
         <<"amount">> => ?INTEGER,
         <<"cart">> => ?INVOICE_CART
     },
-
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
+        <<"CreateRefund">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec create_partial_refund_without_currency(config()) -> _.
@@ -780,36 +849,80 @@ create_partial_refund_without_currency(Config) ->
     },
     _ = capi_ct_helper:mock_services(
         [
-            {
-                invoicing,
-                fun
-                    ('GetPayment', _) ->
-                        {ok, ?PAYPROC_PAYMENT};
-                    ('RefundPayment', _) ->
-                        {ok, ?REFUND}
-                end
-            },
+            {invoicing, fun
+                ('GetPayment', _) ->
+                    {ok, ?PAYPROC_PAYMENT};
+                ('Get', _) ->
+                    P = ?PAYPROC_PAYMENT,
+                    {ok, ?PAYPROC_INVOICE([P])};
+                ('RefundPayment', _) ->
+                    {ok, ?REFUND}
+            end},
             {generator, fun('GenerateID', _) ->
                 capi_ct_helper_bender:generate_id(BenderKey)
             end}
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
+        <<"CreateRefund">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec get_refund_by_id(config()) -> _.
 get_refund_by_id(Config) ->
-    _ = capi_ct_helper:mock_services([{invoicing, fun('GetPaymentRefund', _) -> {ok, ?REFUND} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {invoicing, fun('Get', _) ->
+                P = ?PAYPROC_PAYMENT,
+                Payment = P#payproc_InvoicePayment{refunds = [?PAYPROC_REFUND(?STRING, ?STRING)]},
+                {ok, ?PAYPROC_INVOICE([Payment])}
+            end}
+        ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_assert_refund_op_ctx(
+        <<"GetRefundByID">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_payments:get_refund_by_id(?config(context, Config), ?STRING, ?STRING, ?STRING).
 
 -spec get_refunds(config()) -> _.
 get_refunds(Config) ->
-    _ = capi_ct_helper:mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {invoicing, fun('Get', _) ->
+                P = ?PAYPROC_PAYMENT,
+                Payment = P#payproc_InvoicePayment{refunds = [?PAYPROC_REFUND(?STRING, ?STRING)]},
+                {ok, ?PAYPROC_INVOICE([Payment])}
+            end}
+        ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
+        <<"GetRefunds">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_payments:get_refunds(?config(context, Config), ?STRING, ?STRING).
 
 -spec get_refund_by_external_id(config()) -> _.
 get_refund_by_external_id(Config) ->
     ExternalID = <<"merch_id">>,
+    RefundID = capi_utils:get_unique_id(),
     BenderContext = capi_msgp_marshalling:marshal(#{
         <<"context_data">> => #{
             <<"invoice_id">> => ?STRING,
@@ -819,12 +932,25 @@ get_refund_by_external_id(Config) ->
     }),
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('GetPaymentRefund', _) -> {ok, ?REFUND} end},
+            {invoicing, fun('Get', _) ->
+                P = ?PAYPROC_PAYMENT,
+                Payment = P#payproc_InvoicePayment{refunds = [?PAYPROC_REFUND(RefundID, ExternalID)]},
+                {ok, ?PAYPROC_INVOICE([Payment])}
+            end},
             {bender, fun('GetInternalID', _) ->
-                InternalKey = capi_utils:get_unique_id(),
+                InternalKey = RefundID,
                 {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)}
             end}
         ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_assert_refund_op_ctx(
+        <<"GetRefundByExternalID">>,
+        ?STRING,
+        ?STRING,
+        RefundID,
+        ?STRING,
+        ?STRING,
         Config
     ),
     {ok, _} = capi_client_payments:get_refund_by_external_id(?config(context, Config), ExternalID).
@@ -835,17 +961,20 @@ get_refund_by_external_id(Config) ->
 get_chargeback_by_id(Config) ->
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('GetPaymentChargeback', _) ->
-                {ok, ?CHARGEBACK}
+            {invoicing, fun('Get', _) ->
+                {ok, ?PAYPROC_INVOICE([?PAYPROC_PAYMENT])}
             end}
         ],
         Config
     ),
-    {ok, _} = capi_client_payments:get_chargeback_by_id(?config(context, Config), ?STRING, ?STRING, ?STRING).
-
--spec get_chargebacks(config()) -> _.
-get_chargebacks(Config) ->
-    _ = capi_ct_helper:mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
+        <<"GetChargebacks">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_payments:get_chargebacks(?config(context, Config), ?STRING, ?STRING).
 
 %
@@ -861,7 +990,7 @@ update_invoice_template_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_tpl_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_tpl_op_ctx(
         <<"UpdateInvoiceTemplate">>,
         ?STRING,
         ?STRING,
@@ -906,7 +1035,7 @@ delete_invoice_template_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_invoice_tpl_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_tpl_op_ctx(
         <<"DeleteInvoiceTemplate">>,
         ?STRING,
         ?STRING,
@@ -921,43 +1050,43 @@ get_account_by_id_ok_test(Config) ->
         [{party_management, fun('GetAccountState', _) -> {ok, ?ACCOUNT_STATE} end}],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetAccountByID">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetAccountByID">>, ?STRING, Config),
     {ok, _} = capi_client_accounts:get_account_by_id(?config(context, Config), ?INTEGER).
 
 -spec get_my_party_ok_test(config()) -> _.
 get_my_party_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetMyParty">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetMyParty">>, ?STRING, Config),
     {ok, _} = capi_client_parties:get_my_party(?config(context, Config)).
 
 -spec suspend_my_party_ok_test(config()) -> _.
 suspend_my_party_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Suspend', _) -> {ok, ok} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"SuspendMyParty">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"SuspendMyParty">>, ?STRING, Config),
     ok = capi_client_parties:suspend_my_party(?config(context, Config)).
 
 -spec activate_my_party_ok_test(config()) -> _.
 activate_my_party_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Activate', _) -> {ok, ok} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"ActivateMyParty">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"ActivateMyParty">>, ?STRING, Config),
     ok = capi_client_parties:activate_my_party(?config(context, Config)).
 
 -spec get_party_by_id_ok_test(config()) -> _.
 get_party_by_id_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetPartyByID">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetPartyByID">>, ?STRING, Config),
     {ok, _} = capi_client_parties:get_party_by_id(?config(context, Config), ?STRING).
 
 -spec suspend_party_by_id_ok_test(config()) -> _.
 suspend_party_by_id_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Suspend', _) -> {ok, ok} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"SuspendPartyByID">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"SuspendPartyByID">>, ?STRING, Config),
     ok = capi_client_parties:suspend_party_by_id(?config(context, Config), ?STRING).
 
 -spec activate_party_by_id_ok_test(config()) -> _.
 activate_party_by_id_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Activate', _) -> {ok, ok} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"ActivatePartyByID">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"ActivatePartyByID">>, ?STRING, Config),
     ok = capi_client_parties:activate_party_by_id(?config(context, Config), ?STRING).
 
 -spec get_shop_by_id_ok_test(config()) -> _.
@@ -973,7 +1102,7 @@ get_shop_by_id_for_party_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"GetShopByIDForParty">>, ?STRING, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"GetShopByIDForParty">>, ?STRING, ?STRING, Config),
     {ok, _} = capi_client_shops:get_shop_by_id_for_party(?config(context, Config), ?STRING, ?STRING).
 
 -spec get_shop_by_id_for_party_error_test(config()) -> _.
@@ -986,7 +1115,7 @@ get_shop_by_id_for_party_error_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(
         <<"GetShopByIDForParty">>,
         <<"WrongPartyID">>,
         ?STRING,
@@ -1000,7 +1129,7 @@ get_shop_by_id_for_party_error_test(Config) ->
 -spec get_shops_ok_test(config()) -> _.
 get_shops_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetShops">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetShops">>, ?STRING, Config),
     {ok, _} = capi_client_shops:get_shops(?config(context, Config)).
 
 -spec get_shops_for_party_ok_test(config()) -> _.
@@ -1011,7 +1140,7 @@ get_shops_for_party_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetShopsForParty">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetShopsForParty">>, ?STRING, Config),
     {ok, _} = capi_client_shops:get_shops_for_party(?config(context, Config), ?STRING).
 
 -spec get_shops_for_party_error_test(config()) -> _.
@@ -1020,7 +1149,7 @@ get_shops_for_party_error_test(Config) ->
         [{party_management, fun('Get', {_, <<"WrongPartyID">>}) -> {throwing, #payproc_InvalidUser{}} end}],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetShopsForParty">>, <<"WrongPartyID">>, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetShopsForParty">>, <<"WrongPartyID">>, Config),
     ?assertMatch(
         {error, {404, _}},
         capi_client_shops:get_shops_for_party(?config(context, Config), <<"WrongPartyID">>)
@@ -1029,7 +1158,7 @@ get_shops_for_party_error_test(Config) ->
 -spec activate_shop_ok_test(config()) -> _.
 activate_shop_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('ActivateShop', _) -> {ok, ok} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"ActivateShop">>, ?STRING, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"ActivateShop">>, ?STRING, ?STRING, Config),
     ok = capi_client_shops:activate_shop(?config(context, Config), ?STRING).
 
 -spec activate_shop_for_party_ok_test(config()) -> _.
@@ -1040,7 +1169,7 @@ activate_shop_for_party_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"ActivateShopForParty">>, ?STRING, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"ActivateShopForParty">>, ?STRING, ?STRING, Config),
     ok = capi_client_shops:activate_shop_for_party(?config(context, Config), ?STRING, ?STRING).
 
 -spec activate_shop_for_party_error_test(config()) -> _.
@@ -1053,7 +1182,7 @@ activate_shop_for_party_error_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(
         <<"ActivateShopForParty">>,
         <<"WrongPartyID">>,
         ?STRING,
@@ -1067,7 +1196,7 @@ activate_shop_for_party_error_test(Config) ->
 -spec suspend_shop_ok_test(config()) -> _.
 suspend_shop_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('SuspendShop', _) -> {ok, ok} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"SuspendShop">>, ?STRING, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"SuspendShop">>, ?STRING, ?STRING, Config),
     ok = capi_client_shops:suspend_shop(?config(context, Config), ?STRING).
 
 -spec suspend_shop_for_party_ok_test(config()) -> _.
@@ -1078,7 +1207,7 @@ suspend_shop_for_party_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"SuspendShopForParty">>, ?STRING, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"SuspendShopForParty">>, ?STRING, ?STRING, Config),
     ok = capi_client_shops:suspend_shop_for_party(?config(context, Config), ?STRING, ?STRING).
 
 -spec suspend_shop_for_party_error_test(config()) -> _.
@@ -1091,7 +1220,7 @@ suspend_shop_for_party_error_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(
         <<"SuspendShopForParty">>,
         <<"WrongPartyID">>,
         ?STRING,
@@ -1110,7 +1239,7 @@ get_claim_by_id_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_claim_op_ctx(<<"GetClaimByID">>, ?STRING, ?INTEGER_BINARY, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_claim_op_ctx(<<"GetClaimByID">>, ?STRING, ?INTEGER_BINARY, Config),
     {ok, _} = capi_client_claims:get_claim_by_id(?config(context, Config), ?INTEGER).
 
 -spec get_claims_ok_test(config()) -> _.
@@ -1127,13 +1256,13 @@ get_claims_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetClaims">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetClaims">>, ?STRING, Config),
     {ok, [_OnlyOneClaim]} = capi_client_claims:get_claims(?config(context, Config)).
 
 -spec revoke_claim_ok_test(config()) -> _.
 revoke_claim_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('RevokeClaim', _) -> {ok, ok} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_claim_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_claim_op_ctx(
         <<"RevokeClaimByID">>,
         ?STRING,
         ?INTEGER_BINARY,
@@ -1149,7 +1278,7 @@ create_claim_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"CreateClaim">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"CreateClaim">>, ?STRING, Config),
     Changeset = [
         #{
             <<"partyModificationType">> => <<"ContractModification">>,
@@ -1283,7 +1412,7 @@ create_claim_invalid_residence_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"CreateClaim">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"CreateClaim">>, ?STRING, Config),
     Changeset = [
         #{
             <<"partyModificationType">> => <<"ContractModification">>,
@@ -1312,7 +1441,7 @@ create_claim_invalid_residence_test(Config) ->
 -spec get_contract_by_id_ok_test(config()) -> _.
 get_contract_by_id_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_arbiter(
+    _ = capi_ct_helper_bouncer:mock_arbiter(
         ?assertContextMatches(
             #bctx_v1_ContextFragment{
                 capi = ?CTX_CAPI(?CTX_CONTRACT_OP(<<"GetContractByID">>, ?STRING, _))
@@ -1326,7 +1455,7 @@ get_contract_by_id_ok_test(Config) ->
 -spec get_contract_by_id_for_party_ok_test(config()) -> _.
 get_contract_by_id_for_party_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_contract_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_contract_op_ctx(
         <<"GetContractByIDForParty">>,
         ?STRING,
         ?STRING,
@@ -1337,13 +1466,13 @@ get_contract_by_id_for_party_ok_test(Config) ->
 -spec get_contracts_ok_test(config()) -> _.
 get_contracts_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetContracts">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetContracts">>, ?STRING, Config),
     {ok, [_First, _Second]} = capi_client_contracts:get_contracts(?config(context, Config)).
 
 -spec get_contracts_for_party_ok_test(config()) -> _.
 get_contracts_for_party_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetContractsForParty">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetContractsForParty">>, ?STRING, Config),
     {ok, [_First, _Second]} = capi_client_contracts:get_contracts_for_party(?config(context, Config), ?STRING).
 
 -spec get_contract_adjustments_ok_test(config()) -> _.
@@ -1357,7 +1486,7 @@ get_contract_adjustments_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_contract_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_contract_op_ctx(
         <<"GetContractAdjustments">>,
         ?STRING,
         ?STRING,
@@ -1368,7 +1497,7 @@ get_contract_adjustments_ok_test(Config) ->
 -spec get_contract_adjustments_for_party_ok_test(config()) -> _.
 get_contract_adjustments_for_party_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_contract_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_contract_op_ctx(
         <<"GetContractAdjustmentsForParty">>,
         ?STRING,
         ?STRING,
@@ -1387,7 +1516,7 @@ get_contract_adjustment_by_id_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_contract_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_contract_op_ctx(
         <<"GetContractAdjustmentByID">>,
         ?STRING,
         ?STRING,
@@ -1398,7 +1527,7 @@ get_contract_adjustment_by_id_ok_test(Config) ->
 -spec get_contract_adjustment_by_id_for_party_ok_test(config()) -> _.
 get_contract_adjustment_by_id_for_party_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_contract_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_contract_op_ctx(
         <<"GetContractAdjustmentByIDForParty">>,
         ?STRING,
         ?STRING,
@@ -1414,19 +1543,19 @@ get_contract_adjustment_by_id_for_party_ok_test(Config) ->
 -spec get_payout_tools_ok_test(config()) -> _.
 get_payout_tools_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetPayoutTools">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetPayoutTools">>, ?STRING, Config),
     {ok, _} = capi_client_payouts:get_payout_tools(?config(context, Config), ?STRING).
 
 -spec get_payout_tools_for_party_ok_test(config()) -> _.
 get_payout_tools_for_party_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetPayoutToolsForParty">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetPayoutToolsForParty">>, ?STRING, Config),
     {ok, _} = capi_client_payouts:get_payout_tools_for_party(?config(context, Config), ?STRING, ?STRING).
 
 -spec get_payout_tool_by_id(config()) -> _.
 get_payout_tool_by_id(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetPayoutToolByID">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetPayoutToolByID">>, ?STRING, Config),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_RU),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_US),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?WALLET_TOOL).
@@ -1434,7 +1563,7 @@ get_payout_tool_by_id(Config) ->
 -spec get_payout_tool_by_id_for_party(config()) -> _.
 get_payout_tool_by_id_for_party(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetPayoutToolByIDForParty">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetPayoutToolByIDForParty">>, ?STRING, Config),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id_for_party(
         ?config(context, Config),
         ?STRING,
@@ -1446,14 +1575,14 @@ get_payout_tool_by_id_for_party(Config) ->
 create_payout(Config) ->
     Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, []),
     _ = capi_ct_helper:mock_services([{payouts, fun('CreatePayout', _) -> {ok, Payout} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_shop_op_ctx(<<"CreatePayout">>, ?STRING, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"CreatePayout">>, ?STRING, ?STRING, Config),
     {ok, _} = capi_client_payouts:create_payout(?config(context, Config), ?PAYOUT_PARAMS, ?STRING).
 
 -spec create_payout_autorization_error(config()) -> _.
 create_payout_autorization_error(Config) ->
     Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, []),
     _ = capi_ct_helper:mock_services([{payouts, fun('CreatePayout', _) -> {ok, Payout} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_forbidden(), Config),
+    _ = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_forbidden(), Config),
     %% TODO Enable assert when bouncer is the only authorization authority
     %%    ?assertMatch(
     %%        {error, {401, _}},
@@ -1474,7 +1603,7 @@ create_payout_autorization_error(Config) ->
 get_payout(Config) ->
     Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, [?PAYOUT_PROC_PAYOUT_SUMMARY_ITEM]),
     _ = capi_ct_helper:mock_services([{payouts, fun('Get', _) -> {ok, Payout} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_payout_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_payout_op_ctx(
         <<"GetPayout">>,
         ?STRING,
         ?STRING,
@@ -1486,17 +1615,21 @@ get_payout(Config) ->
 
 -spec get_payout_fail(config()) -> _.
 get_payout_fail(Config) ->
-    Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, [?PAYOUT_PROC_PAYOUT_SUMMARY_ITEM]),
+    PartyID = <<"Wrong party id">>,
+    Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, PartyID, [?PAYOUT_PROC_PAYOUT_SUMMARY_ITEM]),
     _ = capi_ct_helper:mock_services([{payouts, fun('Get', _) -> {ok, Payout} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_payout_op_ctx(
-        <<"GetPayout">>,
-        ?STRING,
-        ?STRING,
-        ?STRING,
-        ?STRING,
+    _ = capi_ct_helper_bouncer:mock_arbiter(
+        ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_PAYOUT_OP(<<"GetPayout">>, ?STRING, ?STRING)),
+                payouts = #bctx_v1_ContextPayouts{
+                    payout = undefined
+                }
+            }
+        ),
         Config
     ),
-    {error, {404, _}} = capi_client_payouts:get_payout(?config(context_with_diff_party, Config), ?STRING).
+    {error, {404, _}} = capi_client_payouts:get_payout(?config(context, Config), ?STRING).
 
 -spec create_webhook_ok_test(config()) -> _.
 create_webhook_ok_test(Config) ->
@@ -1507,7 +1640,7 @@ create_webhook_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"CreateWebhook">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"CreateWebhook">>, ?STRING, Config),
     Req = #{
         <<"url">> => <<"http://localhost:8080/TODO">>,
         <<"scope">> => #{
@@ -1541,7 +1674,7 @@ create_webhook_limit_exceeded_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"CreateWebhook">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"CreateWebhook">>, ?STRING, Config),
     Req = #{
         <<"url">> => <<"http://localhost:8080/TODO">>,
         <<"scope">> => #{
@@ -1570,13 +1703,13 @@ create_webhook_limit_exceeded_test(Config) ->
 -spec get_webhooks(config()) -> _.
 get_webhooks(Config) ->
     _ = capi_ct_helper:mock_services([{webhook_manager, fun('GetList', _) -> {ok, [?WEBHOOK]} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_party_op_ctx(<<"GetWebhooks">>, ?STRING, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetWebhooks">>, ?STRING, Config),
     {ok, _} = capi_client_webhooks:get_webhooks(?config(context, Config)).
 
 -spec get_webhook_by_id(config()) -> _.
 get_webhook_by_id(Config) ->
     _ = capi_ct_helper:mock_services([{webhook_manager, fun('Get', _) -> {ok, ?WEBHOOK} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_webhook_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_webhook_op_ctx(
         <<"GetWebhookByID">>,
         ?INTEGER_BINARY,
         ?STRING,
@@ -1595,7 +1728,7 @@ delete_webhook_by_id(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_webhook_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_webhook_op_ctx(
         <<"DeleteWebhookByID">>,
         ?INTEGER_BINARY,
         ?STRING,
@@ -1609,7 +1742,7 @@ get_locations_names_ok_test(Config) ->
         [{geo_ip_service, fun('GetLocationName', _) -> {ok, #{123 => ?STRING}} end}],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_op_ctx(<<"GetLocationsNames">>, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_op_ctx(<<"GetLocationsNames">>, Config),
     Query = #{
         <<"geoIDs">> => <<"5,3,6,5,4">>,
         <<"language">> => <<"ru">>
@@ -1622,15 +1755,13 @@ search_invoices_ok_test(Config) ->
         [{merchant_stat, fun('GetInvoices', _) -> {ok, ?STAT_RESPONSE_INVOICES} end}],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_search_op_ctx(
-        <<"SearchInvoice">>,
+    _ = capi_ct_helper_bouncer:mock_assert_search_invoice_op_ctx(
+        <<"SearchInvoices">>,
         ?STRING,
         ?STRING,
         <<"testInvoiceID">>,
         <<"testPaymentID">>,
         <<"testCustomerID">>,
-        undefined,
-        undefined,
         Config
     ),
     ok = search_invoices_ok_test_(<<"applepay">>, Config),
@@ -1668,15 +1799,12 @@ search_payments_ok_test(Config) ->
         [{merchant_stat, fun('GetPayments', _) -> {ok, ?STAT_RESPONSE_PAYMENTS} end}],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_search_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_search_payment_op_ctx(
         <<"SearchPayments">>,
         ?STRING,
         ?STRING,
         <<"testInvoiceID">>,
         <<"testPaymentID">>,
-        undefined,
-        undefined,
-        undefined,
         Config
     ),
     ok = search_payments_ok_(<<"applepay">>, Config),
@@ -1713,23 +1841,22 @@ search_refunds_ok_test(Config) ->
         [{merchant_stat, fun('GetPayments', _) -> {ok, ?STAT_RESPONSE_REFUNDS} end}],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_search_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_search_refund_op_ctx(
         <<"SearchRefunds">>,
         ?STRING,
         <<"testShopID">>,
         <<"testInvoiceID">>,
         <<"testPaymentID">>,
-        undefined,
-        undefined,
         <<"testRefundID">>,
         Config
     ),
+    ShopID = <<"testShopID">>,
     Query = [
         {limit, 2},
         {offset, 2},
         {from_time, {{2015, 08, 11}, {19, 42, 35}}},
         {to_time, {{2020, 08, 11}, {19, 42, 35}}},
-        {shopID, <<"testShopID">>},
+        {shopID, ShopID},
         {invoiceID, <<"testInvoiceID">>},
         {paymentID, <<"testPaymentID">>},
         {refundID, <<"testRefundID">>},
@@ -1738,7 +1865,7 @@ search_refunds_ok_test(Config) ->
         {refundStatus, <<"succeeded">>}
     ],
 
-    {ok, _, _} = capi_client_searches:search_refunds(?config(context, Config), ?STRING, Query).
+    {ok, _, _} = capi_client_searches:search_refunds(?config(context, Config), ShopID, Query).
 
 -spec search_payouts_ok_test(config()) -> _.
 search_payouts_ok_test(Config) ->
@@ -1746,15 +1873,12 @@ search_payouts_ok_test(Config) ->
         [{merchant_stat, fun('GetPayouts', _) -> {ok, ?STAT_RESPONSE_PAYOUTS} end}],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_search_op_ctx(
-        <<"SearchPayout">>,
+    ShopID = <<"testShopID">>,
+    _ = capi_ct_helper_bouncer:mock_assert_search_payout_op_ctx(
+        <<"SearchPayouts">>,
         ?STRING,
-        <<"testShopID">>,
-        <<"testInvoiceID">>,
-        <<"testPaymentID">>,
-        undefined,
+        ShopID,
         <<"testPayoutID">>,
-        <<"testRefundID">>,
         Config
     ),
     Query = [
@@ -1762,12 +1886,11 @@ search_payouts_ok_test(Config) ->
         {offset, 2},
         {from_time, {{2015, 08, 11}, {19, 42, 35}}},
         {to_time, {{2020, 08, 11}, {19, 42, 35}}},
-        {shopID, <<"testShopID">>},
         {payoutID, <<"testPayoutID">>},
         {payoutToolType, <<"Wallet">>}
     ],
 
-    {ok, _, _} = capi_client_searches:search_payouts(?config(context, Config), ?STRING, Query).
+    {ok, _, _} = capi_client_searches:search_payouts(?config(context, Config), ShopID, Query).
 
 -spec get_payment_conversion_stats_ok_test(_) -> _.
 get_payment_conversion_stats_ok_test(Config) ->
@@ -1947,17 +2070,17 @@ download_report_file_not_found_test(Config) ->
 
 -spec get_categories_ok_test(config()) -> _.
 get_categories_ok_test(Config) ->
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_op_ctx(<<"GetCategories">>, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_op_ctx(<<"GetCategories">>, Config),
     {ok, _} = capi_client_categories:get_categories(?config(context, Config)).
 
 -spec get_category_by_ref_ok_test(config()) -> _.
 get_category_by_ref_ok_test(Config) ->
-    _ = capi_ct_helper_bouncer:mock_bouncer_assert_op_ctx(<<"GetCategoryByRef">>, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_op_ctx(<<"GetCategoryByRef">>, Config),
     {ok, _} = capi_client_categories:get_category_by_ref(?config(context, Config), ?INTEGER).
 
 -spec get_schedule_by_ref_ok_test(config()) -> _.
 get_schedule_by_ref_ok_test(Config) ->
-    _ = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), Config),
+    _ = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), Config),
     {ok, _} = capi_client_payouts:get_schedule_by_ref(?config(context, Config), ?INTEGER).
 
 -spec check_no_payment_by_external_id_test(config()) -> _.
@@ -1966,8 +2089,8 @@ check_no_payment_by_external_id_test(Config) ->
     BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{<<"invoice_id">> => <<"123">>}}),
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('GetPayment', _) ->
-                {throwing, #payproc_InvoicePaymentNotFound{}}
+            {invoicing, fun('Get', _) ->
+                {ok, ?PAYPROC_INVOICE}
             end},
             {bender, fun('GetInternalID', _) ->
                 InternalKey = capi_utils:get_unique_id(),
@@ -1997,26 +2120,7 @@ check_no_invoice_by_external_id_test(Config) ->
         Config
     ),
 
-    {error,
-        {404, #{
-            <<"message">> := <<"Invoice not found">>
-        }}} =
-        capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
-
--spec check_no_internal_id_for_external_id_test(config()) -> _.
-check_no_internal_id_for_external_id_test(Config) ->
-    ExternalID = capi_utils:get_unique_id(),
-    _ = capi_ct_helper:mock_services(
-        [
-            {bender, fun('GetInternalID', _) -> {throwing, capi_ct_helper_bender:no_internal_id()} end}
-        ],
-        Config
-    ),
-
-    {error,
-        {404, #{
-            <<"message">> := <<"Payment not found">>
-        }}} =
+    {error, {invalid_response_code, 500}} =
         capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
 
 -spec retrieve_payment_by_external_id_test(config()) -> _.
@@ -2026,10 +2130,11 @@ retrieve_payment_by_external_id_test(Config) ->
     BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{<<"invoice_id">> => <<"123">>}}),
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT(PaymentID, ExternalID)} end},
+            {invoicing, fun('Get', _) ->
+                {ok, ?PAYPROC_INVOICE([?PAYPROC_PAYMENT(PaymentID, ExternalID)])}
+            end},
             {bender, fun('GetInternalID', _) ->
-                InternalKey = capi_utils:get_unique_id(),
-                {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)}
+                {ok, capi_ct_helper_bender:get_internal_id_result(PaymentID, BenderContext)}
             end}
         ],
         Config
@@ -2041,6 +2146,7 @@ retrieve_payment_by_external_id_test(Config) ->
 
 -spec get_payment_institutions(config()) -> _.
 get_payment_institutions(Config) ->
+    _ = capi_ct_helper_bouncer:mock_assert_op_ctx(<<"GetPaymentInstitutions">>, Config),
     {ok, [_Something]} = capi_client_payment_institutions:get_payment_institutions(?config(context, Config)),
     {ok, []} =
         capi_client_payment_institutions:get_payment_institutions(?config(context, Config), <<"RUS">>, <<"live">>),
@@ -2049,6 +2155,7 @@ get_payment_institutions(Config) ->
 
 -spec get_payment_institution_by_ref(config()) -> _.
 get_payment_institution_by_ref(Config) ->
+    _ = capi_ct_helper_bouncer:mock_assert_op_ctx(<<"GetPaymentInstitutionByRef">>, Config),
     {ok, _} = capi_client_payment_institutions:get_payment_institution_by_ref(?config(context, Config), ?INTEGER).
 
 -spec get_payment_institution_payment_terms(config()) -> _.
@@ -2059,6 +2166,7 @@ get_payment_institution_payment_terms(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_assert_op_ctx(<<"GetPaymentInstitutionPaymentTerms">>, Config),
     {ok, _} =
         capi_client_payment_institutions:get_payment_institution_payment_terms(?config(context, Config), ?INTEGER).
 
@@ -2070,11 +2178,23 @@ get_payment_institution_payout_terms(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_assert_op_ctx(<<"GetPaymentInstitutionPayoutMethods">>, Config),
     {ok, _} = capi_client_payment_institutions:get_payment_institution_payout_methods(
         ?config(context, Config),
         ?INTEGER,
         <<"RUB">>
+    ).
+
+-spec get_payment_institution_payout_schedules(config()) -> _.
+get_payment_institution_payout_schedules(Config) ->
+    _ = capi_ct_helper:mock_services(
+        [
+            {party_management, fun('ComputePaymentInstitutionTerms', _) -> {ok, ?TERM_SET} end}
+        ],
+        Config
     ),
+    _ = capi_ct_helper_bouncer:mock_assert_op_ctx(<<"GetPaymentInstitutionPayoutSchedules">>, Config),
+
     {ok, _} = capi_client_payment_institutions:get_payment_institution_payout_schedules(
         ?config(context, Config),
         ?INTEGER,

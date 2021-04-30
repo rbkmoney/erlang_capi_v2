@@ -2,9 +2,8 @@
 
 -include_lib("common_test/include/ct.hrl").
 
--include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
+-include_lib("damsel/include/dmsl_domain_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
--include_lib("jose/include/jose_jwk.hrl").
 
 -export([all/0]).
 -export([groups/0]).
@@ -86,7 +85,7 @@ init_per_group(deadline_header, Config) ->
     Context = capi_ct_helper:get_context(Token),
     Config2 = [{context_with_relative_deadline, get_context(Token2, <<"3s">>)} | Config],
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+    Apps1 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     [{context_with_absolute_deadline, Context}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config2];
 init_per_group(_, Config) ->
     Config.

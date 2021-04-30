@@ -1,13 +1,10 @@
 -module(capi_self_tests_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
--include_lib("stdlib/include/assert.hrl").
 
--include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("damsel/include/dmsl_merch_stat_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
--include_lib("jose/include/jose_jwk.hrl").
 
 -export([all/0]).
 -export([groups/0]).
@@ -90,7 +87,7 @@ init_per_group(GroupName, Config) when stream_handler_tests =:= GroupName; valid
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
     Context = capi_ct_helper:get_context(Token),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_bouncer:mock_bouncer_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+    Apps1 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     [{context, Context}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config];
 init_per_group(_, Config) ->
     Config.

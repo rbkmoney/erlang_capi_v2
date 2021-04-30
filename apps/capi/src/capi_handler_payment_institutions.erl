@@ -15,84 +15,96 @@
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
-prepare(OperationID, Req, Context) when
-    OperationID =:= 'GetPaymentInstitutions' orelse
-        OperationID =:= 'GetPaymentInstitutionByRef' orelse
-        OperationID =:= 'GetPaymentInstitutionPaymentTerms' orelse
-        OperationID =:= 'GetPaymentInstitutionPayoutMethods' orelse
-        OperationID =:= 'GetPaymentInstitutionPayoutSchedules'
-->
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
-    Process = fun() -> process_request(OperationID, Context, Req) end,
+prepare(OperationID = 'GetPaymentInstitutions', Req, #{woody_context := WoodyContext} = Context) ->
+    Authorize = mk_authorize_operation(OperationID, Context, Req),
+    Process = fun() ->
+        try
+            Residence = capi_handler_encoder:encode_residence(genlib_map:get(residence, Req)),
+            Realm = genlib_map:get(realm, Req),
+            {ok, PaymentInstObjects} = capi_domain:get_payment_institutions(WoodyContext),
+            Resp =
+                lists:filtermap(
+                    fun(P) ->
+                        case check_payment_institution(Realm, Residence, P) of
+                            true ->
+                                {true, decode_payment_institution_obj(P)};
+                            false ->
+                                false
+                        end
+                    end,
+                    PaymentInstObjects
+                ),
+            {ok, {200, #{}, Resp}}
+        catch
+            throw:{encode_residence, invalid_residence} ->
+                {ok, logic_error(invalidRequest, <<"Invalid residence">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'GetPaymentInstitutionByRef', Req, Context) ->
+    Authorize = mk_authorize_operation(OperationID, Context, Req),
+    Process = fun() ->
+        PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
+        case capi_domain:get({payment_institution, ?payment_institution_ref(PaymentInstitutionID)}, Context) of
+            {ok, PaymentInstitution} ->
+                {ok, {200, #{}, decode_payment_institution_obj(PaymentInstitution)}};
+            {error, not_found} ->
+                {ok, general_error(404, <<"Payment institution not found">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'GetPaymentInstitutionPaymentTerms', Req, Context) ->
+    Authorize = mk_authorize_operation(OperationID, Context, Req),
+    Process = fun() ->
+        PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
+        case compute_payment_institution_terms(PaymentInstitutionID, #payproc_Varset{}, Context) of
+            {ok, #domain_TermSet{payments = PaymentTerms}} ->
+                {ok, {200, #{}, decode_payment_terms(PaymentTerms)}};
+            {exception, #payproc_PaymentInstitutionNotFound{}} ->
+                {ok, general_error(404, <<"Payment institution not found">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'GetPaymentInstitutionPayoutMethods', Req, Context) ->
+    Authorize = mk_authorize_operation(OperationID, Context, Req),
+    Process = fun() ->
+        PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
+        case compute_payment_institution_terms(PaymentInstitutionID, prepare_request_varset(Req, Context), Context) of
+            {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{payout_methods = PayoutMethods}}} ->
+                {ok, {200, #{}, decode_payout_methods_selector(PayoutMethods)}};
+            {ok, #domain_TermSet{payouts = undefined}} ->
+                {ok, general_error(404, <<"Automatic payouts not allowed">>)};
+            {exception, #payproc_PaymentInstitutionNotFound{}} ->
+                {ok, general_error(404, <<"Payment institution not found">>)}
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'GetPaymentInstitutionPayoutSchedules', Req, Context) ->
+    Authorize = mk_authorize_operation(OperationID, Context, Req),
+    Process = fun() ->
+        PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
+        case compute_payment_institution_terms(PaymentInstitutionID, prepare_request_varset(Req, Context), Context) of
+            {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{payout_schedules = Schedules}}} ->
+                {ok, {200, #{}, decode_business_schedules_selector(Schedules)}};
+            {ok, #domain_TermSet{payouts = undefined}} ->
+                {ok, general_error(404, <<"Automatic payouts not allowed">>)};
+            {exception, #payproc_PaymentInstitutionNotFound{}} ->
+                {ok, general_error(404, <<"Payment institution not found">>)}
+        end
+    end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
--spec process_request(
-    OperationID :: capi_handler:operation_id(),
-    Context :: capi_handler:processing_context(),
-    ReqState :: capi_handler:request_state()
-) -> {ok, capi_handler:response()}.
-process_request('GetPaymentInstitutions', #{woody_context := WoodyContext}, Req) ->
-    try
-        Residence = capi_handler_encoder:encode_residence(genlib_map:get(residence, Req)),
-        Realm = genlib_map:get(realm, Req),
-        {ok, PaymentInstObjects} = capi_domain:get_payment_institutions(WoodyContext),
-        Resp =
-            lists:filtermap(
-                fun(P) ->
-                    case check_payment_institution(Realm, Residence, P) of
-                        true ->
-                            {true, decode_payment_institution_obj(P)};
-                        false ->
-                            false
-                    end
-                end,
-                PaymentInstObjects
-            ),
-        {ok, {200, #{}, Resp}}
-    catch
-        throw:{encode_residence, invalid_residence} ->
-            {ok, logic_error(invalidRequest, <<"Invalid residence">>)}
-    end;
-process_request('GetPaymentInstitutionByRef', #{woody_context := WoodyContext}, Req) ->
-    PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
-    case capi_domain:get({payment_institution, ?payment_institution_ref(PaymentInstitutionID)}, WoodyContext) of
-        {ok, PaymentInstitution} ->
-            {ok, {200, #{}, decode_payment_institution_obj(PaymentInstitution)}};
-        {error, not_found} ->
-            {ok, general_error(404, <<"Payment institution not found">>)}
-    end;
-process_request('GetPaymentInstitutionPaymentTerms', Context, Req) ->
-    PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
-    case compute_payment_institution_terms(PaymentInstitutionID, #payproc_Varset{}, Context) of
-        {ok, #domain_TermSet{payments = PaymentTerms}} ->
-            {ok, {200, #{}, decode_payment_terms(PaymentTerms)}};
-        {exception, #payproc_PaymentInstitutionNotFound{}} ->
-            {ok, general_error(404, <<"Payment institution not found">>)}
-    end;
-process_request('GetPaymentInstitutionPayoutMethods', Context, Req) ->
-    PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
-    case compute_payment_institution_terms(PaymentInstitutionID, prepare_request_varset(Req, Context), Context) of
-        {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{payout_methods = PayoutMethods}}} ->
-            {ok, {200, #{}, decode_payout_methods_selector(PayoutMethods)}};
-        {ok, #domain_TermSet{payouts = undefined}} ->
-            {ok, general_error(404, <<"Automatic payouts not allowed">>)};
-        {exception, #payproc_PaymentInstitutionNotFound{}} ->
-            {ok, general_error(404, <<"Payment institution not found">>)}
-    end;
-process_request('GetPaymentInstitutionPayoutSchedules', Context, Req) ->
-    PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
-    case compute_payment_institution_terms(PaymentInstitutionID, prepare_request_varset(Req, Context), Context) of
-        {ok, #domain_TermSet{payouts = #domain_PayoutsServiceTerms{payout_schedules = Schedules}}} ->
-            {ok, {200, #{}, decode_business_schedules_selector(Schedules)}};
-        {ok, #domain_TermSet{payouts = undefined}} ->
-            {ok, general_error(404, <<"Automatic payouts not allowed">>)};
-        {exception, #payproc_PaymentInstitutionNotFound{}} ->
-            {ok, general_error(404, <<"Payment institution not found">>)}
-    end.
-
 %%
+
+mk_authorize_operation(OperationID, Context, Req) ->
+    fun() ->
+        Prototypes = [
+            {operation, #{id => OperationID}}
+        ],
+        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+    end.
 
 check_payment_institution(Realm, Residence, PaymentInstitution) ->
     check_payment_institution_realm(Realm, PaymentInstitution) andalso

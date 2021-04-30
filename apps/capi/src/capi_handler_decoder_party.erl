@@ -233,34 +233,6 @@ decode_bank_card(#domain_BankCard{
         % <<"tokenization_method">> => TokenizationMethod
     }).
 
-% =======
-%     'token'               = Token,
-%     'payment_system'      = PaymentSystem,
-%     'bin'                 = Bin,
-%     'last_digits'         = LastDigits,
-%     'token_provider'      = TokenProvider,
-%     'issuer_country'      = IssuerCountry,
-%     'bank_name'           = BankName,
-%     'metadata'            = Metadata,
-%     'is_cvv_empty'        = IsCVVEmpty
-%     % 'tokenization_method' = TokenizationMethod
-% }) ->
-%     capi_utils:map_to_base64url(genlib_map:compact(#{
-%         <<"type"          >>      => <<"bank_card">>,
-%         <<"token"         >>      => Token,
-%         <<"payment_system">>      => PaymentSystem,
-%         <<"bin"           >>      => Bin,
-%         <<"masked_pan"    >>      => LastDigits,
-%         <<"token_provider">>      => TokenProvider,
-%         <<"issuer_country">>      => IssuerCountry,
-%         <<"bank_name"     >>      => BankName,
-%         <<"metadata"      >>      => decode_bank_card_metadata(Metadata),
-%         <<"is_cvv_empty"  >>      => decode_bank_card_cvv_flag(IsCVVEmpty)
-%         % TODO: Uncomment or delete this when we negotiate deploying non-breaking changes
-%         % <<"tokenization_method">> => TokenizationMethod
-%     })).
-% >>>>>>> master
-
 decode_bank_card_cvv_flag(undefined) ->
     undefined;
 decode_bank_card_cvv_flag(CVVFlag) when is_atom(CVVFlag) ->
