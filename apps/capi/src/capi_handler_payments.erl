@@ -506,8 +506,8 @@ create_payment(Invoice, PaymentParams, Context, BenderPrefix) ->
     PaymentID = capi_bender:try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyCtx, CtxData),
     start_payment(PaymentID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context).
 
-start_payment(ID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context) ->
-    InvoicePaymentParams = encode_invoice_payment_params(ID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift),
+start_payment(ID, InvoiceID, ExternalID, PaymentParams, PaymentToolThrift, Context) ->
+    InvoicePaymentParams = encode_invoice_payment_params(ID, ExternalID, PaymentParams, PaymentToolThrift),
     Call = {invoicing, 'StartPayment', {InvoiceID, InvoicePaymentParams}},
     capi_handler_utils:service_call_with([user_info], Call, Context).
 
@@ -599,7 +599,8 @@ encode_invoice_payment_params(ID, ExternalID, PaymentParams, PaymentToolThrift) 
     #payproc_InvoicePaymentParams{
         id = ID,
         external_id = ExternalID,
-        payer = encode_payer_params({Payer, PaymentToolThrift}),
+        payer = encode_payer_params(Payer, PaymentToolThrift),
+        payer_session_info = encode_payer_session_info(Payer),
         flow = encode_flow(Flow),
         make_recurrent = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false),
         context = capi_handler_encoder:encode_payment_context(PaymentParams),
@@ -609,20 +610,20 @@ encode_invoice_payment_params(ID, ExternalID, PaymentParams, PaymentToolThrift) 
     }.
 
 encode_payer_params(
-    {#{
-            <<"payerType">> := <<"CustomerPayer">>,
-            <<"customerID">> := ID
-        },
-        _}
+    #{
+        <<"payerType">> := <<"CustomerPayer">>,
+        <<"customerID">> := ID
+    },
+    _
 ) ->
     {customer, #payproc_CustomerPayerParams{customer_id = ID}};
 encode_payer_params(
-    {#{
-            <<"payerType">> := <<"PaymentResourcePayer">>,
-            <<"paymentSession">> := EncodedSession,
-            <<"contactInfo">> := ContactInfo
-        },
-        PaymentToolThrift}
+    #{
+        <<"payerType">> := <<"PaymentResourcePayer">>,
+        <<"paymentSession">> := EncodedSession,
+        <<"contactInfo">> := ContactInfo
+    },
+    PaymentToolThrift
 ) ->
     {ClientInfo, PaymentSession} = capi_handler_utils:unwrap_payment_session(EncodedSession),
     {payment_resource, #payproc_PaymentResourcePayerParams{
@@ -634,12 +635,12 @@ encode_payer_params(
         contact_info = capi_handler_encoder:encode_contact_info(ContactInfo)
     }};
 encode_payer_params(
-    {#{
-            <<"payerType">> := <<"RecurrentPayer">>,
-            <<"recurrentParentPayment">> := RecurrentParent,
-            <<"contactInfo">> := ContactInfo
-        },
-        _}
+    #{
+        <<"payerType">> := <<"RecurrentPayer">>,
+        <<"recurrentParentPayment">> := RecurrentParent,
+        <<"contactInfo">> := ContactInfo
+    },
+    _
 ) ->
     #{
         <<"invoiceID">> := InvoiceID,
@@ -652,6 +653,13 @@ encode_payer_params(
         },
         contact_info = capi_handler_encoder:encode_contact_info(ContactInfo)
     }}.
+
+encode_payer_session_info(#{<<"sessionInfo">> := SessionInfo}) ->
+    #domain_PayerSessionInfo{
+        redirect_url = maps:get(<<"redirectUrl">>, SessionInfo, undefined)
+    };
+encode_payer_session_info(#{}) ->
+    undefined.
 
 encode_flow(#{<<"type">> := <<"PaymentFlowInstant">>}) ->
     {instant, #payproc_InvoicePaymentParamsFlowInstant{}};

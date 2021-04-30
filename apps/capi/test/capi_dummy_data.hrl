@@ -9,6 +9,7 @@
 -define(INTEGER, 10000).
 -define(INTEGER_BINARY, <<"10000">>).
 -define(TIMESTAMP, <<"2016-03-22T06:12:27Z">>).
+-define(URL, <<"https://url.io/1337">>).
 -define(MD5, <<"033BD94B1168D7E4F0D644C3C95E35BF">>).
 -define(SHA256, <<"94EE059335E587E501CC4BF90613E0814F00A7B08BC7C648FD865A2AF6A22CC2">>).
 -define(TEST_USER_REALM, <<"external">>).
@@ -213,12 +214,17 @@
 
 -define(PAYER, {payment_resource, ?PAYMENT_RESOURCE_PAYER}).
 
+-define(PAYER_SESSION_INFO, #domain_PayerSessionInfo{
+    redirect_url = ?URL
+}).
+
 -define(PAYMENT(ID, IED, Status), #domain_InvoicePayment{
     id = ID,
     created_at = ?TIMESTAMP,
     domain_revision = ?INTEGER,
     status = Status,
     payer = ?PAYER,
+    payer_session_info = ?PAYER_SESSION_INFO,
     cost = ?CASH,
     flow = {instant, #domain_InvoicePaymentFlowInstant{}},
     context = ?CONTENT,
@@ -1351,6 +1357,9 @@
         <<"payerType">> => <<"PaymentResourcePayer">>,
         <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
         <<"paymentToolToken">> => Token,
+        <<"sessionInfo">> => #{
+            <<"redirectUrl">> => ?URL
+        },
         <<"contactInfo">> => #{
             <<"email">> => <<"bla@bla.ru">>
         }

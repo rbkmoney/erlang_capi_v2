@@ -143,7 +143,10 @@ decode_payment(InvoiceID, Payment, Context) ->
             <<"flow">> => decode_flow(Payment#domain_InvoicePayment.flow),
             <<"amount">> => Amount,
             <<"currency">> => capi_handler_decoder_utils:decode_currency(Currency),
-            <<"payer">> => decode_payer(Payment#domain_InvoicePayment.payer),
+            <<"payer">> => maps:merge(
+                decode_payer(Payment#domain_InvoicePayment.payer),
+                decode_payer_session_info(Payment#domain_InvoicePayment.payer_session_info)
+            ),
             <<"makeRecurrent">> => decode_make_recurrent(Payment#domain_InvoicePayment.make_recurrent),
             <<"metadata">> => capi_handler_decoder_utils:decode_context(Payment#domain_InvoicePayment.context)
         },
@@ -214,6 +217,17 @@ decode_payer(
         },
         capi_handler_decoder_party:decode_disposable_payment_resource(Resource)
     ).
+
+decode_payer_session_info(#domain_PayerSessionInfo{
+    redirect_url = RedirectURL
+}) ->
+    #{
+        <<"sessionInfo">> => genlib_map:compact(#{
+            <<"redirectUrl">> => RedirectURL
+        })
+    };
+decode_payer_session_info(undefined) ->
+    #{}.
 
 -spec decode_payment_status({atom(), _}, processing_context()) -> capi_handler_decoder_utils:decode_data().
 decode_payment_status({Status, StatusInfo}, Context) ->
