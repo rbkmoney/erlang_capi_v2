@@ -376,7 +376,6 @@ get_invoice_by_external_id(Config) ->
         [
             {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE_WITH_ID(InvoiceID, ExternalID)} end},
             {bender, fun('GetInternalID', _) ->
-                % InternalKey = capi_utils:get_unique_id(),
                 {ok, capi_ct_helper_bender:get_internal_id_result(InvoiceID, BenderContext)}
             end}
         ],
@@ -1619,13 +1618,17 @@ get_payout_fail(Config) ->
     PartyID = <<"Wrong party id">>,
     Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, PartyID, [?PAYOUT_PROC_PAYOUT_SUMMARY_ITEM]),
     _ = capi_ct_helper:mock_services([{payouts, fun('Get', _) -> {ok, Payout} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_assert_payout_op_ctx(
-        <<"GetPayout">>,
-        ?STRING,
-        ?STRING,
+    _ = capi_ct_helper_bouncer:mock_arbiter(
+        ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_PAYOUT_OP(<<"GetPayout">>, ?STRING, ?STRING)),
+                payouts = #bctx_v1_ContextPayouts{
+                    payout = undefined
+                }
+            }
+        ),
         Config
     ),
-
     {error, {404, _}} = capi_client_payouts:get_payout(?config(context, Config), ?STRING).
 
 -spec create_webhook_ok_test(config()) -> _.

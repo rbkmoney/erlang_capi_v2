@@ -193,8 +193,8 @@
         ?assertMatch(Expect, Context),
         {ok, ?JUDGEMENT(?ALLOWED)}
     catch
-        error:AssertMatchError ->
-            logger:error("~p", [AssertMatchError]),
+        error:AssertMatchError:Stacktrace ->
+            logger:error("~p~n~p", [AssertMatchError, Stacktrace]),
             {throwing, #bdcs_InvalidContext{}}
     end
 end).

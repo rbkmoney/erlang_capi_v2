@@ -17,7 +17,6 @@
 -export([mock_assert_customer_op_ctx/5]).
 -export([mock_assert_claim_op_ctx/4]).
 -export([mock_assert_webhook_op_ctx/4]).
--export([mock_assert_payout_op_ctx/4]).
 -export([mock_assert_payout_op_ctx/6]).
 -export([mock_assert_search_invoice_op_ctx/7]).
 -export([mock_assert_search_payment_op_ctx/6]).
@@ -178,20 +177,6 @@ mock_assert_webhook_op_ctx(Op, WebhookID, PartyID, Config) ->
                 capi = ?CTX_CAPI(?CTX_WEBHOOK_OP(Op, WebhookID)),
                 webhooks = #bctx_v1_ContextWebhooks{
                     webhook = ?CTX_WEBHOOK(WebhookID, PartyID)
-                }
-            }
-        ),
-        Config
-    ).
-
--spec mock_assert_payout_op_ctx(_, _, _, _) -> _.
-mock_assert_payout_op_ctx(Op, PayoutID, PartyID, Config) ->
-    mock_arbiter(
-        ?assertContextMatches(
-            #bctx_v1_ContextFragment{
-                capi = ?CTX_CAPI(?CTX_PAYOUT_OP(Op, PayoutID, PartyID)),
-                payouts = #bctx_v1_ContextPayouts{
-                    payout = undefined
                 }
             }
         ),
