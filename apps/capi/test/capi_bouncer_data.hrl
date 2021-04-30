@@ -194,7 +194,7 @@
         {ok, ?JUDGEMENT(?ALLOWED)}
     catch
         error:AssertMatchError:Stacktrace ->
-            logger:error("~p~n~p", [AssertMatchError, Stacktrace]),
+            logger:error("failed ~p at ~p", [AssertMatchError, Stacktrace]),
             {throwing, #bdcs_InvalidContext{}}
     end
 end).
