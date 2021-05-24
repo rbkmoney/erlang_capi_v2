@@ -68,13 +68,7 @@ prepare('CreateInvoice' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('CreateInvoiceAccessToken' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    ResultInvoice =
-        case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
-            {ok, Result} ->
-                Result;
-            {exception, _Exception} ->
-                undefined
-        end,
+    ResultInvoice = maybe_result(capi_handler_utils:get_invoice_by_id(InvoiceID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID}},
@@ -98,13 +92,7 @@ prepare('CreateInvoiceAccessToken' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('GetInvoiceByID' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    ResultInvoice =
-        case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
-            {ok, Result} ->
-                Result;
-            {exception, _Exception} ->
-                undefined
-        end,
+    ResultInvoice = maybe_result(capi_handler_utils:get_invoice_by_id(InvoiceID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID}},
@@ -256,21 +244,25 @@ prepare('GetInvoiceEvents' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('GetInvoicePaymentMethods' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
+    ResultInvoice = maybe_result(capi_handler_utils:get_invoice_by_id(InvoiceID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID}},
-            {payproc, #{invoice => InvoiceID}}
+            {payproc, #{invoice => ResultInvoice}}
         ],
         Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
         {ok, Resolution}
     end,
     Process = fun() ->
+        capi_handler:respond_if_undefined(ResultInvoice, general_error(404, <<"Invoice not found">>)),
         Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
         Revision = Party#domain_Party.revision,
         Args = {InvoiceID, {revision, Revision}},
         case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, Args, Context) of
             {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
-                PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
+                PaymentMethods1 = capi_utils:deduplicate_payment_methods(PaymentMethods0),
+                TokenProviderData = prepare_token_provider_data(ResultInvoice, Context),
+                PaymentMethods = mixin_token_provider_data(PaymentMethods1, TokenProviderData),
                 {ok, {200, #{}, PaymentMethods}};
             {exception, Exception} ->
                 case Exception of
@@ -467,3 +459,37 @@ get_invoice_by_external_id(ExternalID, #{woody_context := WoodyContext} = Contex
         Error ->
             Error
     end.
+
+maybe_result({ok, Value}) ->
+    Value;
+maybe_result(_) ->
+    undefined.
+
+prepare_token_provider_data(Invoice, Context) ->
+    %#payproc_Invoice{invoice = #domain_Invoice{id = InvoiceID}} = Invoice,
+    #payproc_Invoice{invoice = #domain_Invoice{shop_id = ShopID}} = Invoice,
+    Shop = maybe_result(capi_handler_utils:get_shop_by_id(ShopID, Context)),
+    #domain_Shop{details = #domain_ShopDetails{name = ShopName}} = Shop,
+    #domain_Shop{contract_id = ContractID} = Shop,
+    Contract = maybe_result(capi_handler_utils:get_contract_by_id(ContractID, Context)),
+    #domain_Contract{payment_institution = PiRef} = Contract,
+    Pi = maybe_result(capi_domain:get_payment_institution_by_ref(PiRef, Context)),
+    #domain_PaymentInstitution{realm = Realm} = Pi,
+    RealmMode = genlib:to_binary(Realm),
+    MerchantID = capi_handler_utils:wrap_merchant_id(RealmMode, ShopID),
+    #{
+        <<"merchantID">> => MerchantID,
+        <<"merchantName">> => ShopName,
+        <<"realm">> => RealmMode
+    }.
+
+mixin_token_provider_data(PaymentMethods, TokenProviderData) ->
+    lists:map(
+        fun
+            (#{<<"method">> := <<"BankCard">>} = PaymentMethod) ->
+                PaymentMethod#{<<"tokenProviderData">> => TokenProviderData};
+            (PaymentMethod) ->
+                PaymentMethod
+        end,
+        PaymentMethods
+    ).

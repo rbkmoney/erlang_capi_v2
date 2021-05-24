@@ -1,6 +1,7 @@
 -module(capi_handler_utils).
 
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
+-include_lib("damsel/include/dmsl_domain_thrift.hrl").
 
 -export([general_error/2]).
 -export([logic_error/2]).
@@ -30,11 +31,16 @@
 
 -export([unwrap_payment_session/1]).
 -export([wrap_payment_session/2]).
+-export([unwrap_merchant_id/1]).
+-export([wrap_merchant_id/2]).
+
 -export([get_invoice_by_id/2]).
 -export([get_payment_by_id/3]).
 -export([get_refund_by_id/4]).
 -export([get_contract_by_id/2]).
 -export([get_contract_by_id/3]).
+-export([get_shop_by_id/2]).
+-export([get_shop_by_id/3]).
 
 -export([create_dsl/3]).
 
@@ -92,9 +98,9 @@ service_call_with(Flags, Call, Context) ->
     service_call_with_(lists:reverse(Flags), Call, Context).
 
 service_call_with_([user_info | T], {ServiceName, Function, Args}, Context) ->
-    service_call_with_(T, {ServiceName, Function, append_to_tuple(get_user_info(Context), Args)}, Context);
+    service_call_with_(T, {ServiceName, Function, prepend_tuple(get_user_info(Context), Args)}, Context);
 service_call_with_([party_id | T], {ServiceName, Function, Args}, Context) ->
-    service_call_with_(T, {ServiceName, Function, append_to_tuple(get_party_id(Context), Args)}, Context);
+    service_call_with_(T, {ServiceName, Function, prepend_tuple(get_party_id(Context), Args)}, Context);
 service_call_with_([], Call, Context) ->
     service_call(Call, Context).
 
@@ -139,9 +145,9 @@ get_party(PartyID, Context) ->
 
 %% Utils
 
--spec append_to_tuple(any(), tuple()) -> tuple().
-append_to_tuple(Item, Tuple) ->
-    list_to_tuple([Item | tuple_to_list(Tuple)]).
+-spec prepend_tuple(any(), tuple()) -> tuple().
+prepend_tuple(Item, Tuple) ->
+    erlang:insert_element(1, Tuple, Item).
 
 -spec issue_access_token(binary(), tuple()) -> map().
 issue_access_token(PartyID, TokenSpec) ->
@@ -260,6 +266,19 @@ wrap_payment_session(ClientInfo, PaymentSession) ->
         <<"paymentSession">> => PaymentSession
     }).
 
+-spec unwrap_merchant_id(binary()) -> {binary(), binary()}.
+unwrap_merchant_id(Encoded) ->
+    case binary:split(Encoded, <<$:>>) of
+        [RealmMode, Binary] ->
+            {RealmMode, Binary};
+        _ ->
+            erlang:throw(invalid_merchant_id)
+    end.
+
+-spec wrap_merchant_id(binary(), binary()) -> binary().
+wrap_merchant_id(RealmMode, Binary) ->
+    <<RealmMode/binary, $:, Binary/binary>>.
+
 -spec get_invoice_by_id(binary(), processing_context()) -> woody:result().
 get_invoice_by_id(InvoiceID, Context) ->
     EventRange = #payproc_EventRange{},
@@ -282,6 +301,16 @@ get_contract_by_id(ContractID, Context) ->
 -spec get_contract_by_id(binary(), binary(), processing_context()) -> woody:result().
 get_contract_by_id(PartyID, ContractID, Context) ->
     Call = {party_management, 'GetContract', {PartyID, ContractID}},
+    service_call_with([user_info], Call, Context).
+
+-spec get_shop_by_id(binary(), processing_context()) -> woody:result().
+get_shop_by_id(ShopID, Context) ->
+    Call = {party_management, 'GetShop', {ShopID}},
+    service_call_with([user_info, party_id], Call, Context).
+
+-spec get_shop_by_id(binary(), binary(), processing_context()) -> woody:result().
+get_shop_by_id(PartyID, ShopID, Context) ->
+    Call = {party_management, 'GetShop', {PartyID, ShopID}},
     service_call_with([user_info], Call, Context).
 
 -spec create_dsl(atom(), map(), map()) -> map().

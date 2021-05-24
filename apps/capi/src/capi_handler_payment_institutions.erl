@@ -45,7 +45,8 @@ prepare(OperationID = 'GetPaymentInstitutionByRef', Req, Context) ->
     Authorize = mk_authorize_operation(OperationID, Context, Req),
     Process = fun() ->
         PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
-        case capi_domain:get({payment_institution, ?payment_institution_ref(PaymentInstitutionID)}, Context) of
+        PaymentInstitutionRef = ?payment_institution_ref(PaymentInstitutionID),
+        case capi_domain:get_payment_institution_by_ref(PaymentInstitutionRef, Context) of
             {ok, PaymentInstitution} ->
                 {ok, {200, #{}, decode_payment_institution_obj(PaymentInstitution)}};
             {error, not_found} ->
