@@ -11,12 +11,8 @@
 -export([assert_party_accessible/2]).
 -export([run_if_party_accessible/3]).
 
--export([service_call_with/3]).
--export([service_call/2]).
-
--export([get_party/1]).
--export([get_party/2]).
 -export([get_auth_context/1]).
+-export([get_user_info/1]).
 -export([get_user_id/1]).
 -export([get_party_id/1]).
 -export([get_extra_properties/1]).
@@ -32,15 +28,7 @@
 -export([unwrap_payment_session/1]).
 -export([wrap_payment_session/2]).
 -export([unwrap_merchant_id/1]).
--export([wrap_merchant_id/2]).
-
--export([get_invoice_by_id/2]).
--export([get_payment_by_id/3]).
--export([get_refund_by_id/4]).
--export([get_contract_by_id/2]).
--export([get_contract_by_id/3]).
--export([get_shop_by_id/2]).
--export([get_shop_by_id/3]).
+-export([wrap_merchant_id/3]).
 
 -export([create_dsl/3]).
 
@@ -89,29 +77,11 @@ format_request_errors(Errors) -> genlib_string:join(<<"\n">>, Errors).
 
 %%%
 
-% Нужно быть аккуратным с флагами их порядок влияет на порядок аргументов при вызове функций!
-% обычно параметры идут в порядке [user_info, party_id],
-% но это зависит от damsel протокола
--spec service_call_with(list(atom()), {atom(), atom(), tuple()}, processing_context()) -> woody:result().
-service_call_with(Flags, Call, Context) ->
-    % реверс тут чтобы в флагах писать порядок аналогично вызову функций
-    service_call_with_(lists:reverse(Flags), Call, Context).
-
-service_call_with_([user_info | T], {ServiceName, Function, Args}, Context) ->
-    service_call_with_(T, {ServiceName, Function, prepend_tuple(get_user_info(Context), Args)}, Context);
-service_call_with_([party_id | T], {ServiceName, Function, Args}, Context) ->
-    service_call_with_(T, {ServiceName, Function, prepend_tuple(get_party_id(Context), Args)}, Context);
-service_call_with_([], Call, Context) ->
-    service_call(Call, Context).
-
--spec service_call({atom(), atom(), tuple()}, processing_context()) -> woody:result().
-service_call({ServiceName, Function, Args}, #{woody_context := WoodyContext}) ->
-    capi_woody_client:call_service(ServiceName, Function, Args, WoodyContext).
-
 -spec get_auth_context(processing_context()) -> any().
 get_auth_context(#{swagger_context := #{auth_context := AuthContext}}) ->
     AuthContext.
 
+-spec get_user_info(processing_context()) -> dmsl_payment_processing_thrift:'UserInfo'().
 get_user_info(Context) ->
     #payproc_UserInfo{
         id = get_user_id(Context),
@@ -131,23 +101,7 @@ get_extra_properties(Context) ->
     Claims = uac_authorizer_jwt:get_claims(get_auth_context(Context)),
     maps:with(capi_auth:get_extra_properties(), Claims).
 
-%% Common functions
-
--spec get_party(processing_context()) -> woody:result().
-get_party(Context) ->
-    Call = {party_management, 'Get', {}},
-    service_call_with([user_info, party_id], Call, Context).
-
--spec get_party(binary(), processing_context()) -> woody:result().
-get_party(PartyID, Context) ->
-    Call = {party_management, 'Get', {PartyID}},
-    service_call_with([user_info], Call, Context).
-
 %% Utils
-
--spec prepend_tuple(any(), tuple()) -> tuple().
-prepend_tuple(Item, Tuple) ->
-    erlang:insert_element(1, Tuple, Item).
 
 -spec issue_access_token(binary(), tuple()) -> map().
 issue_access_token(PartyID, TokenSpec) ->
@@ -266,52 +220,19 @@ wrap_payment_session(ClientInfo, PaymentSession) ->
         <<"paymentSession">> => PaymentSession
     }).
 
--spec unwrap_merchant_id(binary()) -> {binary(), binary()}.
+-spec unwrap_merchant_id(binary()) -> {binary(), binary(), binary()}.
 unwrap_merchant_id(Encoded) ->
     case binary:split(Encoded, <<$:>>) of
-        [RealmMode, Binary] ->
-            {RealmMode, Binary};
+        [RealmMode, PartyHashBin, ShopID] ->
+            {RealmMode, PartyHashBin, ShopID};
         _ ->
             erlang:throw(invalid_merchant_id)
     end.
 
--spec wrap_merchant_id(binary(), binary()) -> binary().
-wrap_merchant_id(RealmMode, Binary) ->
-    <<RealmMode/binary, $:, Binary/binary>>.
-
--spec get_invoice_by_id(binary(), processing_context()) -> woody:result().
-get_invoice_by_id(InvoiceID, Context) ->
-    EventRange = #payproc_EventRange{},
-    Args = {InvoiceID, EventRange},
-    service_call_with([user_info], {invoicing, 'Get', Args}, Context).
-
--spec get_payment_by_id(binary(), binary(), processing_context()) -> woody:result().
-get_payment_by_id(InvoiceID, PaymentID, Context) ->
-    service_call_with([user_info], {invoicing, 'GetPayment', {InvoiceID, PaymentID}}, Context).
-
--spec get_refund_by_id(binary(), binary(), binary(), processing_context()) -> woody:result().
-get_refund_by_id(InvoiceID, PaymentID, RefundID, Context) ->
-    service_call_with([user_info], {invoicing, 'GetPaymentRefund', {InvoiceID, PaymentID, RefundID}}, Context).
-
--spec get_contract_by_id(binary(), processing_context()) -> woody:result().
-get_contract_by_id(ContractID, Context) ->
-    Call = {party_management, 'GetContract', {ContractID}},
-    service_call_with([user_info, party_id], Call, Context).
-
--spec get_contract_by_id(binary(), binary(), processing_context()) -> woody:result().
-get_contract_by_id(PartyID, ContractID, Context) ->
-    Call = {party_management, 'GetContract', {PartyID, ContractID}},
-    service_call_with([user_info], Call, Context).
-
--spec get_shop_by_id(binary(), processing_context()) -> woody:result().
-get_shop_by_id(ShopID, Context) ->
-    Call = {party_management, 'GetShop', {ShopID}},
-    service_call_with([user_info, party_id], Call, Context).
-
--spec get_shop_by_id(binary(), binary(), processing_context()) -> woody:result().
-get_shop_by_id(PartyID, ShopID, Context) ->
-    Call = {party_management, 'GetShop', {PartyID, ShopID}},
-    service_call_with([user_info], Call, Context).
+-spec wrap_merchant_id(binary(), binary(), binary()) -> binary().
+wrap_merchant_id(RealmMode, PartyID, ShopID) ->
+    PartyHashBin = erlang:integer_to_binary(erlang:phash2(PartyID), 16),
+    <<RealmMode/binary, $:, PartyHashBin/binary, $:, ShopID/binary>>.
 
 -spec create_dsl(atom(), map(), map()) -> map().
 create_dsl(QueryType, QueryBody, QueryParams) ->

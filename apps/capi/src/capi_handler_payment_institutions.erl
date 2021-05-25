@@ -46,7 +46,7 @@ prepare(OperationID = 'GetPaymentInstitutionByRef', Req, Context) ->
     Process = fun() ->
         PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
         PaymentInstitutionRef = ?payment_institution_ref(PaymentInstitutionID),
-        case capi_domain:get_payment_institution_by_ref(PaymentInstitutionRef, Context) of
+        case capi_domain:get({payment_institution, PaymentInstitutionRef}, Context) of
             {ok, PaymentInstitution} ->
                 {ok, {200, #{}, decode_payment_institution_obj(PaymentInstitution)}};
             {error, not_found} ->
@@ -128,7 +128,7 @@ check_payment_institution_residence(Residence, #domain_PaymentInstitutionObject{
 compute_payment_institution_terms(PaymentInstitutionID, VS, Context) ->
     CallArgs = {?payment_institution_ref(PaymentInstitutionID), VS},
     Call = {party_management, 'ComputePaymentInstitutionTerms', CallArgs},
-    capi_handler_utils:service_call_with([user_info], Call, Context).
+    capi_handler_call:service_call_with([user_info], Call, Context).
 
 prepare_request_varset(Req, Context) ->
     #payproc_Varset{

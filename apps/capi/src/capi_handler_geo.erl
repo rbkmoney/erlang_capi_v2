@@ -22,7 +22,7 @@ prepare('GetLocationsNames' = OperationID, Req, Context) ->
         GeoIDs = ordsets:from_list(maps:get('geoIDs', Req)),
         Language = maps:get('language', Req),
         Call = {geo_ip_service, 'GetLocationName', {GeoIDs, Language}},
-        case capi_handler_utils:service_call(Call, Context) of
+        case capi_handler_call:service_call(Call, Context) of
             {ok, LocationNames} ->
                 PreparedLocationNames = maps:fold(
                     fun(GeoID, Name, Acc) -> [decode_location_name(GeoID, Name) | Acc] end,

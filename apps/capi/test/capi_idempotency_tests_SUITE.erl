@@ -830,7 +830,7 @@ get_encrypted_token(PS, ExpDate, IsCvvEmpty) ->
     ).
 
 encrypt_payment_tool(PaymentTool) ->
-    capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined).
+    capi_payment_tool:create_encrypted_payment_tool_token(PaymentTool, undefined).
 
 create_customers(BenderKey, Requests, Config) ->
     Context = ?config(context, Config),

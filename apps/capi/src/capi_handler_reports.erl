@@ -89,9 +89,9 @@ create_report(PartyID, Req, Context) ->
         }
     },
     ReportType = encode_report_type(maps:get(<<"reportType">>, ReportParams)),
-    case capi_handler_utils:service_call({reporting, 'CreateReport', {ReportRequest, ReportType}}, Context) of
+    case capi_handler_call:service_call({reporting, 'CreateReport', {ReportRequest, ReportType}}, Context) of
         {ok, ReportId} ->
-            {ok, Report} = capi_handler_utils:service_call(
+            {ok, Report} = capi_handler_call:service_call(
                 {reporting, 'GetReport', {ReportId}},
                 Context
             ),
@@ -110,7 +110,7 @@ get_report(PartyID, Req, Context) ->
     ShopID = maps:get(shopID, Req),
     ReportID = maps:get(reportID, Req),
     Call = {reporting, 'GetReport', {ReportID}},
-    case capi_handler_utils:service_call(Call, Context) of
+    case capi_handler_call:service_call(Call, Context) of
         {ok, Report = #'reports_Report'{party_id = PartyID, shop_id = ShopID}} ->
             {ok, {200, #{}, decode_report(Report)}};
         {ok, _WrongReport} ->
@@ -135,7 +135,7 @@ get_reports(PartyID, Req, Context) ->
         request = ReportRequest
     },
     Call = {reporting, 'GetReports', {StatReportRequest}},
-    case capi_handler_utils:service_call(Call, Context) of
+    case capi_handler_call:service_call(Call, Context) of
         {ok, #reports_StatReportResponse{reports = Reports}} ->
             {ok, {200, #{}, [decode_report(R) || R <- Reports]}};
         {exception, Exception} ->
@@ -155,7 +155,7 @@ download_file(PartyID, Req, Context) ->
         'GetReport',
         {maps:get(reportID, Req)}
     },
-    case capi_handler_utils:service_call(Call, Context) of
+    case capi_handler_call:service_call(Call, Context) of
         {ok, #reports_Report{status = created, files = Files, party_id = PartyID, shop_id = ShopID}} ->
             FileID = maps:get(fileID, Req),
             case lists:keymember(FileID, #reports_FileMeta.file_id, Files) of
@@ -173,7 +173,7 @@ download_file(PartyID, Req, Context) ->
 generate_report_presigned_url(FileID, Context) ->
     ExpiresAt = get_default_url_lifetime(),
     Call = {reporting, 'GeneratePresignedUrl', {FileID, ExpiresAt}},
-    case capi_handler_utils:service_call(Call, Context) of
+    case capi_handler_call:service_call(Call, Context) of
         {ok, URL} ->
             {ok, {200, #{}, #{<<"url">> => URL}}};
         {exception, Exception} ->

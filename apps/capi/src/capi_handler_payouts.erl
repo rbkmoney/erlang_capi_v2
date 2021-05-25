@@ -23,7 +23,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayout' ->
         payout => PayoutID
     },
     Payout =
-        case capi_handler_utils:service_call({payouts, 'Get', {PayoutID}}, Context) of
+        case capi_handler_call:service_call({payouts, 'Get', {PayoutID}}, Context) of
             {ok, Result} ->
                 case check_party_in_payout(PartyID, Result) of
                     true ->
@@ -60,7 +60,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'CreatePayout' ->
     end,
     Process = fun() ->
         CreateRequest = encode_payout_params(PartyID, PayoutParams),
-        case capi_handler_utils:service_call({payouts, 'CreatePayout', {CreateRequest}}, Context) of
+        case capi_handler_call:service_call({payouts, 'CreatePayout', {CreateRequest}}, Context) of
             {ok, Payout} ->
                 {ok, {201, #{}, decode_payout(Payout)}};
             {exception, Exception} ->
@@ -85,7 +85,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutTools' ->
         {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
     end,
     Process = fun() ->
-        case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
+        case capi_handler_call:get_contract_by_id(maps:get('contractID', Req), Context) of
             {ok, #domain_Contract{payout_tools = PayoutTools}} ->
                 {ok, {200, #{}, [decode_payout_tool(P) || P <- PayoutTools]}};
             {exception, #payproc_ContractNotFound{}} ->
@@ -102,7 +102,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolByID' ->
         {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
     end,
     Process = fun() ->
-        case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
+        case capi_handler_call:get_contract_by_id(maps:get('contractID', Req), Context) of
             {ok, #domain_Contract{payout_tools = PayoutTools}} ->
                 PayoutToolID = maps:get('payoutToolID', Req),
                 case lists:keyfind(PayoutToolID, #domain_PayoutTool.id, PayoutTools) of
@@ -127,7 +127,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolsForParty'
     end,
     Process = fun() ->
         ContractID = maps:get('contractID', Req),
-        case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
+        case capi_handler_call:get_contract_by_id(PartyID, ContractID, Context) of
             {ok, #domain_Contract{payout_tools = PayoutTools}} ->
                 {ok, {200, #{}, [decode_payout_tool(P) || P <- PayoutTools]}};
             {exception, #payproc_ContractNotFound{}} ->
@@ -146,7 +146,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolByIDForPar
     end,
     Process = fun() ->
         ContractID = maps:get('contractID', Req),
-        case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
+        case capi_handler_call:get_contract_by_id(PartyID, ContractID, Context) of
             {ok, #domain_Contract{payout_tools = PayoutTools}} ->
                 PayoutToolID = maps:get('payoutToolID', Req),
                 case lists:keyfind(PayoutToolID, #domain_PayoutTool.id, PayoutTools) of

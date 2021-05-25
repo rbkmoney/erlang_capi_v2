@@ -580,7 +580,7 @@ decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
     }.
 
 compute_terms(ServiceName, Args, Context) ->
-    capi_handler_utils:service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
+    capi_handler_call:service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
 
 -spec make_invoice_and_token(capi_handler_encoder:encode_data(), binary(), map()) ->
     capi_handler_decoder_utils:decode_data().

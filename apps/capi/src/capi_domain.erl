@@ -5,7 +5,6 @@
 
 -export([get_categories/1]).
 -export([get_payment_institutions/1]).
--export([get_payment_institution_by_ref/2]).
 -export([get/2]).
 
 -type context() :: woody_context:ctx().
@@ -51,10 +50,6 @@ get_payment_institutions(#domain_Globals{payment_institutions = PaymentInstituti
     );
 get_payment_institutions(#domain_Globals{payment_institutions = undefined}, _) ->
     [].
-
--spec get_payment_institution_by_ref(ref(), context()) -> {ok, payment_institution()} | {error, not_found}.
-get_payment_institution_by_ref(PaymentInstitutionRef, Context) ->
-    get({payment_institution, PaymentInstitutionRef}, Context).
 
 -spec get(ref(), context()) -> {ok, data()} | {error, not_found}.
 get(Ref, Context) ->

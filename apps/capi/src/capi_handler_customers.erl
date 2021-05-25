@@ -27,7 +27,7 @@ prepare('CreateCustomer' = OperationID, Req, Context) ->
             CustomerID = generate_customer_id(OperationID, PartyID, CustomerParams, Context),
             EncodedCustomerParams = encode_customer_params(CustomerID, PartyID, CustomerParams),
             Call = {customer_management, 'Create', {EncodedCustomerParams}},
-            case capi_handler_utils:service_call(Call, Context) of
+            case capi_handler_call:service_call(Call, Context) of
                 {ok, Customer} ->
                     {ok, {201, #{}, make_customer_and_token(Customer, PartyID)}};
                 {exception, #payproc_InvalidUser{}} ->
@@ -82,7 +82,7 @@ prepare('DeleteCustomer' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         Call = {customer_management, 'Delete', {CustomerID}},
-        case capi_handler_utils:service_call(Call, Context) of
+        case capi_handler_call:service_call(Call, Context) of
             {ok, _} ->
                 {ok, {204, #{}, undefined}};
             {exception, #payproc_InvalidUser{}} ->
@@ -145,7 +145,7 @@ prepare('CreateBinding' = OperationID, Req, Context) ->
                 ),
 
                 Call = {customer_management, 'StartBinding', {CustomerID, EncodedCustomerBindingParams}},
-                capi_handler_utils:service_call(Call, Context)
+                capi_handler_call:service_call(Call, Context)
             catch
                 throw:invalid_token ->
                     {error, invalid_token};
@@ -237,7 +237,7 @@ prepare('GetCustomerEvents' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         GetterFun = fun(Range) ->
-            capi_handler_utils:service_call(
+            capi_handler_call:service_call(
                 {customer_management, 'GetEvents', {CustomerID, Range}},
                 Context
             )
@@ -273,7 +273,7 @@ maybe_woody_reply({exception, _}) ->
 
 get_customer_by_id(CustomerID, Context) ->
     EventRange = #payproc_EventRange{},
-    capi_handler_utils:service_call({customer_management, 'Get', {CustomerID, EventRange}}, Context).
+    capi_handler_call:service_call({customer_management, 'Get', {CustomerID, EventRange}}, Context).
 
 generate_customer_id(OperationID, PartyID, CustomerParams, #{woody_context := WoodyContext}) ->
     ExternalID = maps:get(<<"externalID">>, CustomerParams, undefined),
@@ -350,7 +350,7 @@ encode_customer_binding_params(
     }.
 
 encode_payment_tool_token(Token) ->
-    case capi_crypto:decrypt_payment_tool_token(Token) of
+    case capi_payment_tool:decrypt_payment_tool_token(Token) of
         {ok, {PaymentTool, ValidUntil}} ->
             case capi_utils:deadline_is_reached(ValidUntil) of
                 true ->

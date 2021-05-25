@@ -181,7 +181,7 @@ prepare(OperationID = 'CapturePayment', Req, Context) ->
             },
             CallArgs = {InvoiceID, PaymentID, CaptureParams},
             Call = {invoicing, 'CapturePayment', CallArgs},
-            capi_handler_utils:service_call_with([user_info], Call, Context)
+            capi_handler_call:service_call_with([user_info], Call, Context)
         of
             {ok, _} ->
                 {ok, {202, #{}, undefined}};
@@ -241,7 +241,7 @@ prepare(OperationID = 'CancelPayment', Req, Context) ->
         Reason = maps:get(<<"reason">>, maps:get('Reason', Req)),
         CallArgs = {InvoiceID, PaymentID, Reason},
         Call = {invoicing, 'CancelPayment', CallArgs},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_handler_call:service_call_with([user_info], Call, Context) of
             {ok, _} ->
                 {ok, {202, #{}, undefined}};
             {exception, Exception} ->
@@ -490,7 +490,15 @@ create_payment(Invoice, PaymentParams, Context, BenderPrefix) ->
     ExternalID = maps:get(<<"externalID">>, PaymentParams, undefined),
     #payproc_Invoice{invoice = #domain_Invoice{id = InvoiceID, owner_id = PartyID}} = Invoice,
     IdempotentKey = {BenderPrefix, PartyID, ExternalID},
-    {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
+
+    {Payer, PaymentToolThrift} =
+        case decode_payer_token(maps:get(<<"payer">>, PaymentParams)) of
+            {CustomerOrRecurrentPayer, undefined} ->
+                {CustomerOrRecurrentPayer, undefined};
+            {ResourcePayer, TokenData} ->
+                {PaymentTool, PaymentToolDecoded} = unwrap_payment_tool(InvoiceID, TokenData),
+                {ResourcePayer#{<<"paymentTool">> => PaymentToolDecoded}, PaymentTool}
+        end,
 
     PaymentParamsFull = PaymentParams#{<<"invoiceID">> => InvoiceID},
     PaymentParamsDecrypted = PaymentParamsFull#{<<"payer">> => Payer},
@@ -509,7 +517,7 @@ create_payment(Invoice, PaymentParams, Context, BenderPrefix) ->
 start_payment(ID, InvoiceID, ExternalID, PaymentParams, PaymentToolThrift, Context) ->
     InvoicePaymentParams = encode_invoice_payment_params(ID, ExternalID, PaymentParams, PaymentToolThrift),
     Call = {invoicing, 'StartPayment', {InvoiceID, InvoicePaymentParams}},
-    capi_handler_utils:service_call_with([user_info], Call, Context).
+    capi_handler_call:service_call_with([user_info], Call, Context).
 
 find_payment_by_id(PaymentID, #payproc_Invoice{payments = Payments}) ->
     Fun = fun(#payproc_InvoicePayment{payment = #domain_InvoicePayment{id = ID}}) ->
@@ -553,7 +561,7 @@ find_by(_, []) ->
     undefined.
 
 get_invoice_by_id(InvoiceID, Context) ->
-    case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
+    case capi_handler_call:get_invoice_by_id(InvoiceID, Context) of
         {ok, Invoice} ->
             {ok, Invoice};
         {exception, #payproc_InvalidUser{}} ->
@@ -567,29 +575,35 @@ map_result({ok, Value}) ->
 map_result(_) ->
     undefined.
 
-decrypt_payer(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer) ->
-    #{<<"paymentToolToken">> := Token} = Payer,
-    Payer2 = maps:without([<<"paymentToolToken">>], Payer),
-    PaymentToolThrift = decrypt_payment_tool(Token),
-    PaymentTool = capi_handler_decoder_party:decode_payment_tool(PaymentToolThrift),
-    {Payer2#{<<"paymentTool">> => PaymentTool}, PaymentToolThrift};
-decrypt_payer(CustomerOrRecurrentPayer) ->
-    {CustomerOrRecurrentPayer, undefined}.
-
-decrypt_payment_tool(Token) ->
-    case capi_crypto:decrypt_payment_tool_token(Token) of
-        {ok, {PaymentToolThrift, ValidUntil}} ->
-            case capi_utils:deadline_is_reached(ValidUntil) of
-                true ->
-                    logger:warning("Payment tool token expired: ~p", [capi_utils:deadline_to_binary(ValidUntil)]),
-                    erlang:throw(invalid_token);
-                _ ->
-                    PaymentToolThrift
-            end;
+decode_payer_token(#{<<"payerType">> := <<"PaymentResourcePayer">>, <<"paymentToolToken">> := Token} = Payer) ->
+    case capi_payment_tool:decode_token(Token) of
+        {ok, TokenData} ->
+            {maps:without([<<"paymentToolToken">>], Payer), TokenData};
         unrecognized ->
             erlang:throw(invalid_token);
         {error, {decryption_failed, Error}} ->
             logger:warning("Payment tool token decryption failed: ~p", [Error]),
+            erlang:throw(invalid_token)
+    end;
+decode_payer_token(CustomerOrRecurrentPayer) ->
+    {CustomerOrRecurrentPayer, undefined}.
+
+unwrap_payment_tool(InvoiceID, #{payment_tool := PaymentTool, valid_until := ValidUntil} = TokenData) ->
+    TokenInvoiceID =
+        case capi_utils:deadline_is_reached(ValidUntil) of
+            true ->
+                logger:warning("Payment tool token expired: ~p", [capi_utils:deadline_to_binary(ValidUntil)]),
+                erlang:throw(invalid_token);
+            _ ->
+                maps:get(invoice_id, TokenData, undefined)
+        end,
+    case {TokenInvoiceID, InvoiceID} of
+        {undefined, _} ->
+            {PaymentTool, capi_handler_decoder_party:decode_payment_tool(PaymentTool)};
+        {InvoiceID, InvoiceID} ->
+            {PaymentTool, capi_handler_decoder_party:decode_payment_tool(PaymentTool)};
+        Other ->
+            logger:warning("Payment tool token bad invoice: ~p", [Other]),
             erlang:throw(invalid_token)
     end.
 
@@ -676,7 +690,7 @@ encode_optional_cash(Params = #{<<"amount">> := _}, InvoiceID, PaymentID, Contex
         payment = #domain_InvoicePayment{
             cost = #domain_Cash{currency = Currency}
         }
-    }} = capi_handler_utils:get_payment_by_id(InvoiceID, PaymentID, Context),
+    }} = capi_handler_call:get_payment_by_id(InvoiceID, PaymentID, Context),
     capi_handler_encoder:encode_cash(Params#{<<"currency">> => capi_handler_decoder_utils:decode_currency(Currency)});
 encode_optional_cash(_, _, _, _) ->
     undefined.
@@ -752,7 +766,7 @@ refund_payment(RefundID, InvoiceID, PaymentID, RefundParams, Context) ->
         Params#payproc_InvoicePaymentRefundParams{id = RefundID}
     },
     Call = {invoicing, 'RefundPayment', CallArgs},
-    capi_handler_utils:service_call_with([user_info], Call, Context).
+    capi_handler_call:service_call_with([user_info], Call, Context).
 
 %%
 

@@ -1,63 +1,80 @@
--module(capi_crypto).
+-module(capi_payment_tool).
 
 -include_lib("damsel/include/dmsl_payment_tool_token_thrift.hrl").
 
--type encrypted_token() :: binary().
+-type token() :: binary().
+-type token_data() :: #{
+    payment_tool := payment_tool(),
+    valid_until := deadline(),
+    invoice_id => binary(),
+    customer_id => binary()
+}.
 -type payment_tool() :: dmsl_domain_thrift:'PaymentTool'().
 -type payment_tool_token() :: dmsl_payment_tool_token_thrift:'PaymentToolToken'().
 -type payment_tool_token_payload() :: dmsl_payment_tool_token_thrift:'PaymentToolTokenPayload'().
 -type deadline() :: capi_utils:deadline().
 
--export_type([encrypted_token/0]).
+-export_type([token/0]).
+-export_type([token_data/0]).
 
 -export([create_encrypted_payment_tool_token/2]).
 -export([decrypt_payment_tool_token/1]).
+-export([encode_token/1]).
+-export([decode_token/1]).
 
--spec create_encrypted_payment_tool_token(payment_tool(), deadline()) -> encrypted_token().
+-spec create_encrypted_payment_tool_token(payment_tool(), deadline()) -> token().
 create_encrypted_payment_tool_token(PaymentTool, ValidUntil) ->
-    PaymentToolToken = encode_payment_tool_token(PaymentTool, ValidUntil),
+    encode_token(#{
+        payment_tool => PaymentTool,
+        valid_until => ValidUntil
+    }).
+
+-spec decrypt_payment_tool_token(token()) ->
+    {ok, {payment_tool(), deadline()}} | unrecognized | {error, lechiffre:decoding_error()}.
+decrypt_payment_tool_token(Token) ->
+    case decode_token(Token) of
+        {ok, UnwrappedToken} ->
+            #{payment_tool := PaymentTool, valid_until := ValidUntil} = UnwrappedToken,
+            {ok, {PaymentTool, ValidUntil}};
+        Other ->
+            Other
+    end.
+
+-spec encode_token(token_data()) -> token().
+encode_token(UnwrappedToken) ->
+    PaymentToolToken = encode_payment_tool_token(UnwrappedToken),
     ThriftType = {struct, union, {dmsl_payment_tool_token_thrift, 'PaymentToolToken'}},
     {ok, EncodedToken} = lechiffre:encode(ThriftType, PaymentToolToken),
-    TokenVersion = payment_tool_token_version(),
+    TokenVersion = token_version(),
     <<TokenVersion/binary, ".", EncodedToken/binary>>.
 
--spec decrypt_payment_tool_token(encrypted_token()) ->
-    {ok, {payment_tool(), deadline()}}
-    | unrecognized
-    | {error, lechiffre:decoding_error()}.
-decrypt_payment_tool_token(Token) ->
-    Ver = payment_tool_token_version(),
+-spec decode_token(token()) -> {ok, token_data()} | unrecognized | {error, lechiffre:decoding_error()}.
+decode_token(Token) ->
+    Ver = token_version(),
     Size = byte_size(Ver),
     case Token of
         <<Ver:Size/binary, ".", EncryptedPaymentToolToken/binary>> ->
             decrypt_token(EncryptedPaymentToolToken);
-        <<"v1.", EncryptedPaymentToolToken/binary>> ->
-            decrypt_token_v1(EncryptedPaymentToolToken);
         _ ->
             unrecognized
     end.
 
 %% Internal
 
-payment_tool_token_version() ->
+token_version() ->
     <<"v2">>.
 
 decrypt_token(EncryptedPaymentToolToken) ->
     ThriftType = {struct, struct, {dmsl_payment_tool_token_thrift, 'PaymentToolToken'}},
     case lechiffre:decode(ThriftType, EncryptedPaymentToolToken) of
         {ok, PaymentToolToken} ->
-            PaymentTool = decode_payment_tool_token_payload(PaymentToolToken#ptt_PaymentToolToken.payload),
-            ValidUntil = decode_deadline(PaymentToolToken#ptt_PaymentToolToken.valid_until),
-            {ok, {PaymentTool, ValidUntil}};
-        {error, _} = Error ->
-            Error
-    end.
-
-decrypt_token_v1(EncryptedPaymentToolToken) ->
-    ThriftType = {struct, union, {dmsl_payment_tool_token_thrift, 'PaymentToolTokenPayload'}},
-    case lechiffre:decode(ThriftType, EncryptedPaymentToolToken) of
-        {ok, PaymentToolTokenPayload} ->
-            {ok, {decode_payment_tool_token_payload(PaymentToolTokenPayload), undefined}};
+            {ok,
+                genlib_map:compact(#{
+                    payment_tool => decode_payment_tool_token_payload(PaymentToolToken#ptt_PaymentToolToken.payload),
+                    valid_until => decode_deadline(PaymentToolToken#ptt_PaymentToolToken.valid_until),
+                    invoice_id => PaymentToolToken#ptt_PaymentToolToken.invoice_id,
+                    customer_id => PaymentToolToken#ptt_PaymentToolToken.customer_id
+                })};
         {error, _} = Error ->
             Error
     end.
@@ -68,11 +85,13 @@ encode_deadline(undefined) ->
 encode_deadline(Deadline) ->
     capi_utils:deadline_to_binary(Deadline).
 
--spec encode_payment_tool_token(payment_tool(), deadline()) -> payment_tool_token().
-encode_payment_tool_token(PaymentTool, ValidUntil) ->
+-spec encode_payment_tool_token(token_data()) -> payment_tool_token().
+encode_payment_tool_token(#{payment_tool := PaymentTool, valid_until := ValidUntil} = TokenData) ->
     #ptt_PaymentToolToken{
         payload = encode_payment_tool_token_payload(PaymentTool),
-        valid_until = encode_deadline(ValidUntil)
+        valid_until = encode_deadline(ValidUntil),
+        invoice_id = maps:get(invoice_id, TokenData, undefined),
+        customer_id = maps:get(customer_id, TokenData, undefined)
     }.
 
 -spec encode_payment_tool_token_payload(payment_tool()) -> payment_tool_token_payload().

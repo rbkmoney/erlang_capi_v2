@@ -298,7 +298,7 @@ create_payment_expired_test(Config) ->
         Config
     ),
     ValidUntil = capi_utils:deadline_from_timeout(0),
-    PaymentToolToken = capi_crypto:create_encrypted_payment_tool_token(PaymentTool, ValidUntil),
+    PaymentToolToken = capi_payment_tool:create_encrypted_payment_tool_token(PaymentTool, ValidUntil),
     Req = #{
         <<"externalID">> => <<"merch_id">>,
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
@@ -654,7 +654,7 @@ get_encrypted_token({qiwi, Phone, TokenID}) ->
             id = Phone,
             token = TokenID
         }},
-    capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined).
+    capi_payment_tool:create_encrypted_payment_tool_token(PaymentTool, undefined).
 
 get_encrypted_token(PS, ExpDate) ->
     get_encrypted_token(PS, ExpDate, undefined).
@@ -670,4 +670,4 @@ get_encrypted_token(PS, ExpDate, IsCvvEmpty) ->
             cardholder_name = <<"Degus Degusovich">>,
             is_cvv_empty = IsCvvEmpty
         }},
-    capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined).
+    capi_payment_tool:create_encrypted_payment_tool_token(PaymentTool, undefined).

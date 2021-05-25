@@ -29,7 +29,7 @@ prepare('CreateInvoiceTemplate' = OperationID, Req, Context) ->
         try
             InvoiceTemplateID = generate_invoice_template_id(OperationID, InvoiceTemplateParams, PartyID, Context),
             CallArgs = {encode_invoice_tpl_create_params(InvoiceTemplateID, PartyID, InvoiceTemplateParams)},
-            capi_handler_utils:service_call_with(
+            capi_handler_call:service_call_with(
                 [user_info],
                 {invoice_templating, 'Create', CallArgs},
                 Context
@@ -113,7 +113,7 @@ prepare('UpdateInvoiceTemplate' = OperationID, Req, Context) ->
         try
             Params = encode_invoice_tpl_update_params(maps:get('InvoiceTemplateUpdateParams', Req)),
             Call = {invoice_templating, 'Update', {InvoiceTemplateID, Params}},
-            capi_handler_utils:service_call_with([user_info], Call, Context)
+            capi_handler_call:service_call_with([user_info], Call, Context)
         of
             {ok, UpdatedInvoiceTpl} ->
                 {ok, {200, #{}, decode_invoice_tpl(UpdatedInvoiceTpl)}};
@@ -159,7 +159,7 @@ prepare('DeleteInvoiceTemplate' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         Call = {invoice_templating, 'Delete', {InvoiceTemplateID}},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_handler_call:service_call_with([user_info], Call, Context) of
             {ok, _R} ->
                 {ok, {204, #{}, undefined}};
             {exception, Exception} ->
@@ -257,7 +257,7 @@ prepare('GetInvoicePaymentMethodsByTemplateID' = OperationID, Req, Context) ->
     Process = fun() ->
         capi_handler:respond_if_undefined(InvoiceTemplate, general_error(404, <<"Invoice template not found">>)),
         Timestamp = genlib_rfc3339:format_relaxed(erlang:system_time(microsecond), microsecond),
-        {ok, Party} = capi_handler_utils:get_party(Context),
+        {ok, Party} = capi_handler_call:get_party(Context),
         Revision = Party#domain_Party.revision,
         Args = {InvoiceTemplateID, Timestamp, {revision, Revision}},
         case capi_handler_decoder_invoicing:construct_payment_methods(invoice_templating, Args, Context) of
@@ -289,11 +289,11 @@ create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, BenderPrefix) ->
     InvoiceID = capi_bender:try_gen_snowflake(IdempotentKey, Identity, WoodyCtx),
     CallArgs = {encode_invoice_params_with_tpl(InvoiceID, InvoiceTplID, InvoiceParams)},
     Call = {invoicing, 'CreateWithTemplate', CallArgs},
-    capi_handler_utils:service_call_with([user_info], Call, Context).
+    capi_handler_call:service_call_with([user_info], Call, Context).
 
 get_invoice_template(ID, Context) ->
     Call = {invoice_templating, 'Get', {ID}},
-    capi_handler_utils:service_call_with([user_info], Call, Context).
+    capi_handler_call:service_call_with([user_info], Call, Context).
 
 generate_invoice_template_id(OperationID, TemplateParams, PartyID, #{woody_context := WoodyContext}) ->
     ExternalID = maps:get(<<"externalID">>, TemplateParams, undefined),

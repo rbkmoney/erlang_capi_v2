@@ -27,9 +27,9 @@ prepare('CreateWebhook' = OperationID, Req, Context) ->
         WebhookParams = encode_webhook_params(PartyID, Params),
         ShopID = validate_webhook_params(WebhookParams),
         Call = {party_management, 'GetShop', {PartyID, ShopID}},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_handler_call:service_call_with([user_info], Call, Context) of
             {ok, _} ->
-                case capi_handler_utils:service_call({webhook_manager, 'Create', {WebhookParams}}, Context) of
+                case capi_handler_call:service_call({webhook_manager, 'Create', {WebhookParams}}, Context) of
                     {ok, Webhook} ->
                         {ok, {201, #{}, decode_webhook(Webhook)}};
                     {exception, #webhooker_LimitExceeded{}} ->
@@ -51,7 +51,7 @@ prepare('GetWebhooks' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         Webhooks = capi_utils:unwrap(
-            capi_handler_utils:service_call({webhook_manager, 'GetList', {PartyID}}, Context)
+            capi_handler_call:service_call({webhook_manager, 'GetList', {PartyID}}, Context)
         ),
         {ok, {200, #{}, [decode_webhook(V) || V <- Webhooks]}}
     end,
@@ -141,7 +141,7 @@ encode_webhook_id(WebhookID) ->
 
 get_webhook(WebhookID, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
-    case capi_handler_utils:service_call({webhook_manager, 'Get', {WebhookID}}, Context) of
+    case capi_handler_call:service_call({webhook_manager, 'Get', {WebhookID}}, Context) of
         {ok, Webhook = #webhooker_Webhook{party_id = PartyID}} ->
             {ok, Webhook};
         {ok, _Webhook} ->
@@ -153,7 +153,7 @@ get_webhook(WebhookID, Context) ->
 delete_webhook(WebhookID, Context) ->
     case get_webhook(WebhookID, Context) of
         {ok, #webhooker_Webhook{}} ->
-            capi_handler_utils:service_call({webhook_manager, 'Delete', {WebhookID}}, Context);
+            capi_handler_call:service_call({webhook_manager, 'Delete', {WebhookID}}, Context);
         Exception ->
             Exception
     end.

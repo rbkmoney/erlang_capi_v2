@@ -24,7 +24,7 @@ prepare(OperationID = 'GetClaims', Req, Context) ->
     Process = fun() ->
         Call = {party_management, 'GetClaims', {PartyID}},
         Claims = capi_utils:unwrap(
-            capi_handler_utils:service_call_with([user_info], Call, Context)
+            capi_handler_call:service_call_with([user_info], Call, Context)
         ),
         {ok, {200, #{}, decode_claims(filter_claims(maps:get('claimStatus', Req), Claims))}}
     end,
@@ -41,7 +41,7 @@ prepare(OperationID = 'GetClaimByID', Req, Context) ->
     Process = fun() ->
         CallArgs = {PartyID, genlib:to_int(ClaimID)},
         Call = {party_management, 'GetClaim', CallArgs},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_handler_call:service_call_with([user_info], Call, Context) of
             {ok, Claim} ->
                 case is_wallet_claim(Claim) of
                     true ->
@@ -68,7 +68,7 @@ prepare(OperationID = 'CreateClaim', Req, Context) ->
         Process = fun() ->
             CallArgs = {PartyID, Changeset},
             Call = {party_management, 'CreateClaim', CallArgs},
-            case capi_handler_utils:service_call_with([user_info], Call, Context) of
+            case capi_handler_call:service_call_with([user_info], Call, Context) of
                 {ok, Claim} ->
                     {ok, {201, #{}, decode_claim(Claim)}};
                 {exception, Exception} ->
@@ -115,7 +115,7 @@ prepare(OperationID = 'CreateClaim', Req, Context) ->
 %                 encode_claim_changeset(maps:get('claimChangeset', Req))
 %             }},
 %         Party = capi_utils:unwrap(
-%             capi_handler_utils:service_call_with([user_info], Call, Context)
+%             capi_handler_call:service_call_with([user_info], Call, Context)
 %         ),
 %         {ok, {200, #{}, capi_handler_decoder_party:decode_party(Party)}}
 %     end,
@@ -137,7 +137,7 @@ prepare(OperationID = 'RevokeClaimByID', Req, Context) ->
             encode_reason(maps:get('Reason', Req))
         },
         Call = {party_management, 'RevokeClaim', CallArgs},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_handler_call:service_call_with([user_info], Call, Context) of
             {ok, _} ->
                 {ok, {204, #{}, undefined}};
             {exception, Exception} ->

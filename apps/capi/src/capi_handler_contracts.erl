@@ -14,7 +14,7 @@
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare(OperationID = 'GetContracts', Req, Context) ->
-    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
+    Party = capi_utils:unwrap(capi_handler_call:get_party(Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{party => Party#domain_Party.id, id => OperationID}}
@@ -27,7 +27,7 @@ prepare(OperationID = 'GetContracts', Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetContractByID', Req, Context) ->
     ContractID = maps:get('contractID', Req),
-    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
+    Party = capi_utils:unwrap(capi_handler_call:get_party(Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{party => Party#domain_Party.id, contract => ContractID, id => OperationID}}
@@ -45,7 +45,7 @@ prepare(OperationID = 'GetContractByID', Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetContractAdjustments', Req, Context) ->
     ContractID = maps:get('contractID', Req),
-    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
+    Party = capi_utils:unwrap(capi_handler_call:get_party(Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{party => Party#domain_Party.id, contract => ContractID, id => OperationID}}
@@ -53,7 +53,7 @@ prepare(OperationID = 'GetContractAdjustments', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case capi_handler_utils:get_contract_by_id(ContractID, Context) of
+        case capi_handler_call:get_contract_by_id(ContractID, Context) of
             {ok, #domain_Contract{adjustments = Adjustments}} ->
                 Resp = [decode_contract_adjustment(A) || A <- Adjustments],
                 {ok, {200, #{}, Resp}};
@@ -64,7 +64,7 @@ prepare(OperationID = 'GetContractAdjustments', Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetContractAdjustmentByID', Req, Context) ->
     ContractID = maps:get('contractID', Req),
-    Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
+    Party = capi_utils:unwrap(capi_handler_call:get_party(Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{party => Party#domain_Party.id, contract => ContractID, id => OperationID}}
@@ -72,7 +72,7 @@ prepare(OperationID = 'GetContractAdjustmentByID', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case capi_handler_utils:get_contract_by_id(ContractID, Context) of
+        case capi_handler_call:get_contract_by_id(ContractID, Context) of
             {ok, #domain_Contract{adjustments = Adjustments}} ->
                 AdjustmentID = maps:get('adjustmentID', Req),
                 case lists:keyfind(AdjustmentID, #domain_ContractAdjustment.id, Adjustments) of
@@ -99,7 +99,7 @@ prepare(OperationID = 'GetContractsForParty', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case capi_handler_utils:get_party(PartyID, Context) of
+        case capi_handler_call:get_party(PartyID, Context) of
             {ok, Party} ->
                 {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
             {exception, #payproc_InvalidUser{}} ->
@@ -123,7 +123,7 @@ prepare(OperationID = 'GetContractByIDForParty', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case capi_handler_utils:get_party(PartyID, Context) of
+        case capi_handler_call:get_party(PartyID, Context) of
             {ok, Party} ->
                 case genlib_map:get(ContractID, Party#domain_Party.contracts) of
                     undefined ->
@@ -152,7 +152,7 @@ prepare(OperationID = 'GetContractAdjustmentsForParty', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
+        case capi_handler_call:get_contract_by_id(PartyID, ContractID, Context) of
             {ok, #domain_Contract{adjustments = Adjustments}} ->
                 Resp = [decode_contract_adjustment(A) || A <- Adjustments],
                 {ok, {200, #{}, Resp}};
@@ -179,7 +179,7 @@ prepare(OperationID = 'GetContractAdjustmentByIDForParty', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
+        case capi_handler_call:get_contract_by_id(PartyID, ContractID, Context) of
             {ok, #domain_Contract{adjustments = Adjustments}} ->
                 AdjustmentID = maps:get('adjustmentID', Req),
                 case lists:keyfind(AdjustmentID, #domain_ContractAdjustment.id, Adjustments) of

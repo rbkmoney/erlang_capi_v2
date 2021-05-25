@@ -41,7 +41,7 @@ prepare('ActivateMyParty' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         Call = {party_management, 'Activate', {PartyID}},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_handler_call:service_call_with([user_info], Call, Context) of
             {ok, _R} ->
                 {ok, {204, #{}, undefined}};
             {exception, #payproc_InvalidUser{}} ->
@@ -61,7 +61,7 @@ prepare('SuspendMyParty' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         Call = {party_management, 'Suspend', {PartyID}},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_handler_call:service_call_with([user_info], Call, Context) of
             {ok, _R} ->
                 {ok, {204, #{}, undefined}};
             {exception, #payproc_InvalidUser{}} ->
@@ -80,7 +80,7 @@ prepare('GetPartyByID' = OperationID, Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case capi_handler_utils:get_party(PartyID, Context) of
+        case capi_handler_call:get_party(PartyID, Context) of
             {ok, Party} ->
                 DecodedParty = capi_handler_decoder_party:decode_party(Party),
                 {ok, {200, #{}, DecodedParty}};
@@ -99,7 +99,7 @@ prepare('ActivatePartyByID' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         Call = {party_management, 'Activate', {PartyID}},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_handler_call:service_call_with([user_info], Call, Context) of
             {ok, _R} ->
                 {ok, {204, #{}, undefined}};
             {exception, #payproc_InvalidUser{}} ->
@@ -119,7 +119,7 @@ prepare('SuspendPartyByID' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         Call = {party_management, 'Suspend', {PartyID}},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_handler_call:service_call_with([user_info], Call, Context) of
             {ok, _R} ->
                 {ok, {204, #{}, undefined}};
             {exception, #payproc_InvalidUser{}} ->
@@ -138,7 +138,7 @@ prepare(_OperationID, _Req, _Context) ->
 
 -spec get_or_create_party(binary(), processing_context()) -> woody:result().
 get_or_create_party(PartyID, Context) ->
-    case capi_handler_utils:get_party(PartyID, Context) of
+    case capi_handler_call:get_party(PartyID, Context) of
         {exception, #payproc_PartyNotFound{}} ->
             _ = logger:info("Attempting to create a missing party"),
             create_party(PartyID, Context);
@@ -157,11 +157,11 @@ create_party(PartyID, Context) ->
         }
     },
     Call = {party_management, 'Create', {PartyID, PartyParams}},
-    case capi_handler_utils:service_call_with([user_info], Call, Context) of
+    case capi_handler_call:service_call_with([user_info], Call, Context) of
         {ok, _} ->
-            capi_handler_utils:get_party(PartyID, Context);
+            capi_handler_call:get_party(PartyID, Context);
         {exception, #payproc_PartyExists{}} ->
-            capi_handler_utils:get_party(PartyID, Context);
+            capi_handler_call:get_party(PartyID, Context);
         Error ->
             Error
     end.

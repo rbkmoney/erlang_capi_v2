@@ -68,7 +68,7 @@ prepare('CreateInvoice' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('CreateInvoiceAccessToken' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    ResultInvoice = maybe_result(capi_handler_utils:get_invoice_by_id(InvoiceID, Context)),
+    ResultInvoice = maybe_result(capi_handler_call:get_invoice_by_id(InvoiceID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID}},
@@ -92,7 +92,7 @@ prepare('CreateInvoiceAccessToken' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('GetInvoiceByID' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    ResultInvoice = maybe_result(capi_handler_utils:get_invoice_by_id(InvoiceID, Context)),
+    ResultInvoice = maybe_result(capi_handler_call:get_invoice_by_id(InvoiceID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID}},
@@ -145,7 +145,7 @@ prepare('FulfillInvoice' = OperationID, Req, Context) ->
     Process = fun() ->
         CallArgs = {InvoiceID, maps:get(<<"reason">>, maps:get('Reason', Req))},
         Call = {invoicing, 'Fulfill', CallArgs},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_handler_call:service_call_with([user_info], Call, Context) of
             {ok, _} ->
                 {ok, {204, #{}, undefined}};
             {exception, Exception} ->
@@ -177,7 +177,7 @@ prepare('RescindInvoice' = OperationID, Req, Context) ->
     Process = fun() ->
         CallArgs = {InvoiceID, maps:get(<<"reason">>, maps:get('Reason', Req))},
         Call = {invoicing, 'Rescind', CallArgs},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_handler_call:service_call_with([user_info], Call, Context) of
             {ok, _} ->
                 {ok, {204, #{}, undefined}};
             {exception, Exception} ->
@@ -215,7 +215,7 @@ prepare('GetInvoiceEvents' = OperationID, Req, Context) ->
                 maps:get(limit, Req),
                 genlib_map:get(eventID, Req),
                 fun(Range) ->
-                    capi_handler_utils:service_call_with(
+                    capi_handler_call:service_call_with(
                         [user_info],
                         {invoicing, 'GetEvents', {maps:get(invoiceID, Req), Range}},
                         Context
@@ -244,7 +244,7 @@ prepare('GetInvoiceEvents' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('GetInvoicePaymentMethods' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    ResultInvoice = maybe_result(capi_handler_utils:get_invoice_by_id(InvoiceID, Context)),
+    ResultInvoice = maybe_result(capi_handler_call:get_invoice_by_id(InvoiceID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID}},
@@ -255,7 +255,7 @@ prepare('GetInvoicePaymentMethods' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         capi_handler:respond_if_undefined(ResultInvoice, general_error(404, <<"Invoice not found">>)),
-        Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
+        Party = capi_utils:unwrap(capi_handler_call:get_party(Context)),
         Revision = Party#domain_Party.revision,
         Args = {InvoiceID, {revision, Revision}},
         case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, Args, Context) of
@@ -286,7 +286,7 @@ create_invoice(PartyID, InvoiceParams, Context, BenderPrefix) ->
     Identity = {schema, capi_feature_schemas:invoice(), InvoiceParams},
     InvoiceID = capi_bender:try_gen_snowflake(IdempotentKey, Identity, WoodyCtx),
     Call = {invoicing, 'Create', {encode_invoice_params(InvoiceID, PartyID, InvoiceParams)}},
-    capi_handler_utils:service_call_with([user_info], Call, Context).
+    capi_handler_call:service_call_with([user_info], Call, Context).
 
 encode_invoice_params(ID, PartyID, InvoiceParams) ->
     Amount = genlib_map:get(<<"amount">>, InvoiceParams),
@@ -442,7 +442,7 @@ decode_refund_for_event(#domain_InvoicePaymentRefund{cash = #domain_Cash{}} = Re
 decode_refund_for_event(#domain_InvoicePaymentRefund{cash = undefined} = Refund, InvoiceID, PaymentID, Context) ->
     % Need to fix it!
     {ok, #payproc_InvoicePayment{payment = #domain_InvoicePayment{cost = Cash}}} =
-        capi_handler_utils:get_payment_by_id(InvoiceID, PaymentID, Context),
+        capi_handler_call:get_payment_by_id(InvoiceID, PaymentID, Context),
     capi_handler_decoder_invoicing:decode_refund(Refund#domain_InvoicePaymentRefund{cash = Cash}, Context).
 
 get_invoice_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
@@ -450,7 +450,7 @@ get_invoice_by_external_id(ExternalID, #{woody_context := WoodyContext} = Contex
     InvoiceKey = {'CreateInvoice', PartyID, ExternalID},
     case capi_bender:get_internal_id(InvoiceKey, WoodyContext) of
         {ok, InvoiceID, _CtxData} ->
-            case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
+            case capi_handler_call:get_invoice_by_id(InvoiceID, Context) of
                 {ok, Invoice} ->
                     {ok, {InvoiceID, Invoice}};
                 Exception ->
@@ -465,18 +465,18 @@ maybe_result({ok, Value}) ->
 maybe_result(_) ->
     undefined.
 
-prepare_token_provider_data(Invoice, Context) ->
-    %#payproc_Invoice{invoice = #domain_Invoice{id = InvoiceID}} = Invoice,
+prepare_token_provider_data(Invoice, #{woody_context := WoodyContext} = Context) ->
     #payproc_Invoice{invoice = #domain_Invoice{shop_id = ShopID}} = Invoice,
-    Shop = maybe_result(capi_handler_utils:get_shop_by_id(ShopID, Context)),
+    Shop = maybe_result(capi_handler_call:get_shop_by_id(ShopID, Context)),
     #domain_Shop{details = #domain_ShopDetails{name = ShopName}} = Shop,
     #domain_Shop{contract_id = ContractID} = Shop,
-    Contract = maybe_result(capi_handler_utils:get_contract_by_id(ContractID, Context)),
+    Contract = maybe_result(capi_handler_call:get_contract_by_id(ContractID, Context)),
     #domain_Contract{payment_institution = PiRef} = Contract,
-    Pi = maybe_result(capi_domain:get_payment_institution_by_ref(PiRef, Context)),
+    Pi = maybe_result(capi_domain:get({payment_institution, PiRef}, WoodyContext)),
     #domain_PaymentInstitution{realm = Realm} = Pi,
     RealmMode = genlib:to_binary(Realm),
-    MerchantID = capi_handler_utils:wrap_merchant_id(RealmMode, ShopID),
+    PartyID = capi_handler_utils:get_party_id(Context),
+    MerchantID = capi_handler_utils:wrap_merchant_id(RealmMode, PartyID, ShopID),
     #{
         <<"merchantID">> => MerchantID,
         <<"merchantName">> => ShopName,

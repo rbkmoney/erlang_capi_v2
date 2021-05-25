@@ -129,7 +129,7 @@ process_search_request(QueryType, Query, Req, Context, Opts = #{thrift_fun := Th
             )
         }
     },
-    process_search_request_result(QueryType, capi_handler_utils:service_call(Call, Context), Context, Opts).
+    process_search_request_result(QueryType, capi_handler_call:service_call(Call, Context), Context, Opts).
 
 process_search_request_result(QueryType, Result, Context, #{decode_fun := DecodeFun}) ->
     case Result of
