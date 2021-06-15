@@ -36,15 +36,20 @@ process_request('GetCountryByID', Req, #{woody_context := WoodyContext}) ->
 
 decode_country_object(#domain_CountryObject{ref = Ref, data = Data}) ->
     ID = capi_coder_utils:decode_country_code(Ref#domain_CountryRef.id),
-    #domain_Country{name = Name, trade_blocs = TradeBlocsThrift} = Data,
-    TradeBlocs = lists:map(
-        fun(#domain_TradeBlocRef{id = Id}) ->
-            Id
-        end,
-        ordsets:to_list(TradeBlocsThrift)
-    ),
+    #domain_Country{name = Name, trade_blocs = TradeBlocRefsThrift} = Data,
+    TradeBlocRefs = decode_trade_bloc_refs(TradeBlocRefsThrift),
     genlib_map:compact(#{
         <<"id">> => ID,
         <<"name">> => Name,
-        <<"trade_blocs">> => TradeBlocs
+        <<"trade_blocs">> => TradeBlocRefs
     }).
+
+decode_trade_bloc_refs(undefined) ->
+    undefined;
+decode_trade_bloc_refs(TradeBlocRefs) ->
+    lists:map(
+        fun(#domain_TradeBlocRef{id = Id}) ->
+            Id
+        end,
+        ordsets:to_list(TradeBlocRefs)
+    ).
