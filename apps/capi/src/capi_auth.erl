@@ -351,6 +351,10 @@ get_operation_access('GetPaymentInstitutionPayoutMethods', _) ->
     [{[party], read}];
 get_operation_access('GetPaymentInstitutionPayoutSchedules', _) ->
     [{[party], read}];
+get_operation_access(OperationID, _) when OperationID =:= 'GetCountries'; OperationID =:= 'GetCountryByID' ->
+    [];
+get_operation_access(OperationID, _) when OperationID =:= 'GetTradeBlocs'; OperationID =:= 'GetTradeBlocByID' ->
+    [];
 get_operation_access('GetLocationsNames', _) ->
     [];
 get_operation_access('CreatePayout', _) ->

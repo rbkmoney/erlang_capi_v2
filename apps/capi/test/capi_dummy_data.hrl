@@ -1074,6 +1074,24 @@
                     realm = test,
                     residences = [rus]
                 }
+            }},
+        {country, #domain_CountryRef{id = rus}} =>
+            {country, #domain_CountryObject{
+                ref = #domain_CountryRef{id = rus},
+                data = #domain_Country{
+                    name = <<"Russia">>,
+                    trade_blocs = ordsets:from_list(
+                        [#domain_TradeBlocRef{id = <<"1">>}, #domain_TradeBlocRef{id = <<"2">>}]
+                    )
+                }
+            }},
+        {trade_bloc, #domain_TradeBlocRef{id = <<"EEA">>}} =>
+            {trade_bloc, #domain_TradeBlocObject{
+                ref = #domain_TradeBlocRef{id = <<"EEA">>},
+                data = #domain_TradeBloc{
+                    name = <<"European Economic Area">>,
+                    description = <<"Extension of EU">>
+                }
             }}
     }
 }).

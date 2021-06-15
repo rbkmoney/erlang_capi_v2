@@ -124,6 +124,10 @@
     check_no_internal_id_for_external_id_test/1,
     retrieve_payment_by_external_id_test/1,
     check_no_invoice_by_external_id_test/1,
+    get_country_by_id_test/1,
+    get_countries/1,
+    get_trade_bloc_by_id_test/1,
+    get_trade_blocs/1,
 
     check_support_decrypt_v1_test/1,
     check_support_decrypt_v2_test/1
@@ -253,6 +257,11 @@ groups() ->
             get_payment_institution_payment_terms,
             get_payment_institution_payout_terms,
             get_payment_institution_payout_schedules,
+
+            get_country_by_id_test,
+            get_countries,
+            get_trade_bloc_by_id_test,
+            get_trade_blocs,
 
             create_webhook_ok_test,
             create_webhook_limit_exceeded_test,
@@ -2206,6 +2215,55 @@ get_payment_institution_payout_schedules(Config) ->
         ?INTEGER,
         <<"USD">>,
         <<"BankAccount">>
+    ).
+
+-spec get_country_by_id_test(config()) -> _.
+get_country_by_id_test(Config) ->
+    ?assertEqual(
+        {ok, #{
+            <<"id">> => <<"RUS">>,
+            <<"name">> => <<"Russia">>,
+            <<"trade_blocs">> => [<<"1">>, <<"2">>]
+        }},
+        capi_client_countries:get_country_by_id(?config(context, Config), <<"RUS">>)
+    ).
+
+-spec get_countries(config()) -> _.
+
+get_countries(Config) ->
+    ?assertEqual(
+        {ok, [
+            #{
+                <<"id">> => <<"RUS">>,
+                <<"name">> => <<"Russia">>,
+                <<"trade_blocs">> => [<<"1">>, <<"2">>]
+            }
+        ]},
+        capi_client_countries:get_countries(?config(context, Config))
+    ).
+
+-spec get_trade_bloc_by_id_test(config()) -> _.
+get_trade_bloc_by_id_test(Config) ->
+    ?assertEqual(
+        {ok, #{
+            <<"id">> => <<"EEA">>,
+            <<"name">> => <<"European Economic Area">>,
+            <<"description">> => <<"Extension of EU">>
+        }},
+        capi_client_trade_blocs:get_trade_bloc_by_id(?config(context, Config), <<"EEA">>)
+    ).
+
+-spec get_trade_blocs(config()) -> _.
+get_trade_blocs(Config) ->
+    ?assertEqual(
+        {ok, [
+            #{
+                <<"id">> => <<"EEA">>,
+                <<"name">> => <<"European Economic Area">>,
+                <<"description">> => <<"Extension of EU">>
+            }
+        ]},
+        capi_client_trade_blocs:get_trade_blocs(?config(context, Config))
     ).
 
 -spec check_support_decrypt_v1_test(config()) -> _.
