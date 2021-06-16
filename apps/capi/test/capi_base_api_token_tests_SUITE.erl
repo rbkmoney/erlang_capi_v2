@@ -2223,7 +2223,7 @@ get_country_by_id_test(Config) ->
         {ok, #{
             <<"id">> => <<"RUS">>,
             <<"name">> => <<"Russia">>,
-            <<"trade_blocs">> => [<<"1">>, <<"2">>]
+            <<"tradeBlocs">> => [<<"1">>, <<"2">>]
         }},
         capi_client_countries:get_country_by_id(?config(context, Config), <<"RUS">>)
     ).
@@ -2236,7 +2236,7 @@ get_countries(Config) ->
             #{
                 <<"id">> => <<"RUS">>,
                 <<"name">> => <<"Russia">>,
-                <<"trade_blocs">> => [<<"1">>, <<"2">>]
+                <<"tradeBlocs">> => [<<"1">>, <<"2">>]
             }
         ]},
         capi_client_countries:get_countries(?config(context, Config))

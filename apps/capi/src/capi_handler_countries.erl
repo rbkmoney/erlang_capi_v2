@@ -41,7 +41,7 @@ decode_country_object(#domain_CountryObject{ref = Ref, data = Data}) ->
     genlib_map:compact(#{
         <<"id">> => ID,
         <<"name">> => Name,
-        <<"trade_blocs">> => TradeBlocRefs
+        <<"tradeBlocs">> => TradeBlocRefs
     }).
 
 decode_trade_bloc_refs(undefined) ->
