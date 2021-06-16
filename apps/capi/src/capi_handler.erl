@@ -89,6 +89,7 @@ get_handlers() ->
         capi_handler_categories,
         capi_handler_claims,
         capi_handler_contracts,
+        capi_handler_countries,
         capi_handler_customers,
         capi_handler_geo,
         capi_handler_invoice_templates,
@@ -100,6 +101,7 @@ get_handlers() ->
         capi_handler_reports,
         capi_handler_search,
         capi_handler_shops,
+        capi_handler_trade_blocs,
         capi_handler_webhooks
     ].
 
