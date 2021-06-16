@@ -125,9 +125,9 @@
     retrieve_payment_by_external_id_test/1,
     check_no_invoice_by_external_id_test/1,
     get_country_by_id_test/1,
-    get_countries/1,
+    get_countries_test/1,
     get_trade_bloc_by_id_test/1,
-    get_trade_blocs/1,
+    get_trade_blocs_test/1,
 
     check_support_decrypt_v1_test/1,
     check_support_decrypt_v2_test/1
@@ -259,9 +259,9 @@ groups() ->
             get_payment_institution_payout_schedules,
 
             get_country_by_id_test,
-            get_countries,
+            get_countries_test,
             get_trade_bloc_by_id_test,
-            get_trade_blocs,
+            get_trade_blocs_test,
 
             create_webhook_ok_test,
             create_webhook_limit_exceeded_test,
@@ -2228,9 +2228,9 @@ get_country_by_id_test(Config) ->
         capi_client_countries:get_country_by_id(?config(context, Config), <<"RUS">>)
     ).
 
--spec get_countries(config()) -> _.
+-spec get_countries_test(config()) -> _.
 
-get_countries(Config) ->
+get_countries_test(Config) ->
     ?assertEqual(
         {ok, [
             #{
@@ -2253,8 +2253,8 @@ get_trade_bloc_by_id_test(Config) ->
         capi_client_trade_blocs:get_trade_bloc_by_id(?config(context, Config), <<"EEA">>)
     ).
 
--spec get_trade_blocs(config()) -> _.
-get_trade_blocs(Config) ->
+-spec get_trade_blocs_test(config()) -> _.
+get_trade_blocs_test(Config) ->
     ?assertEqual(
         {ok, [
             #{
