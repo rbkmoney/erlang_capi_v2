@@ -1079,9 +1079,16 @@
             {country, #domain_CountryObject{
                 ref = #domain_CountryRef{id = rus},
                 data = #domain_Country{
-                    name = <<"Russia">>,
+                    name = <<"Russia">>
+                }
+            }},
+        {country, #domain_CountryRef{id = deu}} =>
+            {country, #domain_CountryObject{
+                ref = #domain_CountryRef{id = deu},
+                data = #domain_Country{
+                    name = <<"Germany">>,
                     trade_blocs = ordsets:from_list(
-                        [#domain_TradeBlocRef{id = <<"1">>}, #domain_TradeBlocRef{id = <<"2">>}]
+                        [#domain_TradeBlocRef{id = <<"EEA">>}]
                     )
                 }
             }},

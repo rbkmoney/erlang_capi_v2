@@ -125,8 +125,10 @@
     retrieve_payment_by_external_id_test/1,
     check_no_invoice_by_external_id_test/1,
     get_country_by_id_test/1,
+    get_country_by_id_not_found_test/1,
     get_countries_test/1,
     get_trade_bloc_by_id_test/1,
+    get_trade_bloc_by_id_not_found_test/1,
     get_trade_blocs_test/1,
 
     check_support_decrypt_v1_test/1,
@@ -259,8 +261,10 @@ groups() ->
             get_payment_institution_payout_schedules,
 
             get_country_by_id_test,
+            get_country_by_id_not_found_test,
             get_countries_test,
             get_trade_bloc_by_id_test,
+            get_trade_bloc_by_id_not_found_test,
             get_trade_blocs_test,
 
             create_webhook_ok_test,
@@ -2221,11 +2225,19 @@ get_payment_institution_payout_schedules(Config) ->
 get_country_by_id_test(Config) ->
     ?assertEqual(
         {ok, #{
-            <<"id">> => <<"RUS">>,
-            <<"name">> => <<"Russia">>,
-            <<"tradeBlocs">> => [<<"1">>, <<"2">>]
+            <<"id">> => <<"DEU">>,
+            <<"name">> => <<"Germany">>,
+            <<"tradeBlocs">> => [<<"EEA">>]
         }},
-        capi_client_countries:get_country_by_id(?config(context, Config), <<"RUS">>)
+        capi_client_countries:get_country_by_id(?config(context, Config), <<"DEU">>)
+    ).
+
+-spec get_country_by_id_not_found_test(config()) -> _.
+get_country_by_id_not_found_test(Config) ->
+    _NonExistingCountryCode = xxx,
+    ?assertEqual(
+        {error, {404, #{<<"message">> => <<"Country not found">>}}},
+        capi_client_countries:get_country_by_id(?config(context, Config), <<"XXX">>)
     ).
 
 -spec get_countries_test(config()) -> _.
@@ -2235,8 +2247,12 @@ get_countries_test(Config) ->
         {ok, [
             #{
                 <<"id">> => <<"RUS">>,
-                <<"name">> => <<"Russia">>,
-                <<"tradeBlocs">> => [<<"1">>, <<"2">>]
+                <<"name">> => <<"Russia">>
+            },
+            #{
+                <<"id">> => <<"DEU">>,
+                <<"name">> => <<"Germany">>,
+                <<"tradeBlocs">> => [<<"EEA">>]
             }
         ]},
         capi_client_countries:get_countries(?config(context, Config))
@@ -2251,6 +2267,13 @@ get_trade_bloc_by_id_test(Config) ->
             <<"description">> => <<"Extension of EU">>
         }},
         capi_client_trade_blocs:get_trade_bloc_by_id(?config(context, Config), <<"EEA">>)
+    ).
+
+-spec get_trade_bloc_by_id_not_found_test(config()) -> _.
+get_trade_bloc_by_id_not_found_test(Config) ->
+    ?assertEqual(
+        {error, {404, #{<<"message">> => <<"Trade Bloc not found">>}}},
+        capi_client_trade_blocs:get_trade_bloc_by_id(?config(context, Config), <<"XXX">>)
     ).
 
 -spec get_trade_blocs_test(config()) -> _.
