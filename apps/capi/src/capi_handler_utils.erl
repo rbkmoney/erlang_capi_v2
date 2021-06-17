@@ -15,6 +15,7 @@
 
 -export([get_party/1]).
 -export([get_party/2]).
+
 -export([get_auth_context/1]).
 -export([get_user_id/1]).
 -export([get_party_id/1]).
@@ -114,7 +115,7 @@ get_user_info(Context) ->
 
 -spec get_user_id(processing_context()) -> binary().
 get_user_id(Context) ->
-    uac_authorizer_jwt:get_subject_id(get_auth_context(Context)).
+    capi_auth:get_subject_id(get_auth_context(Context)).
 
 -spec get_party_id(processing_context()) -> binary().
 get_party_id(Context) ->
@@ -122,8 +123,8 @@ get_party_id(Context) ->
 
 -spec get_extra_properties(processing_context()) -> map().
 get_extra_properties(Context) ->
-    Claims = uac_authorizer_jwt:get_claims(get_auth_context(Context)),
-    maps:with(capi_auth:get_extra_properties(), Claims).
+    Claims = capi_auth:get_legacy_claims(get_auth_context(Context)),
+    maps:with(capi_auth_legacy:get_extra_properties(), Claims).
 
 %% Common functions
 
@@ -149,7 +150,7 @@ issue_access_token(PartyID, TokenSpec) ->
 
 -spec issue_access_token(binary(), tuple(), map()) -> map().
 issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
-    #{<<"payload">> => capi_auth:issue_access_token(PartyID, TokenSpec, ExtraProperties)}.
+    #{<<"payload">> => capi_auth_legacy:issue_access_token(PartyID, TokenSpec, ExtraProperties)}.
 
 -spec merge_and_compact(map(), map()) -> map().
 merge_and_compact(M1, M2) ->

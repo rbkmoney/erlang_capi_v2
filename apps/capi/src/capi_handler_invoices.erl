@@ -24,7 +24,7 @@ prepare('CreateInvoice' = OperationID, Req, Context) ->
         Prototypes = [
             {operation, #{id => OperationID, party => PartyID, shop => ShopID}}
         ],
-        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -80,7 +80,7 @@ prepare('CreateInvoiceAccessToken' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID}},
             {payproc, #{invoice => ResultInvoice}}
         ],
-        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -110,7 +110,7 @@ prepare('GetInvoiceByID' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID}},
             {payproc, #{invoice => ResultInvoice}}
         ],
-        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -135,7 +135,7 @@ prepare('GetInvoiceByExternalID' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID}},
             {payproc, #{invoice => ResultInvoice}}
         ],
-        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -151,7 +151,7 @@ prepare('FulfillInvoice' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID}},
             {payproc, #{invoice => InvoiceID}}
         ],
-        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -183,7 +183,7 @@ prepare('RescindInvoice' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID}},
             {payproc, #{invoice => InvoiceID}}
         ],
-        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -218,7 +218,7 @@ prepare('GetInvoiceEvents' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID}},
             {payproc, #{invoice => InvoiceID}}
         ],
-        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -261,7 +261,7 @@ prepare('GetInvoicePaymentMethods' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID}},
             {payproc, #{invoice => InvoiceID}}
         ],
-        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
         {ok, Resolution}
     end,
     Process = fun() ->

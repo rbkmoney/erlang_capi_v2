@@ -16,7 +16,7 @@
 prepare('GetLocationsNames' = OperationID, Req, Context) ->
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID}}],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         GeoIDs = ordsets:from_list(maps:get('geoIDs', Req)),

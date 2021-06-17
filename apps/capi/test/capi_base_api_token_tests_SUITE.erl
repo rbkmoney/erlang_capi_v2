@@ -142,14 +142,22 @@ init([]) ->
 -spec all() -> [{group, test_case_name()}].
 all() ->
     [
-        {group, operations_by_base_api_token},
-        {group, operations_by_base_api_token_with_new_auth},
+        {group, auth_by_api_key},
+        {group, auth_by_user_session_token},
         {group, payment_tool_token_support}
     ].
 
 -spec groups() -> [{group_name(), list(), [test_case_name()]}].
 groups() ->
     [
+        {auth_by_api_key, [], [
+            {group, operations_by_base_api_token},
+            {group, operations_by_base_api_token_with_new_auth}
+        ]},
+        {auth_by_user_session_token, [], [
+            {group, operations_by_base_api_token},
+            {group, operations_by_base_api_token_with_new_auth}
+        ]},
         {operations_by_base_api_token, [], [
             get_merchant_payment_status_test,
             update_invoice_template_ok_test,
@@ -293,12 +301,20 @@ end_per_suite(C) ->
     ok.
 
 -spec init_per_group(group_name(), config()) -> config().
+init_per_group(auth_by_api_key, Config) ->
+    SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
+    Apps = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:api_key_handler(?STRING), SupPid),
+    [{group_apps, Apps}, {group_test_sup, SupPid} | Config];
+init_per_group(auth_by_user_session_token, Config) ->
+    SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
+    Apps = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
+    [{group_apps, Apps}, {group_test_sup, SupPid} | Config];
 init_per_group(operations_by_base_api_token, Config) ->
     BasePermissions = get_base_permissions(),
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
     Apps1 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    [{context, capi_ct_helper:get_context(Token)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config];
+    [{context, capi_ct_helper:get_context(Token)}, {subgroup_apps, Apps1}, {subgroup_test_sup, SupPid} | Config];
 init_per_group(operations_by_base_api_token_with_new_auth, Config) ->
     BasePermissions = get_base_permissions(),
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
@@ -307,8 +323,20 @@ init_per_group(_, Config) ->
     Config.
 
 -spec end_per_group(group_name(), config()) -> _.
-end_per_group(_Group, C) ->
+
+end_per_group(Group, C) when
+    Group =:= auth_by_api_key;
+    Group =:= auth_by_user_session_token
+->
     _ = capi_utils:maybe(?config(group_test_sup, C), fun capi_ct_helper:stop_mocked_service_sup/1),
+    ok;
+end_per_group(Group, C) when
+    Group =:= operations_by_base_api_token;
+    Group =:= operations_by_base_api_token_with_new_auth
+->
+    _ = capi_utils:maybe(?config(subgroup_test_sup, C), fun capi_ct_helper:stop_mocked_service_sup/1),
+    ok;
+end_per_group(_Group, _C) ->
     ok.
 
 -spec init_per_testcase(test_case_name(), config()) -> config().

@@ -19,7 +19,7 @@ prepare(OperationID = 'GetClaims', Req, Context) ->
         Prototypes = [
             {operation, #{party => PartyID, id => OperationID}}
         ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         Call = {party_management, 'GetClaims', {PartyID}},
@@ -36,7 +36,7 @@ prepare(OperationID = 'GetClaimByID', Req, Context) ->
         Prototypes = [
             {operation, #{party => PartyID, claim => ClaimID, id => OperationID}}
         ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         CallArgs = {PartyID, genlib:to_int(ClaimID)},
@@ -63,7 +63,7 @@ prepare(OperationID = 'CreateClaim', Req, Context) ->
             Prototypes = [
                 {operation, #{party => PartyID, id => OperationID}}
             ],
-            {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+            {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
         end,
         Process = fun() ->
             CallArgs = {PartyID, Changeset},
@@ -104,7 +104,7 @@ prepare(OperationID = 'CreateClaim', Req, Context) ->
 %         Prototypes = [
 %             {operation, #{party => PartyID, claim => ClaimID, id => OperationID}}
 %         ],
-%         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+%         {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
 %     end,
 %     Process = fun() ->
 %         Call =
@@ -127,7 +127,7 @@ prepare(OperationID = 'RevokeClaimByID', Req, Context) ->
         Prototypes = [
             {operation, #{party => PartyID, claim => ClaimID, id => OperationID}}
         ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         CallArgs = {
