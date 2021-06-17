@@ -6,6 +6,7 @@
 -export([get_categories/1]).
 -export([get_payment_institutions/1]).
 -export([get/2]).
+-export([get_objects_by_type/2]).
 
 -type context() :: woody_context:ctx().
 -type ref() :: dmsl_domain_thrift:'Reference'().
@@ -16,18 +17,22 @@
 
 -spec get_categories(context()) -> {ok, [category()]}.
 get_categories(Context) ->
+    get_objects_by_type(Context, 'category').
+
+-spec get_objects_by_type(context(), Type :: atom()) -> {ok, [dmsl_domain_thrift:'DomainObject'()]}.
+get_objects_by_type(Context, Type) ->
     #'Snapshot'{domain = Domain} = get_shapshot(Context),
-    Categories = maps:fold(
+    Objects = maps:fold(
         fun
-            ({'category', _}, {'category', CategoryObject}, Acc) ->
-                [CategoryObject | Acc];
+            ({Variant, _}, {Variant, Object}, Acc) when Variant =:= Type ->
+                [Object | Acc];
             (_, _, Acc) ->
                 Acc
         end,
         [],
         Domain
     ),
-    {ok, Categories}.
+    {ok, Objects}.
 
 -spec get_payment_institutions(context()) -> {ok, [payment_institution()]}.
 get_payment_institutions(Context) ->
