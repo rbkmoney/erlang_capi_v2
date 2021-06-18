@@ -18,13 +18,14 @@
 
 -export([make_handler_fun/3]).
 
--spec not_found_handler() -> fun().
+-dialyzer({no_return, not_found_handler/0}).
+-spec not_found_handler() -> handler_fun().
 not_found_handler() ->
     fun('GetByToken', {_, _}) ->
         woody_error:raise(business, #token_keeper_AuthDataNotFound{})
     end.
 
--spec user_session_handler() -> fun().
+-spec user_session_handler() -> handler_fun().
 user_session_handler() ->
     make_handler_fun(
         ?TK_META_NS_KEYCLOAK,
@@ -35,7 +36,7 @@ user_session_handler() ->
         [user_session_meta]
     ).
 
--spec invoice_access_token(PartyID :: binary(), InvoiceID :: binary()) -> fun().
+-spec invoice_access_token(PartyID :: binary(), InvoiceID :: binary()) -> handler_fun().
 invoice_access_token(PartyID, InvoiceID) ->
     make_handler_fun(
         <<"com.rbkmoney.capi">>,
@@ -50,7 +51,7 @@ invoice_access_token(PartyID, InvoiceID) ->
         [api_key_meta]
     ).
 
--spec invoice_template_access_token(PartyID :: binary(), InvoiceTmeplateID :: binary()) -> fun().
+-spec invoice_template_access_token(PartyID :: binary(), InvoiceTmeplateID :: binary()) -> handler_fun().
 invoice_template_access_token(PartyID, InvoiceTmeplateID) ->
     make_handler_fun(
         <<"com.rbkmoney.capi">>,
@@ -65,7 +66,7 @@ invoice_template_access_token(PartyID, InvoiceTmeplateID) ->
         [api_key_meta]
     ).
 
--spec customer_access_token(PartyID :: binary(), CustomerID :: binary()) -> fun().
+-spec customer_access_token(PartyID :: binary(), CustomerID :: binary()) -> handler_fun().
 customer_access_token(PartyID, CustomerID) ->
     make_handler_fun(
         <<"com.rbkmoney.capi">>,
@@ -80,7 +81,7 @@ customer_access_token(PartyID, CustomerID) ->
         [api_key_meta]
     ).
 
--spec api_key_handler(PartyID :: binary()) -> fun().
+-spec api_key_handler(PartyID :: binary()) -> handler_fun().
 api_key_handler(PartyID) ->
     make_handler_fun(
         ?TK_META_NS_APIKEYMGMT,
@@ -94,7 +95,12 @@ api_key_handler(PartyID) ->
         [api_key_meta]
     ).
 
--spec make_handler_fun(Authority :: binary(), ContextSpec :: any(), MetadataSpec :: any()) -> fun().
+-type operation_id() :: 'GetByToken'.
+-type args() :: tuple().
+-type handler_return() :: term() | no_return().
+-type handler_fun() :: fun((operation_id(), args()) -> handler_return()).
+
+-spec make_handler_fun(Authority :: binary(), ContextSpec :: any(), MetadataSpec :: any()) -> handler_fun().
 make_handler_fun(Authority, ContextSpec, MetadataSpec) ->
     fun('GetByToken', {Token, _}) ->
         case uac_authorizer_jwt:verify(Token, #{}) of
