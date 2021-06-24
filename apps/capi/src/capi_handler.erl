@@ -67,7 +67,7 @@ authorize_api_key(OperationID, ApiKey, _Context, _HandlerOpts) ->
         {ok, Context} ->
             {true, Context};
         {error, Error} ->
-            _ = logger:info("API Key authorization failed for ~p due to ~p", [OperationID, Error]),
+            _ = logger:info("API Key preauthorization failed for ~p due to ~p", [OperationID, Error]),
             false
     end.
 
@@ -155,7 +155,7 @@ handle_function_(OperationID, Req, SwagContext0, _HandlerOpts) ->
         end
     catch
         throw:{token_auth_failed, Reason} ->
-            _ = logger:error("Couldn't authorize the supplied token: ~p", [Reason]),
+            _ = logger:info("API Key authorization failed for ~p due to ~p", [OperationID, Reason]),
             {error, {401, #{}, undefined}};
         throw:{handler_respond, HandlerResponse} ->
             {ok, HandlerResponse};
@@ -240,6 +240,7 @@ put_user_identity(WoodyContext, AuthContext) ->
 collect_user_identity(AuthContext) ->
     genlib_map:compact(#{
         id => capi_auth:get_subject_id(AuthContext),
+        %%TODO: Store user realm in authdata meta and extract it here
         realm => ?REALM,
         email => capi_auth:get_subject_email(AuthContext),
         username => capi_auth:get_subject_name(AuthContext)
