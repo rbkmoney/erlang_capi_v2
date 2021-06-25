@@ -22,10 +22,7 @@ prepare(OperationID = 'GetClaims', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        Call = {party_management, 'GetClaims', {PartyID}},
-        Claims = capi_utils:unwrap(
-            capi_handler_utils:service_call_with([user_info], Call, Context)
-        ),
+        Claims = capi_utils:unwrap(capi_party:get_claims(PartyID, Context)),
         {ok, {200, #{}, decode_claims(filter_claims(maps:get('claimStatus', Req), Claims))}}
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -39,9 +36,7 @@ prepare(OperationID = 'GetClaimByID', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        CallArgs = {PartyID, genlib:to_int(ClaimID)},
-        Call = {party_management, 'GetClaim', CallArgs},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_party:get_claim(PartyID, genlib:to_int(ClaimID), Context) of
             {ok, Claim} ->
                 case is_wallet_claim(Claim) of
                     true ->
@@ -66,9 +61,7 @@ prepare(OperationID = 'CreateClaim', Req, Context) ->
             {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
         end,
         Process = fun() ->
-            CallArgs = {PartyID, Changeset},
-            Call = {party_management, 'CreateClaim', CallArgs},
-            case capi_handler_utils:service_call_with([user_info], Call, Context) of
+            case capi_party:create_claim(PartyID, Changeset, Context) of
                 {ok, Claim} ->
                     {ok, {201, #{}, decode_claim(Claim)}};
                 {exception, Exception} ->
@@ -107,15 +100,12 @@ prepare(OperationID = 'CreateClaim', Req, Context) ->
 %         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
 %     end,
 %     Process = fun() ->
-%         Call =
-%             {party_management, 'UpdateClaim', {
+%         Party = capi_utils:unwrap(
+%             capi_party:update_claim(
 %                 PartyID,
 %                 genlib:to_int(ClaimID),
 %                 genlib:to_int(maps:get('claimRevision', Req)),
-%                 encode_claim_changeset(maps:get('claimChangeset', Req))
-%             }},
-%         Party = capi_utils:unwrap(
-%             capi_handler_utils:service_call_with([user_info], Call, Context)
+%                 encode_claim_changeset(maps:get('claimChangeset', Req)), Context)
 %         ),
 %         {ok, {200, #{}, capi_handler_decoder_party:decode_party(Party)}}
 %     end,
@@ -130,14 +120,14 @@ prepare(OperationID = 'RevokeClaimByID', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        CallArgs = {
+        Result = capi_party:revoke_claim(
             PartyID,
             genlib:to_int(ClaimID),
             genlib:to_int(maps:get('claimRevision', Req)),
-            encode_reason(maps:get('Reason', Req))
-        },
-        Call = {party_management, 'RevokeClaim', CallArgs},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+            encode_reason(maps:get('Reason', Req)),
+            Context
+        ),
+        case Result of
             {ok, _} ->
                 {ok, {204, #{}, undefined}};
             {exception, Exception} ->

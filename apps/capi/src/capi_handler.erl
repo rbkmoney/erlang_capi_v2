@@ -20,7 +20,9 @@
 -type response() :: swag_server:response().
 -type processing_context() :: #{
     swagger_context := swag_server:request_context(),
-    woody_context := woody_context:ctx()
+    woody_context := woody_context:ctx(),
+    party_client := party_client:client(),
+    party_client_context := party_client:context()
 }.
 
 -type throw(_T) :: no_return().
@@ -30,14 +32,18 @@
     process := fun(() -> {ok, response()} | throw(response()))
 }.
 
+-type handler_opts() ::
+    swag_server:handler_opts(#{
+        party_client := party_client:client()
+    }).
+
 -export_type([operation_id/0]).
 -export_type([request_data/0]).
 -export_type([request_context/0]).
 -export_type([processing_context/0]).
 -export_type([request_state/0]).
 -export_type([response/0]).
-
--type handler_opts() :: swag_server:handler_opts(_).
+-export_type([handler_opts/0]).
 
 %% Handler behaviour
 
@@ -122,17 +128,17 @@ handle_request(OperationID, Req, SwagContext, HandlerOpts) ->
     SwagContext :: request_context(),
     HandlerOpts :: handler_opts()
 ) -> {ok | error, response()}.
-handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext}, _HandlerOpts) ->
+handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext}, HandlerOpts) ->
     try
         RpcID = create_rpc_id(Req),
         ok = set_rpc_meta(RpcID),
         ok = set_request_meta(OperationID, Req),
         _ = logger:info("Processing request ~p", [OperationID]),
         WoodyContext = attach_deadline(Req, create_woody_context(RpcID, AuthContext)),
-        Context = create_processing_context(SwagContext, WoodyContext),
+        Context = create_processing_context(SwagContext, WoodyContext, HandlerOpts),
         ok = set_context_meta(Context),
-        {ok, #{authorize := Authorize, process := Process}} =
-            prepare(OperationID, Req, Context, get_handlers()),
+        {ok, RequestState} = prepare(OperationID, Req, Context, get_handlers()),
+        #{authorize := Authorize, process := Process} = RequestState,
         {ok, Resolution} = Authorize(),
         case Resolution of
             allowed ->
@@ -188,10 +194,12 @@ respond_if_undefined(_, _Response) ->
 
 %%
 
-create_processing_context(SwaggerContext, WoodyContext) ->
+create_processing_context(SwaggerContext, WoodyContext, HandlerOpts) ->
     #{
         woody_context => WoodyContext,
-        swagger_context => SwaggerContext
+        swagger_context => SwaggerContext,
+        party_client_context => party_client:create_context(#{woody_context => WoodyContext}),
+        party_client => maps:get(party_client, HandlerOpts)
     }.
 
 -spec create_rpc_id(request_data()) -> woody:rpc_id().

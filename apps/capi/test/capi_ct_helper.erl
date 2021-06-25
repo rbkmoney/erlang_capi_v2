@@ -40,8 +40,7 @@ init_suite(Module, Config) ->
 -spec init_suite(module(), config(), any()) -> config().
 init_suite(Module, Config, CapiEnv) ->
     SupPid = start_mocked_service_sup(Module),
-    Apps1 =
-        start_app(woody),
+    WoodyApp = start_app(woody),
     ServiceURLs = mock_services_(
         [
             {
@@ -52,11 +51,15 @@ init_suite(Module, Config, CapiEnv) ->
         ],
         SupPid
     ),
-    Apps2 =
-        start_app(dmt_client, [{max_cache_size, #{}}, {service_urls, ServiceURLs}, {cache_update_interval, 50000}]) ++
-            start_capi(Config, CapiEnv) ++
-            capi_ct_helper_bouncer:mock_client(SupPid),
-    [{apps, lists:reverse(Apps1 ++ Apps2)}, {suite_test_sup, SupPid} | Config].
+    DmtApp = start_app(dmt_client, [
+        {max_cache_size, #{}},
+        {service_urls, ServiceURLs},
+        {cache_update_interval, 50000}
+    ]),
+    CapiApp = start_capi(Config, CapiEnv),
+    BouncerApp = capi_ct_helper_bouncer:mock_client(SupPid),
+    Apps = lists:reverse([WoodyApp, DmtApp, CapiApp, BouncerApp]),
+    [{apps, Apps}, {suite_test_sup, SupPid} | Config].
 
 -spec start_app(app_name()) -> [app_name()].
 start_app(woody = AppName) ->
@@ -184,14 +187,26 @@ stop_mocked_service_sup(SupPid) ->
 
 -spec mock_services(_, _) -> _.
 mock_services(Services, SupOrConfig) ->
-    {BenderClientServices, WoodyServices} = lists:partition(
-        fun({ServiceName, _}) ->
-            ServiceName == generator
+    {PartyClientServices, Other} = lists:partition(
+        fun
+            ({party_management, _}) -> true;
+            (_) -> false
         end,
         Services
     ),
+    {BenderClientServices, WoodyServices} = lists:partition(
+        fun
+            ({generator, _}) -> true;
+            (_) -> false
+        end,
+        Other
+    ),
+    _ = start_party_client(mock_services_(PartyClientServices, SupOrConfig)),
     _ = start_bender_client(mock_services_(BenderClientServices, SupOrConfig)),
     start_woody_client(mock_services_(WoodyServices, SupOrConfig)).
+
+start_party_client(Services) ->
+    start_app(party_client, [{services, Services}]).
 
 start_bender_client(Services) ->
     start_app(bender_client, [{services, Services}]).
@@ -201,6 +216,8 @@ start_woody_client(Services) ->
 
 -spec mock_services_(_, _) -> _.
 % TODO need a better name
+mock_services_([], _Config) ->
+    #{};
 mock_services_(Services, Config) when is_list(Config) ->
     mock_services_(Services, ?config(test_sup, Config));
 mock_services_(Services, SupPid) when is_pid(SupPid) ->
@@ -234,6 +251,8 @@ get_service_name({ServiceName, _WoodyService, _Fun}) ->
 
 mock_service_handler({generator, Fun}) ->
     mock_service_handler('Generator', {bender_thrift, 'Generator'}, Fun);
+mock_service_handler({party_management, Fun}) ->
+    mock_service_handler(party_management, {dmsl_payment_processing_thrift, 'PartyManagement'}, Fun);
 mock_service_handler({ServiceName, Fun}) ->
     mock_service_handler(ServiceName, capi_woody_client:get_service_modname(ServiceName), Fun);
 mock_service_handler({ServiceName, WoodyService, Fun}) ->

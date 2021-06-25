@@ -257,7 +257,8 @@ prepare('GetInvoicePaymentMethodsByTemplateID' = OperationID, Req, Context) ->
     Process = fun() ->
         capi_handler:respond_if_undefined(InvoiceTemplate, general_error(404, <<"Invoice template not found">>)),
         Timestamp = genlib_rfc3339:format_relaxed(erlang:system_time(microsecond), microsecond),
-        {ok, Party} = capi_handler_utils:get_party(Context),
+        PartyID = capi_handler_utils:get_party_id(Context),
+        {ok, Party} = capi_party:get_party(PartyID, Context),
         Revision = Party#domain_Party.revision,
         Args = {InvoiceTemplateID, Timestamp, {revision, Revision}},
         case capi_handler_decoder_invoicing:construct_payment_methods(invoice_templating, Args, Context) of

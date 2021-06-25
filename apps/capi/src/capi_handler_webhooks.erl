@@ -26,8 +26,7 @@ prepare('CreateWebhook' = OperationID, Req, Context) ->
     Process = fun() ->
         WebhookParams = encode_webhook_params(PartyID, Params),
         ShopID = validate_webhook_params(WebhookParams),
-        Call = {party_management, 'GetShop', {PartyID, ShopID}},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_party:get_shop(PartyID, ShopID, Context) of
             {ok, _} ->
                 case capi_handler_utils:service_call({webhook_manager, 'Create', {WebhookParams}}, Context) of
                     {ok, Webhook} ->

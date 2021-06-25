@@ -21,8 +21,7 @@ prepare(OperationID = 'ActivateShop', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        Call = {party_management, 'ActivateShop', {PartyID, ShopID}},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_party:activate_shop(PartyID, ShopID, Context) of
             {ok, _R} ->
                 {ok, {204, #{}, undefined}};
             {exception, Exception} ->
@@ -43,8 +42,7 @@ prepare(OperationID = 'SuspendShop', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        Call = {party_management, 'SuspendShop', {PartyID, ShopID}},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_party:suspend_shop(PartyID, ShopID, Context) of
             {ok, _R} ->
                 {ok, {204, #{}, undefined}};
             {exception, Exception} ->
@@ -64,7 +62,7 @@ prepare(OperationID = 'GetShops', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
+        Party = capi_utils:unwrap(capi_party:get_party(PartyID, Context)),
         {ok, {200, #{}, decode_shops_map(Party#domain_Party.shops)}}
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -76,8 +74,7 @@ prepare(OperationID = 'GetShopByID', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        Call = {party_management, 'GetShop', {PartyID, ShopID}},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_party:get_shop(PartyID, ShopID, Context) of
             {ok, Shop} ->
                 {ok, {200, #{}, decode_shop(Shop)}};
             {exception, #payproc_ShopNotFound{}} ->
@@ -96,7 +93,7 @@ prepare(OperationID = 'GetShopsForParty', Req, Context) ->
         % Here we're relying on hellgate ownership check, thus no explicit authorization.
         % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
         % remains authorized.
-        case capi_handler_utils:get_party(PartyID, Context) of
+        case capi_party:get_party(PartyID, Context) of
             {ok, Party} ->
                 {ok, {200, #{}, decode_shops_map(Party#domain_Party.shops)}};
             {exception, #payproc_InvalidUser{}} ->
@@ -114,12 +111,11 @@ prepare(OperationID = 'GetShopByIDForParty', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        Call = {party_management, 'GetShop', {PartyID, ShopID}},
         % TODO
         % Here we're relying on hellgate ownership check, thus no explicit authorization.
         % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
         % remains authorized.
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_party:get_shop(PartyID, ShopID, Context) of
             {ok, Shop} ->
                 {ok, {200, #{}, decode_shop(Shop)}};
             {exception, #payproc_InvalidUser{}} ->
@@ -139,12 +135,11 @@ prepare(OperationID = 'ActivateShopForParty', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        Call = {party_management, 'ActivateShop', {PartyID, ShopID}},
         % TODO
         % Here we're relying on hellgate ownership check, thus no explicit authorization.
         % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
         % remains authorized.
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_party:activate_shop(PartyID, ShopID, Context) of
             {ok, _R} ->
                 {ok, {204, #{}, undefined}};
             {exception, Exception} ->
@@ -169,12 +164,11 @@ prepare(OperationID = 'SuspendShopForParty', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        Call = {party_management, 'SuspendShop', {PartyID, ShopID}},
         % TODO
         % Here we're relying on hellgate ownership check, thus no explicit authorization.
         % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
         % remains authorized.
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_party:suspend_shop(PartyID, ShopID, Context) of
             {ok, _R} ->
                 {ok, {204, #{}, undefined}};
             {exception, Exception} ->

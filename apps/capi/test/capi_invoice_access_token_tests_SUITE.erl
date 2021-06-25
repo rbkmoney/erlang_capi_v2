@@ -230,7 +230,10 @@ get_invoice_payment_methods_ok_test(Config) ->
                 ('ComputeTerms', _) -> {ok, ?TERM_SET};
                 ('Get', _) -> {ok, ?PAYPROC_INVOICE}
             end},
-            {party_management, fun('Get', _) -> {ok, ?PARTY} end}
+            {party_management, fun
+                ('GetRevision', _) -> {ok, ?INTEGER};
+                ('Checkout', _) -> {ok, ?PARTY}
+            end}
         ],
         Config
     ),

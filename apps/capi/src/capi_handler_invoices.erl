@@ -265,7 +265,8 @@ prepare('GetInvoicePaymentMethods' = OperationID, Req, Context) ->
         {ok, Resolution}
     end,
     Process = fun() ->
-        Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
+        PartyID = capi_handler_utils:get_party_id(Context),
+        Party = capi_utils:unwrap(capi_party:get_party(PartyID, Context)),
         Revision = Party#domain_Party.revision,
         Args = {InvoiceID, {revision, Revision}},
         case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, Args, Context) of

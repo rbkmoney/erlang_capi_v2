@@ -29,7 +29,8 @@
         uac,
         prometheus,
         prometheus_cowboy,
-        bouncer_client
+        bouncer_client,
+        party_client
     ]},
     {env, []}
 ]}.

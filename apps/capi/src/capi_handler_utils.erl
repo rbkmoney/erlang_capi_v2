@@ -13,9 +13,8 @@
 -export([service_call_with/3]).
 -export([service_call/2]).
 
--export([get_party/1]).
--export([get_party/2]).
 -export([get_auth_context/1]).
+-export([get_user_info/1]).
 -export([get_user_id/1]).
 -export([get_party_id/1]).
 -export([get_extra_properties/1]).
@@ -33,8 +32,6 @@
 -export([get_invoice_by_id/2]).
 -export([get_payment_by_id/3]).
 -export([get_refund_by_id/4]).
--export([get_contract_by_id/2]).
--export([get_contract_by_id/3]).
 
 -export([create_dsl/3]).
 
@@ -106,6 +103,7 @@ service_call({ServiceName, Function, Args}, #{woody_context := WoodyContext}) ->
 get_auth_context(#{swagger_context := #{auth_context := AuthContext}}) ->
     AuthContext.
 
+-spec get_user_info(processing_context()) -> dmsl_payment_processing_thrift:'UserInfo'().
 get_user_info(Context) ->
     #payproc_UserInfo{
         id = get_user_id(Context),
@@ -124,18 +122,6 @@ get_party_id(Context) ->
 get_extra_properties(Context) ->
     Claims = uac_authorizer_jwt:get_claims(get_auth_context(Context)),
     maps:with(capi_auth:get_extra_properties(), Claims).
-
-%% Common functions
-
--spec get_party(processing_context()) -> woody:result().
-get_party(Context) ->
-    Call = {party_management, 'Get', {}},
-    service_call_with([user_info, party_id], Call, Context).
-
--spec get_party(binary(), processing_context()) -> woody:result().
-get_party(PartyID, Context) ->
-    Call = {party_management, 'Get', {PartyID}},
-    service_call_with([user_info], Call, Context).
 
 %% Utils
 
@@ -273,16 +259,6 @@ get_payment_by_id(InvoiceID, PaymentID, Context) ->
 -spec get_refund_by_id(binary(), binary(), binary(), processing_context()) -> woody:result().
 get_refund_by_id(InvoiceID, PaymentID, RefundID, Context) ->
     service_call_with([user_info], {invoicing, 'GetPaymentRefund', {InvoiceID, PaymentID, RefundID}}, Context).
-
--spec get_contract_by_id(binary(), processing_context()) -> woody:result().
-get_contract_by_id(ContractID, Context) ->
-    Call = {party_management, 'GetContract', {ContractID}},
-    service_call_with([user_info, party_id], Call, Context).
-
--spec get_contract_by_id(binary(), binary(), processing_context()) -> woody:result().
-get_contract_by_id(PartyID, ContractID, Context) ->
-    Call = {party_management, 'GetContract', {PartyID, ContractID}},
-    service_call_with([user_info], Call, Context).
 
 -spec create_dsl(atom(), map(), map()) -> map().
 create_dsl(QueryType, QueryBody, QueryParams) ->
