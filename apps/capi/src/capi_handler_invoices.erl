@@ -256,30 +256,32 @@ prepare('GetInvoiceEvents' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('GetInvoicePaymentMethods' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
+    ResultInvoice =
+        case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
+            {ok, Result} ->
+                Result;
+            {exception, _Exception} ->
+                undefined
+        end,
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID}},
-            {payproc, #{invoice => InvoiceID}}
+            {payproc, #{invoice => ResultInvoice}}
         ],
         Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
         {ok, Resolution}
     end,
     Process = fun() ->
-        PartyID = capi_handler_utils:get_party_id(Context),
-        Party = capi_utils:unwrap(capi_party:get_party(PartyID, Context)),
-        Revision = Party#domain_Party.revision,
-        Args = {InvoiceID, {revision, Revision}},
-        case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, Args, Context) of
-            {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
-                PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
-                {ok, {200, #{}, PaymentMethods}};
-            {exception, Exception} ->
-                case Exception of
-                    #payproc_InvalidUser{} ->
-                        {ok, general_error(404, <<"Invoice not found">>)};
-                    #payproc_InvoiceNotFound{} ->
-                        {ok, general_error(404, <<"Invoice not found">>)}
-                end
+        capi_handler:respond_if_undefined(ResultInvoice, general_error(404, <<"Invoice not found">>)),
+        PartyID = ResultInvoice#payproc_Invoice.invoice#domain_Invoice.owner_id,
+        case capi_party:get_party(PartyID, Context) of
+            {ok, Party} ->
+                Revision = Party#domain_Party.revision,
+                construct_payment_methods(InvoiceID, Revision, Context);
+            {error, #payproc_InvalidUser{}} ->
+                {ok, general_error(404, <<"Invoice not found">>)};
+            {error, #payproc_PartyNotFound{}} ->
+                {ok, general_error(404, <<"Invoice not found">>)}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -287,6 +289,21 @@ prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 %%
+
+construct_payment_methods(InvoiceID, Revision, Context) ->
+    Args = {InvoiceID, {revision, Revision}},
+    case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, Args, Context) of
+        {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
+            PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
+            {ok, {200, #{}, PaymentMethods}};
+        {exception, Exception} ->
+            case Exception of
+                #payproc_InvalidUser{} ->
+                    {ok, general_error(404, <<"Invoice not found">>)};
+                #payproc_InvoiceNotFound{} ->
+                    {ok, general_error(404, <<"Invoice not found">>)}
+            end
+    end.
 
 create_invoice(PartyID, InvoiceParams, Context, BenderPrefix) ->
     #{woody_context := WoodyCtx} = Context,

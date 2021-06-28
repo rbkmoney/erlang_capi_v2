@@ -89,7 +89,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutTools' ->
         case capi_party:get_contract(PartyID, maps:get('contractID', Req), Context) of
             {ok, #domain_Contract{payout_tools = PayoutTools}} ->
                 {ok, {200, #{}, [decode_payout_tool(P) || P <- PayoutTools]}};
-            {exception, #payproc_ContractNotFound{}} ->
+            {error, #payproc_ContractNotFound{}} ->
                 {ok, general_error(404, <<"Contract not found">>)}
         end
     end,
@@ -113,7 +113,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolByID' ->
                     false ->
                         {ok, general_error(404, <<"PayoutTool not found">>)}
                 end;
-            {exception, #payproc_ContractNotFound{}} ->
+            {error, #payproc_ContractNotFound{}} ->
                 {ok, general_error(404, <<"Contract not found">>)}
         end
     end,
@@ -132,7 +132,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolsForParty'
         case capi_party:get_contract(PartyID, ContractID, Context) of
             {ok, #domain_Contract{payout_tools = PayoutTools}} ->
                 {ok, {200, #{}, [decode_payout_tool(P) || P <- PayoutTools]}};
-            {exception, #payproc_ContractNotFound{}} ->
+            {error, #payproc_ContractNotFound{}} ->
                 {ok, general_error(404, <<"Contract not found">>)}
         end
     end,
@@ -157,7 +157,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolByIDForPar
                     false ->
                         {ok, general_error(404, <<"PayoutTool not found">>)}
                 end;
-            {exception, #payproc_ContractNotFound{}} ->
+            {error, #payproc_ContractNotFound{}} ->
                 {ok, general_error(404, <<"Contract not found">>)}
         end
     end,

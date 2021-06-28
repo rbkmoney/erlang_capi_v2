@@ -45,7 +45,7 @@ prepare(OperationID = 'GetClaimByID', Req, Context) ->
                     false ->
                         {ok, {200, #{}, decode_claim(Claim)}}
                 end;
-            {exception, #payproc_ClaimNotFound{}} ->
+            {error, #payproc_ClaimNotFound{}} ->
                 {ok, general_error(404, <<"Claim not found">>)}
         end
     end,
@@ -64,7 +64,7 @@ prepare(OperationID = 'CreateClaim', Req, Context) ->
             case capi_party:create_claim(PartyID, Changeset, Context) of
                 {ok, Claim} ->
                     {ok, {201, #{}, decode_claim(Claim)}};
-                {exception, Exception} ->
+                {error, Exception} ->
                     case Exception of
                         #payproc_InvalidPartyStatus{} ->
                             {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
@@ -128,9 +128,9 @@ prepare(OperationID = 'RevokeClaimByID', Req, Context) ->
             Context
         ),
         case Result of
-            {ok, _} ->
+            ok ->
                 {ok, {204, #{}, undefined}};
-            {exception, Exception} ->
+            {error, Exception} ->
                 case Exception of
                     #payproc_InvalidPartyStatus{} ->
                         {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};

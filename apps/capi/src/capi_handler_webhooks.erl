@@ -34,9 +34,9 @@ prepare('CreateWebhook' = OperationID, Req, Context) ->
                     {exception, #webhooker_LimitExceeded{}} ->
                         {ok, general_error(429, <<"Webhook limit exceeded">>)}
                 end;
-            {exception, #payproc_InvalidUser{}} ->
+            {error, #payproc_InvalidUser{}} ->
                 {ok, logic_error(invalidPartyID, <<"Party not found">>)};
-            {exception, #payproc_ShopNotFound{}} ->
+            {error, #payproc_ShopNotFound{}} ->
                 {ok, logic_error(invalidShopID, <<"Shop not found">>)}
         end
     end,

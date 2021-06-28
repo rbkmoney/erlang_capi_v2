@@ -257,19 +257,25 @@ prepare('GetInvoicePaymentMethodsByTemplateID' = OperationID, Req, Context) ->
     Process = fun() ->
         capi_handler:respond_if_undefined(InvoiceTemplate, general_error(404, <<"Invoice template not found">>)),
         Timestamp = genlib_rfc3339:format_relaxed(erlang:system_time(microsecond), microsecond),
-        PartyID = capi_handler_utils:get_party_id(Context),
-        {ok, Party} = capi_party:get_party(PartyID, Context),
-        Revision = Party#domain_Party.revision,
-        Args = {InvoiceTemplateID, Timestamp, {revision, Revision}},
-        case capi_handler_decoder_invoicing:construct_payment_methods(invoice_templating, Args, Context) of
-            {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
-                PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
-                {ok, {200, #{}, PaymentMethods}};
-            {exception, E} when
-                E == #payproc_InvalidUser{};
-                E == #payproc_InvoiceTemplateNotFound{};
-                E == #payproc_InvoiceTemplateRemoved{}
-            ->
+        PartyID = InvoiceTemplate#domain_InvoiceTemplate.owner_id,
+        case capi_party:get_party(PartyID, Context) of
+            {ok, Party} ->
+                Revision = Party#domain_Party.revision,
+                Args = {InvoiceTemplateID, Timestamp, {revision, Revision}},
+                case capi_handler_decoder_invoicing:construct_payment_methods(invoice_templating, Args, Context) of
+                    {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
+                        PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
+                        {ok, {200, #{}, PaymentMethods}};
+                    {exception, E} when
+                        E == #payproc_InvalidUser{};
+                        E == #payproc_InvoiceTemplateNotFound{};
+                        E == #payproc_InvoiceTemplateRemoved{}
+                    ->
+                        {ok, general_error(404, <<"Invoice template not found">>)}
+                end;
+            {error, #payproc_InvalidUser{}} ->
+                {ok, general_error(404, <<"Invoice template not found">>)};
+            {error, #payproc_PartyNotFound{}} ->
                 {ok, general_error(404, <<"Invoice template not found">>)}
         end
     end,

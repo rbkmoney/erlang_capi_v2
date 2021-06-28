@@ -24,7 +24,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetAccountByID' ->
         case capi_party:get_account_state(PartyID, AccountID, Context) of
             {ok, S} ->
                 {ok, {200, #{}, decode_account_state(S)}};
-            {exception, #payproc_AccountNotFound{}} ->
+            {error, #payproc_AccountNotFound{}} ->
                 {ok, general_error(404, <<"Account not found">>)}
         end
     end,

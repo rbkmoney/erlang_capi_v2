@@ -22,9 +22,9 @@ prepare(OperationID = 'ActivateShop', Req, Context) ->
     end,
     Process = fun() ->
         case capi_party:activate_shop(PartyID, ShopID, Context) of
-            {ok, _R} ->
+            ok ->
                 {ok, {204, #{}, undefined}};
-            {exception, Exception} ->
+            {error, Exception} ->
                 case Exception of
                     #payproc_ShopNotFound{} ->
                         {ok, general_error(404, <<"Shop not found">>)};
@@ -43,9 +43,9 @@ prepare(OperationID = 'SuspendShop', Req, Context) ->
     end,
     Process = fun() ->
         case capi_party:suspend_shop(PartyID, ShopID, Context) of
-            {ok, _R} ->
+            ok ->
                 {ok, {204, #{}, undefined}};
-            {exception, Exception} ->
+            {error, Exception} ->
                 case Exception of
                     #payproc_ShopNotFound{} ->
                         {ok, general_error(404, <<"Shop not found">>)};
@@ -77,7 +77,7 @@ prepare(OperationID = 'GetShopByID', Req, Context) ->
         case capi_party:get_shop(PartyID, ShopID, Context) of
             {ok, Shop} ->
                 {ok, {200, #{}, decode_shop(Shop)}};
-            {exception, #payproc_ShopNotFound{}} ->
+            {error, #payproc_ShopNotFound{}} ->
                 {ok, general_error(404, <<"Shop not found">>)}
         end
     end,
@@ -96,9 +96,9 @@ prepare(OperationID = 'GetShopsForParty', Req, Context) ->
         case capi_party:get_party(PartyID, Context) of
             {ok, Party} ->
                 {ok, {200, #{}, decode_shops_map(Party#domain_Party.shops)}};
-            {exception, #payproc_InvalidUser{}} ->
+            {error, #payproc_InvalidUser{}} ->
                 {ok, general_error(404, <<"Party not found">>)};
-            {exception, #payproc_PartyNotFound{}} ->
+            {error, #payproc_PartyNotFound{}} ->
                 {ok, general_error(404, <<"Party not found">>)}
         end
     end,
@@ -118,11 +118,11 @@ prepare(OperationID = 'GetShopByIDForParty', Req, Context) ->
         case capi_party:get_shop(PartyID, ShopID, Context) of
             {ok, Shop} ->
                 {ok, {200, #{}, decode_shop(Shop)}};
-            {exception, #payproc_InvalidUser{}} ->
+            {error, #payproc_InvalidUser{}} ->
                 {ok, general_error(404, <<"Party not found">>)};
-            {exception, #payproc_PartyNotFound{}} ->
+            {error, #payproc_PartyNotFound{}} ->
                 {ok, general_error(404, <<"Party not found">>)};
-            {exception, #payproc_ShopNotFound{}} ->
+            {error, #payproc_ShopNotFound{}} ->
                 {ok, general_error(404, <<"Shop not found">>)}
         end
     end,
@@ -140,9 +140,9 @@ prepare(OperationID = 'ActivateShopForParty', Req, Context) ->
         % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
         % remains authorized.
         case capi_party:activate_shop(PartyID, ShopID, Context) of
-            {ok, _R} ->
+            ok ->
                 {ok, {204, #{}, undefined}};
-            {exception, Exception} ->
+            {error, Exception} ->
                 case Exception of
                     #payproc_InvalidUser{} ->
                         {ok, general_error(404, <<"Party not found">>)};
@@ -164,14 +164,10 @@ prepare(OperationID = 'SuspendShopForParty', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        % TODO
-        % Here we're relying on hellgate ownership check, thus no explicit authorization.
-        % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
-        % remains authorized.
         case capi_party:suspend_shop(PartyID, ShopID, Context) of
-            {ok, _R} ->
+            ok ->
                 {ok, {204, #{}, undefined}};
-            {exception, Exception} ->
+            {error, Exception} ->
                 case Exception of
                     #payproc_InvalidUser{} ->
                         {ok, general_error(404, <<"Party not found">>)};

@@ -60,7 +60,7 @@ prepare(OperationID = 'GetPaymentInstitutionPaymentTerms', Req, Context) ->
         case compute_payment_institution_terms(PaymentInstitutionID, #payproc_Varset{}, Context) of
             {ok, #domain_TermSet{payments = PaymentTerms}} ->
                 {ok, {200, #{}, decode_payment_terms(PaymentTerms)}};
-            {exception, #payproc_PaymentInstitutionNotFound{}} ->
+            {error, #payproc_PaymentInstitutionNotFound{}} ->
                 {ok, general_error(404, <<"Payment institution not found">>)}
         end
     end,
@@ -74,7 +74,7 @@ prepare(OperationID = 'GetPaymentInstitutionPayoutMethods', Req, Context) ->
                 {ok, {200, #{}, decode_payout_methods_selector(PayoutMethods)}};
             {ok, #domain_TermSet{payouts = undefined}} ->
                 {ok, general_error(404, <<"Automatic payouts not allowed">>)};
-            {exception, #payproc_PaymentInstitutionNotFound{}} ->
+            {error, #payproc_PaymentInstitutionNotFound{}} ->
                 {ok, general_error(404, <<"Payment institution not found">>)}
         end
     end,
@@ -88,7 +88,7 @@ prepare(OperationID = 'GetPaymentInstitutionPayoutSchedules', Req, Context) ->
                 {ok, {200, #{}, decode_business_schedules_selector(Schedules)}};
             {ok, #domain_TermSet{payouts = undefined}} ->
                 {ok, general_error(404, <<"Automatic payouts not allowed">>)};
-            {exception, #payproc_PaymentInstitutionNotFound{}} ->
+            {error, #payproc_PaymentInstitutionNotFound{}} ->
                 {ok, general_error(404, <<"Payment institution not found">>)}
         end
     end,

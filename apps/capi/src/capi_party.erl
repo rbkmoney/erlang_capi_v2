@@ -16,7 +16,7 @@
 -export([get_claims/2]).
 -export([get_account_state/3]).
 
--type result() :: {ok, ok} | {ok, woody:result()} | {exception, woody_error:business_error()}.
+-type result() :: ok | {ok, woody:result()} | {error, woody_error:business_error()}.
 -type processing_context() :: capi_handler:processing_context().
 
 -type party_id() :: party_client_thrift:party_id().
@@ -35,47 +35,47 @@
 -spec create_party(party_id(), party_params(), processing_context()) -> result().
 create_party(PartyID, PartyParams, Context) ->
     {Client, ClientContext} = client_context(Context),
-    map_result(party_client_thrift:create(PartyID, PartyParams, Client, ClientContext)).
+    party_client_thrift:create(PartyID, PartyParams, Client, ClientContext).
 
 -spec get_party(party_id(), processing_context()) -> result().
 get_party(PartyID, Context) ->
     {Client, ClientContext} = client_context(Context),
-    map_result(party_client_thrift:get(PartyID, Client, ClientContext)).
+    party_client_thrift:get(PartyID, Client, ClientContext).
 
 -spec checkout_party(party_id(), party_revision_param(), processing_context()) -> result().
 checkout_party(PartyID, PartyRevision, Context) ->
     {Client, ClientContext} = client_context(Context),
-    map_result(party_client_thrift:checkout(PartyID, PartyRevision, Client, ClientContext)).
+    party_client_thrift:checkout(PartyID, PartyRevision, Client, ClientContext).
 
 -spec activate_party(party_id(), processing_context()) -> result().
 activate_party(PartyID, Context) ->
     {Client, ClientContext} = client_context(Context),
-    map_result(party_client_thrift:activate(PartyID, Client, ClientContext)).
+    party_client_thrift:activate(PartyID, Client, ClientContext).
 
 -spec suspend_party(party_id(), processing_context()) -> result().
 suspend_party(PartyID, Context) ->
     {Client, ClientContext} = client_context(Context),
-    map_result(party_client_thrift:suspend(PartyID, Client, ClientContext)).
+    party_client_thrift:suspend(PartyID, Client, ClientContext).
 
 -spec get_contract(party_id(), contract_id(), processing_context()) -> result().
 get_contract(PartyID, ContractID, Context) ->
     {Client, ClientContext} = client_context(Context),
-    map_result(party_client_thrift:get_contract(PartyID, ContractID, Client, ClientContext)).
+    party_client_thrift:get_contract(PartyID, ContractID, Client, ClientContext).
 
 -spec get_shop(party_id(), shop_id(), processing_context()) -> result().
 get_shop(PartyID, ShopID, Context) ->
     {Client, ClientContext} = client_context(Context),
-    map_result(party_client_thrift:get_shop(PartyID, ShopID, Client, ClientContext)).
+    party_client_thrift:get_shop(PartyID, ShopID, Client, ClientContext).
 
 -spec activate_shop(party_id(), shop_id(), processing_context()) -> result().
 activate_shop(PartyID, ShopID, Context) ->
     {Client, ClientContext} = client_context(Context),
-    map_result(party_client_thrift:activate_shop(PartyID, ShopID, Client, ClientContext)).
+    party_client_thrift:activate_shop(PartyID, ShopID, Client, ClientContext).
 
 -spec suspend_shop(party_id(), shop_id(), processing_context()) -> result().
 suspend_shop(PartyID, ShopID, Context) ->
     {Client, ClientContext} = client_context(Context),
-    map_result(party_client_thrift:suspend_shop(PartyID, ShopID, Client, ClientContext)).
+    party_client_thrift:suspend_shop(PartyID, ShopID, Client, ClientContext).
 
 -spec compute_payment_institution_terms(
     payment_institution_ref(),
@@ -84,19 +84,17 @@ suspend_shop(PartyID, ShopID, Context) ->
 ) -> result().
 compute_payment_institution_terms(Ref, Varset, Context) ->
     {Client, ClientContext} = client_context(Context),
-    map_result(
-        party_client_thrift:compute_payment_institution_terms(
-            Ref,
-            Varset,
-            Client,
-            ClientContext
-        )
+    party_client_thrift:compute_payment_institution_terms(
+        Ref,
+        Varset,
+        Client,
+        ClientContext
     ).
 
 -spec create_claim(party_id(), changeset(), processing_context()) -> result().
 create_claim(PartyID, Changeset, Context) ->
     {Client, ClientContext} = client_context(Context),
-    map_result(party_client_thrift:create_claim(PartyID, Changeset, Client, ClientContext)).
+    party_client_thrift:create_claim(PartyID, Changeset, Client, ClientContext).
 
 -spec revoke_claim(
     party_id(),
@@ -107,42 +105,29 @@ create_claim(PartyID, Changeset, Context) ->
 ) -> result().
 revoke_claim(PartyID, ClaimID, Revision, Reason, Context) ->
     {Client, ClientContext} = client_context(Context),
-    map_result(
-        party_client_thrift:revoke_claim(
-            PartyID,
-            ClaimID,
-            Revision,
-            Reason,
-            Client,
-            ClientContext
-        )
+    party_client_thrift:revoke_claim(
+        PartyID,
+        ClaimID,
+        Revision,
+        Reason,
+        Client,
+        ClientContext
     ).
 
 -spec get_claim(party_id(), claim_id(), processing_context()) -> result().
 get_claim(PartyID, ClaimID, Context) ->
     {Client, ClientContext} = client_context(Context),
-    map_result(party_client_thrift:get_claim(PartyID, ClaimID, Client, ClientContext)).
+    party_client_thrift:get_claim(PartyID, ClaimID, Client, ClientContext).
 
 -spec get_claims(party_id(), processing_context()) -> result().
 get_claims(PartyID, Context) ->
     {Client, ClientContext} = client_context(Context),
-    map_result(party_client_thrift:get_claims(PartyID, Client, ClientContext)).
+    party_client_thrift:get_claims(PartyID, Client, ClientContext).
 
 -spec get_account_state(party_id(), account_id(), processing_context()) -> result().
 get_account_state(PartyID, AccountID, Context) ->
     {Client, ClientContext} = client_context(Context),
-    map_result(party_client_thrift:get_account_state(PartyID, AccountID, Client, ClientContext)).
+    party_client_thrift:get_account_state(PartyID, AccountID, Client, ClientContext).
 
 client_context(#{party_client := Client, party_client_context := ClientContext}) ->
     {Client, ClientContext}.
-
-%%
-%% Преобразование формата ответа party_client в формат совместимый с capi_woody_client
-%%
--spec map_result(ok | {ok, any()} | {error, any()}) -> {ok, ok} | {ok, woody:result()} | {exception, any()}.
-map_result(ok) ->
-    {ok, ok};
-map_result({ok, _Other} = Result) ->
-    Result;
-map_result({error, Exception}) ->
-    {exception, Exception}.

@@ -1491,7 +1491,8 @@ get_contract_by_id_ok_test(Config) ->
         [
             {party_management, fun
                 ('GetRevision', _) -> {ok, ?INTEGER};
-                ('Checkout', _) -> {ok, ?PARTY}
+                ('Checkout', _) -> {ok, ?PARTY};
+                ('GetContract', _) -> {ok, ?CONTRACT}
             end}
         ],
         Config
@@ -1514,7 +1515,8 @@ get_contract_by_id_for_party_ok_test(Config) ->
         [
             {party_management, fun
                 ('GetRevision', _) -> {ok, ?INTEGER};
-                ('Checkout', _) -> {ok, ?PARTY}
+                ('Checkout', _) -> {ok, ?PARTY};
+                ('GetContract', _) -> {ok, ?CONTRACT}
             end}
         ],
         Config
