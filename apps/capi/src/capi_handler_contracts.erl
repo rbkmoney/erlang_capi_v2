@@ -22,14 +22,8 @@ prepare(OperationID = 'GetContracts', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case capi_party:get_party(PartyID, Context) of
-            {ok, Party} ->
-                {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}};
-            {error, #payproc_InvalidUser{}} ->
-                {ok, general_error(404, <<"Party not found">>)};
-            {error, #payproc_PartyNotFound{}} ->
-                {ok, general_error(404, <<"Party not found">>)}
-        end
+        {ok, Party} = capi_party:get_party(PartyID, Context),
+        {ok, {200, #{}, decode_contracts_map(Party#domain_Party.contracts, Party#domain_Party.contractors)}}
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetContractByID', Req, Context) ->
@@ -42,13 +36,13 @@ prepare(OperationID = 'GetContractByID', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case capi_party:get_contract(PartyID, ContractID, Context) of
-            {ok, Contract} ->
-                % Получение Party требуется для извлечения domain_Party.contractors
-                {ok, Party} = capi_party:get_party(PartyID, Context),
-                {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}};
-            {error, #payproc_ContractNotFound{}} ->
-                {ok, general_error(404, <<"Contract not found">>)}
+        % Получение Party требуется для извлечения domain_Party.contractors
+        {ok, Party} = capi_party:get_party(PartyID, Context),
+        case genlib_map:get(ContractID, Party#domain_Party.contracts) of
+            undefined ->
+                {ok, general_error(404, <<"Contract not found">>)};
+            Contract ->
+                {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
