@@ -16,7 +16,7 @@
 prepare(OperationID, Req, Context) when OperationID =:= 'SearchInvoices' ->
     OperationContext = make_authorization_query(OperationID, Context, Req),
     Prototypes = [{operation, OperationContext}],
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)} end,
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context, Req)} end,
     Process = fun() ->
         Query = make_query(Context, Req),
         Opts = #{
@@ -29,7 +29,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'SearchInvoices' ->
 prepare(OperationID, Req, Context) when OperationID =:= 'SearchPayments' ->
     OperationContext = make_authorization_query(OperationID, Context, Req),
     Prototypes = [{operation, OperationContext}],
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)} end,
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context, Req)} end,
     Process = fun() ->
         Query = make_query(Context, Req),
         Opts = #{
@@ -42,7 +42,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'SearchPayments' ->
 prepare(OperationID, Req, Context) when OperationID =:= 'SearchRefunds' ->
     OperationContext = make_authorization_query(OperationID, Context, Req),
     Prototypes = [{operation, OperationContext}],
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)} end,
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context, Req)} end,
     Process = fun() ->
         Query = make_query(Context, Req),
         Opts = #{
@@ -57,7 +57,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'SearchRefunds' ->
 prepare(OperationID, Req, Context) when OperationID =:= 'SearchPayouts' ->
     OperationContext = make_authorization_query(OperationID, Context, Req),
     Prototypes = [{operation, OperationContext}],
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)} end,
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context, Req)} end,
     Process = fun() ->
         Query = make_query(Context, Req),
         Opts = #{

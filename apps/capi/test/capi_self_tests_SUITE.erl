@@ -87,8 +87,9 @@ init_per_group(GroupName, Config) when stream_handler_tests =:= GroupName; valid
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
     Context = capi_ct_helper:get_context(Token),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    [{context, Context}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config];
+    Apps1 = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
+    Apps2 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+    [{context, Context}, {group_apps, Apps1 ++ Apps2}, {group_test_sup, SupPid} | Config];
 init_per_group(_, Config) ->
     Config.
 

@@ -18,7 +18,7 @@ prepare(OperationID = 'ActivateShop', Req, Context) ->
     ShopID = maps:get(shopID, Req),
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID, party => PartyID, shop => ShopID}}],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         case capi_party:activate_shop(PartyID, ShopID, Context) of
@@ -39,7 +39,7 @@ prepare(OperationID = 'SuspendShop', Req, Context) ->
     ShopID = maps:get(shopID, Req),
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID, party => PartyID, shop => ShopID}}],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         case capi_party:suspend_shop(PartyID, ShopID, Context) of
@@ -59,7 +59,7 @@ prepare(OperationID = 'GetShops', Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID, party => PartyID}}],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         Party = capi_utils:unwrap(capi_party:get_party(PartyID, Context)),
@@ -71,7 +71,7 @@ prepare(OperationID = 'GetShopByID', Req, Context) ->
     ShopID = maps:get(shopID, Req),
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID, party => PartyID, shop => ShopID}}],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         case capi_party:get_shop(PartyID, ShopID, Context) of
@@ -86,7 +86,7 @@ prepare(OperationID = 'GetShopsForParty', Req, Context) ->
     PartyID = maps:get(partyID, Req),
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID, party => PartyID}}],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         % TODO
@@ -108,7 +108,7 @@ prepare(OperationID = 'GetShopByIDForParty', Req, Context) ->
     ShopID = maps:get(shopID, Req),
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID, party => PartyID, shop => ShopID}}],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         % TODO
@@ -132,7 +132,7 @@ prepare(OperationID = 'ActivateShopForParty', Req, Context) ->
     ShopID = maps:get(shopID, Req),
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID, party => PartyID, shop => ShopID}}],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         % TODO
@@ -161,7 +161,7 @@ prepare(OperationID = 'SuspendShopForParty', Req, Context) ->
     ShopID = maps:get(shopID, Req),
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID, party => PartyID, shop => ShopID}}],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         case capi_party:suspend_shop(PartyID, ShopID, Context) of

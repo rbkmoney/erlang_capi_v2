@@ -19,7 +19,7 @@ prepare(OperationID = 'GetContracts', Req, Context) ->
         Prototypes = [
             {operation, #{party => PartyID, id => OperationID}}
         ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         {ok, Party} = capi_party:get_party(PartyID, Context),
@@ -33,7 +33,7 @@ prepare(OperationID = 'GetContractByID', Req, Context) ->
         Prototypes = [
             {operation, #{party => PartyID, contract => ContractID, id => OperationID}}
         ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         % Получение Party требуется для извлечения domain_Party.contractors
@@ -53,7 +53,7 @@ prepare(OperationID = 'GetContractAdjustments', Req, Context) ->
         Prototypes = [
             {operation, #{party => PartyID, contract => ContractID, id => OperationID}}
         ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         case capi_party:get_contract(PartyID, ContractID, Context) of
@@ -72,7 +72,7 @@ prepare(OperationID = 'GetContractAdjustmentByID', Req, Context) ->
         Prototypes = [
             {operation, #{party => PartyID, contract => ContractID, id => OperationID}}
         ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         case capi_party:get_contract(PartyID, ContractID, Context) of
@@ -95,7 +95,7 @@ prepare(OperationID = 'GetContractsForParty', Req, Context) ->
         Prototypes = [
             {operation, #{party => PartyID, id => OperationID}}
         ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         case capi_party:get_party(PartyID, Context) of
@@ -115,7 +115,7 @@ prepare(OperationID = 'GetContractByIDForParty', Req, Context) ->
         Prototypes = [
             {operation, #{party => PartyID, contract => ContractID, id => OperationID}}
         ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         case capi_party:get_contract(PartyID, ContractID, Context) of
@@ -135,7 +135,7 @@ prepare(OperationID = 'GetContractAdjustmentsForParty', Req, Context) ->
         Prototypes = [
             {operation, #{party => PartyID, contract => ContractID, id => OperationID}}
         ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         case capi_party:get_contract(PartyID, ContractID, Context) of
@@ -158,7 +158,7 @@ prepare(OperationID = 'GetContractAdjustmentByIDForParty', Req, Context) ->
         Prototypes = [
             {operation, #{party => PartyID, contract => ContractID, id => OperationID}}
         ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         case capi_party:get_contract(PartyID, ContractID, Context) of

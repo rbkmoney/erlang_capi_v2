@@ -103,7 +103,7 @@ mk_authorize_operation(OperationID, Context, Req) ->
         Prototypes = [
             {operation, #{id => OperationID}}
         ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end.
 
 check_payment_institution(Realm, Residence, PaymentInstitution) ->

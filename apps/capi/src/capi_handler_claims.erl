@@ -19,7 +19,7 @@ prepare(OperationID = 'GetClaims', Req, Context) ->
         Prototypes = [
             {operation, #{party => PartyID, id => OperationID}}
         ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         Claims = capi_utils:unwrap(capi_party:get_claims(PartyID, Context)),
@@ -33,7 +33,7 @@ prepare(OperationID = 'GetClaimByID', Req, Context) ->
         Prototypes = [
             {operation, #{party => PartyID, claim => ClaimID, id => OperationID}}
         ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         case capi_party:get_claim(PartyID, genlib:to_int(ClaimID), Context) of
@@ -58,7 +58,7 @@ prepare(OperationID = 'CreateClaim', Req, Context) ->
             Prototypes = [
                 {operation, #{party => PartyID, id => OperationID}}
             ],
-            {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+            {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
         end,
         Process = fun() ->
             case capi_party:create_claim(PartyID, Changeset, Context) of
@@ -97,7 +97,7 @@ prepare(OperationID = 'CreateClaim', Req, Context) ->
 %         Prototypes = [
 %             {operation, #{party => PartyID, claim => ClaimID, id => OperationID}}
 %         ],
-%         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+%         {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
 %     end,
 %     Process = fun() ->
 %         Party = capi_utils:unwrap(
@@ -117,7 +117,7 @@ prepare(OperationID = 'RevokeClaimByID', Req, Context) ->
         Prototypes = [
             {operation, #{party => PartyID, claim => ClaimID, id => OperationID}}
         ],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         Result = capi_party:revoke_claim(

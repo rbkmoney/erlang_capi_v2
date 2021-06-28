@@ -39,7 +39,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayout' ->
         {payouts, #{payout => Payout}}
     ],
     Authorize = fun() ->
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         capi_handler:respond_if_undefined(Payout, general_error(404, <<"Payout not found">>)),
@@ -56,7 +56,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'CreatePayout' ->
         shop => maps:get(<<"shopID">>, PayoutParams)
     },
     Authorize = fun() ->
-        {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
+        {ok, capi_auth:authorize_operation([{operation, OperationContext}], Context, Req)}
     end,
     Process = fun() ->
         CreateRequest = encode_payout_params(PartyID, PayoutParams),
@@ -83,7 +83,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutTools' ->
         party => PartyID
     },
     Authorize = fun() ->
-        {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
+        {ok, capi_auth:authorize_operation([{operation, OperationContext}], Context, Req)}
     end,
     Process = fun() ->
         case capi_party:get_contract(PartyID, maps:get('contractID', Req), Context) of
@@ -101,7 +101,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolByID' ->
         party => PartyID
     },
     Authorize = fun() ->
-        {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
+        {ok, capi_auth:authorize_operation([{operation, OperationContext}], Context, Req)}
     end,
     Process = fun() ->
         case capi_party:get_contract(PartyID, maps:get('contractID', Req), Context) of
@@ -125,7 +125,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolsForParty'
         party => PartyID
     },
     Authorize = fun() ->
-        {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
+        {ok, capi_auth:authorize_operation([{operation, OperationContext}], Context, Req)}
     end,
     Process = fun() ->
         ContractID = maps:get('contractID', Req),
@@ -144,7 +144,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolByIDForPar
         party => PartyID
     },
     Authorize = fun() ->
-        {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
+        {ok, capi_auth:authorize_operation([{operation, OperationContext}], Context, Req)}
     end,
     Process = fun() ->
         ContractID = maps:get('contractID', Req),
@@ -167,7 +167,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetScheduleByRef' ->
         id => OperationID
     },
     Authorize = fun() ->
-        {ok, capi_auth:authorize_operation(OperationID, [{operation, OperationContext}], Context, Req)}
+        {ok, capi_auth:authorize_operation([{operation, OperationContext}], Context, Req)}
     end,
     Process = fun() ->
         case get_schedule_by_id(genlib:to_int(maps:get(scheduleID, Req)), Context) of

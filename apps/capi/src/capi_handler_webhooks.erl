@@ -20,7 +20,7 @@ prepare('CreateWebhook' = OperationID, Req, Context) ->
     PartyID = maps:get(<<"partyID">>, Params, UserID),
     Authorize = fun() ->
         Prototypes = [{operation, #{party => PartyID, id => OperationID}}],
-        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -45,7 +45,7 @@ prepare('GetWebhooks' = OperationID, Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     Authorize = fun() ->
         Prototypes = [{operation, #{party => PartyID, id => OperationID}}],
-        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -74,7 +74,7 @@ prepare('GetWebhookByID' = OperationID, Req, Context) ->
             {operation, #{webhook => WebhookID, id => OperationID}},
             {webhooks, #{webhook => Webhook}}
         ],
-        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -101,7 +101,7 @@ prepare('DeleteWebhookByID' = OperationID, Req, Context) ->
             {operation, #{webhook => WebhookID, id => OperationID}},
             {webhooks, #{webhook => Webhook}}
         ],
-        Resolution = capi_auth:authorize_operation(OperationID, Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
         {ok, Resolution}
     end,
     Process = fun() ->

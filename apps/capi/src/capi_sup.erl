@@ -56,11 +56,11 @@ enable_health_logging(Check) ->
     EvHandler = {erl_health_event_handler, []},
     maps:map(fun(_, V = {_, _, _}) -> #{runner => V, event_handler => EvHandler} end, Check).
 
--spec get_uac_config() -> uac:configuration(capi_auth:metadata()).
+-spec get_uac_config() -> uac:configuration(capi_auth_legacy:metadata()).
 get_uac_config() ->
     maps:merge(
         genlib_app:env(capi, access_conf),
-        #{access => capi_auth:get_access_config()}
+        #{access => capi_auth_legacy:get_access_config()}
     ).
 
 -spec get_prometheus_route() -> {iodata(), module(), _Opts :: any()}.
