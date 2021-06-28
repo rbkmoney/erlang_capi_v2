@@ -42,18 +42,13 @@ prepare(OperationID = 'GetContractByID', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case capi_party:get_party(PartyID, Context) of
-            {ok, Party} ->
-                case capi_party:get_contract(PartyID, ContractID, Context) of
-                    {ok, Contract} ->
-                        {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}};
-                    {error, #payproc_ContractNotFound{}} ->
-                        {ok, general_error(404, <<"Contract not found">>)}
-                end;
-            {error, #payproc_InvalidUser{}} ->
-                {ok, general_error(404, <<"Party not found">>)};
-            {error, #payproc_PartyNotFound{}} ->
-                {ok, general_error(404, <<"Party not found">>)}
+        case capi_party:get_contract(PartyID, ContractID, Context) of
+            {ok, Contract} ->
+                % Получение Party требуется для извлечения domain_Party.contractors
+                {ok, Party} = capi_party:get_party(PartyID, Context),
+                {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}};
+            {error, #payproc_ContractNotFound{}} ->
+                {ok, general_error(404, <<"Contract not found">>)}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -129,18 +124,13 @@ prepare(OperationID = 'GetContractByIDForParty', Req, Context) ->
         {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case capi_party:get_party(PartyID, Context) of
-            {ok, Party} ->
-                case capi_party:get_contract(PartyID, ContractID, Context) of
-                    {ok, Contract} ->
-                        {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}};
-                    {error, #payproc_ContractNotFound{}} ->
-                        {ok, general_error(404, <<"Contract not found">>)}
-                end;
-            {error, #payproc_InvalidUser{}} ->
-                {ok, general_error(404, <<"Party not found">>)};
-            {error, #payproc_PartyNotFound{}} ->
-                {ok, general_error(404, <<"Party not found">>)}
+        case capi_party:get_contract(PartyID, ContractID, Context) of
+            {ok, Contract} ->
+                % Получение Party требуется для извлечения domain_Party.contractors
+                {ok, Party} = capi_party:get_party(PartyID, Context),
+                {ok, {200, #{}, decode_contract(Contract, Party#domain_Party.contractors)}};
+            {error, #payproc_ContractNotFound{}} ->
+                {ok, general_error(404, <<"Contract not found">>)}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
