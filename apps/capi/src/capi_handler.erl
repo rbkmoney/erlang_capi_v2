@@ -19,6 +19,7 @@
 -type request_context() :: swag_server:request_context().
 -type response() :: swag_server:response().
 -type processing_context() :: #{
+    operation_id := operation_id(),
     swagger_context := swag_server:request_context(),
     woody_context := woody_context:ctx()
 }.
@@ -54,13 +55,19 @@
 -define(DOMAIN, <<"common-api">>).
 
 -spec authorize_api_key(operation_id(), swag_server:api_key(), request_context(), handler_opts()) ->
-    Result :: false | {true, capi_auth:context()}.
+    Result :: false | {true, capi_auth:preauth_context()}.
 authorize_api_key(OperationID, ApiKey, _Context, _HandlerOpts) ->
-    case uac:authorize_api_key(ApiKey, #{}) of
+    %% Since we require the request id field to create a woody context for our trip to token_keeper
+    %% it seems it is no longer possible to perform any authorization in this method.
+    %% To gain this ability back be would need to rewrite the swagger generator to perform its
+    %% request validation checks before this stage.
+    %% But since a decent chunk of authorization logic is already defined in the handler function
+    %% it is probably easier to move it there in its entirety.
+    case capi_auth:preauthorize_api_key(ApiKey) of
         {ok, Context} ->
-            check_blacklist(ApiKey, Context);
+            {true, Context};
         {error, Error} ->
-            _ = logger:info("API Key authorization failed for ~p due to ~p", [OperationID, Error]),
+            _ = logger:info("API Key preauthorization failed for ~p due to ~p", [OperationID, Error]),
             false
     end.
 
@@ -122,14 +129,16 @@ handle_request(OperationID, Req, SwagContext, HandlerOpts) ->
     SwagContext :: request_context(),
     HandlerOpts :: handler_opts()
 ) -> {ok | error, response()}.
-handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext}, _HandlerOpts) ->
+handle_function_(OperationID, Req, SwagContext0, _HandlerOpts) ->
     try
         RpcID = create_rpc_id(Req),
         ok = set_rpc_meta(RpcID),
         ok = set_request_meta(OperationID, Req),
         _ = logger:info("Processing request ~p", [OperationID]),
-        WoodyContext = attach_deadline(Req, create_woody_context(RpcID, AuthContext)),
-        Context = create_processing_context(SwagContext, WoodyContext),
+        WoodyContext0 = attach_deadline(Req, create_woody_context(RpcID)),
+        SwagContext = do_authorize_api_key(SwagContext0, WoodyContext0),
+        WoodyContext = put_user_identity(WoodyContext0, get_auth_context(SwagContext)),
+        Context = create_processing_context(OperationID, SwagContext, WoodyContext),
         ok = set_context_meta(Context),
         {ok, #{authorize := Authorize, process := Process}} =
             prepare(OperationID, Req, Context, get_handlers()),
@@ -145,6 +154,9 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
                 {ok, {401, #{}, undefined}}
         end
     catch
+        throw:{token_auth_failed, Reason} ->
+            _ = logger:info("API Key authorization failed for ~p due to ~p", [OperationID, Reason]),
+            {error, {401, #{}, undefined}};
         throw:{handler_respond, HandlerResponse} ->
             {ok, HandlerResponse};
         throw:{bad_deadline, _Deadline} ->
@@ -155,7 +167,7 @@ handle_function_(OperationID, Req, SwagContext = #{auth_context := AuthContext},
         error:{woody_error, {Source, Class, Details}} ->
             process_woody_error(Source, Class, Details);
         Class:Reason:Stacktrace ->
-            process_general_error(Class, Reason, Stacktrace, Req, SwagContext)
+            process_general_error(Class, Reason, Stacktrace, Req, SwagContext0)
     after
         ok = clear_rpc_meta()
     end.
@@ -188,8 +200,28 @@ respond_if_undefined(_, _Response) ->
 
 %%
 
-create_processing_context(SwaggerContext, WoodyContext) ->
+get_auth_context(#{auth_context := AuthContext}) ->
+    AuthContext.
+
+do_authorize_api_key(SwagContext = #{auth_context := PreAuthContext}, WoodyContext) ->
+    case capi_auth:authorize_api_key(PreAuthContext, make_token_context(SwagContext), WoodyContext) of
+        {ok, AuthContext} ->
+            SwagContext#{auth_context => AuthContext};
+        {error, Error} ->
+            throw({token_auth_failed, Error})
+    end.
+
+make_token_context(#{cowboy_req := CowboyReq}) ->
+    case cowboy_req:header(<<"origin">>, CowboyReq) of
+        Origin when is_binary(Origin) ->
+            #{request_origin => Origin};
+        undefined ->
+            undefined
+    end.
+
+create_processing_context(OperationID, SwaggerContext, WoodyContext) ->
     #{
+        operation_id => OperationID,
         woody_context => WoodyContext,
         swagger_context => SwaggerContext
     }.
@@ -199,15 +231,19 @@ create_rpc_id(Req) ->
     RequestID = maps:get('X-Request-ID', Req),
     woody_context:new_rpc_id(genlib:to_binary(RequestID)).
 
-create_woody_context(RpcID, AuthContext) ->
-    woody_user_identity:put(collect_user_identity(AuthContext), woody_context:new(RpcID)).
+create_woody_context(RpcID) ->
+    woody_context:new(RpcID).
+
+put_user_identity(WoodyContext, AuthContext) ->
+    woody_user_identity:put(collect_user_identity(AuthContext), WoodyContext).
 
 collect_user_identity(AuthContext) ->
     genlib_map:compact(#{
-        id => uac_authorizer_jwt:get_subject_id(AuthContext),
+        id => capi_auth:get_subject_id(AuthContext),
+        %%TODO: Store user realm in authdata meta and extract it here
         realm => ?REALM,
-        email => uac_authorizer_jwt:get_claim(<<"email">>, AuthContext, undefined),
-        username => uac_authorizer_jwt:get_claim(<<"name">>, AuthContext, undefined)
+        email => capi_auth:get_subject_email(AuthContext),
+        username => capi_auth:get_subject_name(AuthContext)
     }).
 
 attach_deadline(#{'X-Request-Deadline' := undefined}, Context) ->
@@ -281,14 +317,4 @@ clear_rpc_meta() ->
             ok;
         Metadata ->
             logger:set_process_metadata(maps:without([trace_id, parent_id, span_id], Metadata))
-    end.
-
-check_blacklist(ApiKey, Context) ->
-    case capi_api_key_blacklist:check(ApiKey) of
-        true ->
-            SubjectId = uac_authorizer_jwt:get_subject_id(Context),
-            _ = logger:warning("Blacklisted API Key usage detected for subject_id: ~p", [SubjectId]),
-            false;
-        false ->
-            {true, Context}
     end.

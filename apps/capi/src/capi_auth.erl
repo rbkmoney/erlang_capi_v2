@@ -1,430 +1,164 @@
 -module(capi_auth).
 
--export([issue_access_token/2]).
--export([issue_access_token/3]).
+%% API functions
 
+-export([get_subject_id/1]).
+-export([get_subject_email/1]).
+-export([get_subject_name/1]).
+
+-export([preauthorize_api_key/1]).
+-export([authorize_api_key/3]).
+-export([authorize_operation/3]).
+
+% @NOTE Token issuing facilities are not yet available for tokenkeeper, use capi_auth_legacy
+%-export([issue_access_token/2]).
+%-export([issue_access_token/3]).
+%-export([get_extra_properties/0]).
+
+%% Legacy compatability functions
 -export([get_consumer/1]).
+-export([get_legacy_claims/1]).
 
--export([get_operation_access/2]).
+%% API types
 
--export([get_access_config/0]).
+-type token_type() :: bearer.
 
--export([get_extra_properties/0]).
--export([authorize_operation/4]).
-
--type context() :: uac:context().
--type claims() :: uac:claims().
--type consumer() :: client | merchant | provider.
--type realm() :: binary().
--type auth_method() ::
-    user_session_token.
-
--type metadata() :: #{
-    auth_method => auth_method(),
-    user_realm => realm()
-}.
+-type preauth_context() :: {unauthorized, {token_type(), token_keeper_client:token()}}.
+-type auth_context() ::
+    {authorized, #{
+        legacy := capi_auth_legacy:context(),
+        auth_data => tk_auth_data:auth_data()
+    }}.
 
 -type resolution() ::
     allowed
     | forbidden
     | {forbidden, _Reason}.
 
--export_type([context/0]).
--export_type([claims/0]).
--export_type([consumer/0]).
--export_type([auth_method/0]).
--export_type([metadata/0]).
+-type consumer() :: capi_auth_legacy:consumer().
+
+-export_type([preauth_context/0]).
+-export_type([auth_context/0]).
 -export_type([resolution/0]).
+-export_type([consumer/0]).
 
--define(SIGNEE, capi).
+%% Internal types
+
+-define(authorized(Ctx), {authorized, Ctx}).
+-define(unauthorized(Ctx), {unauthorized, Ctx}).
+
+%%
+%% API functions
+%%
+
+-spec get_subject_id(auth_context()) -> binary() | undefined.
+get_subject_id(?authorized(#{auth_data := AuthData})) ->
+    case tk_auth_data:get_party_id(AuthData) of
+        PartyId when is_binary(PartyId) ->
+            PartyId;
+        undefined ->
+            tk_auth_data:get_user_id(AuthData)
+    end;
+get_subject_id(?authorized(#{legacy := Context})) ->
+    capi_auth_legacy:get_subject_id(Context).
+
+-spec get_subject_email(auth_context()) -> binary() | undefined.
+get_subject_email(?authorized(#{auth_data := AuthData})) ->
+    tk_auth_data:get_user_email(AuthData);
+get_subject_email(?authorized(#{legacy := Context})) ->
+    capi_auth_legacy:get_subject_email(Context).
+
+-spec get_subject_name(auth_context()) -> binary() | undefined.
+get_subject_name(?authorized(#{auth_data := _AuthData})) ->
+    %% Subject names are no longer a thing for auth_data contexts
+    undefined;
+get_subject_name(?authorized(#{legacy := Context})) ->
+    capi_auth_legacy:get_subject_name(Context).
 
 %%
 
-%% TODO
-%% Hardcode for now, should pass it here probably as an argument
--define(DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME, 259200).
--define(DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME, 259200).
-
--include_lib("bouncer_proto/include/bouncer_context_v1_thrift.hrl").
-
--type token_spec() ::
-    {invoice, InvoiceID :: binary()}
-    | {invoice_tpl, InvoiceTplID :: binary()}
-    | {customer, CustomerID :: binary()}.
-
--spec issue_access_token(PartyID :: binary(), token_spec()) -> uac_authorizer_jwt:token().
-issue_access_token(PartyID, TokenSpec) ->
-    issue_access_token(PartyID, TokenSpec, #{}).
-
--spec issue_access_token(PartyID :: binary(), token_spec(), map()) -> uac_authorizer_jwt:token().
-issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
-    TokenID = capi_utils:get_unique_id(),
-    AuthContext = resolve_bouncer_ctx(TokenSpec, PartyID),
-    ContextFragment = bouncer_context_helpers:make_auth_fragment(
-        AuthContext#{
-            token => #{id => TokenID}
-        }
-    ),
-    Claims1 = maps:merge(
-        ExtraProperties,
-        resolve_token_spec(TokenSpec)
-    ),
-    Claims2 = capi_bouncer:set_claim(
-        bouncer_client:bake_context_fragment(ContextFragment),
-        Claims1
-    ),
-    capi_utils:unwrap(
-        uac_authorizer_jwt:issue(TokenID, PartyID, Claims2, ?SIGNEE)
-    ).
-
--spec resolve_token_spec(token_spec()) -> claims().
-resolve_token_spec({invoice, InvoiceID}) ->
-    DomainRoles = #{
-        <<"common-api">> => uac_acl:from_list([
-            {[{invoices, InvoiceID}], read},
-            {[{invoices, InvoiceID}, payments], read},
-            {[{invoices, InvoiceID}, payments], write},
-            {[payment_resources], write}
-        ])
-    },
-    Expiration = lifetime_to_expiration(?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME),
-    #{
-        <<"exp">> => Expiration,
-        <<"resource_access">> => DomainRoles,
-        % token consumer
-        <<"cons">> => <<"client">>
-    };
-resolve_token_spec({invoice_tpl, InvoiceTplID}) ->
-    DomainRoles = #{
-        <<"common-api">> => uac_acl:from_list([
-            {[party, {invoice_templates, InvoiceTplID}], read},
-            {[party, {invoice_templates, InvoiceTplID}, invoice_template_invoices], write}
-        ])
-    },
-    #{
-        <<"exp">> => unlimited,
-        <<"resource_access">> => DomainRoles
-    };
-resolve_token_spec({customer, CustomerID}) ->
-    DomainRoles = #{
-        <<"common-api">> => uac_acl:from_list([
-            {[{customers, CustomerID}], read},
-            {[{customers, CustomerID}, bindings], read},
-            {[{customers, CustomerID}, bindings], write},
-            {[payment_resources], write}
-        ])
-    },
-    Expiration = lifetime_to_expiration(?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME),
-    #{
-        <<"exp">> => Expiration,
-        <<"resource_access">> => DomainRoles
-    }.
-
--spec resolve_bouncer_ctx(token_spec(), _PartyID :: binary()) -> bouncer_context_helpers:auth_params().
-resolve_bouncer_ctx({invoice, InvoiceID}, PartyID) ->
-    #{
-        method => ?BCTX_V1_AUTHMETHOD_INVOICEACCESSTOKEN,
-        expiration => make_auth_expiration(lifetime_to_expiration(?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME)),
-        scope => [
-            #{
-                party => #{id => PartyID},
-                invoice => #{id => InvoiceID}
-            }
-        ]
-    };
-resolve_bouncer_ctx({invoice_tpl, InvoiceTemplateID}, PartyID) ->
-    #{
-        method => ?BCTX_V1_AUTHMETHOD_INVOICETEMPLATEACCESSTOKEN,
-        expiration => make_auth_expiration(unlimited),
-        scope => [
-            #{
-                party => #{id => PartyID},
-                invoice_template => #{id => InvoiceTemplateID}
-            }
-        ]
-    };
-resolve_bouncer_ctx({customer, CustomerID}, PartyID) ->
-    #{
-        method => ?BCTX_V1_AUTHMETHOD_CUSTOMERACCESSTOKEN,
-        expiration => make_auth_expiration(lifetime_to_expiration(?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME)),
-        scope => [
-            #{
-                party => #{id => PartyID},
-                customer => #{id => CustomerID}
-            }
-        ]
-    }.
-
-%%
-
--spec get_operation_access(swag_server:operation_id(), swag_server:object()) ->
-    [{uac_acl:scope(), uac_acl:permission()}].
-get_operation_access('CreateInvoice', _) ->
-    [{[invoices], write}];
-get_operation_access('GetInvoiceByID', #{'invoiceID' := ID}) ->
-    [{[{invoices, ID}], read}];
-get_operation_access('GetInvoiceByExternalID', _) ->
-    [{[invoices], read}];
-get_operation_access('GetInvoiceEvents', #{'invoiceID' := ID}) ->
-    [{[{invoices, ID}], read}];
-get_operation_access('GetInvoicePaymentMethods', #{'invoiceID' := ID}) ->
-    [{[{invoices, ID}], read}];
-get_operation_access('FulfillInvoice', #{'invoiceID' := ID}) ->
-    [{[{invoices, ID}], write}];
-get_operation_access('RescindInvoice', #{'invoiceID' := ID}) ->
-    [{[{invoices, ID}], write}];
-get_operation_access('CreateInvoiceAccessToken', #{'invoiceID' := ID}) ->
-    [{[{invoices, ID}], write}];
-get_operation_access('CreatePayment', #{'invoiceID' := ID}) ->
-    [{[{invoices, ID}, payments], write}];
-get_operation_access('GetPayments', #{'invoiceID' := ID}) ->
-    [{[{invoices, ID}, payments], read}];
-get_operation_access('GetPaymentByID', #{'invoiceID' := ID1, paymentID := ID2}) ->
-    [{[{invoices, ID1}, {payments, ID2}], read}];
-get_operation_access('GetPaymentByExternalID', _) ->
-    [{[invoices, payments], read}];
-get_operation_access('CancelPayment', #{'invoiceID' := ID1, paymentID := ID2}) ->
-    [{[{invoices, ID1}, {payments, ID2}], write}];
-get_operation_access('CapturePayment', #{'invoiceID' := ID1, paymentID := ID2}) ->
-    [{[{invoices, ID1}, {payments, ID2}], write}];
-get_operation_access('CreateRefund', _) ->
-    [{[invoices, payments], write}];
-get_operation_access('GetRefunds', _) ->
-    [{[invoices, payments], read}];
-get_operation_access('GetRefundByID', _) ->
-    [{[invoices, payments], read}];
-get_operation_access('GetRefundByExternalID', _) ->
-    [{[invoices, payments], read}];
-get_operation_access('GetChargebacks', _) ->
-    [{[invoices, payments], read}];
-get_operation_access('GetChargebackByID', _) ->
-    [{[invoices, payments], read}];
-get_operation_access('SearchInvoices', _) ->
-    [{[invoices], read}];
-get_operation_access('SearchPayments', _) ->
-    [{[invoices, payments], read}];
-get_operation_access('SearchRefunds', _) ->
-    [{[invoices, payments], read}];
-get_operation_access('SearchPayouts', _) ->
-    [{[party], read}];
-get_operation_access('CreatePaymentResource', _) ->
-    [{[payment_resources], write}];
-get_operation_access('GetPaymentConversionStats', _) ->
-    [{[party], read}];
-get_operation_access('GetPaymentRevenueStats', _) ->
-    [{[party], read}];
-get_operation_access('GetPaymentGeoStats', _) ->
-    [{[party], read}];
-get_operation_access('GetPaymentRateStats', _) ->
-    [{[party], read}];
-get_operation_access('GetPaymentMethodStats', _) ->
-    [{[party], read}];
-get_operation_access('ActivateShop', _) ->
-    [{[party], write}];
-get_operation_access('SuspendShop', _) ->
-    [{[party], write}];
-get_operation_access('GetMyParty', _) ->
-    [{[party], read}];
-get_operation_access('SuspendMyParty', _) ->
-    [{[party], write}];
-get_operation_access('ActivateMyParty', _) ->
-    [{[party], write}];
-get_operation_access('GetPartyByID', _) ->
-    [{[party], read}];
-get_operation_access('SuspendPartyByID', _) ->
-    [{[party], write}];
-get_operation_access('ActivatePartyByID', _) ->
-    [{[party], write}];
-get_operation_access('CreateClaim', _) ->
-    [{[party], write}];
-get_operation_access('GetClaims', _) ->
-    [{[party], read}];
-get_operation_access('GetClaimByID', _) ->
-    [{[party], read}];
-get_operation_access('GetClaimsByStatus', _) ->
-    [{[party], read}];
-get_operation_access('RevokeClaimByID', _) ->
-    [{[party], write}];
-get_operation_access('GetAccountByID', _) ->
-    [{[party], read}];
-get_operation_access('GetShopByID', _) ->
-    [{[party], read}];
-get_operation_access('GetShopsForParty', _) ->
-    [{[party], read}];
-get_operation_access('GetShopByIDForParty', _) ->
-    [{[party], read}];
-get_operation_access('ActivateShopForParty', _) ->
-    [{[party], write}];
-get_operation_access('SuspendShopForParty', _) ->
-    [{[party], write}];
-get_operation_access('GetShops', _) ->
-    [{[party], read}];
-get_operation_access('GetPayoutTools', _) ->
-    [{[party], read}];
-get_operation_access('GetPayoutToolByID', _) ->
-    [{[party], read}];
-get_operation_access('GetPayoutToolsForParty', _) ->
-    [{[party], read}];
-get_operation_access('GetPayoutToolByIDForParty', _) ->
-    [{[party], read}];
-get_operation_access('GetContracts', _) ->
-    [{[party], read}];
-get_operation_access('GetContractByID', _) ->
-    [{[party], read}];
-get_operation_access('GetContractAdjustments', _) ->
-    [{[party], read}];
-get_operation_access('GetContractAdjustmentByID', _) ->
-    [{[party], read}];
-get_operation_access('GetContractsForParty', _) ->
-    [{[party], read}];
-get_operation_access('GetContractByIDForParty', _) ->
-    [{[party], read}];
-get_operation_access('GetContractAdjustmentsForParty', _) ->
-    [{[party], read}];
-get_operation_access('GetContractAdjustmentByIDForParty', _) ->
-    [{[party], read}];
-get_operation_access('GetReports', _) ->
-    [{[party], read}];
-get_operation_access('GetReport', _) ->
-    [{[party], read}];
-get_operation_access('CreateReport', _) ->
-    [{[party], write}];
-get_operation_access('DownloadFile', _) ->
-    [{[party], read}];
-get_operation_access('GetReportsForParty', _) ->
-    [{[party], read}];
-get_operation_access('GetReportForParty', _) ->
-    [{[party], read}];
-get_operation_access('CreateReportForParty', _) ->
-    [{[party], write}];
-get_operation_access('DownloadFileForParty', _) ->
-    [{[party], read}];
-get_operation_access('GetWebhooks', _) ->
-    [{[party], read}];
-get_operation_access('GetWebhookByID', _) ->
-    [{[party], read}];
-get_operation_access('CreateWebhook', _) ->
-    [{[party], write}];
-get_operation_access('DeleteWebhookByID', _) ->
-    [{[party], write}];
-get_operation_access('CreateInvoiceTemplate', _) ->
-    [{[party], write}];
-get_operation_access('GetInvoiceTemplateByID', #{'invoiceTemplateID' := ID}) ->
-    [{[party, {invoice_templates, ID}], read}];
-get_operation_access('UpdateInvoiceTemplate', #{'invoiceTemplateID' := ID}) ->
-    [{[party, {invoice_templates, ID}], write}];
-get_operation_access('DeleteInvoiceTemplate', #{'invoiceTemplateID' := ID}) ->
-    [{[party, {invoice_templates, ID}], write}];
-get_operation_access('CreateInvoiceWithTemplate', #{'invoiceTemplateID' := ID}) ->
-    [{[party, {invoice_templates, ID}, invoice_template_invoices], write}];
-get_operation_access('GetInvoicePaymentMethodsByTemplateID', #{'invoiceTemplateID' := ID}) ->
-    [{[party, {invoice_templates, ID}], read}];
-get_operation_access('CreateCustomer', _) ->
-    [{[customers], write}];
-get_operation_access('GetCustomerById', #{'customerID' := ID}) ->
-    [{[{customers, ID}], read}];
-get_operation_access('DeleteCustomer', #{'customerID' := ID}) ->
-    [{[{customers, ID}], write}];
-get_operation_access('CreateCustomerAccessToken', #{'customerID' := ID}) ->
-    [{[{customers, ID}], write}];
-get_operation_access('CreateBinding', #{'customerID' := ID}) ->
-    [{[{customers, ID}, bindings], write}];
-get_operation_access('GetBindings', #{'customerID' := ID}) ->
-    [{[{customers, ID}, bindings], read}];
-get_operation_access('GetBinding', #{'customerID' := ID1, 'customerBindingID' := ID2}) ->
-    [{[{customers, ID1}, {bindings, ID2}], read}];
-get_operation_access('GetCustomerEvents', #{'customerID' := ID}) ->
-    [{[{customers, ID}], read}];
-get_operation_access('GetCategories', _) ->
-    [];
-get_operation_access('GetCategoryByRef', _) ->
-    [];
-get_operation_access('GetScheduleByRef', _) ->
-    [];
-get_operation_access('GetPaymentInstitutions', _) ->
-    [];
-get_operation_access('GetPaymentInstitutionByRef', _) ->
-    [];
-get_operation_access('GetPaymentInstitutionPaymentTerms', _) ->
-    [{[party], read}];
-get_operation_access('GetPaymentInstitutionPayoutMethods', _) ->
-    [{[party], read}];
-get_operation_access('GetPaymentInstitutionPayoutSchedules', _) ->
-    [{[party], read}];
-get_operation_access(OperationID, _) when OperationID =:= 'GetCountries'; OperationID =:= 'GetCountryByID' ->
-    [];
-get_operation_access(OperationID, _) when OperationID =:= 'GetTradeBlocs'; OperationID =:= 'GetTradeBlocByID' ->
-    [];
-get_operation_access('GetLocationsNames', _) ->
-    [];
-get_operation_access('CreatePayout', _) ->
-    [{[payouts], write}];
-get_operation_access('GetPayout', _) ->
-    [{[payouts], read}].
-
--spec get_access_config() -> uac_conf:options().
-get_access_config() ->
-    #{
-        domain_name => <<"common-api">>,
-        resource_hierarchy => get_resource_hierarchy()
-    }.
-
--spec get_resource_hierarchy() -> uac_conf:resource_hierarchy().
-get_resource_hierarchy() ->
-    #{
-        party => #{invoice_templates => #{invoice_template_invoices => #{}}},
-        customers => #{bindings => #{}},
-        invoices => #{payments => #{}},
-        payment_resources => #{},
-        payouts => #{},
-        card_bins => #{}
-    }.
-
--spec get_extra_properties() -> [binary()].
-% Which claims are gonna make it to InvoiceAccessTokens
-get_extra_properties() ->
-    [
-        <<"ip_replacement_allowed">>
-    ].
-
--spec get_consumer(claims()) -> consumer().
-get_consumer(Claims) ->
-    case maps:get(<<"cons">>, Claims, <<"merchant">>) of
-        <<"merchant">> -> merchant;
-        <<"client">> -> client;
-        <<"provider">> -> provider
+-spec preauthorize_api_key(swag_server:api_key()) -> {ok, preauth_context()} | {error, _Reason}.
+preauthorize_api_key(ApiKey) ->
+    case parse_api_key(ApiKey) of
+        {ok, Token} ->
+            {ok, ?unauthorized(Token)};
+        {error, Error} ->
+            {error, Error}
     end.
 
-lifetime_to_expiration(Lt) when is_integer(Lt) ->
-    genlib_time:unow() + Lt.
-
-make_auth_expiration(Timestamp) when is_integer(Timestamp) ->
-    genlib_rfc3339:format(Timestamp, second);
-make_auth_expiration(unlimited) ->
-    undefined.
+-spec authorize_api_key(preauth_context(), token_keeper_client:source_context(), woody_context:ctx()) ->
+    {ok, auth_context()} | {error, _Reason}.
+authorize_api_key(?unauthorized({TokenType, Token}), TokenContext, WoodyContext) ->
+    authorize_token_by_type(TokenType, Token, TokenContext, WoodyContext).
 
 -spec authorize_operation(
-    OperationID :: capi_handler:operation_id(),
     Prototypes :: capi_bouncer_context:prototypes(),
-    Context :: capi_handler:processing_context(),
+    ProcessingContext :: capi_handler:processing_context(),
     Req :: capi_handler:request_data()
-) -> resolution() | no_return().
-authorize_operation(
-    OperationID,
-    Prototypes,
-    Ctx = #{swagger_context := #{auth_context := AuthContext}},
-    Req
-) ->
-    OperationACL = get_operation_access(OperationID, Req),
-    OldAuthResult =
-        case uac:authorize_operation(OperationACL, AuthContext) of
-            ok ->
-                allowed;
-            {error, Reason} ->
-                {forbidden, Reason}
-        end,
-    AuthResult = authorize_operation(Prototypes, Ctx),
+) -> resolution().
+authorize_operation(Prototypes, ProcessingContext, Req) ->
+    AuthContext = extract_auth_context(ProcessingContext),
+    OldAuthResult = capi_auth_legacy:authorize_operation(get_legacy_context(AuthContext), ProcessingContext, Req),
+    AuthResult = do_authorize_operation(Prototypes, get_auth_data(AuthContext), ProcessingContext),
     handle_auth_result(OldAuthResult, AuthResult).
+
+%%
+
+-spec get_consumer(auth_context()) -> consumer().
+get_consumer(?authorized(#{legacy := AuthContext})) ->
+    %% TODO: Can we even get to these claims now?
+    capi_auth_legacy:get_consumer(AuthContext).
+
+-spec get_legacy_claims(auth_context()) -> capi_auth_legacy:claims().
+get_legacy_claims(?authorized(#{legacy := AuthContext})) ->
+    %% TODO: Seriously.
+    %% This is needed here for the ip_replacement_allowed claim to still be accessible
+    capi_auth_legacy:get_claims(AuthContext).
+
+%%
+%% Internal functions
+%%
+
+extract_auth_context(#{swagger_context := #{auth_context := ?authorized(AuthContext)}}) ->
+    AuthContext.
+
+get_legacy_context(#{legacy := LegacyContext}) ->
+    LegacyContext.
+
+get_auth_data(AuthContext) ->
+    maps:get(auth_data, AuthContext, undefined).
+
+authorize_token_by_type(bearer = TokenType, Token, TokenContext, WoodyContext) ->
+    %% NONE: For now legacy auth still takes precedence over
+    %% bouncer-based auth, so we MUST have a legacy context
+    case capi_auth_legacy:authorize_api_key(restore_api_key(TokenType, Token)) of
+        {ok, LegacyContext} ->
+            case token_keeper_client:get_by_token(Token, TokenContext, WoodyContext) of
+                {ok, AuthData} ->
+                    {ok, {authorized, make_context(AuthData, LegacyContext)}};
+                {error, TokenKeeperError} ->
+                    _ = logger:warning("Token keeper authorization failed: ~p", [TokenKeeperError]),
+                    {ok, {authorized, make_context(undefined, LegacyContext)}}
+            end;
+        {error, LegacyError} ->
+            {error, {legacy_auth_failed, LegacyError}}
+    end.
+
+parse_api_key(<<"Bearer ", Token/binary>>) ->
+    {ok, {bearer, Token}};
+parse_api_key(_) ->
+    {error, unsupported_auth_scheme}.
+
+restore_api_key(bearer, Token) ->
+    %% Kind of a hack since legacy auth expects the full api key string, but
+    %% token-keeper does not and we got rid of it at preauth stage
+    <<"Bearer ", Token/binary>>.
+
+make_context(AuthData, LegacyContext) ->
+    genlib_map:compact(#{
+        legacy => LegacyContext,
+        auth_data => AuthData
+    }).
 
 handle_auth_result(allowed, allowed) ->
     allowed;
@@ -437,24 +171,22 @@ handle_auth_result(OldRes, NewRes) ->
     OldRes.
 
 %% TODO: Remove this clause after all handlers will be implemented
-authorize_operation([], _) ->
+do_authorize_operation([], _, _) ->
     undefined;
-authorize_operation(Prototypes, #{swagger_context := ReqCtx, woody_context := WoodyCtx}) ->
-    case capi_bouncer:extract_context_fragments(ReqCtx, WoodyCtx) of
-        Fragments when Fragments /= undefined ->
-            Fragments1 = capi_bouncer_context:build(Prototypes, Fragments, WoodyCtx),
-            try
-                capi_bouncer:judge(Fragments1, WoodyCtx)
-            catch
-                error:{woody_error, _Error} ->
-                    % TODO
-                    % This is temporary safeguard around bouncer integration put here so that
-                    % external requests would remain undisturbed by bouncer intermittent failures.
-                    % We need to remove it as soon as these two points come true:
-                    % * bouncer proves to be stable enough,
-                    % * capi starts depending on bouncer exclusively for authz decisions.
-                    undefined
-            end;
-        undefined ->
+do_authorize_operation(_, undefined, _) ->
+    undefined;
+do_authorize_operation(Prototypes, AuthData, #{swagger_context := SwagContext, woody_context := WoodyContext}) ->
+    Fragments = capi_bouncer:gather_context_fragments(AuthData, SwagContext, WoodyContext),
+    Fragments1 = capi_bouncer_context:build(Prototypes, Fragments, WoodyContext),
+    try
+        capi_bouncer:judge(Fragments1, WoodyContext)
+    catch
+        error:{woody_error, _Error} ->
+            % TODO
+            % This is temporary safeguard around bouncer integration put here so that
+            % external requests would remain undisturbed by bouncer intermittent failures.
+            % We need to remove it as soon as these two points come true:
+            % * bouncer proves to be stable enough,
+            % * capi starts depending on bouncer exclusively for authz decisions.
             undefined
     end.

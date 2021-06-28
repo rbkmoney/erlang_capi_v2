@@ -16,7 +16,7 @@
 prepare(OperationID = 'GetCategories', Req, Context = #{woody_context := WoodyContext}) ->
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID}}],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         Categories = capi_utils:unwrap(capi_domain:get_categories(WoodyContext)),
@@ -26,7 +26,7 @@ prepare(OperationID = 'GetCategories', Req, Context = #{woody_context := WoodyCo
 prepare(OperationID = 'GetCategoryByRef', Req, Context) ->
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID}}],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         case get_category_by_id(genlib:to_int(maps:get(categoryID, Req)), Context) of

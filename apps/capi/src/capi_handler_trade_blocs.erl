@@ -16,7 +16,7 @@
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 
 prepare(OperationID, Req, Context) when OperationID =:= 'GetTradeBlocs'; OperationID =:= 'GetTradeBlocByID' ->
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(OperationID, [], Context, Req)} end,
+    Authorize = fun() -> {ok, capi_auth:authorize_operation([], Context, Req)} end,
     Process = fun() -> process_request(OperationID, Req, Context) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
