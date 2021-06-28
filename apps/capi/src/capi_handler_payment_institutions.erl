@@ -60,7 +60,7 @@ prepare(OperationID = 'GetPaymentInstitutionPaymentTerms', Req, Context) ->
         case compute_payment_institution_terms(PaymentInstitutionID, #payproc_Varset{}, Context) of
             {ok, #domain_TermSet{payments = PaymentTerms}} ->
                 {ok, {200, #{}, decode_payment_terms(PaymentTerms)}};
-            {exception, #payproc_PaymentInstitutionNotFound{}} ->
+            {error, #payproc_PaymentInstitutionNotFound{}} ->
                 {ok, general_error(404, <<"Payment institution not found">>)}
         end
     end,
@@ -74,7 +74,7 @@ prepare(OperationID = 'GetPaymentInstitutionPayoutMethods', Req, Context) ->
                 {ok, {200, #{}, decode_payout_methods_selector(PayoutMethods)}};
             {ok, #domain_TermSet{payouts = undefined}} ->
                 {ok, general_error(404, <<"Automatic payouts not allowed">>)};
-            {exception, #payproc_PaymentInstitutionNotFound{}} ->
+            {error, #payproc_PaymentInstitutionNotFound{}} ->
                 {ok, general_error(404, <<"Payment institution not found">>)}
         end
     end,
@@ -88,7 +88,7 @@ prepare(OperationID = 'GetPaymentInstitutionPayoutSchedules', Req, Context) ->
                 {ok, {200, #{}, decode_business_schedules_selector(Schedules)}};
             {ok, #domain_TermSet{payouts = undefined}} ->
                 {ok, general_error(404, <<"Automatic payouts not allowed">>)};
-            {exception, #payproc_PaymentInstitutionNotFound{}} ->
+            {error, #payproc_PaymentInstitutionNotFound{}} ->
                 {ok, general_error(404, <<"Payment institution not found">>)}
         end
     end,
@@ -125,9 +125,8 @@ check_payment_institution_residence(Residence, #domain_PaymentInstitutionObject{
     ordsets:is_element(Residence, Residences).
 
 compute_payment_institution_terms(PaymentInstitutionID, VS, Context) ->
-    CallArgs = {?payment_institution_ref(PaymentInstitutionID), VS},
-    Call = {party_management, 'ComputePaymentInstitutionTerms', CallArgs},
-    capi_handler_utils:service_call_with([user_info], Call, Context).
+    Ref = ?payment_institution_ref(PaymentInstitutionID),
+    capi_party:compute_payment_institution_terms(Ref, VS, Context).
 
 prepare_request_varset(Req, Context) ->
     #payproc_Varset{
@@ -160,7 +159,7 @@ decode_payment_institution_obj(#domain_PaymentInstitutionObject{ref = Ref, data 
         <<"realm">> => genlib:to_binary(Data#domain_PaymentInstitution.realm),
         <<"residences">> => [
             capi_handler_decoder_party:decode_residence(R)
-            || R <- ordsets:to_list(Data#domain_PaymentInstitution.residences)
+         || R <- ordsets:to_list(Data#domain_PaymentInstitution.residences)
         ]
     }).
 
