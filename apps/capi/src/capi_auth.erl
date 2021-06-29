@@ -113,6 +113,8 @@ get_consumer(?authorized(#{legacy := AuthContext})) ->
 get_legacy_claims(?authorized(#{legacy := AuthContext})) ->
     %% TODO: Seriously.
     %% This is needed here for the ip_replacement_allowed claim to still be accessible
+    %% WE ALSO rely on email claim to be present for lazy party creation in capi_handler_parties!
+    %% (which is dropped by tk for api tokens)
     capi_auth_legacy:get_claims(AuthContext).
 
 %%
