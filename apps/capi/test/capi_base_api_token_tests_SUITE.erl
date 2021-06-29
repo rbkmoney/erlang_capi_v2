@@ -52,6 +52,7 @@
     delete_invoice_template_ok_test/1,
     get_account_by_id_ok_test/1,
     get_my_party_ok_test/1,
+    get_my_party_lazy_creation_ok_test/1,
     suspend_my_party_ok_test/1,
     activate_my_party_ok_test/1,
     get_party_by_id_ok_test/1,
@@ -124,6 +125,12 @@
     check_no_internal_id_for_external_id_test/1,
     retrieve_payment_by_external_id_test/1,
     check_no_invoice_by_external_id_test/1,
+    get_country_by_id_test/1,
+    get_country_by_id_not_found_test/1,
+    get_countries_test/1,
+    get_trade_bloc_by_id_test/1,
+    get_trade_bloc_by_id_not_found_test/1,
+    get_trade_blocs_test/1,
 
     check_support_decrypt_v1_test/1,
     check_support_decrypt_v2_test/1
@@ -142,14 +149,22 @@ init([]) ->
 -spec all() -> [{group, test_case_name()}].
 all() ->
     [
-        {group, operations_by_base_api_token},
-        {group, operations_by_base_api_token_with_new_auth},
+        {group, auth_by_api_key},
+        {group, auth_by_user_session_token},
         {group, payment_tool_token_support}
     ].
 
 -spec groups() -> [{group_name(), list(), [test_case_name()]}].
 groups() ->
     [
+        {auth_by_api_key, [], [
+            {group, operations_by_base_api_token},
+            {group, operations_by_base_api_token_with_new_auth}
+        ]},
+        {auth_by_user_session_token, [], [
+            {group, operations_by_base_api_token},
+            {group, operations_by_base_api_token_with_new_auth}
+        ]},
         {operations_by_base_api_token, [], [
             get_merchant_payment_status_test,
             update_invoice_template_ok_test,
@@ -199,6 +214,7 @@ groups() ->
             delete_invoice_template_ok_test,
 
             get_my_party_ok_test,
+            get_my_party_lazy_creation_ok_test,
             suspend_my_party_ok_test,
             activate_my_party_ok_test,
 
@@ -254,6 +270,13 @@ groups() ->
             get_payment_institution_payout_terms,
             get_payment_institution_payout_schedules,
 
+            get_country_by_id_test,
+            get_country_by_id_not_found_test,
+            get_countries_test,
+            get_trade_bloc_by_id_test,
+            get_trade_bloc_by_id_not_found_test,
+            get_trade_blocs_test,
+
             create_webhook_ok_test,
             create_webhook_limit_exceeded_test,
             get_webhooks,
@@ -293,12 +316,20 @@ end_per_suite(C) ->
     ok.
 
 -spec init_per_group(group_name(), config()) -> config().
+init_per_group(auth_by_api_key, Config) ->
+    SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
+    Apps = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:api_key_handler(?STRING), SupPid),
+    [{group_apps, Apps}, {group_test_sup, SupPid} | Config];
+init_per_group(auth_by_user_session_token, Config) ->
+    SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
+    Apps = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
+    [{group_apps, Apps}, {group_test_sup, SupPid} | Config];
 init_per_group(operations_by_base_api_token, Config) ->
     BasePermissions = get_base_permissions(),
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
     Apps1 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    [{context, capi_ct_helper:get_context(Token)}, {group_apps, Apps1}, {group_test_sup, SupPid} | Config];
+    [{context, capi_ct_helper:get_context(Token)}, {subgroup_apps, Apps1}, {subgroup_test_sup, SupPid} | Config];
 init_per_group(operations_by_base_api_token_with_new_auth, Config) ->
     BasePermissions = get_base_permissions(),
     {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
@@ -307,8 +338,20 @@ init_per_group(_, Config) ->
     Config.
 
 -spec end_per_group(group_name(), config()) -> _.
-end_per_group(_Group, C) ->
+
+end_per_group(Group, C) when
+    Group =:= auth_by_api_key;
+    Group =:= auth_by_user_session_token
+->
     _ = capi_utils:maybe(?config(group_test_sup, C), fun capi_ct_helper:stop_mocked_service_sup/1),
+    ok;
+end_per_group(Group, C) when
+    Group =:= operations_by_base_api_token;
+    Group =:= operations_by_base_api_token_with_new_auth
+->
+    _ = capi_utils:maybe(?config(subgroup_test_sup, C), fun capi_ct_helper:stop_mocked_service_sup/1),
+    ok;
+end_per_group(_Group, _C) ->
     ok.
 
 -spec init_per_testcase(test_case_name(), config()) -> config().
@@ -1064,6 +1107,28 @@ get_my_party_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetMyParty">>, ?STRING, Config),
     {ok, _} = capi_client_parties:get_my_party(?config(context, Config)).
+
+-spec get_my_party_lazy_creation_ok_test(config()) -> _.
+get_my_party_lazy_creation_ok_test(Config) ->
+    TestEts = ets:new(get_my_party_lazy_creation_ok_test, [public]),
+    _ = capi_ct_helper:mock_services(
+        [
+            {party_management, fun
+                ('Get', _) ->
+                    case ets:lookup(TestEts, party_created) of
+                        [] -> woody_error:raise(business, #payproc_PartyNotFound{});
+                        [{party_created, true}] -> {ok, ?PARTY}
+                    end;
+                ('Create', _) ->
+                    true = ets:insert(TestEts, {party_created, true}),
+                    {ok, ?PARTY}
+            end}
+        ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetMyParty">>, ?STRING, Config),
+    {ok, _} = capi_client_parties:get_my_party(?config(context, Config)),
+    true = ets:delete(TestEts).
 
 -spec suspend_my_party_ok_test(config()) -> _.
 suspend_my_party_ok_test(Config) ->
@@ -2206,6 +2271,74 @@ get_payment_institution_payout_schedules(Config) ->
         ?INTEGER,
         <<"USD">>,
         <<"BankAccount">>
+    ).
+
+-spec get_country_by_id_test(config()) -> _.
+get_country_by_id_test(Config) ->
+    ?assertEqual(
+        {ok, #{
+            <<"id">> => <<"DEU">>,
+            <<"name">> => <<"Germany">>,
+            <<"tradeBlocs">> => [<<"EEA">>]
+        }},
+        capi_client_countries:get_country_by_id(?config(context, Config), <<"DEU">>)
+    ).
+
+-spec get_country_by_id_not_found_test(config()) -> _.
+get_country_by_id_not_found_test(Config) ->
+    _NonExistingCountryCode = xxx,
+    ?assertEqual(
+        {error, {404, #{<<"message">> => <<"Country not found">>}}},
+        capi_client_countries:get_country_by_id(?config(context, Config), <<"XXX">>)
+    ).
+
+-spec get_countries_test(config()) -> _.
+
+get_countries_test(Config) ->
+    ?assertEqual(
+        {ok, [
+            #{
+                <<"id">> => <<"RUS">>,
+                <<"name">> => <<"Russia">>
+            },
+            #{
+                <<"id">> => <<"DEU">>,
+                <<"name">> => <<"Germany">>,
+                <<"tradeBlocs">> => [<<"EEA">>]
+            }
+        ]},
+        capi_client_countries:get_countries(?config(context, Config))
+    ).
+
+-spec get_trade_bloc_by_id_test(config()) -> _.
+get_trade_bloc_by_id_test(Config) ->
+    ?assertEqual(
+        {ok, #{
+            <<"id">> => <<"EEA">>,
+            <<"name">> => <<"European Economic Area">>,
+            <<"description">> => <<"Extension of EU">>
+        }},
+        capi_client_trade_blocs:get_trade_bloc_by_id(?config(context, Config), <<"EEA">>)
+    ).
+
+-spec get_trade_bloc_by_id_not_found_test(config()) -> _.
+get_trade_bloc_by_id_not_found_test(Config) ->
+    ?assertEqual(
+        {error, {404, #{<<"message">> => <<"Trade Bloc not found">>}}},
+        capi_client_trade_blocs:get_trade_bloc_by_id(?config(context, Config), <<"XXX">>)
+    ).
+
+-spec get_trade_blocs_test(config()) -> _.
+get_trade_blocs_test(Config) ->
+    ?assertEqual(
+        {ok, [
+            #{
+                <<"id">> => <<"EEA">>,
+                <<"name">> => <<"European Economic Area">>,
+                <<"description">> => <<"Extension of EU">>
+            }
+        ]},
+        capi_client_trade_blocs:get_trade_blocs(?config(context, Config))
     ).
 
 -spec check_support_decrypt_v1_test(config()) -> _.

@@ -19,7 +19,7 @@ prepare('GetMyParty' = OperationID, Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID, party => PartyID}}],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         case get_or_create_party(PartyID, Context) of
@@ -37,7 +37,7 @@ prepare('ActivateMyParty' = OperationID, Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID, party => PartyID}}],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         Call = {party_management, 'Activate', {PartyID}},
@@ -57,7 +57,7 @@ prepare('SuspendMyParty' = OperationID, Req, Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID, party => PartyID}}],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         Call = {party_management, 'Suspend', {PartyID}},
@@ -77,7 +77,7 @@ prepare('GetPartyByID' = OperationID, Req, Context) ->
     PartyID = maps:get(partyID, Req),
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID, party => PartyID}}],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         case capi_handler_utils:get_party(PartyID, Context) of
@@ -95,7 +95,7 @@ prepare('ActivatePartyByID' = OperationID, Req, Context) ->
     PartyID = maps:get(partyID, Req),
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID, party => PartyID}}],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         Call = {party_management, 'Activate', {PartyID}},
@@ -115,7 +115,7 @@ prepare('SuspendPartyByID' = OperationID, Req, Context) ->
     PartyID = maps:get(partyID, Req),
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID, party => PartyID}}],
-        {ok, capi_auth:authorize_operation(OperationID, Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
         Call = {party_management, 'Suspend', {PartyID}},
@@ -150,9 +150,12 @@ get_or_create_party(PartyID, Context) ->
 create_party(PartyID, Context) ->
     PartyParams = #payproc_PartyParams{
         contact_info = #domain_PartyContactInfo{
-            email = uac_authorizer_jwt:get_claim(
+            %% TODO: We rely on email claim to be present (which is dropped by tk for api key tokens).
+            email = maps:get(
                 <<"email">>,
-                capi_handler_utils:get_auth_context(Context)
+                capi_auth:get_legacy_claims(
+                    capi_handler_utils:get_auth_context(Context)
+                )
             )
         }
     },
