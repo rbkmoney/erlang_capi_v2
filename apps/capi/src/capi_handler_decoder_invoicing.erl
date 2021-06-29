@@ -549,15 +549,15 @@ decode_bank_card(#domain_BankCardPaymentMethod{payment_system_deprecated = PS}) 
 decode_tokenized_bank_cards([#domain_BankCardPaymentMethod{} | _] = TokenizedBankCards) ->
     PropTokenizedBankCards = [
         {TP, PS}
-     || #domain_BankCardPaymentMethod{payment_system_deprecated = PS, token_provider_deprecated = TP} <-
-            TokenizedBankCards
+        || #domain_BankCardPaymentMethod{payment_system_deprecated = PS, token_provider_deprecated = TP} <-
+               TokenizedBankCards
     ],
     do_decode_tokenized_bank_cards(PropTokenizedBankCards);
 decode_tokenized_bank_cards([#domain_TokenizedBankCard{} | _] = TokenizedBankCards) ->
     PropTokenizedBankCards = [
         {TP, PS}
-     || #domain_TokenizedBankCard{payment_system_deprecated = PS, token_provider_deprecated = TP} <-
-            TokenizedBankCards
+        || #domain_TokenizedBankCard{payment_system_deprecated = PS, token_provider_deprecated = TP} <-
+               TokenizedBankCards
     ],
     do_decode_tokenized_bank_cards(PropTokenizedBankCards);
 decode_tokenized_bank_cards([]) ->

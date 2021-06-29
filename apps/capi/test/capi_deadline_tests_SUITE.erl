@@ -3,7 +3,6 @@
 -include_lib("common_test/include/ct.hrl").
 
 -include_lib("damsel/include/dmsl_domain_thrift.hrl").
--include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 
 -export([all/0]).
@@ -119,16 +118,16 @@ deadline_absolute_ok_test(Config) ->
     Context = ?config(context_with_absolute_deadline, Config),
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('Get', _) ->
-                timer:sleep(10000),
-                {ok, ?PAYPROC_INVOICE}
+            {party_management, fun('Get', _) ->
+                timer:sleep(5000),
+                {ok, ?PARTY}
             end}
         ],
         Config
     ),
     Deadline = woody_deadline:from_timeout(3000),
     BinDeadline = woody_deadline:to_binary(Deadline),
-    ?badresp(504) = capi_client_invoices:get_invoice_by_id(Context#{deadline => BinDeadline}, ?STRING),
+    ?badresp(504) = capi_client_parties:get_my_party(Context#{deadline => BinDeadline}),
     Deadline2 = woody_deadline:from_timeout(3000),
     BinDeadline2 = woody_deadline:to_binary(Deadline2),
     {ok, _} = capi_client_categories:get_categories(Context#{deadline => BinDeadline2}).
@@ -138,14 +137,14 @@ deadline_relative_ok_test(Config) ->
     Context = ?config(context_with_relative_deadline, Config),
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('Get', _) ->
+            {party_management, fun('Get', _) ->
                 timer:sleep(10000),
-                {ok, ?PAYPROC_INVOICE}
+                {ok, ?PARTY}
             end}
         ],
         Config
     ),
-    ?badresp(504) = capi_client_invoices:get_invoice_by_id(Context, ?STRING),
+    ?badresp(504) = capi_client_parties:get_my_party(Context),
     {ok, _} = capi_client_categories:get_categories(Context).
 
 get_context(Token, Deadline) ->

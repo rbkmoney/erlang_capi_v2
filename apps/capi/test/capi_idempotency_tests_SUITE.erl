@@ -143,12 +143,10 @@ init_per_group(payment_creation, Config) ->
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
     Apps1 = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
     Apps2 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    {
-        {ok, #{
+    {{ok, #{
             <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
         }},
-        _
-    } =
+        _} =
         with_feature_storage(fun() ->
             capi_client_invoices:create_invoice(capi_ct_helper:get_context(Token, ExtraProperties), Req)
         end),
@@ -856,7 +854,7 @@ create_customers(BenderKey, Requests, Config) ->
             ),
             [
                 with_feature_storage(fun() -> capi_client_customers:create_customer(Context, R) end)
-             || R <- Requests
+                || R <- Requests
             ]
         end
     ).
@@ -888,7 +886,7 @@ create_customer_bindings(BenderKey, Requests, Config) ->
             ),
             [
                 with_feature_storage(fun() -> capi_client_customers:create_binding(Context, ?STRING, R) end)
-             || R <- Requests
+                || R <- Requests
             ]
         end
     ).
@@ -913,7 +911,7 @@ create_invoice_templates(BenderKey, Requests, Config) ->
             ),
             [
                 with_feature_storage(fun() -> capi_client_invoice_templates:create(Context, R) end)
-             || R <- Requests
+                || R <- Requests
             ]
         end
     ).
@@ -943,7 +941,7 @@ create_invoices_with_templates(BenderKey, Requests, Config) ->
                 with_feature_storage(fun() ->
                     capi_client_invoice_templates:create_invoice(Context, InvoiceTemplateID, Request)
                 end)
-             || {InvoiceTemplateID, Request} <- Requests
+                || {InvoiceTemplateID, Request} <- Requests
             ]
         end
     ).
