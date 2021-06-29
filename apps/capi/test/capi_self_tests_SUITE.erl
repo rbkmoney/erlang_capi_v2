@@ -111,9 +111,10 @@ end_per_testcase(_Name, C) ->
 
 -spec oops_body_test(config()) -> _.
 oops_body_test(Config) ->
-    _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, "spanish inquisition"} end}], Config),
+    _ = capi_ct_helper:mock_services([{invoicing, fun('Get', _) -> {ok, "spanish inquisition"} end}], Config),
     Context = ?config(context, Config),
-    {Endpoint, PreparedParams, Opts0} = capi_client_lib:make_request(Context, #{}),
+    Params = #{binding => #{<<"invoiceID">> => ?STRING}},
+    {Endpoint, PreparedParams, Opts0} = capi_client_lib:make_request(Context, Params),
     Url = swag_client_utils:get_url(Endpoint, "/v2/processing/me"),
     Headers = maps:to_list(maps:get(header, PreparedParams)),
     Body = <<"{}">>,

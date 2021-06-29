@@ -23,26 +23,30 @@ start_link() ->
 
 -spec init([]) -> {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
+    UacConf = get_uac_config(),
+    ok = uac:configure(UacConf),
     LechiffreOpts = genlib_app:env(capi, lechiffre_opts),
     LechiffreSpec = lechiffre:child_spec(lechiffre, LechiffreOpts),
-    {LogicHandler, LogicHandlerSpecs} = get_logic_handler_info(),
     HealthCheck = enable_health_logging(genlib_app:env(?APP, health_check, #{})),
+    BlacklistSpec = capi_api_key_blacklist:child_spec(),
+    PartyClient = party_client:create_client(),
+    PartyClientSpec = party_client:child_spec(party_client, PartyClient),
+    {LogicHandler, []} = get_logic_handler_info(#{party_client => PartyClient}),
     AdditionalRoutes = [{'_', [erl_health_handle:get_route(HealthCheck), get_prometheus_route()]}],
     SwaggerHandlerOpts = genlib_app:env(?APP, swagger_handler_opts, #{}),
     SwaggerSpec = capi_swagger_server:child_spec({AdditionalRoutes, LogicHandler, SwaggerHandlerOpts}),
-    BlacklistSpecs = capi_api_key_blacklist:child_spec(),
-    UacConf = get_uac_config(),
-    ok = uac:configure(UacConf),
-    {ok, {
-        {one_for_all, 0, 1},
-        [LechiffreSpec] ++ LogicHandlerSpecs ++ [SwaggerSpec] ++ [BlacklistSpecs]
-    }}.
+    {ok,
+        {
+            {one_for_all, 0, 1},
+            [LechiffreSpec, SwaggerSpec, BlacklistSpec, PartyClientSpec]
+        }}.
 
--spec get_logic_handler_info() -> {Handler :: atom(), [Spec :: supervisor:child_spec()] | []}.
-get_logic_handler_info() ->
+-spec get_logic_handler_info(capi_handler:handler_opts()) ->
+    {Handler :: swag_server:logic_handler(_), [Spec :: supervisor:child_spec()] | []}.
+get_logic_handler_info(HandlerOpts) ->
     case genlib_app:env(?APP, service_type) of
         real ->
-            {capi_handler, []};
+            {{capi_handler, HandlerOpts}, []};
         undefined ->
             exit(undefined_service_type)
     end.
