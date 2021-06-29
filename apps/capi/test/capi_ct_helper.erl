@@ -140,6 +140,7 @@ issue_token(PartyID, ACL, LifeTime, ExtraProperties) ->
         #{
             ?STRING => ?STRING,
             <<"exp">> => LifeTime,
+            <<"email">> => <<"bla@bla.ru">>,
             <<"resource_access">> => #{
                 <<"common-api">> => uac_acl:from_list(ACL)
             }

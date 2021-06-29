@@ -52,6 +52,7 @@
     delete_invoice_template_ok_test/1,
     get_account_by_id_ok_test/1,
     get_my_party_ok_test/1,
+    get_my_party_lazy_creation_ok_test/1,
     suspend_my_party_ok_test/1,
     activate_my_party_ok_test/1,
     get_party_by_id_ok_test/1,
@@ -213,6 +214,7 @@ groups() ->
             delete_invoice_template_ok_test,
 
             get_my_party_ok_test,
+            get_my_party_lazy_creation_ok_test,
             suspend_my_party_ok_test,
             activate_my_party_ok_test,
 
@@ -1113,6 +1115,28 @@ get_my_party_ok_test(Config) ->
     ),
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetMyParty">>, ?STRING, Config),
     {ok, _} = capi_client_parties:get_my_party(?config(context, Config)).
+
+-spec get_my_party_lazy_creation_ok_test(config()) -> _.
+get_my_party_lazy_creation_ok_test(Config) ->
+    TestEts = ets:new(get_my_party_lazy_creation_ok_test, [public]),
+    _ = capi_ct_helper:mock_services(
+        [
+            {party_management, fun
+                ('Get', _) ->
+                    case ets:lookup(TestEts, party_created) of
+                        [] -> woody_error:raise(business, #payproc_PartyNotFound{});
+                        [{party_created, true}] -> {ok, ?PARTY}
+                    end;
+                ('Create', _) ->
+                    true = ets:insert(TestEts, {party_created, true}),
+                    {ok, ?PARTY}
+            end}
+        ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetMyParty">>, ?STRING, Config),
+    {ok, _} = capi_client_parties:get_my_party(?config(context, Config)),
+    true = ets:delete(TestEts).
 
 -spec suspend_my_party_ok_test(config()) -> _.
 suspend_my_party_ok_test(Config) ->

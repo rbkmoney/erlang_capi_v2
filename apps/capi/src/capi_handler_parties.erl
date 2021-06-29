@@ -146,9 +146,12 @@ get_or_create_party(PartyID, Context) ->
 create_party(PartyID, Context) ->
     PartyParams = #payproc_PartyParams{
         contact_info = #domain_PartyContactInfo{
-            email = uac_authorizer_jwt:get_claim(
+            %% TODO: We rely on email claim to be present (which is dropped by tk for api key tokens).
+            email = maps:get(
                 <<"email">>,
-                capi_handler_utils:get_auth_context(Context)
+                capi_auth:get_legacy_claims(
+                    capi_handler_utils:get_auth_context(Context)
+                )
             )
         }
     },
