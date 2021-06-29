@@ -13,10 +13,7 @@
     transport_opts => woody_client_thrift_http_transport:transport_options()
 }.
 
--spec call_service(service_name(), woody:func(), tuple(), woody_context:ctx()) ->
-    {ok, woody:result()}
-    | {exception, woody_error:business_error()}
-    | no_return().
+-spec call_service(service_name(), woody:func(), tuple(), woody_context:ctx()) -> woody:result().
 call_service(ServiceName, Function, Args, Context0) ->
     Deadline = get_service_deadline(ServiceName),
     Context1 = set_deadline(Deadline, Context0),

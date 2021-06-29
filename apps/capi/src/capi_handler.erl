@@ -21,9 +21,7 @@
 -type processing_context() :: #{
     operation_id := operation_id(),
     swagger_context := swag_server:request_context(),
-    woody_context := woody_context:ctx(),
-    party_client := party_client:client(),
-    party_client_context := party_client:context()
+    woody_context := woody_context:ctx()
 }.
 
 -type throw(_T) :: no_return().
@@ -33,18 +31,14 @@
     process := fun(() -> {ok, response()} | throw(response()))
 }.
 
--type handler_opts() ::
-    swag_server:handler_opts(#{
-        party_client := party_client:client()
-    }).
-
 -export_type([operation_id/0]).
 -export_type([request_data/0]).
 -export_type([request_context/0]).
 -export_type([processing_context/0]).
 -export_type([request_state/0]).
 -export_type([response/0]).
--export_type([handler_opts/0]).
+
+-type handler_opts() :: swag_server:handler_opts(_).
 
 %% Handler behaviour
 
@@ -135,7 +129,7 @@ handle_request(OperationID, Req, SwagContext, HandlerOpts) ->
     SwagContext :: request_context(),
     HandlerOpts :: handler_opts()
 ) -> {ok | error, response()}.
-handle_function_(OperationID, Req, SwagContext0, HandlerOpts) ->
+handle_function_(OperationID, Req, SwagContext0, _HandlerOpts) ->
     try
         RpcID = create_rpc_id(Req),
         ok = set_rpc_meta(RpcID),
@@ -144,10 +138,10 @@ handle_function_(OperationID, Req, SwagContext0, HandlerOpts) ->
         WoodyContext0 = attach_deadline(Req, create_woody_context(RpcID)),
         SwagContext = do_authorize_api_key(SwagContext0, WoodyContext0),
         WoodyContext = put_user_identity(WoodyContext0, get_auth_context(SwagContext)),
-        Context = create_processing_context(OperationID, SwagContext, WoodyContext, HandlerOpts),
+        Context = create_processing_context(OperationID, SwagContext, WoodyContext),
         ok = set_context_meta(Context),
-        {ok, RequestState} = prepare(OperationID, Req, Context, get_handlers()),
-        #{authorize := Authorize, process := Process} = RequestState,
+        {ok, #{authorize := Authorize, process := Process}} =
+            prepare(OperationID, Req, Context, get_handlers()),
         {ok, Resolution} = Authorize(),
         case Resolution of
             allowed ->
@@ -225,13 +219,11 @@ make_token_context(#{cowboy_req := CowboyReq}) ->
             undefined
     end.
 
-create_processing_context(OperationID, SwaggerContext, WoodyContext, HandlerOpts) ->
+create_processing_context(OperationID, SwaggerContext, WoodyContext) ->
     #{
         operation_id => OperationID,
         woody_context => WoodyContext,
-        swagger_context => SwaggerContext,
-        party_client_context => party_client:create_context(#{woody_context => WoodyContext}),
-        party_client => maps:get(party_client, HandlerOpts)
+        swagger_context => SwaggerContext
     }.
 
 -spec create_rpc_id(request_data()) -> woody:rpc_id().

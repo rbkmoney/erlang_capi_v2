@@ -22,7 +22,10 @@ prepare(OperationID = 'GetClaims', Req, Context) ->
         {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        Claims = capi_utils:unwrap(capi_party:get_claims(PartyID, Context)),
+        Call = {party_management, 'GetClaims', {PartyID}},
+        Claims = capi_utils:unwrap(
+            capi_handler_utils:service_call_with([user_info], Call, Context)
+        ),
         {ok, {200, #{}, decode_claims(filter_claims(maps:get('claimStatus', Req), Claims))}}
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -36,7 +39,9 @@ prepare(OperationID = 'GetClaimByID', Req, Context) ->
         {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case capi_party:get_claim(PartyID, genlib:to_int(ClaimID), Context) of
+        CallArgs = {PartyID, genlib:to_int(ClaimID)},
+        Call = {party_management, 'GetClaim', CallArgs},
+        case capi_handler_utils:service_call_with([user_info], Call, Context) of
             {ok, Claim} ->
                 case is_wallet_claim(Claim) of
                     true ->
@@ -45,7 +50,7 @@ prepare(OperationID = 'GetClaimByID', Req, Context) ->
                     false ->
                         {ok, {200, #{}, decode_claim(Claim)}}
                 end;
-            {error, #payproc_ClaimNotFound{}} ->
+            {exception, #payproc_ClaimNotFound{}} ->
                 {ok, general_error(404, <<"Claim not found">>)}
         end
     end,
@@ -61,10 +66,12 @@ prepare(OperationID = 'CreateClaim', Req, Context) ->
             {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
         end,
         Process = fun() ->
-            case capi_party:create_claim(PartyID, Changeset, Context) of
+            CallArgs = {PartyID, Changeset},
+            Call = {party_management, 'CreateClaim', CallArgs},
+            case capi_handler_utils:service_call_with([user_info], Call, Context) of
                 {ok, Claim} ->
                     {ok, {201, #{}, decode_claim(Claim)}};
-                {error, Exception} ->
+                {exception, Exception} ->
                     case Exception of
                         #payproc_InvalidPartyStatus{} ->
                             {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};
@@ -100,12 +107,15 @@ prepare(OperationID = 'CreateClaim', Req, Context) ->
 %         {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
 %     end,
 %     Process = fun() ->
-%         Party = capi_utils:unwrap(
-%             capi_party:update_claim(
+%         Call =
+%             {party_management, 'UpdateClaim', {
 %                 PartyID,
 %                 genlib:to_int(ClaimID),
 %                 genlib:to_int(maps:get('claimRevision', Req)),
-%                 encode_claim_changeset(maps:get('claimChangeset', Req)), Context)
+%                 encode_claim_changeset(maps:get('claimChangeset', Req))
+%             }},
+%         Party = capi_utils:unwrap(
+%             capi_handler_utils:service_call_with([user_info], Call, Context)
 %         ),
 %         {ok, {200, #{}, capi_handler_decoder_party:decode_party(Party)}}
 %     end,
@@ -120,17 +130,17 @@ prepare(OperationID = 'RevokeClaimByID', Req, Context) ->
         {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        Result = capi_party:revoke_claim(
+        CallArgs = {
             PartyID,
             genlib:to_int(ClaimID),
             genlib:to_int(maps:get('claimRevision', Req)),
-            encode_reason(maps:get('Reason', Req)),
-            Context
-        ),
-        case Result of
-            ok ->
+            encode_reason(maps:get('Reason', Req))
+        },
+        Call = {party_management, 'RevokeClaim', CallArgs},
+        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+            {ok, _} ->
                 {ok, {204, #{}, undefined}};
-            {error, Exception} ->
+            {exception, Exception} ->
                 case Exception of
                     #payproc_InvalidPartyStatus{} ->
                         {ok, logic_error(invalidPartyStatus, <<"Invalid party status">>)};

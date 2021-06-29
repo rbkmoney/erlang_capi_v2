@@ -21,10 +21,11 @@ prepare(OperationID = 'ActivateShop', Req, Context) ->
         {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case capi_party:activate_shop(PartyID, ShopID, Context) of
-            ok ->
+        Call = {party_management, 'ActivateShop', {PartyID, ShopID}},
+        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+            {ok, _R} ->
                 {ok, {204, #{}, undefined}};
-            {error, Exception} ->
+            {exception, Exception} ->
                 case Exception of
                     #payproc_ShopNotFound{} ->
                         {ok, general_error(404, <<"Shop not found">>)};
@@ -42,10 +43,11 @@ prepare(OperationID = 'SuspendShop', Req, Context) ->
         {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case capi_party:suspend_shop(PartyID, ShopID, Context) of
-            ok ->
+        Call = {party_management, 'SuspendShop', {PartyID, ShopID}},
+        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+            {ok, _R} ->
                 {ok, {204, #{}, undefined}};
-            {error, Exception} ->
+            {exception, Exception} ->
                 case Exception of
                     #payproc_ShopNotFound{} ->
                         {ok, general_error(404, <<"Shop not found">>)};
@@ -62,7 +64,7 @@ prepare(OperationID = 'GetShops', Req, Context) ->
         {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        Party = capi_utils:unwrap(capi_party:get_party(PartyID, Context)),
+        Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
         {ok, {200, #{}, decode_shops_map(Party#domain_Party.shops)}}
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -74,10 +76,11 @@ prepare(OperationID = 'GetShopByID', Req, Context) ->
         {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case capi_party:get_shop(PartyID, ShopID, Context) of
+        Call = {party_management, 'GetShop', {PartyID, ShopID}},
+        case capi_handler_utils:service_call_with([user_info], Call, Context) of
             {ok, Shop} ->
                 {ok, {200, #{}, decode_shop(Shop)}};
-            {error, #payproc_ShopNotFound{}} ->
+            {exception, #payproc_ShopNotFound{}} ->
                 {ok, general_error(404, <<"Shop not found">>)}
         end
     end,
@@ -93,12 +96,12 @@ prepare(OperationID = 'GetShopsForParty', Req, Context) ->
         % Here we're relying on hellgate ownership check, thus no explicit authorization.
         % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
         % remains authorized.
-        case capi_party:get_party(PartyID, Context) of
+        case capi_handler_utils:get_party(PartyID, Context) of
             {ok, Party} ->
                 {ok, {200, #{}, decode_shops_map(Party#domain_Party.shops)}};
-            {error, #payproc_InvalidUser{}} ->
+            {exception, #payproc_InvalidUser{}} ->
                 {ok, general_error(404, <<"Party not found">>)};
-            {error, #payproc_PartyNotFound{}} ->
+            {exception, #payproc_PartyNotFound{}} ->
                 {ok, general_error(404, <<"Party not found">>)}
         end
     end,
@@ -111,18 +114,19 @@ prepare(OperationID = 'GetShopByIDForParty', Req, Context) ->
         {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
+        Call = {party_management, 'GetShop', {PartyID, ShopID}},
         % TODO
         % Here we're relying on hellgate ownership check, thus no explicit authorization.
         % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
         % remains authorized.
-        case capi_party:get_shop(PartyID, ShopID, Context) of
+        case capi_handler_utils:service_call_with([user_info], Call, Context) of
             {ok, Shop} ->
                 {ok, {200, #{}, decode_shop(Shop)}};
-            {error, #payproc_InvalidUser{}} ->
+            {exception, #payproc_InvalidUser{}} ->
                 {ok, general_error(404, <<"Party not found">>)};
-            {error, #payproc_PartyNotFound{}} ->
+            {exception, #payproc_PartyNotFound{}} ->
                 {ok, general_error(404, <<"Party not found">>)};
-            {error, #payproc_ShopNotFound{}} ->
+            {exception, #payproc_ShopNotFound{}} ->
                 {ok, general_error(404, <<"Shop not found">>)}
         end
     end,
@@ -135,14 +139,15 @@ prepare(OperationID = 'ActivateShopForParty', Req, Context) ->
         {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
+        Call = {party_management, 'ActivateShop', {PartyID, ShopID}},
         % TODO
         % Here we're relying on hellgate ownership check, thus no explicit authorization.
         % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
         % remains authorized.
-        case capi_party:activate_shop(PartyID, ShopID, Context) of
-            ok ->
+        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+            {ok, _R} ->
                 {ok, {204, #{}, undefined}};
-            {error, Exception} ->
+            {exception, Exception} ->
                 case Exception of
                     #payproc_InvalidUser{} ->
                         {ok, general_error(404, <<"Party not found">>)};
@@ -164,10 +169,15 @@ prepare(OperationID = 'SuspendShopForParty', Req, Context) ->
         {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        case capi_party:suspend_shop(PartyID, ShopID, Context) of
-            ok ->
+        Call = {party_management, 'SuspendShop', {PartyID, ShopID}},
+        % TODO
+        % Here we're relying on hellgate ownership check, thus no explicit authorization.
+        % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
+        % remains authorized.
+        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+            {ok, _R} ->
                 {ok, {204, #{}, undefined}};
-            {error, Exception} ->
+            {exception, Exception} ->
                 case Exception of
                     #payproc_InvalidUser{} ->
                         {ok, general_error(404, <<"Party not found">>)};

@@ -112,15 +112,7 @@ authorization_far_future_deadline_ok_test(_Config) ->
 
 -spec authorization_permission_ok_test(config()) -> _.
 authorization_permission_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services(
-        [
-            {party_management, fun
-                ('GetRevision', _) -> {ok, ?INTEGER};
-                ('Checkout', _) -> {ok, ?PARTY}
-            end}
-        ],
-        Config
-    ),
+    _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
     {ok, Token} = capi_ct_helper:issue_token([{[party], read}], unlimited),
     {ok, _} = capi_client_parties:get_my_party(capi_ct_helper:get_context(Token)).
 

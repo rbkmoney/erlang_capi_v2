@@ -21,10 +21,12 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetAccountByID' ->
     end,
     Process = fun() ->
         AccountID = genlib:to_int(maps:get('accountID', Req)),
-        case capi_party:get_account_state(PartyID, AccountID, Context) of
+        CallArgs = {PartyID, AccountID},
+        Call = {party_management, 'GetAccountState', CallArgs},
+        case capi_handler_utils:service_call_with([user_info], Call, Context) of
             {ok, S} ->
                 {ok, {200, #{}, decode_account_state(S)}};
-            {error, #payproc_AccountNotFound{}} ->
+            {exception, #payproc_AccountNotFound{}} ->
                 {ok, general_error(404, <<"Account not found">>)}
         end
     end,
