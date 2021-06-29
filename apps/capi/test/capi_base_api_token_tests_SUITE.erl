@@ -1122,7 +1122,9 @@ get_my_party_lazy_creation_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {party_management, fun
-                ('Get', _) ->
+                ('GetRevision', _) ->
+                    {ok, ?INTEGER};
+                ('Checkout', _) ->
                     case ets:lookup(TestEts, party_created) of
                         [] -> woody_error:raise(business, #payproc_PartyNotFound{});
                         [{party_created, true}] -> {ok, ?PARTY}
