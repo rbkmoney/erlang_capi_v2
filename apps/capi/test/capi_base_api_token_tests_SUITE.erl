@@ -1123,15 +1123,18 @@ get_my_party_lazy_creation_ok_test(Config) ->
         [
             {party_management, fun
                 ('GetRevision', _) ->
-                    {ok, ?INTEGER};
+                    case ets:lookup(TestEts, party_created) of
+                        [] -> {throwing, #payproc_PartyNotFound{}};
+                        [{party_created, true}] -> {ok, ?INTEGER}
+                    end;
                 ('Checkout', _) ->
                     case ets:lookup(TestEts, party_created) of
-                        [] -> woody_error:raise(business, #payproc_PartyNotFound{});
+                        [] -> {throwing, #payproc_PartyNotFound{}};
                         [{party_created, true}] -> {ok, ?PARTY}
                     end;
                 ('Create', _) ->
                     true = ets:insert(TestEts, {party_created, true}),
-                    {ok, ?PARTY}
+                    {ok, ok}
             end}
         ],
         Config
