@@ -1118,27 +1118,24 @@ get_my_party_ok_test(Config) ->
 
 -spec get_my_party_lazy_creation_ok_test(config()) -> _.
 get_my_party_lazy_creation_ok_test(Config) ->
-    TestEts = ets:new(get_my_party_lazy_creation_ok_test, [public]),
+    TestETS = ets:new(get_my_party_lazy_creation_ok_test, [public]),
     _ = capi_ct_helper:mock_services(
         [
             {party_management, fun
                 ('GetRevision', _) ->
-                    case ets:lookup(TestEts, party_created) of
-                        [] -> {throwing, #payproc_PartyNotFound{}};
-                        [{party_created, true}] -> {ok, ?INTEGER}
+                    case ets:lookup(TestETS, party_created) of
+                        [{party_created, true}] -> {ok, ?INTEGER};
+                        _ -> {throwing, #payproc_PartyNotFound{}}
                     end;
                 ('Checkout', _) ->
-                    case ets:lookup(TestEts, party_created) of
-                        [] -> {throwing, #payproc_PartyNotFound{}};
-                        [{party_created, true}] -> {ok, ?PARTY}
+                    case ets:lookup(TestETS, party_created) of
+                        [{party_created, true}] -> {ok, ?PARTY};
+                        _ -> {throwing, #payproc_PartyNotFound{}}
                     end;
                 ('Create', _) ->
-                    case ets:lookup(TestEts, party_created) of
-                        [] ->
-                            _ = ets:insert(TestEts, {party_created, true}),
-                            {ok, ok};
-                        [{party_created, true}] ->
-                            {throwing, #payproc_PartyExists{}}
+                    case ets:insert_new(TestETS, {party_created, true}) of
+                        true -> {ok, ok};
+                        _ -> {throwing, #payproc_PartyExists{}}
                     end
             end}
         ],
@@ -1146,7 +1143,7 @@ get_my_party_lazy_creation_ok_test(Config) ->
     ),
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetMyParty">>, ?STRING, Config),
     {ok, _} = capi_client_parties:get_my_party(?config(context, Config)),
-    true = ets:delete(TestEts).
+    true = ets:delete(TestETS).
 
 -spec suspend_my_party_ok_test(config()) -> _.
 suspend_my_party_ok_test(Config) ->
