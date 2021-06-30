@@ -1133,8 +1133,13 @@ get_my_party_lazy_creation_ok_test(Config) ->
                         [{party_created, true}] -> {ok, ?PARTY}
                     end;
                 ('Create', _) ->
-                    true = ets:insert(TestEts, {party_created, true}),
-                    {ok, ok}
+                    case ets:lookup(TestEts, party_created) of
+                        [] ->
+                            _ = ets:insert(TestEts, {party_created, true}),
+                            {ok, ok};
+                        [{party_created, true}] ->
+                            {throwing, #payproc_PartyExists{}}
+                    end
             end}
         ],
         Config
