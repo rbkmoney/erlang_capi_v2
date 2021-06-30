@@ -10,7 +10,11 @@
 
 -define(START_TIME_TAG, processing_start_time).
 
--type params() :: {cowboy_router:routes(), module(), swag_server_router:swagger_handler_opts()}.
+-type params() :: {
+    cowboy_router:routes(),
+    swag_server:logic_handler(_),
+    swag_server_router:swagger_handler_opts()
+}.
 
 -spec child_spec(params()) -> supervisor:child_spec().
 child_spec({AdditionalRoutes, LogicHandler, SwaggerHandlerOpts}) ->

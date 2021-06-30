@@ -1104,31 +1104,46 @@ get_account_by_id_ok_test(Config) ->
 
 -spec get_my_party_ok_test(config()) -> _.
 get_my_party_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {party_management, fun
+                ('GetRevision', _) -> {ok, ?INTEGER};
+                ('Checkout', _) -> {ok, ?PARTY}
+            end}
+        ],
+        Config
+    ),
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetMyParty">>, ?STRING, Config),
     {ok, _} = capi_client_parties:get_my_party(?config(context, Config)).
 
 -spec get_my_party_lazy_creation_ok_test(config()) -> _.
 get_my_party_lazy_creation_ok_test(Config) ->
-    TestEts = ets:new(get_my_party_lazy_creation_ok_test, [public]),
+    TestETS = ets:new(get_my_party_lazy_creation_ok_test, [public]),
     _ = capi_ct_helper:mock_services(
         [
             {party_management, fun
-                ('Get', _) ->
-                    case ets:lookup(TestEts, party_created) of
-                        [] -> woody_error:raise(business, #payproc_PartyNotFound{});
-                        [{party_created, true}] -> {ok, ?PARTY}
+                ('GetRevision', _) ->
+                    case ets:lookup(TestETS, party_created) of
+                        [{party_created, true}] -> {ok, ?INTEGER};
+                        _ -> {throwing, #payproc_PartyNotFound{}}
+                    end;
+                ('Checkout', _) ->
+                    case ets:lookup(TestETS, party_created) of
+                        [{party_created, true}] -> {ok, ?PARTY};
+                        _ -> {throwing, #payproc_PartyNotFound{}}
                     end;
                 ('Create', _) ->
-                    true = ets:insert(TestEts, {party_created, true}),
-                    {ok, ?PARTY}
+                    case ets:insert_new(TestETS, {party_created, true}) of
+                        true -> {ok, ok};
+                        _ -> {throwing, #payproc_PartyExists{}}
+                    end
             end}
         ],
         Config
     ),
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetMyParty">>, ?STRING, Config),
     {ok, _} = capi_client_parties:get_my_party(?config(context, Config)),
-    true = ets:delete(TestEts).
+    true = ets:delete(TestETS).
 
 -spec suspend_my_party_ok_test(config()) -> _.
 suspend_my_party_ok_test(Config) ->
@@ -1144,7 +1159,15 @@ activate_my_party_ok_test(Config) ->
 
 -spec get_party_by_id_ok_test(config()) -> _.
 get_party_by_id_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {party_management, fun
+                ('GetRevision', _) -> {ok, ?INTEGER};
+                ('Checkout', _) -> {ok, ?PARTY}
+            end}
+        ],
+        Config
+    ),
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetPartyByID">>, ?STRING, Config),
     {ok, _} = capi_client_parties:get_party_by_id(?config(context, Config), ?STRING).
 
@@ -1199,7 +1222,15 @@ get_shop_by_id_for_party_error_test(Config) ->
 
 -spec get_shops_ok_test(config()) -> _.
 get_shops_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {party_management, fun
+                ('GetRevision', _) -> {ok, ?INTEGER};
+                ('Checkout', _) -> {ok, ?PARTY}
+            end}
+        ],
+        Config
+    ),
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetShops">>, ?STRING, Config),
     {ok, _} = capi_client_shops:get_shops(?config(context, Config)).
 
@@ -1207,7 +1238,10 @@ get_shops_ok_test(Config) ->
 get_shops_for_party_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
-            {party_management, fun('Get', _) -> {ok, ?PARTY} end}
+            {party_management, fun
+                ('GetRevision', _) -> {ok, ?INTEGER};
+                ('Checkout', _) -> {ok, ?PARTY}
+            end}
         ],
         Config
     ),
@@ -1217,9 +1251,10 @@ get_shops_for_party_ok_test(Config) ->
 -spec get_shops_for_party_error_test(config()) -> _.
 get_shops_for_party_error_test(Config) ->
     _ = capi_ct_helper:mock_services(
-        [{party_management, fun('Get', {_, <<"WrongPartyID">>}) -> {throwing, #payproc_InvalidUser{}} end}],
+        [{party_management, fun('GetRevision', {_, <<"WrongPartyID">>}) -> {throwing, #payproc_InvalidUser{}} end}],
         Config
     ),
+
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetShopsForParty">>, <<"WrongPartyID">>, Config),
     ?assertMatch(
         {error, {404, _}},
@@ -1511,7 +1546,17 @@ create_claim_invalid_residence_test(Config) ->
 
 -spec get_contract_by_id_ok_test(config()) -> _.
 get_contract_by_id_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {party_management, fun
+                ('GetRevision', _) -> {ok, ?INTEGER};
+                ('Checkout', _) -> {ok, ?PARTY};
+                ('GetContract', _) -> {ok, ?CONTRACT}
+            end}
+        ],
+        Config
+    ),
+
     _ = capi_ct_helper_bouncer:mock_arbiter(
         ?assertContextMatches(
             #bctx_v1_ContextFragment{
@@ -1525,7 +1570,17 @@ get_contract_by_id_ok_test(Config) ->
 
 -spec get_contract_by_id_for_party_ok_test(config()) -> _.
 get_contract_by_id_for_party_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {party_management, fun
+                ('GetRevision', _) -> {ok, ?INTEGER};
+                ('Checkout', _) -> {ok, ?PARTY};
+                ('GetContract', _) -> {ok, ?CONTRACT}
+            end}
+        ],
+        Config
+    ),
+
     _ = capi_ct_helper_bouncer:mock_assert_contract_op_ctx(
         <<"GetContractByIDForParty">>,
         ?STRING,
@@ -1536,13 +1591,30 @@ get_contract_by_id_for_party_ok_test(Config) ->
 
 -spec get_contracts_ok_test(config()) -> _.
 get_contracts_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {party_management, fun
+                ('GetRevision', _) -> {ok, ?INTEGER};
+                ('Checkout', _) -> {ok, ?PARTY}
+            end}
+        ],
+        Config
+    ),
+
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetContracts">>, ?STRING, Config),
     {ok, [_First, _Second]} = capi_client_contracts:get_contracts(?config(context, Config)).
 
 -spec get_contracts_for_party_ok_test(config()) -> _.
 get_contracts_for_party_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{party_management, fun('Get', _) -> {ok, ?PARTY} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {party_management, fun
+                ('GetRevision', _) -> {ok, ?INTEGER};
+                ('Checkout', _) -> {ok, ?PARTY}
+            end}
+        ],
+        Config
+    ),
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetContractsForParty">>, ?STRING, Config),
     {ok, [_First, _Second]} = capi_client_contracts:get_contracts_for_party(?config(context, Config), ?STRING).
 
@@ -1551,8 +1623,9 @@ get_contract_adjustments_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {party_management, fun
-                ('GetContract', _) -> {ok, ?CONTRACT};
-                ('Get', _) -> {ok, ?PARTY}
+                ('GetRevision', _) -> {ok, ?INTEGER};
+                ('Checkout', _) -> {ok, ?PARTY};
+                ('GetContract', _) -> {ok, ?CONTRACT}
             end}
         ],
         Config
@@ -1581,8 +1654,9 @@ get_contract_adjustment_by_id_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {party_management, fun
-                ('GetContract', _) -> {ok, ?CONTRACT};
-                ('Get', _) -> {ok, ?PARTY}
+                ('GetRevision', _) -> {ok, ?INTEGER};
+                ('Checkout', _) -> {ok, ?PARTY};
+                ('GetContract', _) -> {ok, ?CONTRACT}
             end}
         ],
         Config

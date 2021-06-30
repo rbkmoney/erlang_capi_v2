@@ -26,8 +26,7 @@ prepare('CreateWebhook' = OperationID, Req, Context) ->
     Process = fun() ->
         WebhookParams = encode_webhook_params(PartyID, Params),
         ShopID = validate_webhook_params(WebhookParams),
-        Call = {party_management, 'GetShop', {PartyID, ShopID}},
-        case capi_handler_utils:service_call_with([user_info], Call, Context) of
+        case capi_party:get_shop(PartyID, ShopID, Context) of
             {ok, _} ->
                 case capi_handler_utils:service_call({webhook_manager, 'Create', {WebhookParams}}, Context) of
                     {ok, Webhook} ->
@@ -35,9 +34,9 @@ prepare('CreateWebhook' = OperationID, Req, Context) ->
                     {exception, #webhooker_LimitExceeded{}} ->
                         {ok, general_error(429, <<"Webhook limit exceeded">>)}
                 end;
-            {exception, #payproc_InvalidUser{}} ->
+            {error, #payproc_InvalidUser{}} ->
                 {ok, logic_error(invalidPartyID, <<"Party not found">>)};
-            {exception, #payproc_ShopNotFound{}} ->
+            {error, #payproc_ShopNotFound{}} ->
                 {ok, logic_error(invalidShopID, <<"Shop not found">>)}
         end
     end,
@@ -269,11 +268,11 @@ decode_invoice_event_type({status_changed, #webhooker_InvoiceStatusChanged{value
     % TODO seems unmaintainable
     [
         decode_invoice_status_event_type(V)
-        || V <- [
-               ?invpaid(),
-               ?invcancelled(),
-               ?invfulfilled()
-           ]
+     || V <- [
+            ?invpaid(),
+            ?invcancelled(),
+            ?invfulfilled()
+        ]
     ];
 decode_invoice_event_type({status_changed, #webhooker_InvoiceStatusChanged{value = Value}}) ->
     [decode_invoice_status_event_type(Value)];
@@ -283,13 +282,13 @@ decode_invoice_event_type({payment, {status_changed, #webhooker_InvoicePaymentSt
     % TODO seems unmaintainable
     [
         decode_payment_status_event_type(V)
-        || V <- [
-               ?pmtprocessed(),
-               ?pmtcaptured(),
-               ?pmtcancelled(),
-               ?pmtrefunded(),
-               ?pmtfailed()
-           ]
+     || V <- [
+            ?pmtprocessed(),
+            ?pmtcaptured(),
+            ?pmtcancelled(),
+            ?pmtrefunded(),
+            ?pmtfailed()
+        ]
     ];
 decode_invoice_event_type({payment, {status_changed, #webhooker_InvoicePaymentStatusChanged{value = Value}}}) ->
     [decode_payment_status_event_type(Value)];
