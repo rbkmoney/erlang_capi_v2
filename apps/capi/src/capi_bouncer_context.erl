@@ -103,8 +103,8 @@ mk_base_fragment() ->
     }).
 
 -spec build(prototypes(), fragments(), woody_context:ctx()) -> fragments().
-build(Prototype, {Acc0, External}, WoodyCtx) ->
-    Acc1 = lists:foldl(fun({T, Params}, Acc) -> build(T, Params, Acc, WoodyCtx) end, Acc0, Prototype),
+build(Prototypes, {Acc0, External}, WoodyCtx) ->
+    Acc1 = lists:foldl(fun({T, Params}, Acc) -> build(T, Params, Acc, WoodyCtx) end, Acc0, Prototypes),
     {Acc1, External}.
 
 build(operation, Params = #{id := OperationID}, Acc, _WoodyCtx) ->
