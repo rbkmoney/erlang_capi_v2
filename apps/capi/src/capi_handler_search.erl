@@ -14,8 +14,7 @@
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare(OperationID, Req, Context) when OperationID =:= 'SearchInvoices' ->
-    OperationContext = make_authorization_query(OperationID, Context, Req),
-    Prototypes = [{operation, OperationContext}],
+    Prototypes = build_prototypes(OperationID, Context, Req),
     Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context, Req)} end,
     Process = fun() ->
         Query = make_query(Context, Req),
@@ -27,8 +26,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'SearchInvoices' ->
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID, Req, Context) when OperationID =:= 'SearchPayments' ->
-    OperationContext = make_authorization_query(OperationID, Context, Req),
-    Prototypes = [{operation, OperationContext}],
+    Prototypes = build_prototypes(OperationID, Context, Req),
     Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context, Req)} end,
     Process = fun() ->
         Query = make_query(Context, Req),
@@ -40,8 +38,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'SearchPayments' ->
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID, Req, Context) when OperationID =:= 'SearchRefunds' ->
-    OperationContext = make_authorization_query(OperationID, Context, Req),
-    Prototypes = [{operation, OperationContext}],
+    Prototypes = build_prototypes(OperationID, Context, Req),
     Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context, Req)} end,
     Process = fun() ->
         Query = make_query(Context, Req),
@@ -55,8 +52,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'SearchRefunds' ->
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID, Req, Context) when OperationID =:= 'SearchPayouts' ->
-    OperationContext = make_authorization_query(OperationID, Context, Req),
-    Prototypes = [{operation, OperationContext}],
+    Prototypes = build_prototypes(OperationID, Context, Req),
     Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context, Req)} end,
     Process = fun() ->
         Query = make_query(Context, Req),
@@ -99,18 +95,6 @@ make_query(Context, Req) ->
         <<"invoice_status">> => genlib_map:get('invoiceStatus', Req),
         <<"payout_id">> => genlib_map:get('payoutID', Req),
         <<"payout_type">> => encode_payout_type(genlib_map:get('payoutToolType', Req))
-    }.
-
-make_authorization_query(OperationID, Context, Req) ->
-    #{
-        id => OperationID,
-        party => capi_handler_utils:get_party_id(Context),
-        shop => genlib_map:get('shopID', Req),
-        invoice => genlib_map:get('invoiceID', Req),
-        payment => genlib_map:get('paymentID', Req),
-        customer => genlib_map:get('customerID', Req),
-        payout => genlib_map:get('payoutID', Req),
-        refund => genlib_map:get('refundID', Req)
     }.
 
 process_search_request(QueryType, Query, Req, Context, Opts = #{thrift_fun := ThriftFun}) ->
@@ -585,3 +569,20 @@ decode_mobile_phone(#merchstat_MobilePhone{cc = Cc, ctn = Ctn}) ->
 
 gen_phone_number(#{<<"cc">> := Cc, <<"ctn">> := Ctn}) ->
     <<"+", Cc/binary, Ctn/binary>>.
+
+build_prototypes(OperationID, Context, Req) ->
+    InvoiceID = genlib_map:get('invoiceID', Req),
+    CustomerID = genlib_map:get('customerID', Req),
+    [
+        {operation, #{
+            id => OperationID,
+            party => capi_handler_utils:get_party_id(Context),
+            shop => genlib_map:get('shopID', Req),
+            invoice => InvoiceID,
+            payment => genlib_map:get('paymentID', Req),
+            customer => CustomerID,
+            payout => genlib_map:get('payoutID', Req),
+            refund => genlib_map:get('refundID', Req)
+        }},
+        {payproc, #{invoice => InvoiceID, customer => CustomerID}}
+    ].

@@ -80,7 +80,6 @@ clean:
 	$(REBAR) clean
 
 distclean: swag_server.distclean swag_client.distclean
-	$(REBAR) clean
 	rm -rf _build
 
 cover:
