@@ -52,7 +52,7 @@ get(Ref, Context) ->
 globals() ->
     {globals, #domain_GlobalsRef{}}.
 
--spec get_objects_by_type(context(), Type :: atom()) -> {ok, [dmsl_domain_thrift:'DomainObject'()]}.
+-spec get_objects_by_type(Type :: atom(), context()) -> {ok, [dmsl_domain_thrift:'DomainObject'()]}.
 get_objects_by_type(Type, Context) ->
     Objects = dmt_client:checkout_objects_by_type(latest, Type, #{woody_context => Context}),
     {ok, Objects}.
