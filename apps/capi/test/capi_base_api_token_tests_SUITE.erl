@@ -2372,13 +2372,13 @@ get_countries_test(Config) ->
     ?assertEqual(
         {ok, [
             #{
-                <<"id">> => <<"RUS">>,
-                <<"name">> => <<"Russia">>
-            },
-            #{
                 <<"id">> => <<"DEU">>,
                 <<"name">> => <<"Germany">>,
                 <<"tradeBlocs">> => [<<"EEA">>]
+            },
+            #{
+                <<"id">> => <<"RUS">>,
+                <<"name">> => <<"Russia">>
             }
         ]},
         capi_client_countries:get_countries(?config(context, Config))
