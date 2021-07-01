@@ -15,7 +15,7 @@
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare(OperationID, Req, Context) when OperationID =:= 'SearchInvoices' ->
     OperationContext = make_authorization_query(OperationID, Context, Req),
-    Prototypes = [{operation, OperationContext}],
+    Prototypes = maybe_extend_prototype([{operation, OperationContext}]),
     Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context, Req)} end,
     Process = fun() ->
         Query = make_query(Context, Req),
@@ -28,7 +28,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'SearchInvoices' ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID, Req, Context) when OperationID =:= 'SearchPayments' ->
     OperationContext = make_authorization_query(OperationID, Context, Req),
-    Prototypes = [{operation, OperationContext}],
+    Prototypes = maybe_extend_prototype([{operation, OperationContext}]),
     Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context, Req)} end,
     Process = fun() ->
         Query = make_query(Context, Req),
@@ -585,3 +585,8 @@ decode_mobile_phone(#merchstat_MobilePhone{cc = Cc, ctn = Ctn}) ->
 
 gen_phone_number(#{<<"cc">> := Cc, <<"ctn">> := Ctn}) ->
     <<"+", Cc/binary, Ctn/binary>>.
+
+maybe_extend_prototype([{operation, #{invoice := undefined}}] = Prototypes) ->
+    Prototypes;
+maybe_extend_prototype([{operation, #{invoice := InvoiceID}}] = Prototypes) ->
+    [{payproc, #{invoice => InvoiceID}} | Prototypes].
