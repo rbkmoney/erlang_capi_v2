@@ -256,18 +256,27 @@ prepare('GetInvoiceEvents' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('GetInvoicePaymentMethods' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
+    ResultInvoice =
+        case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
+            {ok, Result} ->
+                Result;
+            {exception, _Exception} ->
+                undefined
+        end,
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID}},
-            {payproc, #{invoice => InvoiceID}}
+            {payproc, #{invoice => ResultInvoice}}
         ],
         Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
         {ok, Resolution}
     end,
     Process = fun() ->
-        Party = capi_utils:unwrap(capi_handler_utils:get_party(Context)),
-        Revision = Party#domain_Party.revision,
-        Args = {InvoiceID, {revision, Revision}},
+        capi_handler:respond_if_undefined(ResultInvoice, general_error(404, <<"Invoice not found">>)),
+        PartyID = ResultInvoice#payproc_Invoice.invoice#domain_Invoice.owner_id,
+        % В данном контексте - Party не может не существовать
+        {ok, Party} = capi_party:get_party(PartyID, Context),
+        Args = {InvoiceID, {revision, Party#domain_Party.revision}},
         case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, Args, Context) of
             {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
                 PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),

@@ -30,7 +30,8 @@
         prometheus,
         prometheus_cowboy,
         bouncer_client,
-        token_keeper_client
+        token_keeper_client,
+        party_client
     ]},
     {env, []}
 ]}.

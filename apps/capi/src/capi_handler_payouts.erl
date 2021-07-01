@@ -77,32 +77,34 @@ prepare(OperationID, Req, Context) when OperationID =:= 'CreatePayout' ->
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutTools' ->
+    PartyID = capi_handler_utils:get_party_id(Context),
     OperationContext = #{
         id => OperationID,
-        party => capi_handler_utils:get_party_id(Context)
+        party => PartyID
     },
     Authorize = fun() ->
         {ok, capi_auth:authorize_operation([{operation, OperationContext}], Context, Req)}
     end,
     Process = fun() ->
-        case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
+        case capi_party:get_contract(PartyID, maps:get('contractID', Req), Context) of
             {ok, #domain_Contract{payout_tools = PayoutTools}} ->
                 {ok, {200, #{}, [decode_payout_tool(P) || P <- PayoutTools]}};
-            {exception, #payproc_ContractNotFound{}} ->
+            {error, #payproc_ContractNotFound{}} ->
                 {ok, general_error(404, <<"Contract not found">>)}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolByID' ->
+    PartyID = capi_handler_utils:get_party_id(Context),
     OperationContext = #{
         id => OperationID,
-        party => capi_handler_utils:get_party_id(Context)
+        party => PartyID
     },
     Authorize = fun() ->
         {ok, capi_auth:authorize_operation([{operation, OperationContext}], Context, Req)}
     end,
     Process = fun() ->
-        case capi_handler_utils:get_contract_by_id(maps:get('contractID', Req), Context) of
+        case capi_party:get_contract(PartyID, maps:get('contractID', Req), Context) of
             {ok, #domain_Contract{payout_tools = PayoutTools}} ->
                 PayoutToolID = maps:get('payoutToolID', Req),
                 case lists:keyfind(PayoutToolID, #domain_PayoutTool.id, PayoutTools) of
@@ -111,7 +113,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolByID' ->
                     false ->
                         {ok, general_error(404, <<"PayoutTool not found">>)}
                 end;
-            {exception, #payproc_ContractNotFound{}} ->
+            {error, #payproc_ContractNotFound{}} ->
                 {ok, general_error(404, <<"Contract not found">>)}
         end
     end,
@@ -127,10 +129,10 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolsForParty'
     end,
     Process = fun() ->
         ContractID = maps:get('contractID', Req),
-        case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
+        case capi_party:get_contract(PartyID, ContractID, Context) of
             {ok, #domain_Contract{payout_tools = PayoutTools}} ->
                 {ok, {200, #{}, [decode_payout_tool(P) || P <- PayoutTools]}};
-            {exception, #payproc_ContractNotFound{}} ->
+            {error, #payproc_ContractNotFound{}} ->
                 {ok, general_error(404, <<"Contract not found">>)}
         end
     end,
@@ -146,7 +148,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolByIDForPar
     end,
     Process = fun() ->
         ContractID = maps:get('contractID', Req),
-        case capi_handler_utils:get_contract_by_id(PartyID, ContractID, Context) of
+        case capi_party:get_contract(PartyID, ContractID, Context) of
             {ok, #domain_Contract{payout_tools = PayoutTools}} ->
                 PayoutToolID = maps:get('payoutToolID', Req),
                 case lists:keyfind(PayoutToolID, #domain_PayoutTool.id, PayoutTools) of
@@ -155,7 +157,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayoutToolByIDForPar
                     false ->
                         {ok, general_error(404, <<"PayoutTool not found">>)}
                 end;
-            {exception, #payproc_ContractNotFound{}} ->
+            {error, #payproc_ContractNotFound{}} ->
                 {ok, general_error(404, <<"Contract not found">>)}
         end
     end,
