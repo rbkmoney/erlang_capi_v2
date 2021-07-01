@@ -20,7 +20,7 @@ get_payment_institutions(Context) ->
     #'VersionedObject'{
         version = Version,
         object = {globals, Globals}
-    } = dmt_client:checkout_versioned_object(globals(), Opts),
+    } = dmt_client:checkout_versioned_object(latest, globals(), Opts),
 
     PaymentInstitutionRefs =
         case Globals#domain_Globals.payment_institutions of
@@ -42,7 +42,7 @@ get_payment_institutions(Context) ->
 -spec get(ref(), context()) -> {ok, data()} | {error, not_found}.
 get(Ref, Context) ->
     try
-        {_Type, Object} = dmt_client:checkout_object(Ref, #{woody_context => Context}),
+        {_Type, Object} = dmt_client:checkout_object(latest, Ref, #{woody_context => Context}),
         {ok, Object}
     catch
         error:#'ObjectNotFound'{} ->
@@ -54,5 +54,5 @@ globals() ->
 
 -spec get_objects_by_type(context(), Type :: atom()) -> {ok, [dmsl_domain_thrift:'DomainObject'()]}.
 get_objects_by_type(Type, Context) ->
-    Objects = dmt_client:checkout_objects_by_type(Type, #{woody_context => Context}),
+    Objects = dmt_client:checkout_objects_by_type(latest, Type, #{woody_context => Context}),
     {ok, Objects}.
