@@ -1825,6 +1825,7 @@ search_invoices_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end},
+            {customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end},
             {merchant_stat, fun('GetInvoices', _) -> {ok, ?STAT_RESPONSE_INVOICES} end}
         ],
         Config
@@ -1915,7 +1916,11 @@ search_payments_ok_(BankCardTokenProvider, Config) ->
 -spec search_refunds_ok_test(config()) -> _.
 search_refunds_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
-        [{merchant_stat, fun('GetPayments', _) -> {ok, ?STAT_RESPONSE_REFUNDS} end}],
+        [
+            {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end},
+            {customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end},
+            {merchant_stat, fun('GetPayments', _) -> {ok, ?STAT_RESPONSE_REFUNDS} end}
+        ],
         Config
     ),
     _ = capi_ct_helper_bouncer:mock_assert_search_refund_op_ctx(
