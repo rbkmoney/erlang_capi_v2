@@ -19,7 +19,7 @@ get_payment_institutions(Context) ->
 
     #'VersionedObject'{
         version = Version,
-        object = {globals, Globals}
+        object = {globals, #domain_GlobalsObject{data = Globals}}
     } = dmt_client:checkout_versioned_object(latest, globals(), Opts),
 
     PaymentInstitutionRefs =
@@ -45,7 +45,7 @@ get(Ref, Context) ->
         {_Type, Object} = dmt_client:checkout_object(latest, Ref, #{woody_context => Context}),
         {ok, Object}
     catch
-        error:#'ObjectNotFound'{} ->
+        throw:#'ObjectNotFound'{} ->
             {error, not_found}
     end.
 
