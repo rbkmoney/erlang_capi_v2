@@ -15,7 +15,7 @@
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare(OperationID, Req, Context) when OperationID =:= 'GetCountries'; OperationID =:= 'GetCountryByID' ->
-    Authorize = fun() -> {ok, capi_auth:authorize_operation([], Context, Req)} end,
+    Authorize = fun() -> {ok, capi_auth:authorize_operation([], Context)} end,
     Process = fun() -> process_request(OperationID, Req, Context) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
