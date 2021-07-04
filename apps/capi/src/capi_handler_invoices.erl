@@ -309,6 +309,7 @@ encode_invoice_params(ID, PartyID, InvoiceParams) ->
     Amount = genlib_map:get(<<"amount">>, InvoiceParams),
     Currency = genlib_map:get(<<"currency">>, InvoiceParams),
     Cart = genlib_map:get(<<"cart">>, InvoiceParams),
+    ClientInfo = genlib_map:get(<<"clientInfo">>, InvoiceParams),
     #payproc_InvoiceParams{
         id = ID,
         party_id = PartyID,
@@ -317,8 +318,21 @@ encode_invoice_params(ID, PartyID, InvoiceParams) ->
         due = capi_handler_utils:get_time(<<"dueDate">>, InvoiceParams),
         context = capi_handler_encoder:encode_invoice_context(InvoiceParams),
         shop_id = genlib_map:get(<<"shopID">>, InvoiceParams),
-        external_id = genlib_map:get(<<"externalID">>, InvoiceParams, undefined)
+        external_id = genlib_map:get(<<"externalID">>, InvoiceParams, undefined),
+        client_info = encode_client_info(ClientInfo)
     }.
+
+encode_client_info(undefined) ->
+    undefined;
+encode_client_info(#{<<"trustLevel">> := TrustLevel}) ->
+    #domain_InvoiceClientInfo{
+        trust_level = encode_trust_level(TrustLevel)
+    }.
+
+encode_trust_level(<<"unknown">>) ->
+    unknown;
+encode_trust_level(<<"wellKnown">>) ->
+    well_known.
 
 encode_invoice_cost(Amount, Currency, Cart) when Amount =/= undefined, Cart =/= undefined ->
     case get_invoice_cart_amount(Cart) of
