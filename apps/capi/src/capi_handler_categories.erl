@@ -19,7 +19,7 @@ prepare(OperationID = 'GetCategories', Req, Context = #{woody_context := WoodyCo
         {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
     end,
     Process = fun() ->
-        Categories = capi_utils:unwrap(capi_domain:get_categories(WoodyContext)),
+        Categories = capi_utils:unwrap(capi_domain:get_objects_by_type(category, WoodyContext)),
         {ok, {200, #{}, [decode_category(C) || C <- Categories]}}
     end,
     {ok, #{authorize => Authorize, process => Process}};
