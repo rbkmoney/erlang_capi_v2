@@ -23,8 +23,8 @@ prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 process_request('GetTradeBlocs', _Req, #{woody_context := WoodyContext}) ->
-    Countries = unwrap(capi_domain:get_objects_by_type(trade_bloc, WoodyContext)),
-    {ok, {200, #{}, lists:map(fun decode_trade_bloc_object/1, Countries)}};
+    TradeBlocs = unwrap(capi_domain:get_objects_by_type(trade_bloc, WoodyContext)),
+    {ok, {200, #{}, lists:map(fun decode_trade_bloc_object/1, TradeBlocs)}};
 process_request('GetTradeBlocByID', Req, #{woody_context := WoodyContext}) ->
     Ref = {trade_bloc, #domain_TradeBlocRef{id = maps:get('tradeBlocID', Req)}},
     case capi_domain:get(Ref, WoodyContext) of
