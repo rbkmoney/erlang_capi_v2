@@ -170,7 +170,7 @@ handle_auth_result(Res, undefined) ->
     Res;
 handle_auth_result(OldRes, NewRes) ->
     _ = logger:warning("New auth ~p differ from old ~p", [NewRes, OldRes]),
-    OldRes.
+    NewRes.
 
 %% TODO: Remove this clause after all handlers will be implemented
 do_authorize_operation([], _, _) ->
