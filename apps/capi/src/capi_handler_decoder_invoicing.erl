@@ -326,7 +326,8 @@ decode_refund(Refund, Context) ->
             <<"reason">> => Refund#domain_InvoicePaymentRefund.reason,
             <<"amount">> => Amount,
             <<"currency">> => capi_handler_decoder_utils:decode_currency(Currency),
-            <<"externalID">> => Refund#domain_InvoicePaymentRefund.external_id
+            <<"externalID">> => Refund#domain_InvoicePaymentRefund.external_id,
+            <<"allocation">> => capi_allocation:decode(Refund#domain_InvoicePaymentRefund.allocation)
         },
         decode_refund_status(Refund#domain_InvoicePaymentRefund.status, Context)
     ).
@@ -402,7 +403,8 @@ decode_invoice(Invoice) ->
             <<"description">> => Details#domain_InvoiceDetails.description,
             <<"cart">> => decode_invoice_cart(Details#domain_InvoiceDetails.cart),
             <<"bankAccount">> => decode_invoice_bank_account(Details#domain_InvoiceDetails.bank_account),
-            <<"invoiceTemplateID">> => Invoice#domain_Invoice.template_id
+            <<"invoiceTemplateID">> => Invoice#domain_Invoice.template_id,
+            <<"allocation">> => capi_allocation:decode(Invoice#domain_Invoice.allocation)
         },
         decode_invoice_status(Invoice#domain_Invoice.status)
     ).
@@ -420,7 +422,7 @@ decode_invoice_status({Status, StatusInfo}) ->
     }.
 
 -spec decode_invoice_cart(capi_handler_encoder:encode_data() | undefined) ->
-    capi_handler_decoder_utils:decode_data() | undefined.
+    [capi_handler_decoder_utils:decode_data()] | undefined.
 decode_invoice_cart(#domain_InvoiceCart{lines = Lines}) ->
     [decode_invoice_line(L) || L <- Lines];
 decode_invoice_cart(undefined) ->

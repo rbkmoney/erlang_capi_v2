@@ -10,6 +10,7 @@
 -export([encode_cash/2]).
 -export([encode_currency/1]).
 -export([encode_invoice_cart/1]).
+-export([encode_invoice_cart/2]).
 -export([encode_invoice_bank_account/1]).
 -export([encode_stat_request/1]).
 -export([encode_invoice_context/1]).
@@ -144,6 +145,7 @@ encode_invoice_cart(Params) ->
     Currency = genlib_map:get(<<"currency">>, Params),
     encode_invoice_cart(Cart, Currency).
 
+-spec encode_invoice_cart(list(), binary()) -> encode_data().
 encode_invoice_cart(Cart, Currency) when Cart =/= undefined, Cart =/= [] ->
     #domain_InvoiceCart{
         lines = [encode_invoice_line(Line, Currency) || Line <- Cart]

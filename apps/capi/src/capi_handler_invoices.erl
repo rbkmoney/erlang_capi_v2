@@ -29,6 +29,8 @@ prepare('CreateInvoice' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         try
+            Allocation = maps:get(<<"allocation">>, InvoiceParams, undefined),
+            ok = validate_allocation(Allocation),
             ExtraProperties = capi_handler_utils:get_extra_properties(Context),
             case create_invoice(PartyID, InvoiceParams, Context, OperationID) of
                 {ok, #'payproc_Invoice'{invoice = Invoice}} ->
@@ -57,12 +59,14 @@ prepare('CreateInvoice' = OperationID, Req, Context) ->
                     end
             end
         catch
-            invoice_cart_empty ->
+            throw:invoice_cart_empty ->
                 {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
-            invalid_invoice_cost ->
+            throw:invalid_invoice_cost ->
                 {ok, logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)};
-            {external_id_conflict, InvoiceID, ExternalID, _Schema} ->
-                {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
+            throw:{external_id_conflict, InvoiceID, ExternalID, _Schema} ->
+                {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})};
+            throw:duplicate_allocation ->
+                {ok, logic_error(invalidAllocation, <<"Duplicate shop">>)}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -296,6 +300,12 @@ prepare(_OperationID, _Req, _Context) ->
 
 %%
 
+validate_allocation(Allocation) ->
+    case capi_allocation:validate(Allocation) of
+        ok -> ok;
+        Error -> throw(Error)
+    end.
+
 create_invoice(PartyID, InvoiceParams, Context, BenderPrefix) ->
     #{woody_context := WoodyCtx} = Context,
     ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
@@ -310,6 +320,7 @@ encode_invoice_params(ID, PartyID, InvoiceParams) ->
     Currency = genlib_map:get(<<"currency">>, InvoiceParams),
     Cart = genlib_map:get(<<"cart">>, InvoiceParams),
     ClientInfo = genlib_map:get(<<"clientInfo">>, InvoiceParams),
+    Allocation = genlib_map:get(<<"allocation">>, InvoiceParams),
     #payproc_InvoiceParams{
         id = ID,
         party_id = PartyID,
@@ -319,7 +330,8 @@ encode_invoice_params(ID, PartyID, InvoiceParams) ->
         context = capi_handler_encoder:encode_invoice_context(InvoiceParams),
         shop_id = genlib_map:get(<<"shopID">>, InvoiceParams),
         external_id = genlib_map:get(<<"externalID">>, InvoiceParams, undefined),
-        client_info = encode_client_info(ClientInfo)
+        client_info = encode_client_info(ClientInfo),
+        allocation = capi_allocation:encode(Allocation, PartyID)
     }.
 
 encode_client_info(undefined) ->
