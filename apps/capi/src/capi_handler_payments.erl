@@ -164,6 +164,7 @@ prepare(OperationID = 'GetPaymentByExternalID', Req, Context) ->
 prepare(OperationID = 'CapturePayment', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
+    PartyID = capi_handler_utils:get_party_id(Context),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID}},
@@ -180,7 +181,7 @@ prepare(OperationID = 'CapturePayment', Req, Context) ->
                 reason = maps:get(<<"reason">>, Params),
                 cash = encode_optional_cash(Params, InvoiceID, PaymentID, Context),
                 cart = capi_handler_encoder:encode_invoice_cart(Params),
-                allocation = capi_allocation:encode(Allocation)
+                allocation = capi_allocation:encode(Allocation, PartyID)
             },
             CallArgs = {InvoiceID, PaymentID, CaptureParams},
             Call = {invoicing, 'CapturePayment', CallArgs},
@@ -277,7 +278,7 @@ prepare(OperationID = 'CancelPayment', Req, Context) ->
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'CreateRefund', Req, Context) ->
-    InvoiceID = maps:get('invoiceID', Req),
+    InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
     RefundParams = maps:get('RefundParams', Req),
     Authorize = fun() ->
@@ -507,7 +508,11 @@ validate_allocation(Allocation) ->
 validate_refund(RefundParams) ->
     Allocation = maps:get(<<"allocation">>, RefundParams, undefined),
     ok = validate_allocation(Allocation),
-    AllocationCart = maps:get(<<"cart">>, Allocation, undefined),
+    AllocationCart =
+        if
+            Allocation =:= undefined -> undefined;
+            true -> maps:get(<<"cart">>, Allocation, undefined)
+        end,
     RefundCart = maps:get(<<"cart">>, RefundParams, undefined),
     case {RefundCart, AllocationCart} of
         {undefined, _} -> ok;

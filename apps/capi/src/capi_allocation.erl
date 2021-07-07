@@ -42,7 +42,7 @@ encode(Transactions, PartyID) ->
 
 encode_transaction(Transaction) ->
     #domain_AllocationTransactionPrototype{
-        id = <<"wtf">>,
+        id = <<>>,
         target = encode_target(maps:get(<<"target">>, Transaction)),
         body = encode_body(Transaction),
         details = encode_details(Transaction)
@@ -50,7 +50,6 @@ encode_transaction(Transaction) ->
 
 encode_target(#{<<"allocationTargetType">> := <<"AllocationTargetShop">>} = Target) ->
     {shop, #domain_AllocationTransactionTargetShop{
-        owner_id = <<"wtf">>,
         shop_id = maps:get(<<"shopID">>, Target)
     }}.
 
@@ -68,7 +67,6 @@ encode_body(#{<<"allocationBodyType">> := <<"AllocationBodyAmount">>} = Transact
 encode_body(#{<<"allocationBodyType">> := <<"AllocationBodyTotal">>} = Transaction) ->
     Currency = maps:get(<<"currency">>, Transaction),
     Total = maps:get(<<"total">>, Transaction),
-    % в swag помечен как необязательный
     Fee = maps:get(<<"fee">>, Transaction),
     {total, #domain_AllocationTransactionPrototypeBodyTotal{
         total = capi_handler_encoder:encode_cash(Total, Currency),
@@ -231,7 +229,7 @@ encode_test() ->
     Expected = #domain_AllocationPrototype{
         transactions = [
             #domain_AllocationTransactionPrototype{
-                id = <<"wtf">>,
+                id = <<>>,
                 target =
                     {shop, #domain_AllocationTransactionTargetShop{
                         owner_id = <<"partyID">>,
