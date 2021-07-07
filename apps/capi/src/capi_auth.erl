@@ -140,7 +140,7 @@ authorize_token_by_type(bearer = TokenType, Token, TokenContext, WoodyContext) -
                     {ok, {authorized, make_context(AuthData, LegacyContext)}};
                 {error, TokenKeeperError} ->
                     _ = logger:warning("Token keeper authorization failed: ~p", [TokenKeeperError]),
-                    {ok, {authorized, make_context(undefined, LegacyContext)}}
+                    {error, {auth_failed, TokenKeeperError}}
             end;
         {error, LegacyError} ->
             {error, {legacy_auth_failed, LegacyError}}
