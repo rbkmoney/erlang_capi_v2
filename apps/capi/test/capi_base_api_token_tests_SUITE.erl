@@ -325,14 +325,12 @@ init_per_group(auth_by_user_session_token, Config) ->
     Apps = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
     [{group_apps, Apps}, {group_test_sup, SupPid} | Config];
 init_per_group(operations_by_base_api_token, Config) ->
-    BasePermissions = get_base_permissions(),
-    {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
+    {ok, Token} = capi_ct_helper:issue_token([], unlimited),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
     Apps1 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     [{context, capi_ct_helper:get_context(Token)}, {subgroup_apps, Apps1}, {subgroup_test_sup, SupPid} | Config];
 init_per_group(operations_by_base_api_token_with_new_auth, Config) ->
-    BasePermissions = get_base_permissions(),
-    {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
+    {ok, Token} = capi_ct_helper:issue_token([], unlimited),
     [{context, capi_ct_helper:get_context(Token)} | Config];
 init_per_group(_, Config) ->
     Config.
@@ -362,19 +360,6 @@ init_per_testcase(_Name, C) ->
 end_per_testcase(_Name, C) ->
     capi_ct_helper:stop_mocked_service_sup(?config(test_sup, C)),
     ok.
-
-get_base_permissions() ->
-    [
-        {[invoices], write},
-        {[invoices], read},
-        {[party], write},
-        {[party], read},
-        {[invoices, payments], write},
-        {[invoices, payments], read},
-        {[customers], write},
-        {[payouts], write},
-        {[payouts], read}
-    ].
 
 %%% Tests
 
@@ -1186,6 +1171,7 @@ activate_party_by_id_ok_test(Config) ->
 -spec get_shop_by_id_ok_test(config()) -> _.
 get_shop_by_id_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('GetShop', _) -> {ok, ?SHOP} end}], Config),
+    _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"GetShopByID">>, ?STRING, ?STRING, Config),
     {ok, _} = capi_client_shops:get_shop_by_id(?config(context, Config), ?STRING).
 
 -spec get_shop_by_id_for_party_ok_test(config()) -> _.
@@ -2235,7 +2221,7 @@ get_schedule_by_ref_ok_test(Config) ->
 -spec check_no_payment_by_external_id_test(config()) -> _.
 check_no_payment_by_external_id_test(Config) ->
     ExternalID = capi_utils:get_unique_id(),
-    BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{<<"invoice_id">> => <<"123">>}}),
+    BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{<<"invoice_id">> => ?STRING}}),
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Get', _) ->
@@ -2246,6 +2232,13 @@ check_no_payment_by_external_id_test(Config) ->
                 {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)}
             end}
         ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+        <<"GetPaymentByExternalID">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
         Config
     ),
 
@@ -2268,6 +2261,13 @@ check_no_invoice_by_external_id_test(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+        <<"GetPaymentByExternalID">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
 
     {error, {invalid_response_code, 500}} =
         capi_client_payments:get_payment_by_external_id(?config(context, Config), ExternalID).
@@ -2276,7 +2276,7 @@ check_no_invoice_by_external_id_test(Config) ->
 retrieve_payment_by_external_id_test(Config) ->
     PaymentID = capi_utils:get_unique_id(),
     ExternalID = capi_utils:get_unique_id(),
-    BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{<<"invoice_id">> => <<"123">>}}),
+    BenderContext = capi_msgp_marshalling:marshal(#{<<"context_data">> => #{<<"invoice_id">> => ?STRING}}),
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Get', _) ->
@@ -2286,6 +2286,13 @@ retrieve_payment_by_external_id_test(Config) ->
                 {ok, capi_ct_helper_bender:get_internal_id_result(PaymentID, BenderContext)}
             end}
         ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+        <<"GetPaymentByExternalID">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
         Config
     ),
     {ok, #{
