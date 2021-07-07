@@ -172,9 +172,6 @@ handle_auth_result(OldRes, NewRes) ->
     _ = logger:warning("New auth ~p differ from old ~p", [NewRes, OldRes]),
     NewRes.
 
-%% TODO: Remove this clause after all handlers will be implemented
-do_authorize_operation([], _, _) ->
-    undefined;
 do_authorize_operation(_, undefined, _) ->
     undefined;
 do_authorize_operation(Prototypes, AuthData, #{swagger_context := SwagContext, woody_context := WoodyContext}) ->
