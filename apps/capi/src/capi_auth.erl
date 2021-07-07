@@ -128,7 +128,7 @@ get_legacy_context(#{legacy := LegacyContext}) ->
     LegacyContext.
 
 get_auth_data(AuthContext) ->
-    maps:get(auth_data, AuthContext, undefined).
+    maps:get(auth_data, AuthContext).
 
 authorize_token_by_type(bearer = TokenType, Token, TokenContext, WoodyContext) ->
     %% NONE: For now legacy auth still takes precedence over
@@ -172,8 +172,6 @@ handle_auth_result(OldRes, NewRes) ->
     _ = logger:warning("New auth ~p differ from old ~p", [NewRes, OldRes]),
     NewRes.
 
-do_authorize_operation(_, undefined, _) ->
-    undefined;
 do_authorize_operation(Prototypes, AuthData, #{swagger_context := SwagContext, woody_context := WoodyContext}) ->
     Fragments = capi_bouncer:gather_context_fragments(AuthData, SwagContext, WoodyContext),
     Fragments1 = capi_bouncer_context:build(Prototypes, Fragments, WoodyContext),
