@@ -65,7 +65,9 @@ prepare('CreateInvoice' = OperationID, Req, Context) ->
                 {ok, logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)};
             throw:{external_id_conflict, InvoiceID, ExternalID, _Schema} ->
                 {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})};
-            throw:duplicate_allocation ->
+            throw:allocation_wrong_cart ->
+                {ok, logic_error(invalidAllocation, <<"Wrong cart">>)};
+            throw:allocation_duplicate ->
                 {ok, logic_error(invalidAllocation, <<"Duplicate shop">>)}
         end
     end,

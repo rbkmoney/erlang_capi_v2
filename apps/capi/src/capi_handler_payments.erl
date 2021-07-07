@@ -228,7 +228,9 @@ prepare(OperationID = 'CapturePayment', Req, Context) ->
         catch
             throw:invoice_cart_empty ->
                 {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
-            throw:duplicate_allocation ->
+            throw:allocation_wrong_cart ->
+                {ok, logic_error(invalidAllocation, <<"Wrong cart">>)};
+            throw:allocation_duplicate ->
                 {ok, logic_error(invalidAllocation, <<"Duplicate shop">>)}
         end
     end,
@@ -352,8 +354,10 @@ prepare(OperationID = 'CreateRefund', Req, Context) ->
                 {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
             throw:{external_id_conflict, RefundID, ExternalID, _Schema} ->
                 {ok, logic_error(externalIDConflict, {RefundID, ExternalID})};
-            throw:duplicate_allocation ->
+            throw:allocation_duplicate ->
                 {ok, logic_error(invalidAllocation, <<"Duplicate shop">>)};
+            throw:allocation_wrong_cart ->
+                {ok, logic_error(invalidAllocation, <<"Wrong cart">>)};
             throw:refund_cart_conflict ->
                 {ok, logic_error(refundCartConflict, <<"Inconsistent Refund Cart">>)}
         end
@@ -505,16 +509,11 @@ validate_allocation(Allocation) ->
         Error -> throw(Error)
     end.
 
-validate_refund(RefundParams) ->
-    Allocation = maps:get(<<"allocation">>, RefundParams, undefined),
+validate_refund(Params) ->
+    Allocation = maps:get(<<"allocation">>, Params, undefined),
     ok = validate_allocation(Allocation),
-    AllocationCart =
-        if
-            Allocation =:= undefined -> undefined;
-            true -> maps:get(<<"cart">>, Allocation, undefined)
-        end,
-    RefundCart = maps:get(<<"cart">>, RefundParams, undefined),
-    case {RefundCart, AllocationCart} of
+    RefundCart = maps:get(<<"cart">>, Params, undefined),
+    case {RefundCart, Allocation} of
         {undefined, _} -> ok;
         {_, undefined} -> ok;
         _ -> throw(refund_cart_conflict)

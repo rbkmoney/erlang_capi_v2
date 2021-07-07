@@ -9,47 +9,40 @@
 -type allocation() :: dmsl_domain_thrift:'Allocation'().
 -type encode_data() :: _.
 -type decode_data() :: _.
--type validate_error() :: duplicate_allocation.
+-type validate_error() :: allocation_duplicate | allocation_wrong_cart.
 
 -spec validate(map()) -> ok | validate_error().
 validate(undefined) ->
     ok;
+validate(#{<<"items">> := []}) ->
+    allocation_wrong_cart;
 validate(#{<<"items">> := Transactions}) ->
     Uniq = lists:usort([maps:get(<<"shopID">>, Target) || #{<<"target">> := Target} <- Transactions]),
-    Duplictate = erlang:length(Uniq) =/= erlang:length(Transactions),
-    if
-        Duplictate -> duplicate_allocation;
-        true -> ok
+    case erlang:length(Uniq) =/= erlang:length(Transactions) of
+        true -> allocation_duplicate;
+        _ -> ok
     end.
 
 -spec encode(map() | undefined, binary()) -> encode_data() | undefined.
 encode(undefined, _PartyID) ->
     undefined;
 encode(Transactions, PartyID) ->
+    Ordered = lists:zip(lists:seq(0, erlang:length(Transactions) - 1), Transactions),
     #domain_AllocationPrototype{
-        transactions = lists:map(
-            fun(T) ->
-                Transaction = encode_transaction(T),
-                {shop, Target} = Transaction#domain_AllocationTransactionPrototype.target,
-                NewTarget = Target#domain_AllocationTransactionTargetShop{owner_id = PartyID},
-                Transaction#domain_AllocationTransactionPrototype{
-                    target = {shop, NewTarget}
-                }
-            end,
-            Transactions
-        )
+        transactions = [encode_transaction(Order, PartyID, Transaction) || {Order, Transaction} <- Ordered]
     }.
 
-encode_transaction(Transaction) ->
+encode_transaction(Index, PartyID, Transaction) ->
     #domain_AllocationTransactionPrototype{
-        id = <<>>,
-        target = encode_target(maps:get(<<"target">>, Transaction)),
+        id = erlang:integer_to_binary(Index),
+        target = encode_target(PartyID, maps:get(<<"target">>, Transaction)),
         body = encode_body(Transaction),
         details = encode_details(Transaction)
     }.
 
-encode_target(#{<<"allocationTargetType">> := <<"AllocationTargetShop">>} = Target) ->
+encode_target(PartyID, #{<<"allocationTargetType">> := <<"AllocationTargetShop">>} = Target) ->
     {shop, #domain_AllocationTransactionTargetShop{
+        owner_id = PartyID,
         shop_id = maps:get(<<"shopID">>, Target)
     }}.
 
@@ -175,18 +168,21 @@ decode_parts(Parts) ->
 
 -spec test() -> _.
 
--spec validate_test() -> _.
-validate_test() ->
-    ?assertEqual(
-        duplicate_allocation,
-        validate(#{
-            <<"items">> => [
-                #{<<"target">> => #{<<"shopID">> => <<"shop1">>}},
-                #{<<"target">> => #{<<"shopID">> => <<"shop2">>}},
-                #{<<"target">> => #{<<"shopID">> => <<"shop1">>}}
-            ]
-        })
-    ).
+-spec validate_test_() -> _.
+validate_test_() ->
+    [
+        ?_assertEqual(allocation_wrong_cart, validate(#{<<"items">> => []})),
+        ?_assertEqual(
+            allocation_duplicate,
+            validate(#{
+                <<"items">> => [
+                    #{<<"target">> => #{<<"shopID">> => <<"shop1">>}},
+                    #{<<"target">> => #{<<"shopID">> => <<"shop2">>}},
+                    #{<<"target">> => #{<<"shopID">> => <<"shop1">>}}
+                ]
+            })
+        )
+    ].
 
 -spec encode_parts_test_() -> _.
 encode_parts_test_() ->
@@ -229,7 +225,7 @@ encode_test() ->
     Expected = #domain_AllocationPrototype{
         transactions = [
             #domain_AllocationTransactionPrototype{
-                id = <<>>,
+                id = <<"0">>,
                 target =
                     {shop, #domain_AllocationTransactionTargetShop{
                         owner_id = <<"partyID">>,
@@ -274,7 +270,7 @@ decode_test() ->
     Allocation = #domain_Allocation{
         transactions = [
             #domain_AllocationTransaction{
-                id = <<"transactionID">>,
+                id = <<"0">>,
                 target =
                     {shop, #domain_AllocationTransactionTargetShop{
                         owner_id = <<"partyID1">>,
