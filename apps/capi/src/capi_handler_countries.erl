@@ -26,7 +26,7 @@ prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
 process_request('GetCountries', _Req, #{woody_context := WoodyContext}) ->
-    Countries = unwrap(capi_domain:get_objects_by_type(WoodyContext, country)),
+    Countries = unwrap(capi_domain:get_objects_by_type(country, WoodyContext)),
     {ok, {200, #{}, lists:map(fun decode_country_object/1, Countries)}};
 process_request('GetCountryByID', Req, #{woody_context := WoodyContext}) ->
     CountryCode = capi_coder_utils:encode_country_code(maps:get(countryID, Req)),
