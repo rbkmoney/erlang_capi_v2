@@ -224,7 +224,7 @@ mock_services_(Services, Config) when is_list(Config) ->
 mock_services_(Services, SupPid) when is_pid(SupPid) ->
     {ok, IP} = inet:parse_address(?CAPI_IP),
     lists:foldl(
-        fun (Service, Acc) ->
+        fun(Service, Acc) ->
             Name = get_service_name(Service),
             ServerID = {dummy, Name},
             WoodyOpts = #{
@@ -237,7 +237,7 @@ mock_services_(Services, SupPid) when is_pid(SupPid) ->
             {ok, _} = supervisor:start_child(SupPid, ChildSpec),
             {_IP, Port} = woody_server:get_addr(ServerID, WoodyOpts),
             Acc#{Name => make_url(Name, Port)}
-         end,
+        end,
         #{},
         Services
     ).

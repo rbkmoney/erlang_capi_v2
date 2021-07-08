@@ -2152,19 +2152,40 @@ get_reports_for_party_ok_test(Config) ->
 -spec get_report_ok_test(config()) -> _.
 get_report_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{reporting, fun('GetReport', _) -> {ok, ?REPORT} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_assert_report_op_ctx(<<"GetReport">>, ?INTEGER_BINARY, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_report_op_ctx(
+        <<"GetReport">>,
+        ?STRING,
+        ?STRING,
+        ?INTEGER_BINARY,
+        [?CTX_ENTITY(?STRING)],
+        Config
+    ),
     {ok, _} = capi_client_reports:get_report(?config(context, Config), ?STRING, ?INTEGER_BINARY).
 
 -spec get_report_for_party_ok_test(config()) -> _.
 get_report_for_party_ok_test(Config) ->
     _ = capi_ct_helper:mock_services([{reporting, fun('GetReport', _) -> {ok, ?REPORT} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_assert_report_op_ctx(<<"GetReportsForParty">>, ?INTEGER_BINARY, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_report_op_ctx(
+        <<"GetReportForParty">>,
+        ?STRING,
+        ?STRING,
+        ?INTEGER_BINARY,
+        [?CTX_ENTITY(?STRING)],
+        Config
+    ),
     {ok, _} = capi_client_reports:get_report_for_party(?config(context, Config), ?STRING, ?STRING, ?INTEGER_BINARY).
 
 -spec get_report_not_found_test(config()) -> _.
 get_report_not_found_test(Config) ->
     _ = capi_ct_helper:mock_services([{reporting, fun('GetReport', _) -> {ok, ?REPORT} end}], Config),
-    _ = capi_ct_helper_bouncer:mock_assert_report_op_ctx(<<"GetReport">>, ?INTEGER_BINARY, Config),
+    _ = capi_ct_helper_bouncer:mock_assert_report_op_ctx(
+        <<"GetReport">>,
+        ?STRING,
+        ?STRING,
+        ?INTEGER_BINARY,
+        [?CTX_ENTITY(?STRING)],
+        Config
+    ),
     {error, {404, #{<<"message">> := <<"Report not found">>}}} =
         capi_client_reports:get_report(?config(context, Config), <<"WRONG_STRING">>, ?INTEGER_BINARY).
 
@@ -2193,9 +2214,9 @@ create_report_for_party_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {reporting, fun
-                            ('CreateReport', _) -> {ok, ?INTEGER};
-                            ('GetReport', {?INTEGER}) -> {ok, ?REPORT}
-                        end}
+                ('CreateReport', _) -> {ok, ?INTEGER};
+                ('GetReport', {?INTEGER}) -> {ok, ?REPORT}
+            end}
         ],
         Config
     ),
@@ -2236,9 +2257,9 @@ download_report_file_for_party_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {reporting, fun
-                            ('GetReport', _) -> {ok, ?REPORT};
-                            ('GeneratePresignedUrl', _) -> {ok, ?STRING}
-                        end}
+                ('GetReport', _) -> {ok, ?REPORT};
+                ('GeneratePresignedUrl', _) -> {ok, ?STRING}
+            end}
         ],
         Config
     ),

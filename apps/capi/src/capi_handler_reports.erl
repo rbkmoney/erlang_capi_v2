@@ -21,7 +21,7 @@ prepare(OperationID = 'GetReports', Req, Context) ->
     Authorize =
         fun() ->
             PartyID = capi_handler_utils:get_party_id(Context),
-            Prototypes =  build_prototypes(OperationID, PartyID, undefined, Req),
+            Prototypes = build_prototypes(OperationID, PartyID, undefined, Req),
             {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
         end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
@@ -30,7 +30,7 @@ prepare(OperationID = 'GetReportsForParty', Req, Context) ->
     Authorize =
         fun() ->
             PartyID = maps:get(partyID, Req),
-            Prototypes =  build_prototypes(OperationID, PartyID, undefined, Req),
+            Prototypes = build_prototypes(OperationID, PartyID, undefined, Req),
             {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
         end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
@@ -63,7 +63,7 @@ prepare(OperationID = 'GetReportForParty', Req, Context) ->
         end,
     Authorize =
         fun() ->
-            PartyID = capi_handler_utils:get_party_id(Context),
+            PartyID = maps:get(partyID, Req),
             Prototypes = build_prototypes(OperationID, PartyID, Report, Req),
             {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
         end,
@@ -322,13 +322,12 @@ build_prototypes(OperationID, PartyID, Report, Req) ->
     ShopID = genlib_map:get(shopID, Req),
     FileID = genlib_map:get(fileID, Req),
     [
-        {operation,
-            #{
-                id => OperationID,
-                party => PartyID,
-                shop => ShopID,
-                report => ReportID,
-                file => FileID
+        {operation, #{
+            id => OperationID,
+            party => PartyID,
+            shop => ShopID,
+            report => ReportID,
+            file => FileID
         }},
         {reports, #{report => Report}}
-        ].
+    ].
