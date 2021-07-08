@@ -8,6 +8,8 @@
 -export([mock_assert_op_ctx/2]).
 -export([mock_assert_party_op_ctx/3]).
 -export([mock_assert_shop_op_ctx/4]).
+-export([mock_assert_report_op_ctx/3]).
+-export([mock_assert_report_op_ctx/7]).
 -export([mock_assert_contract_op_ctx/4]).
 -export([mock_assert_invoice_op_ctx/5]).
 -export([mock_assert_payment_op_ctx/5]).
@@ -264,6 +266,30 @@ mock_assert_search_payout_op_ctx(Op, PartyID, ShopID, PayoutID, Config) ->
         ?assertContextMatches(
             #bctx_v1_ContextFragment{
                 capi = ?CTX_CAPI(SearchCtx)
+            }
+        ),
+        Config
+    ).
+
+-spec mock_assert_report_op_ctx(_, _, _, _, _, _, _) -> _.
+mock_assert_report_op_ctx(Op, PartyID, ShopID, ReportID, FileID, Files, Config) ->
+    mock_arbiter(
+        ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_FILE_OP(Op, ReportID, FileID)),
+                reports = ?CTX_CONTEXT_REPORTS(?CTX_REPORT(ReportID, PartyID, ShopID, Files))
+            }
+        ),
+        Config
+    ).
+
+-spec mock_assert_report_op_ctx(_, _, _) -> _.
+mock_assert_report_op_ctx(Op, ReportID, Config) ->
+    mock_arbiter(
+        ?assertContextMatches(
+            #bctx_v1_ContextFragment{
+                capi = ?CTX_CAPI(?CTX_REPORT_OP(Op, ReportID)),
+                reports = ?CTX_CONTEXT_REPORTS(undefined)
             }
         ),
         Config

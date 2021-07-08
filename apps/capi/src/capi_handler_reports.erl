@@ -17,17 +17,108 @@
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
-prepare(OperationID, Req, Context) when
-    OperationID =:= 'GetReports' orelse
-        OperationID =:= 'GetReportsForParty' orelse
-        OperationID =:= 'GetReport' orelse
-        OperationID =:= 'GetReportForParty' orelse
-        OperationID =:= 'CreateReport' orelse
-        OperationID =:= 'CreateReportForParty' orelse
-        OperationID =:= 'DownloadFile' orelse
-        OperationID =:= 'DownloadFileForParty'
-->
-    Authorize = fun() -> {ok, capi_auth:authorize_operation([], Context, Req)} end,
+prepare(OperationID = 'GetReports', Req, Context) ->
+    Authorize =
+        fun() ->
+            PartyID = capi_handler_utils:get_party_id(Context),
+            Prototypes =  build_prototypes(OperationID, PartyID, undefined, Req),
+            {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'GetReportsForParty', Req, Context) ->
+    Authorize =
+        fun() ->
+            PartyID = maps:get(partyID, Req),
+            Prototypes =  build_prototypes(OperationID, PartyID, undefined, Req),
+            {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'GetReport', Req, Context) ->
+    ReportID = maps:get(reportID, Req),
+    Report =
+        case get_report_by_id(ReportID, Context) of
+            {ok, R} ->
+                R;
+            {exception, _} ->
+                undefined
+        end,
+    Authorize =
+        fun() ->
+            PartyID = capi_handler_utils:get_party_id(Context),
+            Prototypes = build_prototypes(OperationID, PartyID, Report, Req),
+            {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'GetReportForParty', Req, Context) ->
+    ReportID = maps:get(reportID, Req),
+    Report =
+        case get_report_by_id(ReportID, Context) of
+            {ok, R} ->
+                R;
+            {exception, _} ->
+                undefined
+        end,
+    Authorize =
+        fun() ->
+            PartyID = capi_handler_utils:get_party_id(Context),
+            Prototypes = build_prototypes(OperationID, PartyID, Report, Req),
+            {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'CreateReport', Req, Context) ->
+    Authorize =
+        fun() ->
+            PartyID = capi_handler_utils:get_party_id(Context),
+            Prototypes = build_prototypes(OperationID, PartyID, undefined, Req),
+            {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'CreateReportForParty', Req, Context) ->
+    Authorize =
+        fun() ->
+            PartyID = maps:get(partyID, Req),
+            Prototypes = build_prototypes(OperationID, PartyID, undefined, Req),
+            {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'DownloadFile', Req, Context) ->
+    ReportID = maps:get(reportID, Req),
+    Report =
+        case get_report_by_id(ReportID, Context) of
+            {ok, R} ->
+                R;
+            {exception, _} ->
+                undefined
+        end,
+    Authorize =
+        fun() ->
+            PartyID = capi_handler_utils:get_party_id(Context),
+            Prototypes = build_prototypes(OperationID, PartyID, Report, Req),
+            {ok, capi_auth:authorize_operation([{reports, #{report => Report}} | Prototypes], Context, Req)}
+        end,
+    Process = fun() -> process_request(OperationID, Context, Req) end,
+    {ok, #{authorize => Authorize, process => Process}};
+prepare(OperationID = 'DownloadFileForParty', Req, Context) ->
+    ReportID = maps:get(reportID, Req),
+    Report =
+        case get_report_by_id(ReportID, Context) of
+            {ok, R} ->
+                R;
+            {exception, _} ->
+                undefined
+        end,
+    Authorize =
+        fun() ->
+            PartyID = maps:get(partyID, Req),
+            Prototypes = build_prototypes(OperationID, PartyID, Report, Req),
+            {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
@@ -150,12 +241,8 @@ get_reports(PartyID, Req, Context) ->
 
 download_file(PartyID, Req, Context) ->
     ShopID = maps:get(shopID, Req),
-    Call = {
-        reporting,
-        'GetReport',
-        {maps:get(reportID, Req)}
-    },
-    case capi_handler_utils:service_call(Call, Context) of
+    ReportID = maps:get(reportID, Req),
+    case get_report_by_id(ReportID, Context) of
         {ok, #reports_Report{status = created, files = Files, party_id = PartyID, shop_id = ShopID}} ->
             FileID = maps:get(fileID, Req),
             case lists:keymember(FileID, #reports_FileMeta.file_id, Files) of
@@ -169,6 +256,10 @@ download_file(PartyID, Req, Context) ->
         {exception, #reports_ReportNotFound{}} ->
             {ok, general_error(404, <<"Report not found">>)}
     end.
+
+get_report_by_id(ReportId, Context) ->
+    Call = {reporting, 'GetReport', {ReportId}},
+    capi_handler_utils:service_call(Call, Context).
 
 generate_report_presigned_url(FileID, Context) ->
     ExpiresAt = get_default_url_lifetime(),
@@ -225,3 +316,19 @@ decode_report_file(#reports_FileMeta{file_id = ID, filename = Filename, signatur
 
 decode_report_file_signature(#reports_Signature{md5 = MD5, sha256 = SHA256}) ->
     #{<<"md5">> => MD5, <<"sha256">> => SHA256}.
+
+build_prototypes(OperationID, PartyID, Report, Req) ->
+    ReportID = genlib_map:get(reportID, Req),
+    ShopID = genlib_map:get(shopID, Req),
+    FileID = genlib_map:get(fileID, Req),
+    [
+        {operation,
+            #{
+                id => OperationID,
+                party => PartyID,
+                shop => ShopID,
+                report => ReportID,
+                file => FileID
+        }},
+        {reports, #{report => Report}}
+        ].
