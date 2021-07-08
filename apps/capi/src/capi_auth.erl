@@ -8,7 +8,7 @@
 
 -export([preauthorize_api_key/1]).
 -export([authorize_api_key/3]).
--export([authorize_operation/3]).
+-export([authorize_operation/2]).
 
 % @NOTE Token issuing facilities are not yet available for tokenkeeper, use capi_auth_legacy
 %-export([issue_access_token/2]).
@@ -93,10 +93,9 @@ authorize_api_key(?unauthorized({TokenType, Token}), TokenContext, WoodyContext)
 
 -spec authorize_operation(
     Prototypes :: capi_bouncer_context:prototypes(),
-    ProcessingContext :: capi_handler:processing_context(),
-    Req :: capi_handler:request_data()
+    ProcessingContext :: capi_handler:processing_context()
 ) -> resolution().
-authorize_operation(Prototypes, ProcessingContext, _Req) ->
+authorize_operation(Prototypes, ProcessingContext) ->
     AuthContext = extract_auth_context(ProcessingContext),
     do_authorize_operation(Prototypes, get_auth_data(AuthContext), ProcessingContext).
 

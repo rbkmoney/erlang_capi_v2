@@ -24,7 +24,7 @@ prepare(OperationID, Req, Context) when
         fun() ->
             PartyID = capi_handler_utils:get_party_id(Context),
             Prototypes = [{operation, #{id => OperationID, party => PartyID}}],
-            {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+            {ok, capi_auth:authorize_operation(Prototypes, Context)}
         end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};

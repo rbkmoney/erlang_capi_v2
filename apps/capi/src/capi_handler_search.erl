@@ -15,7 +15,7 @@
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare(OperationID, Req, Context) when OperationID =:= 'SearchInvoices' ->
     Prototypes = build_prototypes(OperationID, Context, Req),
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context, Req)} end,
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context)} end,
     Process = fun() ->
         Query = make_query(Context, Req),
         Opts = #{
@@ -27,7 +27,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'SearchInvoices' ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID, Req, Context) when OperationID =:= 'SearchPayments' ->
     Prototypes = build_prototypes(OperationID, Context, Req),
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context, Req)} end,
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context)} end,
     Process = fun() ->
         Query = make_query(Context, Req),
         Opts = #{
@@ -39,7 +39,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'SearchPayments' ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID, Req, Context) when OperationID =:= 'SearchRefunds' ->
     Prototypes = build_prototypes(OperationID, Context, Req),
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context, Req)} end,
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context)} end,
     Process = fun() ->
         Query = make_query(Context, Req),
         Opts = #{
@@ -53,7 +53,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'SearchRefunds' ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID, Req, Context) when OperationID =:= 'SearchPayouts' ->
     Prototypes = build_prototypes(OperationID, Context, Req),
-    Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context, Req)} end,
+    Authorize = fun() -> {ok, capi_auth:authorize_operation(Prototypes, Context)} end,
     Process = fun() ->
         Query = make_query(Context, Req),
         Opts = #{

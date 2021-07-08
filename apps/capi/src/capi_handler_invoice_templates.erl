@@ -21,7 +21,7 @@ prepare('CreateInvoiceTemplate' = OperationID, Req, Context) ->
     Authorize = fun() ->
         ShopID = maps:get(<<"shopID">>, InvoiceTemplateParams),
         Prototypes = [{operation, #{party => PartyID, shop => ShopID, id => OperationID}}],
-        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -79,7 +79,7 @@ prepare('GetInvoiceTemplateByID' = OperationID, Req, Context) ->
             {operation, #{invoice_template => InvoiceTemplateID, id => OperationID}},
             {payproc, #{invoice_template => InvoiceTpl}}
         ],
-        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -106,7 +106,7 @@ prepare('UpdateInvoiceTemplate' = OperationID, Req, Context) ->
             {operation, #{invoice_template => InvoiceTemplateID, id => OperationID}},
             {payproc, #{invoice_template => InvoiceTpl}}
         ],
-        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -154,7 +154,7 @@ prepare('DeleteInvoiceTemplate' = OperationID, Req, Context) ->
             {operation, #{invoice_template => InvoiceTemplateID, id => OperationID}},
             {payproc, #{invoice_template => InvoiceTemplateID}}
         ],
-        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -192,7 +192,7 @@ prepare('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
             {operation, #{invoice_template => InvoiceTplID, id => OperationID}},
             {payproc, #{invoice_template => InvoiceTpl}}
         ],
-        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -251,7 +251,7 @@ prepare('GetInvoicePaymentMethodsByTemplateID' = OperationID, Req, Context) ->
             {operation, #{invoice_template => InvoiceTemplateID, id => OperationID}},
             {payproc, #{invoice_template => InvoiceTemplate}}
         ],
-        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context),
         {ok, Resolution}
     end,
     Process = fun() ->

@@ -20,7 +20,7 @@ prepare('CreateCustomer' = OperationID, Req, Context) ->
     ShopID = maps:get(<<"shopID">>, CustomerParams),
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID, party => PartyID, shop => ShopID}}],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         try
@@ -57,7 +57,7 @@ prepare('GetCustomerById' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, customer => CustomerID}},
             {payproc, #{customer => maybe_woody_reply(CustomerReply)}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         case CustomerReply of
@@ -78,7 +78,7 @@ prepare('DeleteCustomer' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, customer => CustomerID}},
             {payproc, #{customer => maybe_woody_reply(CustomerReply)}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         Call = {customer_management, 'Delete', {CustomerID}},
@@ -104,7 +104,7 @@ prepare('CreateCustomerAccessToken' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, customer => CustomerID}},
             {payproc, #{customer => maybe_woody_reply(CustomerReply)}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         case CustomerReply of
@@ -125,7 +125,7 @@ prepare('CreateBinding' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, customer => CustomerID}},
             {payproc, #{customer => CustomerID}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         Result =
@@ -186,7 +186,7 @@ prepare('GetBindings' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, customer => CustomerID}},
             {payproc, #{customer => maybe_woody_reply(CustomerReply)}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         case CustomerReply of
@@ -208,7 +208,7 @@ prepare('GetBinding' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, customer => CustomerID, binding => CustomerBindingID}},
             {payproc, #{customer => maybe_woody_reply(CustomerReply)}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         case CustomerReply of
@@ -233,7 +233,7 @@ prepare('GetCustomerEvents' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, customer => CustomerID}},
             {payproc, #{customer => CustomerID}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         GetterFun = fun(Range) ->
