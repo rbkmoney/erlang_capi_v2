@@ -28,7 +28,6 @@ init([]) ->
     LechiffreOpts = genlib_app:env(capi, lechiffre_opts),
     LechiffreSpec = lechiffre:child_spec(lechiffre, LechiffreOpts),
     HealthCheck = enable_health_logging(genlib_app:env(?APP, health_check, #{})),
-    BlacklistSpec = capi_api_key_blacklist:child_spec(),
     PartyClient = party_client:create_client(),
     PartyClientSpec = party_client:child_spec(party_client, PartyClient),
     {LogicHandler, []} = get_logic_handler_info(#{party_client => PartyClient}),
@@ -38,7 +37,7 @@ init([]) ->
     {ok,
         {
             {one_for_all, 0, 1},
-            [LechiffreSpec, SwaggerSpec, BlacklistSpec, PartyClientSpec]
+            [LechiffreSpec, SwaggerSpec, PartyClientSpec]
         }}.
 
 -spec get_logic_handler_info(capi_handler:handler_opts()) ->
