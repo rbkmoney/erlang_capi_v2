@@ -8,7 +8,6 @@
 -export([get_claims/1]).
 
 -export([authorize_api_key/1]).
--export([authorize_operation/3]).
 
 -export([issue_access_token/2]).
 -export([issue_access_token/3]).
@@ -75,20 +74,6 @@ authorize_api_key(ApiKey) ->
             check_blacklist(ApiKey, Context);
         {error, Error} ->
             {error, {authorize_api_key_failed, Error}}
-    end.
-
--spec authorize_operation(
-    AuthContext :: context(),
-    OperationID :: capi_handler:processing_context(),
-    Req :: capi_handler:request_data()
-) -> resolution().
-authorize_operation(AuthContext, #{operation_id := OperationID}, Req) ->
-    OperationACL = capi_operation_access:get_operation_access(OperationID, Req),
-    case uac:authorize_operation(OperationACL, AuthContext) of
-        ok ->
-            allowed;
-        {error, Reason} ->
-            {forbidden, Reason}
     end.
 
 %%

@@ -20,7 +20,12 @@ prepare(OperationID, Req, Context) when
         OperationID =:= 'GetPaymentRateStats' orelse
         OperationID =:= 'GetPaymentMethodStats'
 ->
-    Authorize = fun() -> {ok, capi_auth:authorize_operation([], Context, Req)} end,
+    Authorize =
+        fun() ->
+            PartyID = capi_handler_utils:get_party_id(Context),
+            Prototypes = [{operation, #{id => OperationID, party => PartyID}}],
+            {ok, capi_auth:authorize_operation(Prototypes, Context)}
+        end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->

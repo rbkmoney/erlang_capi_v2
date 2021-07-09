@@ -24,7 +24,7 @@ prepare(OperationID = 'CreatePayment', Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID}},
             {payproc, #{invoice => Invoice}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         try
@@ -96,7 +96,7 @@ prepare(OperationID = 'GetPayments', Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID}},
             {payproc, #{invoice => Invoice}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         capi_handler:respond_if_undefined(Invoice, general_error(404, <<"Invoice not found">>)),
@@ -113,7 +113,7 @@ prepare(OperationID = 'GetPaymentByID', Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID}},
             {payproc, #{invoice => Invoice}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         capi_handler:respond_if_undefined(Invoice, general_error(404, <<"Invoice not found">>)),
@@ -146,7 +146,7 @@ prepare(OperationID = 'GetPaymentByExternalID', Req, Context) ->
             {operation, genlib:define(OperationPrototype, #{id => OperationID})},
             {payproc, #{invoice => Invoice}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         capi_handler:respond_if_undefined(InternalID, general_error(404, <<"Payment not found">>)),
@@ -164,12 +164,13 @@ prepare(OperationID = 'GetPaymentByExternalID', Req, Context) ->
 prepare(OperationID = 'CapturePayment', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
+    Invoice = map_result(get_invoice_by_id(InvoiceID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID}},
-            {payproc, #{invoice => InvoiceID}}
+            {payproc, #{invoice => Invoice}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         Params = maps:get('CaptureParams', Req),
@@ -230,12 +231,13 @@ prepare(OperationID = 'CapturePayment', Req, Context) ->
 prepare(OperationID = 'CancelPayment', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
+    Invoice = map_result(get_invoice_by_id(InvoiceID, Context)),
     Authorize = fun() ->
         Prototypes = [
-            {operation, #{id => OperationID, invoice => InvoiceID}},
-            {payproc, #{invoice => InvoiceID}}
+            {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID}},
+            {payproc, #{invoice => Invoice}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         Reason = maps:get(<<"reason">>, maps:get('Reason', Req)),
@@ -280,7 +282,7 @@ prepare(OperationID = 'CreateRefund', Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID}},
             {payproc, #{invoice => InvoiceID}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         try create_refund(InvoiceID, PaymentID, RefundParams, Context, OperationID) of
@@ -355,7 +357,7 @@ prepare(OperationID = 'GetRefunds', Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID}},
             {payproc, #{invoice => Invoice}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         capi_handler:respond_if_undefined(Invoice, general_error(404, <<"Invoice not found">>)),
@@ -382,7 +384,7 @@ prepare(OperationID = 'GetRefundByID', Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID, refund => RefundID}},
             {payproc, #{invoice => Invoice}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
 
     Process = fun() ->
@@ -414,7 +416,7 @@ prepare(OperationID = 'GetRefundByExternalID', Req, Context) ->
             {operation, genlib:define(OperationPrototype, #{id => OperationID})},
             {payproc, #{invoice => Invoice}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
 
     Process = fun() ->
@@ -441,7 +443,7 @@ prepare(OperationID = 'GetChargebacks', Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID}},
             {payproc, #{invoice => Invoice}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         capi_handler:respond_if_undefined(Invoice, general_error(404, <<"Invoice not found">>)),
@@ -468,7 +470,7 @@ prepare(OperationID = 'GetChargebackByID', Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID}},
             {payproc, #{invoice => Invoice}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         capi_handler:respond_if_undefined(Invoice, general_error(404, <<"Invoice not found">>)),

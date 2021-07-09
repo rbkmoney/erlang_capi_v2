@@ -8,7 +8,7 @@
 
 -export([preauthorize_api_key/1]).
 -export([authorize_api_key/3]).
--export([authorize_operation/3]).
+-export([authorize_operation/2]).
 
 % @NOTE Token issuing facilities are not yet available for tokenkeeper, use capi_auth_legacy
 %-export([issue_access_token/2]).
@@ -93,14 +93,11 @@ authorize_api_key(?unauthorized({TokenType, Token}), TokenContext, WoodyContext)
 
 -spec authorize_operation(
     Prototypes :: capi_bouncer_context:prototypes(),
-    ProcessingContext :: capi_handler:processing_context(),
-    Req :: capi_handler:request_data()
+    ProcessingContext :: capi_handler:processing_context()
 ) -> resolution().
-authorize_operation(Prototypes, ProcessingContext, Req) ->
+authorize_operation(Prototypes, ProcessingContext) ->
     AuthContext = extract_auth_context(ProcessingContext),
-    OldAuthResult = capi_auth_legacy:authorize_operation(get_legacy_context(AuthContext), ProcessingContext, Req),
-    AuthResult = do_authorize_operation(Prototypes, get_auth_data(AuthContext), ProcessingContext),
-    handle_auth_result(OldAuthResult, AuthResult).
+    do_authorize_operation(Prototypes, get_auth_data(AuthContext), ProcessingContext).
 
 %%
 
@@ -124,11 +121,8 @@ get_legacy_claims(?authorized(#{legacy := AuthContext})) ->
 extract_auth_context(#{swagger_context := #{auth_context := ?authorized(AuthContext)}}) ->
     AuthContext.
 
-get_legacy_context(#{legacy := LegacyContext}) ->
-    LegacyContext.
-
 get_auth_data(AuthContext) ->
-    maps:get(auth_data, AuthContext, undefined).
+    maps:get(auth_data, AuthContext).
 
 authorize_token_by_type(bearer = TokenType, Token, TokenContext, WoodyContext) ->
     %% NONE: For now legacy auth still takes precedence over
@@ -140,7 +134,7 @@ authorize_token_by_type(bearer = TokenType, Token, TokenContext, WoodyContext) -
                     {ok, {authorized, make_context(AuthData, LegacyContext)}};
                 {error, TokenKeeperError} ->
                     _ = logger:warning("Token keeper authorization failed: ~p", [TokenKeeperError]),
-                    {ok, {authorized, make_context(undefined, LegacyContext)}}
+                    {error, {auth_failed, TokenKeeperError}}
             end;
         {error, LegacyError} ->
             {error, {legacy_auth_failed, LegacyError}}
@@ -162,33 +156,7 @@ make_context(AuthData, LegacyContext) ->
         auth_data => AuthData
     }).
 
-handle_auth_result(allowed, allowed) ->
-    allowed;
-handle_auth_result(Res = {forbidden, _Reason}, forbidden) ->
-    Res;
-handle_auth_result(Res, undefined) ->
-    Res;
-handle_auth_result(OldRes, NewRes) ->
-    _ = logger:warning("New auth ~p differ from old ~p", [NewRes, OldRes]),
-    OldRes.
-
-%% TODO: Remove this clause after all handlers will be implemented
-do_authorize_operation([], _, _) ->
-    undefined;
-do_authorize_operation(_, undefined, _) ->
-    undefined;
 do_authorize_operation(Prototypes, AuthData, #{swagger_context := SwagContext, woody_context := WoodyContext}) ->
     Fragments = capi_bouncer:gather_context_fragments(AuthData, SwagContext, WoodyContext),
     Fragments1 = capi_bouncer_context:build(Prototypes, Fragments, WoodyContext),
-    try
-        capi_bouncer:judge(Fragments1, WoodyContext)
-    catch
-        error:{woody_error, _Error} ->
-            % TODO
-            % This is temporary safeguard around bouncer integration put here so that
-            % external requests would remain undisturbed by bouncer intermittent failures.
-            % We need to remove it as soon as these two points come true:
-            % * bouncer proves to be stable enough,
-            % * capi starts depending on bouncer exclusively for authz decisions.
-            undefined
-    end.
+    capi_bouncer:judge(Fragments1, WoodyContext).

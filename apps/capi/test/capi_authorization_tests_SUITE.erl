@@ -79,9 +79,8 @@ end_per_suite(C) ->
 -spec init_per_group(group_name(), config()) -> config().
 init_per_group(_, Config) ->
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps0 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     Apps1 = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
-    [{group_apps, Apps0 ++ Apps1}, {group_test_sup, SupPid} | Config].
+    [{group_apps, Apps1}, {group_test_sup, SupPid} | Config].
 
 -spec end_per_group(group_name(), config()) -> _.
 end_per_group(_Group, C) ->
@@ -89,8 +88,14 @@ end_per_group(_Group, C) ->
     ok.
 
 -spec init_per_testcase(test_case_name(), config()) -> config().
+init_per_testcase(authorization_error_no_permission_test, C) ->
+    SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
+    Apps0 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_forbidden(), SupPid),
+    [{test_apps, Apps0}, {test_sup, SupPid} | C];
 init_per_testcase(_Name, C) ->
-    [{test_sup, capi_ct_helper:start_mocked_service_sup(?MODULE)} | C].
+    SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
+    Apps0 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
+    [{test_apps, Apps0}, {test_sup, SupPid} | C].
 
 -spec end_per_testcase(test_case_name(), config()) -> _.
 end_per_testcase(_Name, C) ->

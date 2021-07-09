@@ -222,22 +222,21 @@ mock_services_([], _Config) ->
 mock_services_(Services, Config) when is_list(Config) ->
     mock_services_(Services, ?config(test_sup, Config));
 mock_services_(Services, SupPid) when is_pid(SupPid) ->
-    Name = lists:map(fun get_service_name/1, Services),
     {ok, IP} = inet:parse_address(?CAPI_IP),
-    ServerID = {dummy, Name},
-    WoodyOpts = #{
-        ip => IP,
-        port => 0,
-        event_handler => scoper_woody_event_handler,
-        handlers => lists:map(fun mock_service_handler/1, Services)
-    },
-    ChildSpec = woody_server:child_spec(ServerID, WoodyOpts),
-    {ok, _} = supervisor:start_child(SupPid, ChildSpec),
-    {_IP, Port} = woody_server:get_addr(ServerID, WoodyOpts),
     lists:foldl(
         fun(Service, Acc) ->
-            ServiceName = get_service_name(Service),
-            Acc#{ServiceName => make_url(ServiceName, Port)}
+            Name = get_service_name(Service),
+            ServerID = {dummy, Name},
+            WoodyOpts = #{
+                ip => IP,
+                port => 0,
+                event_handler => scoper_woody_event_handler,
+                handlers => [mock_service_handler(Service)]
+            },
+            ChildSpec = woody_server:child_spec(ServerID, WoodyOpts),
+            {ok, _} = supervisor:start_child(SupPid, ChildSpec),
+            {_IP, Port} = woody_server:get_addr(ServerID, WoodyOpts),
+            Acc#{Name => make_url(Name, Port)}
         end,
         #{},
         Services

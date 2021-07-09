@@ -275,7 +275,7 @@ create_payment_ok_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
         <<"CreatePayment">>,
         ?STRING,
         ?STRING,
@@ -302,6 +302,13 @@ create_payment_expired_test(Config) ->
                     {ok, ?PAYPROC_PAYMENT(ID, EID)}
             end}
         ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+        <<"CreatePayment">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
         Config
     ),
     ValidUntil = capi_utils:deadline_from_timeout(0),
@@ -354,6 +361,13 @@ create_payment_with_empty_cvv_ok_test(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+        <<"CreatePayment">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     PaymentToolToken = get_encrypted_token(visa, ?EXP_DATE(1, 2020), true),
     Req2 = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
@@ -397,6 +411,13 @@ create_payment_qiwi_access_token_ok_test(Config) ->
             end},
             {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
         ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+        <<"CreatePayment">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
         Config
     ),
     PaymentToolToken = get_encrypted_token({qiwi, <<"+79876543210">>, <<"benderkey0">>}),
@@ -446,6 +467,13 @@ create_payment_with_googlepay_encrypt_ok_test(Config) ->
         ],
         Config
     ),
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+        <<"CreatePayment">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     PaymentToolToken = get_encrypted_token(mastercard, ?EXP_DATE(1, 2020)),
     Req2 = #{
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
@@ -467,10 +495,25 @@ get_payments_ok_test(Config) ->
     Payment2 = ?PAYPROC_PAYMENT(?PAYMENT, [?REFUND], [?ADJUSTMENT], [?PAYPROC_CHARGEBACK]),
     Result = ?PAYPROC_INVOICE([Payment0, Payment1, Payment2]),
     _ = capi_ct_helper:mock_services([{invoicing, fun('Get', _) -> {ok, Result} end}], Config),
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+        <<"GetPayments">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_payments:get_payments(?config(context, Config), ?STRING).
 
 -spec get_payment_by_id_ok_test(config()) -> _.
 get_payment_by_id_ok_test(Config) ->
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
+        <<"GetPaymentByID">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     Result = ?PAYPROC_PAYMENT(?PAYMENT_WITH_RECURRENT_PAYER, [?REFUND], [?ADJUSTMENT], [?PAYPROC_CHARGEBACK]),
     _ = capi_ct_helper:mock_services(
         [
@@ -485,6 +528,14 @@ get_payment_by_id_ok_test(Config) ->
 
 -spec get_payment_by_id_trx_ok_test(config()) -> _.
 get_payment_by_id_trx_ok_test(Config) ->
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
+        <<"GetPaymentByID">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     _ = capi_ct_helper:mock_services(
         [{invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE([?PAYPROC_PAYMENT])} end}],
         Config
@@ -508,10 +559,18 @@ cancel_payment_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun
-                ('Get', _) -> {ok, ?PAYPROC_INVOICE};
+                ('Get', _) -> {ok, ?PAYPROC_INVOICE([?PAYPROC_PAYMENT])};
                 ('CancelPayment', _) -> {ok, ok}
             end}
         ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
+        <<"CancelPayment">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
         Config
     ),
     ok = capi_client_payments:cancel_payment(?config(context, Config), ?STRING, ?STRING, ?STRING).
@@ -521,7 +580,7 @@ capture_payment_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun
-                ('Get', _) -> {ok, ?PAYPROC_INVOICE};
+                ('Get', _) -> {ok, ?PAYPROC_INVOICE([?PAYPROC_PAYMENT])};
                 ('CapturePayment', _) -> {ok, ok}
             end}
         ],
@@ -530,6 +589,14 @@ capture_payment_ok_test(Config) ->
     Req = #{
         <<"reason">> => ?STRING
     },
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
+        <<"CapturePayment">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     ok = capi_client_payments:capture_payment(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec capture_partial_payment_ok_test(config()) -> _.
@@ -538,7 +605,7 @@ capture_partial_payment_ok_test(Config) ->
         [
             {invoicing, fun
                 ('Get', _) ->
-                    {ok, ?PAYPROC_INVOICE};
+                    {ok, ?PAYPROC_INVOICE([?PAYPROC_PAYMENT])};
                 (
                     'CapturePayment',
                     {
@@ -562,6 +629,14 @@ capture_partial_payment_ok_test(Config) ->
         <<"currency">> => ?RUB,
         <<"cart">> => ?INVOICE_CART
     },
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
+        <<"CapturePayment">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     ok = capi_client_payments:capture_payment(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec create_first_recurrent_payment_ok_test(config()) -> _.
@@ -593,6 +668,13 @@ create_first_recurrent_payment_ok_test(Config) ->
             }
         }
     },
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+        <<"CreatePayment">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req2, ?STRING).
 
 -spec create_second_recurrent_payment_ok_test(config()) -> _.
@@ -607,6 +689,13 @@ create_second_recurrent_payment_ok_test(Config) ->
             end},
             {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
         ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+        <<"CreatePayment">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
         Config
     ),
     Req = #{
@@ -629,6 +718,13 @@ create_second_recurrent_payment_ok_test(Config) ->
 get_recurrent_payments_ok_test(Config) ->
     Invoice = ?PAYPROC_INVOICE([?PAYPROC_PAYMENT(?RECURRENT_PAYMENT, [?REFUND], [?ADJUSTMENT], [?PAYPROC_CHARGEBACK])]),
     _ = capi_ct_helper:mock_services([{invoicing, fun('Get', _) -> {ok, Invoice} end}], Config),
+    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+        <<"GetPayments">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        Config
+    ),
     {ok, _} = capi_client_payments:get_payments(?config(context, Config), ?STRING).
 
 -spec get_failed_payment_with_invalid_cvv(config()) -> _.
@@ -649,6 +745,14 @@ get_failed_payment_with_invalid_cvv(Config) ->
                     {ok, ?PAYPROC_FAILED_PAYMENT({failure, Failure})}
             end}
         ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
+        <<"GetPaymentByID">>,
+        ?STRING,
+        ?STRING,
+        ?STRING,
+        ?STRING,
         Config
     ),
     % mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
