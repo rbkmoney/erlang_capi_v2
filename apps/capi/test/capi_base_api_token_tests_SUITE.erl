@@ -2334,7 +2334,7 @@ check_no_payment_by_external_id_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
         <<"GetPaymentByExternalID">>,
         ?STRING,
         ?STRING,
@@ -2361,8 +2361,9 @@ check_no_invoice_by_external_id_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
         <<"GetPaymentByExternalID">>,
+        ?STRING,
         ?STRING,
         ?STRING,
         ?STRING,
@@ -2388,9 +2389,10 @@ retrieve_payment_by_external_id_test(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
         <<"GetPaymentByExternalID">>,
         ?STRING,
+        PaymentID,
         ?STRING,
         ?STRING,
         Config
