@@ -506,8 +506,9 @@ get_payments_ok_test(Config) ->
 
 -spec get_payment_by_id_ok_test(config()) -> _.
 get_payment_by_id_ok_test(Config) ->
-    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
         <<"GetPaymentByID">>,
+        ?STRING,
         ?STRING,
         ?STRING,
         ?STRING,
@@ -527,8 +528,9 @@ get_payment_by_id_ok_test(Config) ->
 
 -spec get_payment_by_id_trx_ok_test(config()) -> _.
 get_payment_by_id_trx_ok_test(Config) ->
-    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
         <<"GetPaymentByID">>,
+        ?STRING,
         ?STRING,
         ?STRING,
         ?STRING,
@@ -742,8 +744,9 @@ get_failed_payment_with_invalid_cvv(Config) ->
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
         <<"GetPaymentByID">>,
+        ?STRING,
         ?STRING,
         ?STRING,
         ?STRING,
