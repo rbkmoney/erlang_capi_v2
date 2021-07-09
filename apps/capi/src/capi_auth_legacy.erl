@@ -67,14 +67,9 @@ get_claims(Context) ->
 %%
 
 -spec authorize_api_key(ApiKey :: binary()) ->
-    {ok, context()} | {error, {authorize_api_key_failed | blacklisted_token, _Reason}}.
+    {ok, context()} | {error, {authorize_api_key_failed, _Reason}}.
 authorize_api_key(ApiKey) ->
-    case uac:authorize_api_key(ApiKey, #{}) of
-        {ok, Context} ->
-            check_blacklist(ApiKey, Context);
-        {error, Error} ->
-            {error, {authorize_api_key_failed, Error}}
-    end.
+    uac:authorize_api_key(ApiKey, #{}).
 
 %%
 
@@ -143,18 +138,6 @@ get_access_config() ->
 
 %%
 %% Internal functions
-%%
-
-check_blacklist(Token, Context) ->
-    case capi_api_key_blacklist:check(Token) of
-        true ->
-            SubjectId = get_subject_id(Context),
-            _ = logger:warning("Blacklisted API Key usage detected for subject_id: ~p", [SubjectId]),
-            {error, {blacklisted_token, Token}};
-        false ->
-            {ok, Context}
-    end.
-
 %%
 
 -spec resolve_token_spec(token_spec()) -> claims().
