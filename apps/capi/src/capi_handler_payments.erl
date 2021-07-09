@@ -164,10 +164,11 @@ prepare(OperationID = 'GetPaymentByExternalID', Req, Context) ->
 prepare(OperationID = 'CapturePayment', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
+    Invoice = map_result(get_invoice_by_id(InvoiceID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID}},
-            {payproc, #{invoice => InvoiceID}}
+            {payproc, #{invoice => Invoice}}
         ],
         {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
@@ -230,10 +231,11 @@ prepare(OperationID = 'CapturePayment', Req, Context) ->
 prepare(OperationID = 'CancelPayment', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
+    Invoice = map_result(get_invoice_by_id(InvoiceID, Context)),
     Authorize = fun() ->
         Prototypes = [
-            {operation, #{id => OperationID, invoice => InvoiceID}},
-            {payproc, #{invoice => InvoiceID}}
+            {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID}},
+            {payproc, #{invoice => Invoice}}
         ],
         {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,

@@ -559,14 +559,15 @@ cancel_payment_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun
-                ('Get', _) -> {ok, ?PAYPROC_INVOICE};
+                ('Get', _) -> {ok, ?PAYPROC_INVOICE([?PAYPROC_PAYMENT])};
                 ('CancelPayment', _) -> {ok, ok}
             end}
         ],
         Config
     ),
-    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
         <<"CancelPayment">>,
+        ?STRING,
         ?STRING,
         ?STRING,
         ?STRING,
@@ -579,7 +580,7 @@ capture_payment_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun
-                ('Get', _) -> {ok, ?PAYPROC_INVOICE};
+                ('Get', _) -> {ok, ?PAYPROC_INVOICE([?PAYPROC_PAYMENT])};
                 ('CapturePayment', _) -> {ok, ok}
             end}
         ],
@@ -588,8 +589,9 @@ capture_payment_ok_test(Config) ->
     Req = #{
         <<"reason">> => ?STRING
     },
-    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
         <<"CapturePayment">>,
+        ?STRING,
         ?STRING,
         ?STRING,
         ?STRING,
@@ -603,7 +605,7 @@ capture_partial_payment_ok_test(Config) ->
         [
             {invoicing, fun
                 ('Get', _) ->
-                    {ok, ?PAYPROC_INVOICE};
+                    {ok, ?PAYPROC_INVOICE([?PAYPROC_PAYMENT])};
                 (
                     'CapturePayment',
                     {
@@ -627,8 +629,9 @@ capture_partial_payment_ok_test(Config) ->
         <<"currency">> => ?RUB,
         <<"cart">> => ?INVOICE_CART
     },
-    _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
+    _ = capi_ct_helper_bouncer:mock_assert_payment_op_ctx(
         <<"CapturePayment">>,
+        ?STRING,
         ?STRING,
         ?STRING,
         ?STRING,
