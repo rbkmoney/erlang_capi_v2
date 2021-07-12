@@ -350,8 +350,9 @@ encode_customer_binding_params(
     }.
 
 encode_payment_tool_token(Token) ->
-    case capi_crypto:decrypt_payment_tool_token(Token) of
-        {ok, {PaymentTool, ValidUntil}} ->
+    case capi_crypto:decode_token(Token) of
+        {ok, TokenData} ->
+            #{payment_tool := PaymentTool, valid_until := ValidUntil} = TokenData,
             case capi_utils:deadline_is_reached(ValidUntil) of
                 true ->
                     logger:warning("Payment tool token expired: ~p", [capi_utils:deadline_to_binary(ValidUntil)]),

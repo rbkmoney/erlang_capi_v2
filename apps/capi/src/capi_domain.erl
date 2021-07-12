@@ -3,19 +3,31 @@
 -include_lib("damsel/include/dmsl_domain_thrift.hrl").
 -include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 
+-export([get_pi_realm/2]).
 -export([get_payment_institutions/1]).
 -export([get/2]).
 -export([get_objects_by_type/2]).
 
--type context() :: woody_context:ctx().
+-type processing_context() :: capi_handler:processing_context().
 -type ref() :: dmsl_domain_thrift:'Reference'().
 -type data() :: _.
 
--type payment_institution() :: #domain_PaymentInstitutionObject{}.
+-type payment_institution_ref() :: dmsl_domain_thrift:'PaymentInstitutionRef'().
+-type payment_institution() :: dmsl_domain_thrift:'PaymentInstitutionObject'().
+-type realm() :: dmsl_domain_thrift:'PaymentInstitutionRealm'().
 
--spec get_payment_institutions(context()) -> {ok, [payment_institution()]}.
+-export_type([realm/0]).
+
+-spec get_pi_realm(payment_institution_ref(), processing_context()) -> {ok, realm()}.
+get_pi_realm(Ref, Context) ->
+    {ok, PiObject} = get({payment_institution, Ref}, Context),
+    #domain_PaymentInstitutionObject{data = Pi} = PiObject,
+    #domain_PaymentInstitution{realm = Realm} = Pi,
+    {ok, Realm}.
+
+-spec get_payment_institutions(processing_context()) -> {ok, [payment_institution()]}.
 get_payment_institutions(Context) ->
-    Opts = #{woody_context => Context},
+    Opts = make_opts(Context),
 
     #'VersionedObject'{
         version = Version,
@@ -39,10 +51,11 @@ get_payment_institutions(Context) ->
 
     {ok, PaymentInstitutions}.
 
--spec get(ref(), context()) -> {ok, data()} | {error, not_found}.
+-spec get(ref(), processing_context()) -> {ok, data()} | {error, not_found}.
 get(Ref, Context) ->
     try
-        {_Type, Object} = dmt_client:checkout_object(latest, Ref, #{woody_context => Context}),
+        Opts = make_opts(Context),
+        {_Type, Object} = dmt_client:checkout_object(latest, Ref, Opts),
         {ok, Object}
     catch
         throw:#'ObjectNotFound'{} ->
@@ -52,7 +65,12 @@ get(Ref, Context) ->
 globals() ->
     {globals, #domain_GlobalsRef{}}.
 
--spec get_objects_by_type(Type :: atom(), context()) -> {ok, [dmsl_domain_thrift:'DomainObject'()]}.
+-spec get_objects_by_type(Type :: atom(), processing_context()) -> {ok, [dmsl_domain_thrift:'DomainObject'()]}.
 get_objects_by_type(Type, Context) ->
-    Objects = dmt_client:checkout_objects_by_type(latest, Type, #{woody_context => Context}),
+    Opts = make_opts(Context),
+    Objects = dmt_client:checkout_objects_by_type(latest, Type, Opts),
     {ok, Objects}.
+
+-spec make_opts(processing_context()) -> dmt_client:opts().
+make_opts(#{woody_context := WoodyContext}) ->
+    #{woody_context => WoodyContext}.

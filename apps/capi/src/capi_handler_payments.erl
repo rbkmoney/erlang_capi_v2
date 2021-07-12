@@ -492,7 +492,15 @@ create_payment(Invoice, PaymentParams, Context, BenderPrefix) ->
     ExternalID = maps:get(<<"externalID">>, PaymentParams, undefined),
     #payproc_Invoice{invoice = #domain_Invoice{id = InvoiceID, owner_id = PartyID}} = Invoice,
     IdempotentKey = {BenderPrefix, PartyID, ExternalID},
-    {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
+
+    {Payer, PaymentToolThrift} =
+        case decode_payer_token(maps:get(<<"payer">>, PaymentParams)) of
+            {CustomerOrRecurrentPayer, undefined} ->
+                {CustomerOrRecurrentPayer, undefined};
+            {ResourcePayer, TokenData} ->
+                {PaymentTool, PaymentToolDecoded} = unwrap_payment_tool(InvoiceID, TokenData),
+                {ResourcePayer#{<<"paymentTool">> => PaymentToolDecoded}, PaymentTool}
+        end,
 
     PaymentParamsFull = PaymentParams#{<<"invoiceID">> => InvoiceID},
     PaymentParamsDecrypted = PaymentParamsFull#{<<"payer">> => Payer},
@@ -569,30 +577,35 @@ map_result({ok, Value}) ->
 map_result(_) ->
     undefined.
 
-decrypt_payer(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer) ->
-    #{<<"paymentToolToken">> := Token} = Payer,
-    Payer2 = maps:without([<<"paymentToolToken">>], Payer),
-    PaymentToolThrift = decrypt_payment_tool(Token),
-    PaymentTool = capi_handler_decoder_party:decode_payment_tool(PaymentToolThrift),
-    {Payer2#{<<"paymentTool">> => PaymentTool}, PaymentToolThrift};
-decrypt_payer(CustomerOrRecurrentPayer) ->
-    {CustomerOrRecurrentPayer, undefined}.
-
-decrypt_payment_tool(Token) ->
-    case capi_crypto:decrypt_payment_tool_token(Token) of
-        {ok, {PaymentToolThrift, ValidUntil}} ->
-            case capi_utils:deadline_is_reached(ValidUntil) of
-                true ->
-                    logger:warning("Payment tool token expired: ~p", [capi_utils:deadline_to_binary(ValidUntil)]),
-                    erlang:throw(invalid_token);
-                _ ->
-                    PaymentToolThrift
-            end;
+decode_payer_token(#{<<"payerType">> := <<"PaymentResourcePayer">>, <<"paymentToolToken">> := Token} = Payer) ->
+    case capi_crypto:decode_token(Token) of
+        {ok, TokenData} ->
+            {maps:without([<<"paymentToolToken">>], Payer), TokenData};
         unrecognized ->
             erlang:throw(invalid_token);
         {error, {decryption_failed, Error}} ->
             logger:warning("Payment tool token decryption failed: ~p", [Error]),
             erlang:throw(invalid_token)
+    end;
+decode_payer_token(CustomerOrRecurrentPayer) ->
+    {CustomerOrRecurrentPayer, undefined}.
+
+unwrap_payment_tool(InvoiceID, #{payment_tool := PaymentTool} = TokenData) ->
+    ValidUntil = maps:get(valid_until, TokenData, undefined),
+    case capi_utils:deadline_is_reached(ValidUntil) of
+        true ->
+            logger:warning("Payment tool token expired: ~p", [capi_utils:deadline_to_binary(ValidUntil)]),
+            erlang:throw(invalid_token);
+        _ ->
+            case maps:get(token_link, TokenData, undefined) of
+                undefined ->
+                    {PaymentTool, capi_handler_decoder_party:decode_payment_tool(PaymentTool)};
+                {invoice_id, InvoiceID} ->
+                    {PaymentTool, capi_handler_decoder_party:decode_payment_tool(PaymentTool)};
+                Other ->
+                    logger:warning("Payment tool token bad link: ~p", [Other]),
+                    erlang:throw(invalid_token)
+            end
     end.
 
 encode_invoice_payment_params(ID, ExternalID, PaymentParams, PaymentToolThrift) ->

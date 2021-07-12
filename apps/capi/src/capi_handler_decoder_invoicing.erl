@@ -19,14 +19,16 @@
 -export([decode_recurrent_parent/1]).
 -export([decode_make_recurrent/1]).
 
+-export([decode_token_provider_data/2]).
 -export([construct_payment_methods/3]).
 -export([make_invoice_and_token/3]).
 
 -type processing_context() :: capi_handler:processing_context().
+-type decode_data() :: capi_handler_decoder_utils:decode_data().
 
 %%
 
--spec decode_user_interaction({atom(), _}) -> capi_handler_decoder_utils:decode_data().
+-spec decode_user_interaction({atom(), _}) -> decode_data().
 decode_user_interaction({payment_terminal_reciept, TerminalReceipt}) ->
     #{
         <<"interactionType">> => <<"PaymentTerminalReceipt">>,
@@ -112,7 +114,7 @@ build_decoded_crypto_amount(Integral, <<>>) ->
 build_decoded_crypto_amount(Integral, Fractional) ->
     <<Integral/binary, ".", Fractional/binary>>.
 
--spec decode_user_interaction_form(map()) -> capi_handler_decoder_utils:decode_data().
+-spec decode_user_interaction_form(map()) -> decode_data().
 decode_user_interaction_form(Form) ->
     maps:fold(
         fun(K, V, Acc) ->
@@ -127,7 +129,7 @@ decode_user_interaction_form(Form) ->
     ).
 
 -spec decode_payment(binary(), capi_handler_encoder:encode_data(), processing_context()) ->
-    capi_handler_decoder_utils:decode_data().
+    decode_data().
 decode_payment(InvoiceID, Payment, Context) ->
     #domain_Cash{
         amount = Amount,
@@ -154,7 +156,7 @@ decode_payment(InvoiceID, Payment, Context) ->
     ).
 
 -spec decode_invoice_payment(binary(), capi_handler_encoder:encode_data(), processing_context()) ->
-    capi_handler_decoder_utils:decode_data().
+    decode_data().
 decode_invoice_payment(InvoiceID, InvoicePayment = #payproc_InvoicePayment{payment = Payment}, Context) ->
     capi_handler_utils:merge_and_compact(
         decode_payment(InvoiceID, Payment, Context),
@@ -229,7 +231,7 @@ decode_payer_session_info(#domain_PayerSessionInfo{
 decode_payer_session_info(undefined) ->
     #{}.
 
--spec decode_payment_status({atom(), _}, processing_context()) -> capi_handler_decoder_utils:decode_data().
+-spec decode_payment_status({atom(), _}, processing_context()) -> decode_data().
 decode_payment_status({Status, StatusInfo}, Context) ->
     Error =
         case StatusInfo of
@@ -243,7 +245,7 @@ decode_payment_status({Status, StatusInfo}, Context) ->
         <<"error">> => Error
     }.
 
--spec decode_payment_operation_failure({atom(), _}, processing_context()) -> capi_handler_decoder_utils:decode_data().
+-spec decode_payment_operation_failure({atom(), _}, processing_context()) -> decode_data().
 decode_payment_operation_failure({operation_timeout, _}, _) ->
     payment_error(<<"timeout">>);
 decode_payment_operation_failure({failure, Failure}, Context) ->
@@ -280,7 +282,7 @@ decode_make_recurrent(undefined) ->
 decode_make_recurrent(Value) when is_boolean(Value) ->
     Value.
 
--spec decode_recurrent_parent(capi_handler_encoder:encode_data()) -> capi_handler_decoder_utils:decode_data().
+-spec decode_recurrent_parent(capi_handler_encoder:encode_data()) -> decode_data().
 decode_recurrent_parent(#domain_RecurrentParentPayment{invoice_id = InvoiceID, payment_id = PaymentID}) ->
     #{
         <<"invoiceID">> => InvoiceID,
@@ -316,7 +318,7 @@ payment_error_client_maping(_) ->
     <<"PaymentRejected">>.
 
 -spec decode_refund(capi_handler_encoder:encode_data(), processing_context()) ->
-    capi_handler_decoder_utils:decode_data().
+    decode_data().
 decode_refund(Refund, Context) ->
     #domain_Cash{amount = Amount, currency = Currency} = Refund#domain_InvoicePaymentRefund.cash,
     capi_handler_utils:merge_and_compact(
@@ -331,7 +333,7 @@ decode_refund(Refund, Context) ->
         decode_refund_status(Refund#domain_InvoicePaymentRefund.status, Context)
     ).
 
--spec decode_refund_status({atom(), _}, processing_context()) -> capi_handler_decoder_utils:decode_data().
+-spec decode_refund_status({atom(), _}, processing_context()) -> decode_data().
 decode_refund_status({Status, StatusInfo}, Context) ->
     Error =
         case StatusInfo of
@@ -346,7 +348,7 @@ decode_refund_status({Status, StatusInfo}, Context) ->
     }.
 
 -spec decode_chargeback(capi_handler_encoder:encode_data(), processing_context()) ->
-    capi_handler_decoder_utils:decode_data().
+    decode_data().
 decode_chargeback(#payproc_InvoicePaymentChargeback{chargeback = Chargeback}, Context) ->
     decode_chargeback(Chargeback, Context);
 decode_chargeback(#domain_InvoicePaymentChargeback{} = Chargeback, _Context) ->
@@ -384,7 +386,7 @@ decode_chargeback_stage({arbitration, _StageDetails}) ->
 decode_chargeback_reason_code(#domain_InvoicePaymentChargebackReason{code = Code}) ->
     #{<<"reasonCode">> => Code}.
 
--spec decode_invoice(capi_handler_encoder:encode_data()) -> capi_handler_decoder_utils:decode_data().
+-spec decode_invoice(capi_handler_encoder:encode_data()) -> decode_data().
 decode_invoice(Invoice) ->
     #domain_Cash{amount = Amount, currency = Currency} = Invoice#domain_Invoice.cost,
     Details = Invoice#domain_Invoice.details,
@@ -420,7 +422,7 @@ decode_invoice_status({Status, StatusInfo}) ->
     }.
 
 -spec decode_invoice_cart(capi_handler_encoder:encode_data() | undefined) ->
-    capi_handler_decoder_utils:decode_data() | undefined.
+    decode_data() | undefined.
 decode_invoice_cart(#domain_InvoiceCart{lines = Lines}) ->
     [decode_invoice_line(L) || L <- Lines];
 decode_invoice_cart(undefined) ->
@@ -436,7 +438,7 @@ decode_invoice_line(InvoiceLine = #domain_InvoiceLine{quantity = Quantity, price
     }).
 
 -spec decode_invoice_bank_account(dmsl_domain_thrift:'InvoiceBankAccount'() | undefined) ->
-    capi_handler_decoder_utils:decode_data() | undefined.
+    decode_data() | undefined.
 decode_invoice_bank_account({russian, Russian}) ->
     genlib_map:compact(#{
         <<"accountType">> => <<"InvoiceRussianBankAccount">>,
@@ -446,7 +448,7 @@ decode_invoice_bank_account({russian, Russian}) ->
 decode_invoice_bank_account(undefined) ->
     undefined.
 
--spec decode_invoice_line_tax_mode(map()) -> capi_handler_decoder_utils:decode_data() | undefined.
+-spec decode_invoice_line_tax_mode(map()) -> decode_data() | undefined.
 decode_invoice_line_tax_mode(#{<<"TaxMode">> := {str, TM}}) ->
     %% for more info about taxMode look here:
     %% https://github.com/rbkmoney/starrys/blob/master/docs/settings.md
@@ -456,6 +458,18 @@ decode_invoice_line_tax_mode(#{<<"TaxMode">> := {str, TM}}) ->
     };
 decode_invoice_line_tax_mode(_) ->
     undefined.
+
+-spec decode_token_provider_data([decode_data()], decode_data()) -> [decode_data()].
+decode_token_provider_data(PaymentMethods, TokenProviderData) ->
+    lists:map(
+        fun
+            (#{<<"tokenProviders">> := _Providers} = PaymentMethod) ->
+                PaymentMethod#{<<"tokenProviderData">> => TokenProviderData};
+            (PaymentMethod) ->
+                PaymentMethod
+        end,
+        PaymentMethods
+    ).
 
 -spec construct_payment_methods(atom(), tuple(), processing_context()) -> {ok, list()} | woody:result().
 construct_payment_methods(ServiceName, Args, Context) ->
@@ -583,7 +597,7 @@ compute_terms(ServiceName, Args, Context) ->
     capi_handler_utils:service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
 
 -spec make_invoice_and_token(capi_handler_encoder:encode_data(), binary(), map()) ->
-    capi_handler_decoder_utils:decode_data().
+    decode_data().
 make_invoice_and_token(Invoice, PartyID, ExtraProperties) ->
     #{
         <<"invoice">> => decode_invoice(Invoice),

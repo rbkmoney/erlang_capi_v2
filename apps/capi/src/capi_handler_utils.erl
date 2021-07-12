@@ -1,6 +1,7 @@
 -module(capi_handler_utils).
 
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
+-include_lib("damsel/include/dmsl_domain_thrift.hrl").
 
 -export([general_error/2]).
 -export([logic_error/2]).
@@ -29,9 +30,12 @@
 
 -export([unwrap_payment_session/1]).
 -export([wrap_payment_session/2]).
+-export([make_merchant_id/3]).
+
 -export([get_invoice_by_id/2]).
 -export([get_payment_by_id/3]).
 -export([get_refund_by_id/4]).
+-export([get_realm_by_contract/3]).
 
 -export([create_dsl/3]).
 
@@ -246,6 +250,11 @@ wrap_payment_session(ClientInfo, PaymentSession) ->
         <<"paymentSession">> => PaymentSession
     }).
 
+-spec make_merchant_id(binary(), binary(), binary()) -> binary().
+make_merchant_id(RealmMode, PartyID, EntityID) ->
+    Bin16 = erlang:integer_to_binary(erlang:phash2(PartyID), 16),
+    <<RealmMode/binary, $:, Bin16/binary, $:, EntityID/binary>>.
+
 -spec get_invoice_by_id(binary(), processing_context()) -> woody:result().
 get_invoice_by_id(InvoiceID, Context) ->
     EventRange = #payproc_EventRange{},
@@ -259,6 +268,12 @@ get_payment_by_id(InvoiceID, PaymentID, Context) ->
 -spec get_refund_by_id(binary(), binary(), binary(), processing_context()) -> woody:result().
 get_refund_by_id(InvoiceID, PaymentID, RefundID, Context) ->
     service_call_with([user_info], {invoicing, 'GetPaymentRefund', {InvoiceID, PaymentID, RefundID}}, Context).
+
+-spec get_realm_by_contract(binary(), binary(), processing_context()) -> {ok, capi_domain:realm()}.
+get_realm_by_contract(PartyID, ContractID, Context) ->
+    {ok, Contract} = capi_party:get_contract(PartyID, ContractID, Context),
+    #domain_Contract{payment_institution = PiRef} = Contract,
+    capi_domain:get_pi_realm(PiRef, Context).
 
 -spec create_dsl(atom(), map(), map()) -> map().
 create_dsl(QueryType, QueryBody, QueryParams) ->

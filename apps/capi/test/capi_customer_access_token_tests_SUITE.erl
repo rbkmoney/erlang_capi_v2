@@ -179,7 +179,7 @@ create_binding_expired_test(Config) ->
     ),
     PaymentTool = {bank_card, ?BANK_CARD},
     ValidUntil = capi_utils:deadline_from_timeout(0),
-    PaymentToolToken = capi_crypto:create_encrypted_payment_tool_token(PaymentTool, ValidUntil),
+    PaymentToolToken = capi_crypto:encode_token(#{payment_tool => PaymentTool, valid_until => ValidUntil}),
     Req = #{
         <<"paymentResource">> => #{
             <<"paymentSession">> => ?TEST_PAYMENT_SESSION,
