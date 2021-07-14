@@ -251,14 +251,11 @@ decode_payout_status({Status, _}) ->
         <<"status">> => genlib:to_binary(Status)
     }.
 
-decode_payout_tool_details({wallet, #payout_processing_Wallet{wallet_id = WalletID}}) ->
-    #{
-        <<"detailsType">> => <<"PayoutToolDetailsWalletInfo">>,
-        <<"walletID">> => WalletID
-    };
 decode_payout_tool_details(PayoutType) ->
     capi_handler_decoder_party:decode_payout_tool_details(payout_proc_to_domain(PayoutType)).
 
+payout_proc_to_domain({wallet, #payout_processing_Wallet{wallet_id = WalletID}}) ->
+    {wallet_info, #domain_WalletInfo{wallet_id = WalletID}};
 payout_proc_to_domain({bank_account, {russian_payout_account, PayoutAccount}}) ->
     #payout_processing_RussianPayoutAccount{bank_account = BankAccount} = PayoutAccount,
     {russian_bank_account, BankAccount};

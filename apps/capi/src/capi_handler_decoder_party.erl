@@ -378,8 +378,6 @@ decode_payout_tool_params(Currency, Info) ->
     }.
 
 -spec decode_payout_tool_details({atom(), _}) -> capi_handler_decoder_utils:decode_data().
-decode_payout_tool_details({bank_card, V}) ->
-    decode_bank_card_details(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankCard">>});
 decode_payout_tool_details({russian_bank_account, V}) ->
     decode_russian_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankAccount">>});
 decode_payout_tool_details({international_bank_account, V}) ->
@@ -388,6 +386,10 @@ decode_payout_tool_details({wallet_info, V}) ->
     #{
         <<"detailsType">> => <<"PayoutToolDetailsWalletInfo">>,
         <<"walletID">> => V#domain_WalletInfo.wallet_id
+    };
+decode_payout_tool_details({payment_institution_account, _V}) ->
+    #{
+        <<"detailsType">> => <<"PayoutToolDetailsPaymentInstitutionAccount">>
     }.
 
 decode_russian_bank_account(BankAccount, V) ->

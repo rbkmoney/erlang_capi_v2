@@ -1697,17 +1697,18 @@ get_payout_tool_by_id(Config) ->
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetPayoutToolByID">>, ?STRING, Config),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_RU),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_US),
-    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?WALLET_TOOL).
+    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?WALLET_TOOL),
+    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?PI_ACCOUNT_TOOL).
 
 -spec get_payout_tool_by_id_for_party(config()) -> _.
 get_payout_tool_by_id_for_party(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetPayoutToolByIDForParty">>, ?STRING, Config),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id_for_party(
-        ?config(context, Config),
-        ?STRING,
-        ?STRING,
-        ?WALLET_TOOL
+        ?config(context, Config), ?STRING, ?STRING, ?WALLET_TOOL
+    ),
+    {ok, _} = capi_client_payouts:get_payout_tool_by_id_for_party(
+        ?config(context, Config), ?STRING, ?STRING, ?PI_ACCOUNT_TOOL
     ).
 
 -spec create_payout(config()) -> _.
