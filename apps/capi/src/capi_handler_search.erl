@@ -143,7 +143,8 @@ encode_payment_method('paymentTerminal') -> <<"payment_terminal">>;
 encode_payment_method(undefined) -> undefined.
 
 encode_payout_type('PayoutAccount') -> <<"bank_account">>;
-encode_payout_type('Wallet') -> <<"wallet">>;
+encode_payout_type('Wallet') -> <<"wallet_info">>;
+encode_payout_type('PaymentInstitutionAccount') -> <<"payment_institution_account">>;
 encode_payout_type(undefined) -> undefined.
 
 %%
