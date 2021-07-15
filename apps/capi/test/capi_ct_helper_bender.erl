@@ -23,7 +23,7 @@
 -spec get_internal_id(tid(), internal_id(), msg_pack()) -> {ok, bender_thrift:'GenerationResult'()}.
 -spec get_internal_id(tid(), internal_id()) -> {ok, bender_thrift:'GetInternalIDResult'()}.
 -spec generate_id(binary()) -> {ok, bender_thrift:'GeneratedID'()}.
--spec generate_id(tid(), binary(), binary(), msg_pack()) -> {ok, bender_thrift:'GeneratedID'()}.
+-spec generate_id(tid(), binary(), binary(), msg_pack()) -> {ok, bender_thrift:'GenerationResult'()}.
 
 -spec get_result(binary()) -> bender_thrift:'GenerationResult'().
 -spec get_result(binary(), msgpack_thrift:'Value'() | undefined) -> bender_thrift:'GenerationResult'().
@@ -64,7 +64,7 @@ get_internal_id(Tid, IdempotentKey, MsgPack) ->
 
 get_internal_id(Tid, IdempotentKey) ->
     [{IdempotentKey, #{ctx := Ctx, internal_id := InternalID}}] = ets:lookup(Tid, IdempotentKey),
-    get_internal_id_result(InternalID, Ctx).
+    {ok, get_internal_id_result(InternalID, Ctx)}.
 
 generate_id(ID) ->
     {ok, #bender_GeneratedID{

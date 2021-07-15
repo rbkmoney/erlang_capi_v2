@@ -975,7 +975,7 @@ get_refund_by_external_id(Config) ->
                     end},
                     {bender, fun
                         ('GetInternalID', {ID}) ->
-                            {ok, capi_ct_helper_bender:get_internal_id(Tid, ID)};
+                            capi_ct_helper_bender:get_internal_id(Tid, ID);
                         ('GenerateID', {ID, _Schema, Ctx}) ->
                             capi_ct_helper_bender:generate_id(Tid, ID, ?STRING, Ctx)
                     end}
