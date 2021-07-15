@@ -757,7 +757,6 @@ create_payment_ok_test(Config) ->
 create_refund(Config) ->
     BenderKey = <<"bender_key">>,
     Req = #{<<"reason">> => ?STRING},
-    Tid = capi_ct_helper_bender:create_storage(),
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun
@@ -780,8 +779,7 @@ create_refund(Config) ->
         ?STRING,
         Config
     ),
-    {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
-    capi_ct_helper_bender:del_storage(Tid).
+    {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING).
 
 -spec create_refund_blocked_error(config()) -> _.
 create_refund_blocked_error(Config) ->
@@ -963,39 +961,33 @@ get_refunds(Config) ->
 
 -spec get_refund_by_external_id(config()) -> _.
 get_refund_by_external_id(Config) ->
-    ExternalID = <<"merch_id">>,
-    RefundID = capi_utils:get_unique_id(),
-    BenderContext = capi_msgp_marshalling:marshal(#{
-        <<"context_data">> => #{
-            <<"invoice_id">> => ?STRING,
-            <<"payment_id">> => ?STRING,
-            <<"refund_id">> => ?STRING
-        }
-    }),
-    _ = capi_ct_helper:mock_services(
-        [
-            {invoicing, fun('Get', _) ->
-                P = ?PAYPROC_PAYMENT,
-                Payment = P#payproc_InvoicePayment{refunds = [?PAYPROC_REFUND(RefundID, ExternalID)]},
-                {ok, ?PAYPROC_INVOICE([Payment])}
-            end},
-            {bender, fun('GetInternalID', _) ->
-                InternalKey = RefundID,
-                {ok, capi_ct_helper_bender:get_internal_id_result(InternalKey, BenderContext)}
-            end}
-        ],
-        Config
-    ),
-    _ = capi_ct_helper_bouncer:mock_assert_refund_op_ctx(
-        <<"GetRefundByExternalID">>,
-        ?STRING,
-        ?STRING,
-        RefundID,
-        ?STRING,
-        ?STRING,
-        Config
-    ),
-    {ok, _} = capi_client_payments:get_refund_by_external_id(?config(context, Config), ExternalID).
+    capi_ct_helper_bender:with_storage(
+        fun(Tid) ->
+            _ = capi_ct_helper:mock_services(
+                [
+                    {invoicing, fun
+                        ('Get', _) ->
+                            P = ?PAYPROC_PAYMENT,
+                            Payment = P#payproc_InvoicePayment{refunds = [?PAYPROC_REFUND(?STRING, ?STRING)]},
+                            {ok, ?PAYPROC_INVOICE([Payment])};
+                        ('RefundPayment', _) ->
+                            {ok, ?REFUND}
+                    end},
+                    {bender, fun
+                        ('GetInternalID', {ID}) ->
+                            {ok, capi_ct_helper_bender:get_internal_id(Tid, ID)};
+                        ('GenerateID', {ID, _Schema, Ctx}) ->
+                            capi_ct_helper_bender:generate_id(Tid, ID, ?STRING, Ctx)
+                    end}
+                ],
+                Config
+            ),
+            _ = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), Config),
+            Req = #{<<"reason">> => ?STRING, <<"externalID">> => ?STRING},
+            {ok, _} = capi_client_payments:create_refund(?config(context, Config), Req, ?STRING, ?STRING),
+            {ok, _} = capi_client_payments:get_refund_by_external_id(?config(context, Config), ?STRING)
+        end
+    ).
 
 %
 

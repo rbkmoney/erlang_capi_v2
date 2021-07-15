@@ -14,12 +14,16 @@
 -export([del_storage/1]).
 -export([with_storage/1]).
 -export([get_internal_id/3]).
+-export([get_internal_id/2]).
 -export([generate_id/1]).
+-export([generate_id/4]).
 
 -spec create_storage() -> tid().
 -spec del_storage(tid()) -> true.
 -spec get_internal_id(tid(), internal_id(), msg_pack()) -> {ok, bender_thrift:'GenerationResult'()}.
+-spec get_internal_id(tid(), internal_id()) -> {ok, bender_thrift:'GetInternalIDResult'()}.
 -spec generate_id(binary()) -> {ok, bender_thrift:'GeneratedID'()}.
+-spec generate_id(tid(), binary(), binary(), msg_pack()) -> {ok, bender_thrift:'GeneratedID'()}.
 
 -spec get_result(binary()) -> bender_thrift:'GenerationResult'().
 -spec get_result(binary(), msgpack_thrift:'Value'() | undefined) -> bender_thrift:'GenerationResult'().
@@ -58,10 +62,24 @@ get_internal_id(Tid, IdempotentKey, MsgPack) ->
             {ok, get_result(IdempotentKey, Ctx)}
     end.
 
+get_internal_id(Tid, IdempotentKey) ->
+    [{IdempotentKey, #{ctx := Ctx, internal_id := InternalID}}] = ets:lookup(Tid, IdempotentKey),
+    get_internal_id_result(InternalID, Ctx).
+
 generate_id(ID) ->
     {ok, #bender_GeneratedID{
         id = ID
     }}.
+
+generate_id(Tid, ID, InternalID, Ctx) ->
+    ets:insert(
+        Tid,
+        {ID, #{
+            ctx => Ctx,
+            internal_id => InternalID
+        }}
+    ),
+    {ok, get_result(ID, Ctx)}.
 
 get_result(ID) ->
     get_result(ID, undefined).
