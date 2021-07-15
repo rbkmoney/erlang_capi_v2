@@ -54,8 +54,6 @@
 -export([gen_sequence/4]).
 -export([gen_sequence/5]).
 -export([gen_sequence/6]).
--export([try_gen_sequence/4]).
--export([try_gen_sequence/5]).
 -export([try_gen_sequence/6]).
 -export([gen_constant/4]).
 -export([gen_constant/5]).
@@ -120,23 +118,6 @@ gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyContext, 
     IdSchema = build_sequence_schema(SequenceID, SequenceParams),
     generate_id(IdSchema, IdempotentKey, Identity, WoodyContext, Context).
 
--spec try_gen_sequence(idempotent_key_params() | undefined, identity_params(), sequence_id(), woody_context()) ->
-    id() | no_return().
-try_gen_sequence(IdempotentKey, Identity, SequenceID, WoodyContext) ->
-    SequenceParams = #{},
-    try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyContext).
-
--spec try_gen_sequence(
-    idempotent_key_params() | undefined,
-    identity_params(),
-    sequence_id(),
-    sequence_params(),
-    woody_context()
-) -> id() | no_return().
-try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyContext) ->
-    Context = #{},
-    try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyContext, Context).
-
 -spec try_gen_sequence(
     idempotent_key_params() | undefined,
     identity_params(),
@@ -145,9 +126,9 @@ try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyConte
     woody_context(),
     context_data()
 ) -> id() | no_return().
-try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyContext, Context) ->
+try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyContext, ContextData) ->
     IdSchema = build_sequence_schema(SequenceID, SequenceParams),
-    try_generate_id(IdSchema, IdempotentKey, Identity, WoodyContext, Context).
+    try_generate_id(IdSchema, IdempotentKey, Identity, WoodyContext, ContextData).
 
 -spec gen_constant(idempotent_key_params(), identity_params(), constant_id(), woody_context()) ->
     {ok, id()} | {ok, id(), context_data()} | {error, generation_error()}.
