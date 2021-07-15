@@ -737,7 +737,9 @@ create_refund(InvoiceID, PaymentID, RefundParams, Context, BenderPrefix) ->
     SequenceID = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
     SequenceParams = #{minimum => 100},
     #{woody_context := WoodyCtx} = Context,
-    RefundID = capi_bender:try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyCtx),
+    %% We put `invoice_id` and `payment_id` in a context here because `get_refund_by_external_id/2` needs it to work
+    CtxData = #{<<"invoice_id">> => InvoiceID, <<"payment_id">> => PaymentID},
+    RefundID = capi_bender:try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyCtx, CtxData),
     refund_payment(RefundID, InvoiceID, PaymentID, RefundParams, Context).
 
 refund_payment(RefundID, InvoiceID, PaymentID, RefundParams, Context) ->
