@@ -15,7 +15,6 @@
 -export([decode_residence/1]).
 -export([decode_payment_institution_ref/1]).
 -export([decode_disposable_payment_resource/1]).
--export([decode_payout_tool_params/2]).
 -export([decode_payout_tool_details/1]).
 -export([decode_payment_tool/1]).
 -export([decode_payment_tool_details/1]).
@@ -367,14 +366,6 @@ decode_client_info(ClientInfo) ->
     #{
         <<"fingerprint">> => ClientInfo#domain_ClientInfo.fingerprint,
         <<"ip">> => ClientInfo#domain_ClientInfo.ip_address
-    }.
-
--spec decode_payout_tool_params(capi_handler_encoder:encode_data(), {atom(), _}) ->
-    capi_handler_decoder_utils:decode_data().
-decode_payout_tool_params(Currency, Info) ->
-    #{
-        <<"currency">> => capi_handler_decoder_utils:decode_currency(Currency),
-        <<"details">> => decode_payout_tool_details(Info)
     }.
 
 -spec decode_payout_tool_details({atom(), _}) -> capi_handler_decoder_utils:decode_data().

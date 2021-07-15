@@ -580,8 +580,11 @@ decode_shop_modification({payout_schedule_modification, #payproc_ScheduleModific
         <<"scheduleID">> => capi_handler_decoder_utils:decode_business_schedule_ref(ScheduleRef)
     }).
 
-decode_payout_tool_params(#payproc_PayoutToolParams{currency = Currency, tool_info = ToolInfo}) ->
-    capi_handler_decoder_party:decode_payout_tool_params(Currency, ToolInfo).
+decode_payout_tool_params(#payproc_PayoutToolParams{currency = Currency, tool_info = Info}) ->
+    #{
+        <<"currency">> => capi_handler_decoder_utils:decode_currency(Currency),
+        <<"details">> => capi_handler_decoder_party:decode_payout_tool_details(Info)
+    }.
 
 decode_shop_params(ShopParams) ->
     #{

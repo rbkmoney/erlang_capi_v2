@@ -143,6 +143,8 @@ encode_optional_payout_method('InternationalBankAccount') ->
     #domain_PayoutMethodRef{id = international_bank_account};
 encode_optional_payout_method('Wallet') ->
     #domain_PayoutMethodRef{id = wallet_info};
+encode_optional_payout_method('PaymentInstitutionAccount') ->
+    #domain_PayoutMethodRef{id = payment_institution_account};
 encode_optional_payout_method(undefined) ->
     undefined.
 
@@ -181,7 +183,9 @@ decode_payout_method(#domain_PayoutMethodRef{id = russian_bank_account}) ->
 decode_payout_method(#domain_PayoutMethodRef{id = international_bank_account}) ->
     <<"InternationalBankAccount">>;
 decode_payout_method(#domain_PayoutMethodRef{id = wallet_info}) ->
-    <<"Wallet">>.
+    <<"Wallet">>;
+decode_payout_method(#domain_PayoutMethodRef{id = payment_institution_account}) ->
+    <<"PaymentInstitutionAccount">>.
 
 decode_payout_methods_selector({value, Val}) when is_list(Val) ->
     lists:map(fun decode_payout_method/1, Val);

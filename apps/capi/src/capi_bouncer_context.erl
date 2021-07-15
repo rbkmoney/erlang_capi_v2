@@ -3,9 +3,9 @@
 -include_lib("bouncer_proto/include/bouncer_context_v1_thrift.hrl").
 
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
--include_lib("damsel/include/dmsl_payout_processing_thrift.hrl").
 -include_lib("damsel/include/dmsl_webhooker_thrift.hrl").
 -include_lib("reporter_proto/include/reporter_reports_thrift.hrl").
+-include_lib("payout_manager_proto/include/payouts_payout_manager_thrift.hrl").
 
 -type fragment() :: bouncer_client:context_fragment().
 -type acc() :: bouncer_context_helpers:context_fragment().
@@ -49,7 +49,8 @@
 }.
 
 -type prototype_payouts() :: #{
-    payout => payout_id() | payout() | undefined
+    payout => payout_id() | payout() | undefined,
+    contract => entity_id()
 }.
 
 -type prototype_webhooks() :: #{
@@ -75,8 +76,8 @@
 -type report_id() :: reporter_reports_thrift:'ReportID'().
 -type report() :: reporter_reports_thrift:'Report'().
 
--type payout_id() :: dmsl_payout_processing_thrift:'PayoutID'().
--type payout() :: dmsl_payout_processing_thrift:'Payout'().
+-type payout_id() :: payouts_payout_manager_thrift:'PayoutID'().
+-type payout() :: payouts_payout_manager_thrift:'Payout'().
 
 -type entity_id() :: binary().
 
@@ -170,13 +171,23 @@ build(reports, Params = #{}, Acc, WoodyCtx) ->
         }
     };
 build(payouts, Params = #{}, Acc, WoodyCtx) ->
+    Payout0 = maybe_with(
+        payout,
+        Params,
+        fun(V) -> build_payout_ctx(V, WoodyCtx) end
+    ),
+    Payout =
+        case Payout0 of
+            undefined ->
+                undefined;
+            _ ->
+                Payout0#bctx_v1_Payout{
+                    contract = maybe_entity(contract, Params)
+                }
+        end,
     Acc#bctx_v1_ContextFragment{
         payouts = #bctx_v1_ContextPayouts{
-            payout = maybe_with(
-                payout,
-                Params,
-                fun(V) -> build_payout_ctx(V, WoodyCtx) end
-            )
+            payout = Payout
         }
     }.
 
@@ -257,16 +268,14 @@ build_payout_ctx(ID, WoodyCtx) when is_binary(ID) ->
 build_payout_ctx(Payout, _WoodyCtx) ->
     build_payout_ctx(Payout).
 
-build_payout_ctx(#payout_processing_Payout{
-    id = ID,
+build_payout_ctx(#payouts_Payout{
+    payout_id = ID,
     party_id = PartyID,
-    contract_id = ContractID,
     shop_id = ShopID
 }) ->
     #bctx_v1_Payout{
         id = ID,
         party = build_entity(PartyID),
-        contract = build_entity(ContractID),
         shop = build_entity(ShopID)
     }.
 

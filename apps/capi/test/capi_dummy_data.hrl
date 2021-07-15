@@ -1195,46 +1195,22 @@
     bank_card = ?BANK_CARD
 }).
 
--define(PAYOUT(Type, PayoutSummary), ?PAYOUT(Type, ?STRING, PayoutSummary)).
+-define(PAYOUT, ?PAYOUT(?PI_ACCOUNT_TOOL, ?STRING)).
+-define(PAYOUT(ToolID), ?PAYOUT(ToolID, ?STRING)).
 
--define(PAYOUT(Type, PartyID, PayoutSummary), #'payout_processing_Payout'{
-    id = ?STRING,
+-define(PAYOUT(ToolID, PartyID), #payouts_Payout{
+    payout_id = ?STRING,
+    created_at = ?TIMESTAMP,
     party_id = PartyID,
     shop_id = ?STRING,
-    contract_id = ?STRING,
-    created_at = ?TIMESTAMP,
-    status = {paid, #'payout_processing_PayoutPaid'{}},
+    status = {paid, #payouts_PayoutPaid{}},
+    cash_flow = [],
+    payout_tool_id = ToolID,
     amount = ?INTEGER,
     fee = ?INTEGER,
-    currency = #domain_CurrencyRef{
+    currency = #payouts_CurrencyRef{
         symbolic_code = ?RUB
-    },
-    payout_flow = [],
-    type = Type,
-    summary = PayoutSummary,
-    metadata = #{
-        <<"someKey">> => {str, <<"someBinary">>},
-        <<"someInt">> => {i, 5},
-        <<"someList">> => {arr, [{str, <<"list_1">>}, {str, <<"list_2">>}]},
-        <<"someMap">> => {obj, #{{str, <<"someKey">>} => {i, 123}}},
-        <<"someNil">> => {nl, #msgpack_Nil{}}
     }
-}).
-
--define(WALLET_PAYOUT_TYPE,
-    {wallet, #payout_processing_Wallet{
-        wallet_id = ?STRING
-    }}
-).
-
--define(PAYOUT_PROC_PAYOUT_SUMMARY_ITEM, #payout_processing_PayoutSummaryItem{
-    amount = ?INTEGER,
-    fee = ?INTEGER,
-    currency_symbolic_code = ?RUB,
-    from_time = ?TIMESTAMP,
-    to_time = ?TIMESTAMP,
-    operation_type = payment,
-    count = ?INTEGER
 }).
 
 -define(TEST_PAYMENT_TOKEN, ?TEST_PAYMENT_TOKEN(visa)).
@@ -1319,19 +1295,7 @@
     <<"partyID">> => ?STRING,
     <<"payoutToolID">> => ?WALLET_TOOL,
     <<"amount">> => 2,
-    <<"currency">> => <<"RUB">>,
-    <<"metadata">> => #{
-        <<"payoutBinary">> => <<"sample data">>,
-        <<"payoutInt">> => 5,
-        <<"payoutList">> => [
-            <<"some_1">>,
-            <<"some_2">>
-        ],
-        <<"payoutMap">> => #{
-            <<"someKey">> => 234
-        },
-        <<"how_about_null">> => null
-    }
+    <<"currency">> => <<"RUB">>
 }).
 
 -define(PAYMENT_PARAMS(EID, Token), #{
