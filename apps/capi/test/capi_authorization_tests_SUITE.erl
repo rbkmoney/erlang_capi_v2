@@ -25,7 +25,6 @@
     authorization_bad_deadline_error_test/1,
     authorization_error_no_header_test/1,
     authorization_error_no_permission_test/1,
-    authorization_blacklisted_token_error_test/1,
     authorization_bad_token_error_test/1
 ]).
 
@@ -58,7 +57,6 @@ groups() ->
             authorization_bad_deadline_error_test,
             authorization_error_no_header_test,
             authorization_error_no_permission_test,
-            authorization_blacklisted_token_error_test,
             authorization_bad_token_error_test
         ]}
     ].
@@ -153,16 +151,6 @@ authorization_error_no_permission_test(_Config) ->
     {ok, Token} = capi_ct_helper:issue_token([], 4102444800),
     ?emptyresp(401) = capi_client_parties:get_my_party(capi_ct_helper:get_context(Token)).
 
--spec authorization_blacklisted_token_error_test(config()) -> _.
-authorization_blacklisted_token_error_test(Config) ->
-    {ok, Token} = capi_ct_helper:issue_token(<<"BlackListedToken">>, [{[party], read}], unlimited, #{}),
-    DataDir = get_blacklisted_keys_dir(Config),
-    ok = file:write_file(filename:join(DataDir, "1.key"), Token),
-    ok = file:write_file(filename:join(DataDir, "2.key"), Token),
-    ok = file:write_file(filename:join(DataDir, "3.key"), Token),
-    ok = capi_api_key_blacklist:update(),
-    ?emptyresp(401) = capi_client_parties:get_my_party(capi_ct_helper:get_context(Token)).
-
 -spec authorization_bad_token_error_test(config()) -> _.
 authorization_bad_token_error_test(Config) ->
     {ok, Token} = issue_dummy_token([{[party], read}], Config),
@@ -190,6 +178,3 @@ issue_dummy_token(ACL, Config) ->
     JWT = jose_jwt:sign(BadJWK, #{<<"alg">> => <<"RS256">>, <<"kid">> => KID}, Claims),
     {_Modules, Token} = jose_jws:compact(JWT),
     {ok, Token}.
-
-get_blacklisted_keys_dir(Config) ->
-    filename:join(?config(data_dir, Config), "blacklisted_keys").
