@@ -85,8 +85,8 @@ prepare(OperationID, Req, Context) when OperationID =:= 'CreatePayout' ->
                         {ok, logic_error(invalidRequest, FormattedErrors)};
                     #payouts_PayoutAlreadyExists{} ->
                         {ok, logic_error(invalidRequest, <<"Payout already exists">>)};
-                    #payouts_NotFound{} ->
-                        {ok, logic_error(invalidPayoutTool, <<"Payout tool not found">>)}
+                    #payouts_NotFound{message = Message} ->
+                        {ok, logic_error(invalidRequest, Message)}
                 end
         end
     end,
@@ -237,7 +237,7 @@ encode_payout_params(PartyID, PayoutParams) ->
         },
         cash = encode_payout_cash(PayoutParams),
         payout_id = maps:get(<<"id">>, PayoutParams, undefined),
-        payout_tool_id = maps:get(<<"payoutToolID">>, PayoutParams, undefined)
+        payout_tool_id = maps:get(<<"payoutToolID">>, PayoutParams)
     }.
 
 encode_payout_cash(#{<<"amount">> := Amount, <<"currency">> := Currency}) ->
