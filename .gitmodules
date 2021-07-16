@@ -1,8 +1,8 @@
 [submodule "schemes/swag"]
-	path = schemes/swag
-	branch = release/v2
-	url = git@github.com:rbkmoney/swag.git
+  path = schemes/swag
+  branch = release/epic/JD-425/new_payouts
+  url = git@github.com:rbkmoney/swag.git
 [submodule "build_utils"]
-	path = build_utils
-	url = git@github.com:rbkmoney/build_utils.git
-	branch = master
+  path = build_utils
+  url = git@github.com:rbkmoney/build_utils.git
+  branch = master
