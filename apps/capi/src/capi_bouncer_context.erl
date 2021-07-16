@@ -171,20 +171,14 @@ build(reports, Params = #{}, Acc, WoodyCtx) ->
         }
     };
 build(payouts, Params = #{}, Acc, WoodyCtx) ->
-    Payout0 = maybe_with(
-        payout,
-        Params,
-        fun(V) -> build_payout_ctx(V, WoodyCtx) end
-    ),
-    Payout =
-        case Payout0 of
-            undefined ->
-                undefined;
-            _ ->
-                Payout0#bctx_v1_Payout{
-                    contract = maybe_entity(contract, Params)
-                }
-        end,
+    Payout0 = maybe_with(payout, Params, fun(V) ->
+        build_payout_ctx(V, WoodyCtx)
+    end),
+    Payout = maybe(Payout0, fun(_Payout0) ->
+        Payout0#bctx_v1_Payout{
+            contract = maybe_entity(contract, Params)
+        }
+    end),
     Acc#bctx_v1_ContextFragment{
         payouts = #bctx_v1_ContextPayouts{
             payout = Payout
@@ -328,10 +322,10 @@ build_report_file_ctx(#reports_FileMeta{file_id = ID}) ->
 
 %%
 
-maybe(V, Then) when V /= undefined ->
-    Then(V);
 maybe(undefined, _Then) ->
-    undefined.
+    undefined;
+maybe(V, Then) ->
+    Then(V).
 
 maybe_with(Name, Params, Then) ->
     case maps:get(Name, Params, undefined) of

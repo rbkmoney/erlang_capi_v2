@@ -35,13 +35,9 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayout' ->
             {exception, #payouts_NotFound{}} ->
                 undefined
         end,
-    {ok, ContractID} =
-        case Payout of
-            undefined ->
-                {ok, undefined};
-            _ ->
-                get_payout_contract_id(Payout, Context)
-        end,
+    ContractID = capi_utils:maybe(Payout, fun(_Payout) ->
+        get_payout_contract_id(Payout, Context)
+    end),
     Prototypes = [
         {operation, OperationContext},
         {payouts, #{
@@ -205,14 +201,14 @@ get_schedule_by_id(ScheduleID, #{woody_context := WoodyContext}) ->
 get_payout_tool(Payout, Context) ->
     PayoutToolID = Payout#payouts_Payout.payout_tool_id,
     PartyID = Payout#payouts_Payout.party_id,
-    {ok, ContractID} = get_payout_contract_id(Payout, Context),
+    ContractID = get_payout_contract_id(Payout, Context),
     get_payout_tool_by_id(PartyID, ContractID, PayoutToolID, Context).
 
 get_payout_contract_id(Payout, Context) ->
     PartyID = Payout#payouts_Payout.party_id,
     ShopID = Payout#payouts_Payout.shop_id,
     {ok, Shop} = capi_party:get_shop(PartyID, ShopID, Context),
-    {ok, Shop#domain_Shop.contract_id}.
+    Shop#domain_Shop.contract_id.
 
 get_payout_tool_by_id(PartyID, ContractID, PayoutToolID, Context) ->
     case capi_party:get_contract(PartyID, ContractID, Context) of
