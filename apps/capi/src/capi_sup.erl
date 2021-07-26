@@ -33,7 +33,7 @@ init([]) ->
     {LogicHandler, []} = get_logic_handler_info(#{party_client => PartyClient}),
     AdditionalRoutes = [{'_', [erl_health_handle:get_route(HealthCheck), get_prometheus_route()]}],
     SwaggerHandlerOpts = genlib_app:env(?APP, swagger_handler_opts, #{}),
-    SwaggerSpec = capi_swagger_server:child_spec({AdditionalRoutes, LogicHandler, SwaggerHandlerOpts}),
+    SwaggerSpec = capi_swagger_server:child_spec(AdditionalRoutes, LogicHandler, SwaggerHandlerOpts),
     {ok,
         {
             {one_for_all, 0, 1},
