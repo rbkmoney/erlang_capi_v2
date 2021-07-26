@@ -58,7 +58,6 @@
 
 %% @WARNING Must be refactored in case of different classes of users using this API
 -define(REALM, <<"external">>).
--define(DOMAIN, <<"common-api">>).
 
 -spec authorize_api_key(operation_id(), swag_server:api_key(), request_context(), handler_opts()) ->
     Result :: false | {true, capi_auth:preauth_context()}.
