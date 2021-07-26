@@ -43,12 +43,7 @@ init([]) ->
 -spec get_logic_handler_info(capi_handler:handler_opts()) ->
     {Handler :: swag_server:logic_handler(_), [Spec :: supervisor:child_spec()] | []}.
 get_logic_handler_info(HandlerOpts) ->
-    case genlib_app:env(?APP, service_type) of
-        real ->
-            {{capi_handler, HandlerOpts}, []};
-        undefined ->
-            exit(undefined_service_type)
-    end.
+    {{capi_handler, HandlerOpts}, []}.
 
 -spec enable_health_logging(erl_health:check()) -> erl_health:check().
 enable_health_logging(Check) ->
