@@ -477,4 +477,10 @@ get_invoice_by_external_id(ExternalID, #{woody_context := WoodyContext} = Contex
     end.
 
 mask_invoice_notfound(Resolution) ->
+    % ED-206
+    % When bouncer says "forbidden" we can't really tell the difference between "forbidden because
+    % of no such invoice", "forbidden because client has no access to it" and "forbidden because
+    % client has no permission to act on it". From the point of view of existing integrations this
+    % is not great, so we have to mask specific instances of missing authorization as if specified
+    % invoice is nonexistent.
     capi_handler:respond_if_forbidden(Resolution, general_error(404, <<"Invoice not found">>)).
