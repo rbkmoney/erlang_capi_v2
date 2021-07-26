@@ -152,10 +152,6 @@ handle_function_(OperationID, Req, SwagContext0, HandlerOpts) ->
             allowed ->
                 Process();
             forbidden ->
-                _ = logger:info("Authorization failed"),
-                {ok, {401, #{}, undefined}};
-            {forbidden, Error} ->
-                _ = logger:info("Authorization failed due to ~p", [Error]),
                 {ok, {401, #{}, undefined}}
         end
     catch

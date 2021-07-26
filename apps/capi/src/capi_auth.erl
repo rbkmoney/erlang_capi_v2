@@ -30,10 +30,7 @@
         auth_data => tk_auth_data:auth_data()
     }}.
 
--type resolution() ::
-    allowed
-    | forbidden
-    | {forbidden, _Reason}.
+-type resolution() :: allowed | forbidden.
 
 -type consumer() :: capi_auth_legacy:consumer().
 
