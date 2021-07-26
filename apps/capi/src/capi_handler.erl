@@ -10,6 +10,7 @@
 -export([handle_request/4]).
 -export([respond/1]).
 -export([respond_if_undefined/2]).
+-export([respond_if_forbidden/2]).
 
 %%
 
@@ -198,6 +199,13 @@ respond_if_undefined(undefined, Response) ->
     respond(Response);
 respond_if_undefined(_, _Response) ->
     ok.
+
+-spec respond_if_forbidden(Resolution, response()) -> Resolution | throw(response()) when
+    Resolution :: capi_auth:resolution().
+respond_if_forbidden(forbidden, Response) ->
+    respond(Response);
+respond_if_forbidden(allowed, _Response) ->
+    allowed.
 
 %%
 
