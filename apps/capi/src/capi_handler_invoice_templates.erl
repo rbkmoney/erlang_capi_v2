@@ -7,7 +7,11 @@
 
 -export([prepare/3]).
 
--import(capi_handler_utils, [general_error/2, logic_error/2]).
+-import(capi_handler_utils, [
+    general_error/2,
+    logic_error/2,
+    map_service_result/1
+]).
 
 -spec prepare(
     OperationID :: capi_handler:operation_id(),
@@ -63,23 +67,13 @@ prepare('CreateInvoiceTemplate' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('GetInvoiceTemplateByID' = OperationID, Req, Context) ->
     InvoiceTemplateID = maps:get('invoiceTemplateID', Req),
-    InvoiceTpl =
-        case get_invoice_template(InvoiceTemplateID, Context) of
-            {ok, Result} ->
-                Result;
-            {exception, E} when
-                E == #payproc_InvalidUser{};
-                E == #payproc_InvoiceTemplateNotFound{};
-                E == #payproc_InvoiceTemplateRemoved{}
-            ->
-                undefined
-        end,
+    InvoiceTpl = map_service_result(get_invoice_template(InvoiceTemplateID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{invoice_template => InvoiceTemplateID, id => OperationID}},
             {payproc, #{invoice_template => InvoiceTpl}}
         ],
-        Resolution = capi_auth:authorize_operation(Prototypes, Context),
+        Resolution = mask_invoice_template_notfound(capi_auth:authorize_operation(Prototypes, Context)),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -89,22 +83,10 @@ prepare('GetInvoiceTemplateByID' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('UpdateInvoiceTemplate' = OperationID, Req, Context) ->
     InvoiceTemplateID = maps:get('invoiceTemplateID', Req),
-    InvoiceTpl =
-        case get_invoice_template(InvoiceTemplateID, Context) of
-            {ok, Result} ->
-                Result;
-            {exception, E} when
-                E == #payproc_InvalidUser{};
-                E == #payproc_InvoiceTemplateNotFound{};
-                E == #payproc_InvoiceTemplateRemoved{}
-            ->
-                undefined
-        end,
     Authorize = fun() ->
-        InvoiceTemplateID = maps:get('invoiceTemplateID', Req),
         Prototypes = [
             {operation, #{invoice_template => InvoiceTemplateID, id => OperationID}},
-            {payproc, #{invoice_template => InvoiceTpl}}
+            {payproc, #{invoice_template => InvoiceTemplateID}}
         ],
         Resolution = capi_auth:authorize_operation(Prototypes, Context),
         {ok, Resolution}
@@ -180,13 +162,7 @@ prepare('DeleteInvoiceTemplate' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
     InvoiceTplID = maps:get('invoiceTemplateID', Req),
-    InvoiceTpl =
-        case get_invoice_template(InvoiceTplID, Context) of
-            {ok, Result} ->
-                Result;
-            {exception, _Exception} ->
-                undefined
-        end,
+    InvoiceTpl = map_service_result(get_invoice_template(InvoiceTplID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{invoice_template => InvoiceTplID, id => OperationID}},
@@ -239,19 +215,13 @@ prepare('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('GetInvoicePaymentMethodsByTemplateID' = OperationID, Req, Context) ->
     InvoiceTemplateID = maps:get('invoiceTemplateID', Req),
-    InvoiceTemplate =
-        case get_invoice_template(InvoiceTemplateID, Context) of
-            {ok, Result} ->
-                Result;
-            {exception, _Exception} ->
-                undefined
-        end,
+    InvoiceTemplate = map_service_result(get_invoice_template(InvoiceTemplateID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{invoice_template => InvoiceTemplateID, id => OperationID}},
             {payproc, #{invoice_template => InvoiceTemplate}}
         ],
-        Resolution = capi_auth:authorize_operation(Prototypes, Context),
+        Resolution = mask_invoice_template_notfound(capi_auth:authorize_operation(Prototypes, Context)),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -276,6 +246,15 @@ prepare('GetInvoicePaymentMethodsByTemplateID' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
+
+mask_invoice_template_notfound(Resolution) ->
+    % ED-206
+    % When bouncer says "forbidden" we can't really tell the difference between "forbidden because
+    % of no such invoice teplate", "forbidden because client has no access to it" and "forbidden
+    % because client has no permission to act on it". From the point of view of existing integrations
+    % this is not great, so we have to mask specific instances of missing authorization as if
+    % specified invoice template is nonexistent.
+    capi_handler:respond_if_forbidden(Resolution, general_error(404, <<"Invoice template not found">>)).
 
 %%
 
