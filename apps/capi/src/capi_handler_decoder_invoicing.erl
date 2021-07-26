@@ -139,7 +139,6 @@ decode_payment(InvoiceID, Payment, Context) ->
             <<"externalID">> => Payment#domain_InvoicePayment.external_id,
             <<"invoiceID">> => InvoiceID,
             <<"createdAt">> => Payment#domain_InvoicePayment.created_at,
-            % TODO whoops, nothing to get it from yet
             <<"flow">> => decode_flow(Payment#domain_InvoicePayment.flow),
             <<"amount">> => Amount,
             <<"currency">> => capi_handler_decoder_utils:decode_currency(Currency),
