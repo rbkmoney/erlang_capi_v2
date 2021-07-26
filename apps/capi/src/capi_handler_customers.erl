@@ -6,7 +6,11 @@
 
 -export([prepare/3]).
 
--import(capi_handler_utils, [general_error/2, logic_error/2]).
+-import(capi_handler_utils, [
+    general_error/2,
+    logic_error/2,
+    map_service_result/1
+]).
 
 -spec prepare(
     OperationID :: capi_handler:operation_id(),
@@ -51,32 +55,29 @@ prepare('CreateCustomer' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('GetCustomerById' = OperationID, Req, Context) ->
     CustomerID = maps:get('customerID', Req),
-    CustomerReply = get_customer_by_id(CustomerID, Context),
+    Customer = map_service_result(get_customer_by_id(CustomerID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, customer => CustomerID}},
-            {payproc, #{customer => maybe_woody_reply(CustomerReply)}}
+            {payproc, #{customer => Customer}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+        {ok, mask_customer_notfound(capi_auth:authorize_operation(Prototypes, Context))}
     end,
     Process = fun() ->
-        case CustomerReply of
-            {ok, Customer} ->
+        case Customer of
+            #payproc_Customer{} ->
                 {ok, {200, #{}, decode_customer(Customer)}};
-            {exception, #payproc_InvalidUser{}} ->
-                {ok, general_error(404, <<"Customer not found">>)};
-            {exception, #payproc_CustomerNotFound{}} ->
+            undefined ->
                 {ok, general_error(404, <<"Customer not found">>)}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare('DeleteCustomer' = OperationID, Req, Context) ->
     CustomerID = maps:get('customerID', Req),
-    CustomerReply = get_customer_by_id(CustomerID, Context),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, customer => CustomerID}},
-            {payproc, #{customer => maybe_woody_reply(CustomerReply)}}
+            {payproc, #{customer => CustomerID}}
         ],
         {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
@@ -98,22 +99,20 @@ prepare('DeleteCustomer' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('CreateCustomerAccessToken' = OperationID, Req, Context) ->
     CustomerID = maps:get('customerID', Req),
-    CustomerReply = get_customer_by_id(CustomerID, Context),
+    Customer = map_service_result(get_customer_by_id(CustomerID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, customer => CustomerID}},
-            {payproc, #{customer => maybe_woody_reply(CustomerReply)}}
+            {payproc, #{customer => Customer}}
         ],
         {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
-        case CustomerReply of
-            {ok, #payproc_Customer{owner_id = PartyID}} ->
+        case Customer of
+            #payproc_Customer{owner_id = PartyID} ->
                 Response = capi_handler_utils:issue_access_token(PartyID, {customer, CustomerID}),
                 {ok, {201, #{}, Response}};
-            {exception, #payproc_InvalidUser{}} ->
-                {ok, general_error(404, <<"Customer not found">>)};
-            {exception, #payproc_CustomerNotFound{}} ->
+            undefined ->
                 {ok, general_error(404, <<"Customer not found">>)}
         end
     end,
@@ -180,21 +179,19 @@ prepare('CreateBinding' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('GetBindings' = OperationID, Req, Context) ->
     CustomerID = maps:get(customerID, Req),
-    CustomerReply = get_customer_by_id(CustomerID, Context),
+    Customer = map_service_result(get_customer_by_id(CustomerID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, customer => CustomerID}},
-            {payproc, #{customer => maybe_woody_reply(CustomerReply)}}
+            {payproc, #{customer => Customer}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+        {ok, mask_customer_notfound(capi_auth:authorize_operation(Prototypes, Context))}
     end,
     Process = fun() ->
-        case CustomerReply of
-            {ok, #payproc_Customer{bindings = Bindings}} ->
+        case Customer of
+            #payproc_Customer{bindings = Bindings} ->
                 {ok, {200, #{}, [decode_customer_binding(B, Context) || B <- Bindings]}};
-            {exception, #payproc_InvalidUser{}} ->
-                {ok, general_error(404, <<"Customer not found">>)};
-            {exception, #payproc_CustomerNotFound{}} ->
+            undefined ->
                 {ok, general_error(404, <<"Customer not found">>)}
         end
     end,
@@ -202,26 +199,24 @@ prepare('GetBindings' = OperationID, Req, Context) ->
 prepare('GetBinding' = OperationID, Req, Context) ->
     CustomerID = maps:get(customerID, Req),
     CustomerBindingID = maps:get(customerBindingID, Req),
-    CustomerReply = get_customer_by_id(CustomerID, Context),
+    Customer = map_service_result(get_customer_by_id(CustomerID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, customer => CustomerID, binding => CustomerBindingID}},
-            {payproc, #{customer => maybe_woody_reply(CustomerReply)}}
+            {payproc, #{customer => Customer}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+        {ok, mask_customer_notfound(capi_auth:authorize_operation(Prototypes, Context))}
     end,
     Process = fun() ->
-        case CustomerReply of
-            {ok, #payproc_Customer{bindings = Bindings}} ->
+        case Customer of
+            #payproc_Customer{bindings = Bindings} ->
                 case lists:keyfind(CustomerBindingID, #payproc_CustomerBinding.id, Bindings) of
                     #payproc_CustomerBinding{} = B ->
                         {ok, {200, #{}, decode_customer_binding(B, Context)}};
                     false ->
                         {ok, general_error(404, <<"Customer binding not found">>)}
                 end;
-            {exception, #payproc_InvalidUser{}} ->
-                {ok, general_error(404, <<"Customer not found">>)};
-            {exception, #payproc_CustomerNotFound{}} ->
+            undefined ->
                 {ok, general_error(404, <<"Customer not found">>)}
         end
     end,
@@ -233,7 +228,7 @@ prepare('GetCustomerEvents' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, customer => CustomerID}},
             {payproc, #{customer => CustomerID}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+        {ok, mask_customer_notfound(capi_auth:authorize_operation(Prototypes, Context))}
     end,
     Process = fun() ->
         GetterFun = fun(Range) ->
@@ -266,14 +261,18 @@ prepare(_OperationID, _Req, _Context) ->
 
 %%
 
-maybe_woody_reply({ok, Reply}) ->
-    Reply;
-maybe_woody_reply({exception, _}) ->
-    undefined.
-
 get_customer_by_id(CustomerID, Context) ->
     EventRange = #payproc_EventRange{},
     capi_handler_utils:service_call({customer_management, 'Get', {CustomerID, EventRange}}, Context).
+
+mask_customer_notfound(Resolution) ->
+    % ED-206
+    % When bouncer says "forbidden" we can't really tell the difference between "forbidden because
+    % of no such customer", "forbidden because client has no access to it" and "forbidden because
+    % client has no permission to act on it". From the point of view of existing integrations this
+    % is not great, so we have to mask specific instances of missing authorization as if specified
+    % customer is nonexistent.
+    capi_handler:respond_if_forbidden(Resolution, general_error(404, <<"Customer not found">>)).
 
 generate_customer_id(OperationID, PartyID, CustomerParams, #{woody_context := WoodyContext}) ->
     ExternalID = maps:get(<<"externalID">>, CustomerParams, undefined),
