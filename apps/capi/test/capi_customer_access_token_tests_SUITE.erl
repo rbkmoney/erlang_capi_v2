@@ -84,7 +84,7 @@ init_per_group(operations_by_customer_access_token_after_customer_creation, Conf
     ),
     _ = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:api_key_handler(?STRING), MockServiceSup),
     _ = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), MockServiceSup),
-    {ok, Token} = capi_ct_helper:issue_token([{[customers], write}], unlimited),
+    Token = capi_ct_helper:issue_token(unlimited),
     Req = #{
         <<"shopID">> => ?STRING,
         <<"contactInfo">> => #{<<"email">> => <<"bla@bla.ru">>},
@@ -108,7 +108,7 @@ init_per_group(operations_by_customer_access_token_after_token_creation, Config)
     _ = capi_ct_helper:mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], MockServiceSup),
     _ = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:api_key_handler(?STRING), MockServiceSup),
     _ = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), MockServiceSup),
-    {ok, Token} = capi_ct_helper:issue_token([{[customers], write}], unlimited),
+    Token = capi_ct_helper:issue_token(unlimited),
     {ok, #{<<"payload">> := CustAccToken}} = capi_client_customers:create_customer_access_token(
         capi_ct_helper:get_context(Token),
         ?STRING

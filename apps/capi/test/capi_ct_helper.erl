@@ -10,12 +10,11 @@
 -export([start_app/2]).
 -export([start_capi/1]).
 -export([start_capi/2]).
+-export([issue_token/1]).
 -export([issue_token/2]).
 -export([issue_token/3]).
--export([issue_token/4]).
 -export([get_context/1]).
 -export([get_context/2]).
--export([get_context/3]).
 -export([get_keysource/2]).
 -export([start_mocked_service_sup/1]).
 -export([stop_mocked_service_sup/1]).
@@ -122,57 +121,44 @@ start_capi(Config, ExtraEnv) ->
 get_keysource(Key, Config) ->
     filename:join(?config(data_dir, Config), Key).
 
--spec issue_token(_, _) ->
-    {ok, binary()}
-    | {error, nonexistent_signee}.
-issue_token(ACL, LifeTime) ->
-    issue_token(ACL, LifeTime, #{}).
+-spec issue_token(uac_authorizer_jwt:expiration()) -> binary().
+issue_token(LifeTime) ->
+    issue_token(LifeTime, #{}).
 
--spec issue_token(_, _, _) ->
-    {ok, binary()}
-    | {error, nonexistent_signee}.
-issue_token(ACL, LifeTime, ExtraProperties) ->
+-spec issue_token(uac_authorizer_jwt:expiration(), uac_authorizer_jwt:claims()) -> binary().
+issue_token(LifeTime, ExtraProperties) ->
     % ugly
-    issue_token(?STRING, ACL, LifeTime, ExtraProperties).
+    issue_token(?STRING, LifeTime, ExtraProperties).
 
--spec issue_token(_, _, _, _) ->
-    {ok, binary()}
-    | {error, nonexistent_signee}.
-issue_token(PartyID, ACL, LifeTime, ExtraProperties) ->
+-spec issue_token(_SubjectID, uac_authorizer_jwt:expiration(), uac_authorizer_jwt:claims()) -> binary().
+issue_token(PartyID, LifeTime, ExtraProperties) ->
     Claims = maps:merge(
         #{
             ?STRING => ?STRING,
             <<"exp">> => LifeTime,
-            <<"email">> => <<"bla@bla.ru">>,
-            <<"resource_access">> => #{
-                <<"common-api">> => uac_acl:from_list(ACL)
-            }
+            <<"email">> => <<"bla@bla.ru">>
         },
         ExtraProperties
     ),
-    uac_authorizer_jwt:issue(
+    {ok, Token} = uac_authorizer_jwt:issue(
         capi_utils:get_unique_id(),
         PartyID,
         Claims,
         capi
-    ).
+    ),
+    Token.
 
 -spec get_context(binary()) -> capi_client_lib:context().
 get_context(Token) ->
-    get_context(Token, #{}).
+    get_context(Token, undefined).
 
--spec get_context(binary(), map()) -> capi_client_lib:context().
-get_context(Token, ExtraProperties) ->
-    capi_client_lib:get_context(?CAPI_URL, Token, 10000, ipv4, ExtraProperties).
-
--spec get_context(binary(), map(), binary()) -> capi_client_lib:context().
-get_context(Token, ExtraProperties, Deadline) ->
+-spec get_context(binary(), capi_client_lib:deadline()) -> capi_client_lib:context().
+get_context(Token, Deadline) ->
     capi_client_lib:get_context(
         ?CAPI_URL,
         Token,
         10000,
         ipv4,
-        ExtraProperties,
         capi_client_lib:default_event_handler(),
         Deadline
     ).
