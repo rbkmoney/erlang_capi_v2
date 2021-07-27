@@ -22,10 +22,6 @@
     deadline_relative_ok_test/1
 ]).
 
--define(CAPI_PORT, 8080).
--define(CAPI_HOST_NAME, "localhost").
--define(CAPI_URL, ?CAPI_HOST_NAME ++ ":" ++ integer_to_list(?CAPI_PORT)).
-
 -define(badresp(Code), {error, {invalid_response_code, Code}}).
 
 -type test_case_name() :: atom().
