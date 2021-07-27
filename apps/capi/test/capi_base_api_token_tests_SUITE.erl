@@ -321,8 +321,7 @@ init_per_group(auth_by_user_session_token, Config) ->
     Apps = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
     [{group_apps, Apps}, {group_test_sup, SupPid} | Config];
 init_per_group(operations_by_base_api_token, Config) ->
-    {ok, Token} = capi_ct_helper:issue_token([], unlimited),
-    [{context, capi_ct_helper:get_context(Token)} | Config];
+    [{context, capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited))} | Config];
 init_per_group(_, Config) ->
     Config.
 

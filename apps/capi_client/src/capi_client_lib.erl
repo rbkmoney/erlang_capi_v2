@@ -1,8 +1,8 @@
 -module(capi_client_lib).
 
+-export([get_context/4]).
 -export([get_context/5]).
 -export([get_context/6]).
--export([get_context/7]).
 
 -export([handle_response/1]).
 -export([make_request/2]).
@@ -16,8 +16,7 @@
     timeout := integer(),
     event_handler := event_handler(),
     protocol := protocol(),
-    deadline := iodata() | undefined,
-    extra_properties := map()
+    deadline := iodata() | undefined
 }.
 
 -export_type([context/0]).
@@ -108,24 +107,23 @@ handle_response(Code, _, Body) when Code div 100 == 2 ->
 handle_response(Code, _, Body) ->
     {error, {Code, Body}}.
 
--spec get_context(string(), term(), integer(), protocol(), map()) -> context().
-get_context(Url, Token, Timeout, Protocol, ExtraProperties) ->
-    get_context(Url, Token, Timeout, Protocol, ExtraProperties, default_event_handler()).
+-spec get_context(string(), term(), integer(), protocol()) -> context().
+get_context(Url, Token, Timeout, Protocol) ->
+    get_context(Url, Token, Timeout, Protocol, default_event_handler()).
 
--spec get_context(string(), term(), integer(), protocol(), map(), event_handler()) -> context().
-get_context(Url, Token, Timeout, Protocol, ExtraProperties, EventHandler) ->
-    get_context(Url, Token, Timeout, Protocol, ExtraProperties, EventHandler, undefined).
+-spec get_context(string(), term(), integer(), protocol(), event_handler()) -> context().
+get_context(Url, Token, Timeout, Protocol, EventHandler) ->
+    get_context(Url, Token, Timeout, Protocol, EventHandler, undefined).
 
--spec get_context(string(), term(), integer(), protocol(), map(), event_handler(), iodata() | undefined) -> context().
-get_context(Url, Token, Timeout, Protocol, ExtraProperties, EventHandler, Deadline) ->
+-spec get_context(string(), term(), integer(), protocol(), event_handler(), iodata() | undefined) -> context().
+get_context(Url, Token, Timeout, Protocol, EventHandler, Deadline) ->
     #{
         url => Url,
         token => Token,
         timeout => Timeout,
         protocol => Protocol,
         event_handler => EventHandler,
-        deadline => Deadline,
-        extra_properties => ExtraProperties
+        deadline => Deadline
     }.
 
 -spec default_event_handler() -> event_handler().

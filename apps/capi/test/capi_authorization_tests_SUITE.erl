@@ -148,7 +148,7 @@ authorization_error_no_header_test(_Config) ->
 
 -spec authorization_error_no_permission_test(config()) -> _.
 authorization_error_no_permission_test(_Config) ->
-    {ok, Token} = capi_ct_helper:issue_token([], 4102444800),
+    Token = capi_ct_helper:issue_token(unlimited),
     ?emptyresp(401) = capi_client_parties:get_my_party(capi_ct_helper:get_context(Token)).
 
 -spec authorization_bad_token_error_test(config()) -> _.

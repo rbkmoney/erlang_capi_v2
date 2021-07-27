@@ -2,7 +2,6 @@
 
 -include_lib("common_test/include/ct.hrl").
 
--include_lib("damsel/include/dmsl_domain_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 
@@ -70,25 +69,10 @@ end_per_suite(C) ->
 
 -spec init_per_group(group_name(), config()) -> config().
 init_per_group(deadline_header, Config) ->
-    BasePermissions = [
-        {[invoices], write},
-        {[invoices], read},
-        {[party], write},
-        {[party], read},
-        {[invoices, payments], write},
-        {[invoices, payments], read},
-        {[customers], write},
-        {[payouts], write},
-        {[payouts], read}
-    ],
-    {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
-    {ok, Token2} = capi_ct_helper:issue_token(BasePermissions, unlimited),
-    Context = capi_ct_helper:get_context(Token),
-    Config2 = [{context_with_relative_deadline, get_context(Token2, <<"3s">>)} | Config],
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
     Apps1 = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
     Apps2 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    [{context_with_absolute_deadline, Context}, {group_apps, Apps1 ++ Apps2}, {group_test_sup, SupPid} | Config2];
+    [{group_apps, Apps1 ++ Apps2}, {group_test_sup, SupPid} | Config];
 init_per_group(_, Config) ->
     Config.
 
@@ -110,13 +94,12 @@ end_per_testcase(_Name, C) ->
 
 -spec deadline_error_test(config()) -> _.
 deadline_error_test(_Config) ->
-    % 01/01/2100 @ 12:00am (UTC)
-    {ok, Token} = capi_ct_helper:issue_token([], 4102444800),
-    {error, {400, _}} = capi_client_categories:get_categories(get_context(Token, <<"blabla">>)).
+    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited), <<"blabla">>),
+    {error, {400, _}} = capi_client_categories:get_categories(Context).
 
 -spec deadline_absolute_ok_test(config()) -> _.
 deadline_absolute_ok_test(Config) ->
-    Context = ?config(context_with_absolute_deadline, Config),
+    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited)),
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Get', _) ->
@@ -135,7 +118,8 @@ deadline_absolute_ok_test(Config) ->
 
 -spec deadline_relative_ok_test(config()) -> _.
 deadline_relative_ok_test(Config) ->
-    Context = ?config(context_with_relative_deadline, Config),
+    DeadlineRelative = <<"3s">>,
+    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited), DeadlineRelative),
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Get', _) ->
@@ -147,7 +131,3 @@ deadline_relative_ok_test(Config) ->
     ),
     ?badresp(504) = capi_client_invoices:get_invoice_by_id(Context, ?STRING),
     {ok, _} = capi_client_categories:get_categories(Context).
-
-get_context(Token, Deadline) ->
-    DefEvtHandler = capi_client_lib:default_event_handler(),
-    capi_client_lib:get_context(?CAPI_URL, Token, 10000, ipv4, #{}, DefEvtHandler, Deadline).
