@@ -110,11 +110,9 @@ deadline_absolute_ok_test(Config) ->
         Config
     ),
     Deadline = woody_deadline:from_timeout(3000),
-    BinDeadline = woody_deadline:to_binary(Deadline),
-    ?badresp(504) = capi_client_invoices:get_invoice_by_id(Context#{deadline => BinDeadline}, ?STRING),
+    ?badresp(504) = capi_client_invoices:get_invoice_by_id(Context#{deadline => Deadline}, ?STRING),
     Deadline2 = woody_deadline:from_timeout(3000),
-    BinDeadline2 = woody_deadline:to_binary(Deadline2),
-    {ok, _} = capi_client_categories:get_categories(Context#{deadline => BinDeadline2}).
+    {ok, _} = capi_client_categories:get_categories(Context#{deadline => Deadline2}).
 
 -spec deadline_relative_ok_test(config()) -> _.
 deadline_relative_ok_test(Config) ->

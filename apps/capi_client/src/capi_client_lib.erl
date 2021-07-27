@@ -10,15 +10,18 @@
 -export([make_search_query_string/1]).
 -export([default_event_handler/0]).
 
+-type deadline() :: iodata() | woody_deadline:deadline() | undefined.
+
 -type context() :: #{
     url := string(),
     token := term(),
     timeout := integer(),
     event_handler := event_handler(),
     protocol := protocol(),
-    deadline := iodata() | undefined
+    deadline := deadline()
 }.
 
+-export_type([deadline/0]).
 -export_type([context/0]).
 
 -type event_handler() :: fun((event_type(), code(), duration()) -> ok).
@@ -163,6 +166,8 @@ x_request_id_header() ->
 -spec x_request_deadline_header(iodata() | undefined, list()) -> list().
 x_request_deadline_header(undefined, Headers) ->
     Headers;
+x_request_deadline_header(WoodyDeadline = {_, _}, Headers) ->
+    [{<<"X-Request-Deadline">>, woody_deadline:to_binary(WoodyDeadline)} | Headers];
 x_request_deadline_header(Time, Headers) ->
     [{<<"X-Request-Deadline">>, Time} | Headers].
 

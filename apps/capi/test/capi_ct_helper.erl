@@ -149,7 +149,7 @@ issue_token(PartyID, LifeTime, ExtraProperties) ->
 get_context(Token) ->
     get_context(Token, undefined).
 
--spec get_context(binary(), binary()) -> capi_client_lib:context().
+-spec get_context(binary(), capi_client_lib:deadline()) -> capi_client_lib:context().
 get_context(Token, Deadline) ->
     capi_client_lib:get_context(
         ?CAPI_URL,
