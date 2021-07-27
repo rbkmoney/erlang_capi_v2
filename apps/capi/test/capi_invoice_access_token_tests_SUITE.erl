@@ -103,7 +103,7 @@ end_per_suite(C) ->
 init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
     ExtraProperties = #{<<"ip_replacement_allowed">> => true},
-    {ok, Token} = capi_ct_helper:issue_token([{[invoices], write}], unlimited, ExtraProperties),
+    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited, ExtraProperties)),
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end},
@@ -124,12 +124,12 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
     },
     {ok, #{
         <<"invoiceAccessToken">> := #{<<"payload">> := InvAccToken}
-    }} = capi_client_invoices:create_invoice(capi_ct_helper:get_context(Token, ExtraProperties), Req),
+    }} = capi_client_invoices:create_invoice(Context, Req),
     capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
     [{context, capi_ct_helper:get_context(InvAccToken)} | Config];
 init_per_group(operations_by_invoice_access_token_after_token_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    {ok, Token} = capi_ct_helper:issue_token([{[invoices], write}], unlimited),
+    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited)),
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end},
@@ -145,10 +145,7 @@ init_per_group(operations_by_invoice_access_token_after_token_creation, Config) 
         ?STRING,
         MockServiceSup
     ),
-    {ok, #{<<"payload">> := InvAccToken}} = capi_client_invoices:create_invoice_access_token(
-        capi_ct_helper:get_context(Token),
-        ?STRING
-    ),
+    {ok, #{<<"payload">> := InvAccToken}} = capi_client_invoices:create_invoice_access_token(Context, ?STRING),
     capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
     [{context, capi_ct_helper:get_context(InvAccToken)} | Config];
 init_per_group(_, Config) ->

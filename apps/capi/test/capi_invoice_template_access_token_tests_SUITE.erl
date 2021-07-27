@@ -72,7 +72,7 @@ end_per_suite(C) ->
 -spec init_per_group(group_name(), config()) -> config().
 init_per_group(operations_by_invoice_template_access_token, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    {ok, Token} = capi_ct_helper:issue_token([{[party], write}], unlimited),
+    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited)),
     _ = capi_ct_helper:mock_services(
         [
             {invoice_templating, fun('Create', _) -> {ok, ?INVOICE_TPL} end},
@@ -104,7 +104,7 @@ init_per_group(operations_by_invoice_template_access_token, Config) ->
     },
     {ok, #{
         <<"invoiceTemplateAccessToken">> := #{<<"payload">> := InvTemplAccToken}
-    }} = capi_client_invoice_templates:create(capi_ct_helper:get_context(Token), Req),
+    }} = capi_client_invoice_templates:create(Context, Req),
     capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
     [{context, capi_ct_helper:get_context(InvTemplAccToken)} | Config];
 init_per_group(_, Config) ->

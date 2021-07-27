@@ -162,48 +162,12 @@ all() ->
 groups() ->
     [
         {auth_by_api_key, [], [
-            {group, operations_by_base_api_token},
-            {group, operations_by_base_api_token_with_new_auth}
+            {group, operations_by_base_api_token}
         ]},
         {auth_by_user_session_token, [], [
-            {group, operations_by_base_api_token},
-            {group, operations_by_base_api_token_with_new_auth}
+            {group, operations_by_base_api_token}
         ]},
         {operations_by_base_api_token, [], [
-            get_merchant_payment_status_test,
-            update_invoice_template_ok_test,
-            delete_invoice_template_ok_test,
-            get_my_party_ok_test,
-            suspend_my_party_ok_test,
-            activate_my_party_ok_test,
-            get_shop_by_id_ok_test,
-            get_shops_ok_test,
-            activate_shop_ok_test,
-            suspend_shop_ok_test,
-
-            get_payment_conversion_stats_ok_test,
-            get_payment_revenue_stats_ok_test,
-            get_payment_geo_stats_ok_test,
-            get_payment_rate_stats_ok_test,
-            get_payment_method_stats_ok_test,
-            get_reports_ok_test,
-            get_reports_for_party_ok_test,
-            get_report_ok_test,
-            get_report_for_party_ok_test,
-            get_report_not_found_test,
-            create_report_ok_test,
-            create_report_for_party_ok_test,
-            download_report_file_ok_test,
-            download_report_file_for_party_ok_test,
-            download_report_file_not_found_test,
-            get_category_by_ref_ok_test,
-            get_schedule_by_ref_ok_test,
-            delete_customer_ok_test,
-
-            retrieve_payment_by_external_id_test,
-            check_no_invoice_by_external_id_test
-        ]},
-        {operations_by_base_api_token_with_new_auth, [], [
             create_customer_ok_test,
             create_customer_autorization_error_test,
             delete_customer_ok_test,
@@ -212,6 +176,7 @@ groups() ->
             create_invoice_ok_test,
             create_invoice_autorization_error_test,
             get_invoice_by_external_id,
+            check_no_invoice_by_external_id_test,
             create_invoice_access_token_ok_test,
             create_invoice_template_ok_test,
             create_invoice_template_autorization_error_test,
@@ -225,10 +190,13 @@ groups() ->
             get_my_party_lazy_creation_ok_test,
             suspend_my_party_ok_test,
             activate_my_party_ok_test,
-
             get_party_by_id_ok_test,
             suspend_party_by_id_ok_test,
             activate_party_by_id_ok_test,
+            get_shop_by_id_ok_test,
+            get_shops_ok_test,
+            activate_shop_ok_test,
+            suspend_shop_ok_test,
 
             get_locations_names_ok_test,
 
@@ -260,6 +228,7 @@ groups() ->
             activate_shop_for_party_error_test,
 
             create_payment_ok_test,
+            retrieve_payment_by_external_id_test,
             check_no_payment_by_external_id_test,
             create_refund,
             create_refund_blocked_error,
@@ -271,6 +240,7 @@ groups() ->
             get_refunds,
             get_refund_by_external_id,
             check_no_internal_id_for_external_id_test,
+            get_merchant_payment_status_test,
 
             get_payment_institutions,
             get_payment_institution_by_ref,
@@ -278,6 +248,8 @@ groups() ->
             get_payment_institution_payout_terms,
             get_payment_institution_payout_schedules,
 
+            get_category_by_ref_ok_test,
+            get_schedule_by_ref_ok_test,
             get_country_by_id_test,
             get_country_by_id_not_found_test,
             get_countries_test,
@@ -302,7 +274,23 @@ groups() ->
             search_invoices_ok_test,
             search_payments_ok_test,
             search_refunds_ok_test,
-            search_payouts_ok_test
+            search_payouts_ok_test,
+
+            get_payment_conversion_stats_ok_test,
+            get_payment_revenue_stats_ok_test,
+            get_payment_geo_stats_ok_test,
+            get_payment_rate_stats_ok_test,
+            get_payment_method_stats_ok_test,
+            get_reports_ok_test,
+            get_reports_for_party_ok_test,
+            get_report_ok_test,
+            get_report_for_party_ok_test,
+            get_report_not_found_test,
+            create_report_ok_test,
+            create_report_for_party_ok_test,
+            download_report_file_ok_test,
+            download_report_file_for_party_ok_test,
+            download_report_file_not_found_test
         ]},
         {payment_tool_token_support, [], [
             check_support_decrypt_v1_test,
@@ -333,13 +321,7 @@ init_per_group(auth_by_user_session_token, Config) ->
     Apps = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
     [{group_apps, Apps}, {group_test_sup, SupPid} | Config];
 init_per_group(operations_by_base_api_token, Config) ->
-    {ok, Token} = capi_ct_helper:issue_token([], unlimited),
-    SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    [{context, capi_ct_helper:get_context(Token)}, {subgroup_apps, Apps1}, {subgroup_test_sup, SupPid} | Config];
-init_per_group(operations_by_base_api_token_with_new_auth, Config) ->
-    {ok, Token} = capi_ct_helper:issue_token([], unlimited),
-    [{context, capi_ct_helper:get_context(Token)} | Config];
+    [{context, capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited))} | Config];
 init_per_group(_, Config) ->
     Config.
 
@@ -349,14 +331,9 @@ end_per_group(Group, C) when
     Group =:= auth_by_api_key;
     Group =:= auth_by_user_session_token
 ->
-    _ = capi_utils:maybe(?config(group_test_sup, C), fun capi_ct_helper:stop_mocked_service_sup/1),
-    ok;
-end_per_group(Group, C) when
-    Group =:= operations_by_base_api_token;
-    Group =:= operations_by_base_api_token_with_new_auth
-->
-    _ = capi_utils:maybe(?config(subgroup_test_sup, C), fun capi_ct_helper:stop_mocked_service_sup/1),
-    ok;
+    capi_utils:maybe(?config(group_test_sup, C), fun capi_ct_helper:stop_mocked_service_sup/1);
+end_per_group(operations_by_base_api_token, C) ->
+    capi_utils:maybe(?config(subgroup_test_sup, C), fun capi_ct_helper:stop_mocked_service_sup/1);
 end_per_group(_Group, _C) ->
     ok.
 
@@ -683,22 +660,6 @@ fulfill_invoice_ok_test(Config) ->
 
 -spec get_merchant_payment_status_test(config()) -> _.
 get_merchant_payment_status_test(Config) ->
-    {ok, #{
-        <<"status">> := <<"failed">>,
-        <<"error">> := #{
-            <<"code">> := <<"authorization_failed">>,
-            <<"subError">> := #{
-                <<"code">> := <<"payment_tool_rejected">>,
-                <<"subError">> := #{
-                    <<"code">> := <<"bank_card_rejected">>,
-                    <<"subError">> := #{<<"code">> := <<"cvv_invalid">>}
-                }
-            }
-        }
-    }} = get_failed_payment_with_invalid_cvv(Config).
-
--spec get_failed_payment_with_invalid_cvv(config()) -> _.
-get_failed_payment_with_invalid_cvv(Config) ->
     Failure =
         payproc_errors:construct(
             'PaymentFailure',
@@ -712,8 +673,23 @@ get_failed_payment_with_invalid_cvv(Config) ->
         ],
         Config
     ),
-    % mock_services([{invoicing, fun('GetPayment', _) -> {ok, ?PAYPROC_PAYMENT} end}], Config),
-    capi_client_payments:get_payment_by_id(?config(context, Config), ?STRING, ?STRING).
+    _ = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), Config),
+    ?assertMatch(
+        {ok, #{
+            <<"status">> := <<"failed">>,
+            <<"error">> := #{
+                <<"code">> := <<"authorization_failed">>,
+                <<"subError">> := #{
+                    <<"code">> := <<"payment_tool_rejected">>,
+                    <<"subError">> := #{
+                        <<"code">> := <<"bank_card_rejected">>,
+                        <<"subError">> := #{<<"code">> := <<"cvv_invalid">>}
+                    }
+                }
+            }
+        }},
+        capi_client_payments:get_payment_by_id(?config(context, Config), ?STRING, ?STRING)
+    ).
 
 -spec create_payment_ok_test(config()) -> _.
 create_payment_ok_test(Config) ->

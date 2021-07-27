@@ -123,7 +123,7 @@ end_per_suite(C) ->
 init_per_group(payment_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
     ExtraProperties = #{<<"ip_replacement_allowed">> => true},
-    {ok, Token} = capi_ct_helper:issue_token([{[invoices], write}], unlimited, ExtraProperties),
+    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited, ExtraProperties)),
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end},
@@ -150,7 +150,7 @@ init_per_group(payment_creation, Config) ->
         _
     } =
         with_feature_storage(fun() ->
-            capi_client_invoices:create_invoice(capi_ct_helper:get_context(Token, ExtraProperties), Req)
+            capi_client_invoices:create_invoice(Context, Req)
         end),
 
     capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
@@ -163,14 +163,18 @@ init_per_group(GroupName, Config) when
         GroupName =:= customer_creation orelse
         GroupName =:= invoice_with_template_creation
 ->
-    BasePermissions = base_permissions(),
-    {ok, Token} = capi_ct_helper:issue_token(BasePermissions, unlimited),
-    {ok, Token2} = capi_ct_helper:issue_token(<<"TEST2">>, BasePermissions, unlimited, #{}),
-    Config2 = [{context_with_diff_party, capi_ct_helper:get_context(Token2)} | Config],
+    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited)),
+    Context2 = capi_ct_helper:get_context(capi_ct_helper:issue_token(<<"TEST2">>, unlimited, #{})),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
     Apps1 = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
     Apps2 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    [{context, capi_ct_helper:get_context(Token)}, {group_apps, Apps1 ++ Apps2}, {group_test_sup, SupPid} | Config2];
+    [
+        {context_with_diff_party, Context2},
+        {context, Context},
+        {group_apps, Apps1 ++ Apps2},
+        {group_test_sup, SupPid}
+        | Config
+    ];
 init_per_group(_, Config) ->
     Config.
 
@@ -187,19 +191,6 @@ init_per_testcase(_Name, C) ->
 end_per_testcase(_Name, C) ->
     capi_ct_helper:stop_mocked_service_sup(?config(test_sup, C)),
     ok.
-
-base_permissions() ->
-    [
-        {[invoices], write},
-        {[invoices], read},
-        {[party], write},
-        {[party], read},
-        {[invoices, payments], write},
-        {[invoices, payments], read},
-        {[customers], write},
-        {[payouts], write},
-        {[payouts], read}
-    ].
 
 %% TESTS
 

@@ -2,7 +2,6 @@
 
 -include_lib("common_test/include/ct.hrl").
 
--include_lib("damsel/include/dmsl_domain_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 -include_lib("jose/include/jose_jwk.hrl").
 
@@ -18,11 +17,6 @@
 -export([init/1]).
 
 -export([
-    authorization_unlimited_lifetime_ok_test/1,
-    authorization_far_future_deadline_ok_test/1,
-    authorization_permission_ok_test/1,
-    authorization_negative_lifetime_error_test/1,
-    authorization_bad_deadline_error_test/1,
     authorization_error_no_header_test/1,
     authorization_error_no_permission_test/1,
     authorization_bad_token_error_test/1
@@ -50,11 +44,6 @@ all() ->
 groups() ->
     [
         {authorization, [], [
-            authorization_unlimited_lifetime_ok_test,
-            authorization_far_future_deadline_ok_test,
-            authorization_permission_ok_test,
-            authorization_negative_lifetime_error_test,
-            authorization_bad_deadline_error_test,
             authorization_error_no_header_test,
             authorization_error_no_permission_test,
             authorization_bad_token_error_test
@@ -102,45 +91,6 @@ end_per_testcase(_Name, C) ->
 
 %%% Tests
 
--spec authorization_unlimited_lifetime_ok_test(config()) -> _.
-authorization_unlimited_lifetime_ok_test(_Config) ->
-    {ok, Token} = capi_ct_helper:issue_token([], unlimited),
-    {ok, _} = capi_client_categories:get_categories(capi_ct_helper:get_context(Token)).
-
--spec authorization_far_future_deadline_ok_test(config()) -> _.
-authorization_far_future_deadline_ok_test(_Config) ->
-    % 01/01/2100 @ 12:00am (UTC)
-    {ok, Token} = capi_ct_helper:issue_token([], 4102444800),
-    {ok, _} = capi_client_categories:get_categories(capi_ct_helper:get_context(Token)).
-
--spec authorization_permission_ok_test(config()) -> _.
-authorization_permission_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services(
-        [
-            {party_management, fun
-                ('GetRevision', _) -> {ok, ?INTEGER};
-                ('Checkout', _) -> {ok, ?PARTY}
-            end}
-        ],
-        Config
-    ),
-    {ok, Token} = capi_ct_helper:issue_token([{[party], read}], unlimited),
-    {ok, _} = capi_client_parties:get_my_party(capi_ct_helper:get_context(Token)).
-
--spec authorization_negative_lifetime_error_test(config()) -> _.
-authorization_negative_lifetime_error_test(_Config) ->
-    ok.
-
-% {ok, Token} = capi_ct_helper:issue_token([], {lifetime, -10}),
-% ?emptyresp(401) = capi_client_categories:get_categories(capi_ct_helper:get_context(Token)).
-
--spec authorization_bad_deadline_error_test(config()) -> _.
-authorization_bad_deadline_error_test(_Config) ->
-    ok.
-
-% {ok, Token} = capi_ct_helper:issue_token([], {deadline, -10}),
-% ?emptyresp(401) = capi_client_categories:get_categories(capi_ct_helper:get_context(Token)).
-
 -spec authorization_error_no_header_test(config()) -> _.
 authorization_error_no_header_test(_Config) ->
     Token = <<>>,
@@ -148,7 +98,7 @@ authorization_error_no_header_test(_Config) ->
 
 -spec authorization_error_no_permission_test(config()) -> _.
 authorization_error_no_permission_test(_Config) ->
-    {ok, Token} = capi_ct_helper:issue_token([], 4102444800),
+    Token = capi_ct_helper:issue_token(unlimited),
     ?emptyresp(401) = capi_client_parties:get_my_party(capi_ct_helper:get_context(Token)).
 
 -spec authorization_bad_token_error_test(config()) -> _.
