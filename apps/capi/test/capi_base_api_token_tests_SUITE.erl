@@ -8,7 +8,7 @@
 -include_lib("damsel/include/dmsl_webhooker_thrift.hrl").
 -include_lib("damsel/include/dmsl_merch_stat_thrift.hrl").
 -include_lib("reporter_proto/include/reporter_reports_thrift.hrl").
--include_lib("damsel/include/dmsl_payout_processing_thrift.hrl").
+-include_lib("payout_manager_proto/include/payouts_payout_manager_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
 -include_lib("capi_bouncer_data.hrl").
 
@@ -1665,30 +1665,49 @@ get_payout_tool_by_id(Config) ->
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetPayoutToolByID">>, ?STRING, Config),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_RU),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?BANKID_US),
-    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?WALLET_TOOL).
+    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?WALLET_TOOL),
+    {ok, _} = capi_client_payouts:get_payout_tool_by_id(?config(context, Config), ?STRING, ?PI_ACCOUNT_TOOL).
 
 -spec get_payout_tool_by_id_for_party(config()) -> _.
 get_payout_tool_by_id_for_party(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetPayoutToolByIDForParty">>, ?STRING, Config),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id_for_party(
-        ?config(context, Config),
-        ?STRING,
-        ?STRING,
-        ?WALLET_TOOL
+        ?config(context, Config), ?STRING, ?STRING, ?WALLET_TOOL
+    ),
+    {ok, _} = capi_client_payouts:get_payout_tool_by_id_for_party(
+        ?config(context, Config), ?STRING, ?STRING, ?PI_ACCOUNT_TOOL
     ).
 
 -spec create_payout(config()) -> _.
 create_payout(Config) ->
-    Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, []),
-    _ = capi_ct_helper:mock_services([{payouts, fun('CreatePayout', _) -> {ok, Payout} end}], Config),
+    Payout = ?PAYOUT(?WALLET_TOOL),
+    _ = capi_ct_helper:mock_services(
+        [
+            {payouts, fun('CreatePayout', _) -> {ok, Payout} end},
+            {party_management, fun
+                ('GetShop', _) -> {ok, ?SHOP};
+                ('GetContract', _) -> {ok, ?CONTRACT}
+            end}
+        ],
+        Config
+    ),
     _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"CreatePayout">>, ?STRING, ?STRING, Config),
     {ok, _} = capi_client_payouts:create_payout(?config(context, Config), ?PAYOUT_PARAMS, ?STRING).
 
 -spec create_payout_autorization_error(config()) -> _.
 create_payout_autorization_error(Config) ->
-    Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, []),
-    _ = capi_ct_helper:mock_services([{payouts, fun('CreatePayout', _) -> {ok, Payout} end}], Config),
+    Payout = ?PAYOUT(?WALLET_TOOL),
+    _ = capi_ct_helper:mock_services(
+        [
+            {payouts, fun('CreatePayout', _) -> {ok, Payout} end},
+            {party_management, fun
+                ('GetShop', _) -> {ok, ?SHOP};
+                ('GetContract', _) -> {ok, ?CONTRACT}
+            end}
+        ],
+        Config
+    ),
     _ = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_forbidden(), Config),
     ?assertMatch(
         {error, {401, _}},
@@ -1701,8 +1720,17 @@ create_payout_autorization_error(Config) ->
 
 -spec get_payout(config()) -> _.
 get_payout(Config) ->
-    Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, [?PAYOUT_PROC_PAYOUT_SUMMARY_ITEM]),
-    _ = capi_ct_helper:mock_services([{payouts, fun('Get', _) -> {ok, Payout} end}], Config),
+    Payout = ?PAYOUT(?WALLET_TOOL),
+    _ = capi_ct_helper:mock_services(
+        [
+            {payouts, fun('GetPayout', _) -> {ok, Payout} end},
+            {party_management, fun
+                ('GetShop', _) -> {ok, ?SHOP};
+                ('GetContract', _) -> {ok, ?CONTRACT}
+            end}
+        ],
+        Config
+    ),
     _ = capi_ct_helper_bouncer:mock_assert_payout_op_ctx(
         <<"GetPayout">>,
         ?STRING,
@@ -1716,8 +1744,8 @@ get_payout(Config) ->
 -spec get_payout_fail(config()) -> _.
 get_payout_fail(Config) ->
     PartyID = <<"Wrong party id">>,
-    Payout = ?PAYOUT(?WALLET_PAYOUT_TYPE, PartyID, [?PAYOUT_PROC_PAYOUT_SUMMARY_ITEM]),
-    _ = capi_ct_helper:mock_services([{payouts, fun('Get', _) -> {ok, Payout} end}], Config),
+    Payout = ?PAYOUT(?WALLET_TOOL, PartyID),
+    _ = capi_ct_helper:mock_services([{payouts, fun('GetPayout', _) -> {ok, Payout} end}], Config),
     _ = capi_ct_helper_bouncer:mock_arbiter(
         ?assertContextMatches(
             #bctx_v1_ContextFragment{
