@@ -15,7 +15,6 @@
 -export([decode_residence/1]).
 -export([decode_payment_institution_ref/1]).
 -export([decode_disposable_payment_resource/1]).
--export([decode_payout_tool_params/2]).
 -export([decode_payout_tool_details/1]).
 -export([decode_payment_tool/1]).
 -export([decode_payment_tool_details/1]).
@@ -369,17 +368,7 @@ decode_client_info(ClientInfo) ->
         <<"ip">> => ClientInfo#domain_ClientInfo.ip_address
     }.
 
--spec decode_payout_tool_params(capi_handler_encoder:encode_data(), {atom(), _}) ->
-    capi_handler_decoder_utils:decode_data().
-decode_payout_tool_params(Currency, Info) ->
-    #{
-        <<"currency">> => capi_handler_decoder_utils:decode_currency(Currency),
-        <<"details">> => decode_payout_tool_details(Info)
-    }.
-
 -spec decode_payout_tool_details({atom(), _}) -> capi_handler_decoder_utils:decode_data().
-decode_payout_tool_details({bank_card, V}) ->
-    decode_bank_card_details(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankCard">>});
 decode_payout_tool_details({russian_bank_account, V}) ->
     decode_russian_bank_account(V, #{<<"detailsType">> => <<"PayoutToolDetailsBankAccount">>});
 decode_payout_tool_details({international_bank_account, V}) ->
@@ -388,6 +377,10 @@ decode_payout_tool_details({wallet_info, V}) ->
     #{
         <<"detailsType">> => <<"PayoutToolDetailsWalletInfo">>,
         <<"walletID">> => V#domain_WalletInfo.wallet_id
+    };
+decode_payout_tool_details({payment_institution_account, _V}) ->
+    #{
+        <<"detailsType">> => <<"PayoutToolDetailsPaymentInstitutionAccount">>
     }.
 
 decode_russian_bank_account(BankAccount, V) ->
