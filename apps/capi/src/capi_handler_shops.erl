@@ -89,10 +89,6 @@ prepare(OperationID = 'GetShopsForParty', Req, Context) ->
         {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
-        % TODO
-        % Here we're relying on hellgate ownership check, thus no explicit authorization.
-        % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
-        % remains authorized.
         case capi_party:get_party(PartyID, Context) of
             {ok, Party} ->
                 {ok, {200, #{}, decode_shops_map(Party#domain_Party.shops)}};
@@ -111,10 +107,6 @@ prepare(OperationID = 'GetShopByIDForParty', Req, Context) ->
         {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
-        % TODO
-        % Here we're relying on hellgate ownership check, thus no explicit authorization.
-        % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
-        % remains authorized.
         case capi_party:get_shop(PartyID, ShopID, Context) of
             {ok, Shop} ->
                 {ok, {200, #{}, decode_shop(Shop)}};
@@ -135,10 +127,6 @@ prepare(OperationID = 'ActivateShopForParty', Req, Context) ->
         {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
-        % TODO
-        % Here we're relying on hellgate ownership check, thus no explicit authorization.
-        % Hovewer we're going to drop hellgate authz eventually, then we'll need to make sure that operation
-        % remains authorized.
         case capi_party:activate_shop(PartyID, ShopID, Context) of
             ok ->
                 {ok, {204, #{}, undefined}};

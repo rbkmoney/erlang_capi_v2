@@ -1,6 +1,6 @@
 -module(capi_swagger_server).
 
--export([child_spec/1]).
+-export([child_spec/3]).
 
 -define(APP, capi).
 -define(DEFAULT_ACCEPTORS_POOLSIZE, 100).
@@ -8,16 +8,9 @@
 -define(DEFAULT_PORT, 8080).
 -define(RANCH_REF, ?MODULE).
 
--define(START_TIME_TAG, processing_start_time).
-
--type params() :: {
-    cowboy_router:routes(),
-    swag_server:logic_handler(_),
-    swag_server_router:swagger_handler_opts()
-}.
-
--spec child_spec(params()) -> supervisor:child_spec().
-child_spec({AdditionalRoutes, LogicHandler, SwaggerHandlerOpts}) ->
+-spec child_spec(cowboy_router:routes(), swag_server:logic_handler(_), swag_server_router:swagger_handler_opts()) ->
+    supervisor:child_spec().
+child_spec(AdditionalRoutes, LogicHandler, SwaggerHandlerOpts) ->
     {Transport, TransportOpts} = get_socket_transport(),
     CowboyOpts = get_cowboy_config(AdditionalRoutes, LogicHandler, SwaggerHandlerOpts),
     GsTimeout = genlib_app:env(?APP, graceful_shutdown_timeout, 5000),

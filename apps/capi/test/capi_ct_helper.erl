@@ -45,7 +45,10 @@ init_suite(Module, Config, CapiEnv) ->
             {
                 'Repository',
                 {dmsl_domain_config_thrift, 'Repository'},
-                fun('Checkout', _) -> {ok, ?SNAPSHOT} end
+                fun
+                    ('Checkout', _) -> {ok, ?SNAPSHOT};
+                    ('PullRange', _) -> {ok, #{}}
+                end
             }
         ],
         SupPid

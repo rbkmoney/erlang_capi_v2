@@ -17,7 +17,7 @@
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare(OperationID = 'CreatePayment', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    Invoice = map_result(get_invoice_by_id(InvoiceID, Context)),
+    Invoice = get_invoice_by_id(InvoiceID, Context),
     PaymentParams = maps:get('PaymentParams', Req),
     Authorize = fun() ->
         Prototypes = [
@@ -90,13 +90,13 @@ prepare(OperationID = 'CreatePayment', Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetPayments', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    Invoice = map_result(get_invoice_by_id(InvoiceID, Context)),
+    Invoice = get_invoice_by_id(InvoiceID, Context),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID}},
             {payproc, #{invoice => Invoice}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+        {ok, mask_invoice_notfound(capi_auth:authorize_operation(Prototypes, Context))}
     end,
     Process = fun() ->
         capi_handler:respond_if_undefined(Invoice, general_error(404, <<"Invoice not found">>)),
@@ -107,31 +107,30 @@ prepare(OperationID = 'GetPayments', Req, Context) ->
 prepare(OperationID = 'GetPaymentByID', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
-    Invoice = map_result(get_invoice_by_id(InvoiceID, Context)),
+    Invoice = get_invoice_by_id(InvoiceID, Context),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID}},
             {payproc, #{invoice => Invoice}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+        {ok, mask_invoice_notfound(capi_auth:authorize_operation(Prototypes, Context))}
     end,
     Process = fun() ->
         capi_handler:respond_if_undefined(Invoice, general_error(404, <<"Invoice not found">>)),
         case find_payment_by_id(PaymentID, Invoice) of
-            {ok, Payment} ->
+            Payment when Payment /= undefined ->
                 {ok, {200, #{}, decode_invoice_payment(InvoiceID, Payment, Context)}};
-            {error, payment_not_found} ->
+            undefined ->
                 {ok, general_error(404, <<"Payment not found">>)}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetPaymentByExternalID', Req, Context) ->
     ExternalID = maps:get(externalID, Req),
-    InternalID = map_result(get_payment_by_external_id(ExternalID, Context)),
-    Invoice = map_result(
-        maybe(InternalID, fun({InvoiceID, _}) ->
-            get_invoice_by_id(InvoiceID, Context)
-        end)
+    InternalID = get_payment_by_external_id(ExternalID, Context),
+    Invoice = maybe(
+        InternalID,
+        fun({InvoiceID, _}) -> get_invoice_by_id(InvoiceID, Context) end
     ),
 
     OperationPrototype = maybe(
@@ -146,17 +145,16 @@ prepare(OperationID = 'GetPaymentByExternalID', Req, Context) ->
             {operation, genlib:define(OperationPrototype, #{id => OperationID})},
             {payproc, #{invoice => Invoice}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+        {ok, mask_payment_notfound(capi_auth:authorize_operation(Prototypes, Context))}
     end,
     Process = fun() ->
         capi_handler:respond_if_undefined(InternalID, general_error(404, <<"Payment not found">>)),
         capi_handler:respond_if_undefined(Invoice, general_error(404, <<"Invoice not found">>)),
-
         {InvoiceID, PaymentID} = InternalID,
         case find_payment_by_id(PaymentID, Invoice) of
-            {ok, Payment} ->
+            Payment when Payment /= undefined ->
                 {ok, {200, #{}, decode_invoice_payment(InvoiceID, Payment, Context)}};
-            {error, payment_not_found} ->
+            undefined ->
                 {ok, general_error(404, <<"Payment not found">>)}
         end
     end,
@@ -164,7 +162,7 @@ prepare(OperationID = 'GetPaymentByExternalID', Req, Context) ->
 prepare(OperationID = 'CapturePayment', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
-    Invoice = map_result(get_invoice_by_id(InvoiceID, Context)),
+    Invoice = get_invoice_by_id(InvoiceID, Context),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID}},
@@ -231,11 +229,10 @@ prepare(OperationID = 'CapturePayment', Req, Context) ->
 prepare(OperationID = 'CancelPayment', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
-    Invoice = map_result(get_invoice_by_id(InvoiceID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID}},
-            {payproc, #{invoice => Invoice}}
+            {payproc, #{invoice => InvoiceID}}
         ],
         {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
@@ -351,24 +348,24 @@ prepare(OperationID = 'CreateRefund', Req, Context) ->
 prepare(OperationID = 'GetRefunds', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
-    Invoice = map_result(get_invoice_by_id(InvoiceID, Context)),
+    Invoice = get_invoice_by_id(InvoiceID, Context),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID}},
             {payproc, #{invoice => Invoice}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+        {ok, mask_invoice_notfound(capi_auth:authorize_operation(Prototypes, Context))}
     end,
     Process = fun() ->
         capi_handler:respond_if_undefined(Invoice, general_error(404, <<"Invoice not found">>)),
         case find_payment_by_id(PaymentID, Invoice) of
-            {ok, #payproc_InvoicePayment{refunds = Refunds}} ->
+            #payproc_InvoicePayment{refunds = Refunds} ->
                 {ok,
                     {200, #{}, [
                         capi_handler_decoder_invoicing:decode_refund(R, Context)
                      || #payproc_InvoicePaymentRefund{refund = R} <- Refunds
                     ]}};
-            {error, payment_not_found} ->
+            undefined ->
                 {ok, general_error(404, <<"Payment not found">>)}
         end
     end,
@@ -377,14 +374,14 @@ prepare(OperationID = 'GetRefundByID', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
     RefundID = maps:get(refundID, Req),
-    Invoice = map_result(get_invoice_by_id(InvoiceID, Context)),
-    Payment = map_result(find_payment_by_id(PaymentID, Invoice)),
+    Invoice = get_invoice_by_id(InvoiceID, Context),
+    Payment = find_payment_by_id(PaymentID, Invoice),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID, refund => RefundID}},
             {payproc, #{invoice => Invoice}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+        {ok, mask_invoice_notfound(capi_auth:authorize_operation(Prototypes, Context))}
     end,
 
     Process = fun() ->
@@ -392,44 +389,45 @@ prepare(OperationID = 'GetRefundByID', Req, Context) ->
         capi_handler:respond_if_undefined(Payment, general_error(404, <<"Payment not found">>)),
 
         case find_refund_by_id(RefundID, Payment) of
-            {ok, #payproc_InvoicePaymentRefund{refund = Refund}} ->
+            #payproc_InvoicePaymentRefund{refund = Refund} ->
                 {ok, {200, #{}, capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
-            {error, refund_not_found} ->
+            undefined ->
                 {ok, general_error(404, <<"Invoice payment refund not found">>)}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetRefundByExternalID', Req, Context) ->
     ExternalID = maps:get(externalID, Req),
-    InternalID = map_result(get_refund_by_external_id(ExternalID, Context)),
-    Invoice = map_result(
-        maybe(InternalID, fun({InvoiceID, _PaymentID, _RefundID}) ->
-            get_invoice_by_id(InvoiceID, Context)
-        end)
+    InternalID = get_refund_by_external_id(ExternalID, Context),
+    Invoice = maybe(
+        InternalID,
+        fun({InvoiceID, _PaymentID, _RefundID}) -> get_invoice_by_id(InvoiceID, Context) end
     ),
-    OperationPrototype = maybe(InternalID, fun({InvoiceID, PaymentID, RefundID}) ->
-        #{id => OperationID, invoice => InvoiceID, payment => PaymentID, refund => RefundID}
-    end),
+    OperationPrototype = maybe(
+        InternalID,
+        fun({InvoiceID, PaymentID, RefundID}) ->
+            #{id => OperationID, invoice => InvoiceID, payment => PaymentID, refund => RefundID}
+        end
+    ),
 
     Authorize = fun() ->
         Prototypes = [
             {operation, genlib:define(OperationPrototype, #{id => OperationID})},
             {payproc, #{invoice => Invoice}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+        {ok, mask_refund_notfound(capi_auth:authorize_operation(Prototypes, Context))}
     end,
 
     Process = fun() ->
         capi_handler:respond_if_undefined(InternalID, general_error(404, <<"Refund not found">>)),
         capi_handler:respond_if_undefined(Invoice, general_error(404, <<"Invoice not found">>)),
         {_InvoiceID, PaymentID, RefundID} = InternalID,
-        Payment = map_result(find_payment_by_id(PaymentID, Invoice)),
+        Payment = find_payment_by_id(PaymentID, Invoice),
         capi_handler:respond_if_undefined(Payment, general_error(404, <<"Payment not found">>)),
-
         case find_refund_by_id(RefundID, Payment) of
-            {ok, #payproc_InvoicePaymentRefund{refund = Refund}} ->
+            #payproc_InvoicePaymentRefund{refund = Refund} ->
                 {ok, {200, #{}, capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
-            {error, refund_not_found} ->
+            undefined ->
                 {ok, general_error(404, <<"Invoice payment refund not found">>)}
         end
     end,
@@ -437,7 +435,7 @@ prepare(OperationID = 'GetRefundByExternalID', Req, Context) ->
 prepare(OperationID = 'GetChargebacks', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
-    Invoice = map_result(get_invoice_by_id(InvoiceID, Context)),
+    Invoice = get_invoice_by_id(InvoiceID, Context),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID}},
@@ -451,9 +449,9 @@ prepare(OperationID = 'GetChargebacks', Req, Context) ->
             capi_handler_decoder_invoicing:decode_chargeback(C#payproc_InvoicePaymentChargeback.chargeback, Context)
         end,
         case find_payment_by_id(PaymentID, Invoice) of
-            {ok, #payproc_InvoicePayment{chargebacks = Chargebacks}} ->
+            #payproc_InvoicePayment{chargebacks = Chargebacks} ->
                 {ok, {200, #{}, [DecodeChargebackFun(C) || C <- Chargebacks]}};
-            {error, payment_not_found} ->
+            undefined ->
                 {ok, general_error(404, <<"Payment not found">>)}
         end
     end,
@@ -462,9 +460,8 @@ prepare(OperationID = 'GetChargebackByID', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
     ChargebackID = maps:get(chargebackID, Req),
-    Invoice = map_result(get_invoice_by_id(InvoiceID, Context)),
-    Payment = map_result(find_payment_by_id(PaymentID, Invoice)),
-
+    Invoice = get_invoice_by_id(InvoiceID, Context),
+    Payment = find_payment_by_id(PaymentID, Invoice),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID, payment => PaymentID}},
@@ -517,23 +514,13 @@ find_payment_by_id(PaymentID, #payproc_Invoice{payments = Payments}) ->
     Fun = fun(#payproc_InvoicePayment{payment = #domain_InvoicePayment{id = ID}}) ->
         PaymentID == ID
     end,
-    case find_by(Fun, genlib:define(Payments, [])) of
-        undefined ->
-            {error, payment_not_found};
-        Payment ->
-            {ok, Payment}
-    end.
+    find_by(Fun, genlib:define(Payments, [])).
 
 find_refund_by_id(RefundID, #payproc_InvoicePayment{refunds = Refunds}) ->
     Fun = fun(#payproc_InvoicePaymentRefund{refund = Refund}) ->
         Refund#domain_InvoicePaymentRefund.id == RefundID
     end,
-    case find_by(Fun, genlib:define(Refunds, [])) of
-        undefined ->
-            {error, refund_not_found};
-        Refund ->
-            {ok, Refund}
-    end.
+    find_by(Fun, genlib:define(Refunds, [])).
 
 find_chargeback_by_id(ChargebackID, #payproc_InvoicePayment{chargebacks = Chargebacks}) ->
     Fun = fun(#payproc_InvoicePaymentChargeback{chargeback = Chargeback}) ->
@@ -557,17 +544,12 @@ find_by(_, []) ->
 get_invoice_by_id(InvoiceID, Context) ->
     case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
         {ok, Invoice} ->
-            {ok, Invoice};
+            Invoice;
         {exception, #payproc_InvalidUser{}} ->
-            {error, invalid_user};
+            undefined;
         {exception, #payproc_InvoiceNotFound{}} ->
-            {error, invoice_not_found}
+            undefined
     end.
-
-map_result({ok, Value}) ->
-    Value;
-map_result(_) ->
-    undefined.
 
 decrypt_payer(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer) ->
     #{<<"paymentToolToken">> := Token} = Payer,
@@ -695,23 +677,22 @@ get_refund_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context
         {ok, RefundID, CtxData} ->
             InvoiceID = maps:get(<<"invoice_id">>, CtxData),
             PaymentID = maps:get(<<"payment_id">>, CtxData),
-            {ok, {InvoiceID, PaymentID, RefundID}};
-        {error, internal_id_not_found} = Error ->
-            Error
+            {InvoiceID, PaymentID, RefundID};
+        {error, internal_id_not_found} ->
+            undefined
     end.
 
 -spec get_payment_by_external_id(binary(), capi_handler:processing_context()) ->
-    {ok, {binary(), binary()}}
-    | {error, internal_id_not_found}.
+    {binary(), binary()} | undefined.
 get_payment_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     IdempotentKey = {'CreatePayment', PartyID, ExternalID},
     case capi_bender:get_internal_id(IdempotentKey, WoodyContext) of
         {ok, PaymentID, CtxData} ->
             InvoiceID = maps:get(<<"invoice_id">>, CtxData),
-            {ok, {InvoiceID, PaymentID}};
-        {error, internal_id_not_found} = Error ->
-            Error
+            {InvoiceID, PaymentID};
+        {error, internal_id_not_found} ->
+            undefined
     end.
 
 encode_processing_deadline(Deadline) ->
@@ -757,6 +738,22 @@ refund_payment(RefundID, InvoiceID, PaymentID, RefundParams, Context) ->
     },
     Call = {invoicing, 'RefundPayment', CallArgs},
     capi_handler_utils:service_call_with([user_info], Call, Context).
+
+%% ED-206
+%% When bouncer says "forbidden" we can't really tell the difference between "forbidden because
+%% of no such invoice", "forbidden because client has no access to it" and "forbidden because
+%% client has no permission to act on it". From the point of view of existing integrations this
+%% is not great, so we have to mask specific instances of missing authorization as if specified
+%% invoice / payment / refund is nonexistent.
+
+mask_invoice_notfound(Resolution) ->
+    capi_handler:respond_if_forbidden(Resolution, general_error(404, <<"Invoice not found">>)).
+
+mask_payment_notfound(Resolution) ->
+    capi_handler:respond_if_forbidden(Resolution, general_error(404, <<"Payment not found">>)).
+
+mask_refund_notfound(Resolution) ->
+    capi_handler:respond_if_forbidden(Resolution, general_error(404, <<"Invoice payment refund not found">>)).
 
 %%
 

@@ -30,10 +30,7 @@
         auth_data => tk_auth_data:auth_data()
     }}.
 
--type resolution() ::
-    allowed
-    | forbidden
-    | {forbidden, _Reason}.
+-type resolution() :: allowed | forbidden.
 
 -type consumer() :: capi_auth_legacy:consumer().
 
@@ -96,8 +93,11 @@ authorize_api_key(?unauthorized({TokenType, Token}), TokenContext, WoodyContext)
     ProcessingContext :: capi_handler:processing_context()
 ) -> resolution().
 authorize_operation(Prototypes, ProcessingContext) ->
-    AuthContext = extract_auth_context(ProcessingContext),
-    do_authorize_operation(Prototypes, get_auth_data(AuthContext), ProcessingContext).
+    AuthData = get_auth_data(extract_auth_context(ProcessingContext)),
+    #{swagger_context := SwagContext, woody_context := WoodyContext} = ProcessingContext,
+    Fragments = capi_bouncer:gather_context_fragments(AuthData, SwagContext, WoodyContext),
+    Fragments1 = capi_bouncer_context:build(Prototypes, Fragments, WoodyContext),
+    capi_bouncer:judge(Fragments1, WoodyContext).
 
 %%
 
@@ -155,8 +155,3 @@ make_context(AuthData, LegacyContext) ->
         legacy => LegacyContext,
         auth_data => AuthData
     }).
-
-do_authorize_operation(Prototypes, AuthData, #{swagger_context := SwagContext, woody_context := WoodyContext}) ->
-    Fragments = capi_bouncer:gather_context_fragments(AuthData, SwagContext, WoodyContext),
-    Fragments1 = capi_bouncer_context:build(Prototypes, Fragments, WoodyContext),
-    capi_bouncer:judge(Fragments1, WoodyContext).
