@@ -40,10 +40,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetPayout' ->
     end),
     Prototypes = [
         {operation, OperationContext},
-        {payouts, #{
-            payout => Payout,
-            contract => ContractID
-        }}
+        {payouts, #{payout => Payout, contract => ContractID}}
     ],
     Authorize = fun() ->
         {ok, capi_auth:authorize_operation(Prototypes, Context)}
