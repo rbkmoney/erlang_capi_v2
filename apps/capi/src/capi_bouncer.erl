@@ -14,11 +14,11 @@
 
 %%
 
--spec gather_context_fragments(tk_auth_data:auth_data(), swag_server:request_context(), woody_context:ctx()) ->
+-spec gather_context_fragments(token_keeper_auth_data:auth_data(), swag_server:request_context(), woody_context:ctx()) ->
     capi_bouncer_context:fragments().
 gather_context_fragments(AuthData, ReqCtx, WoodyCtx) ->
     {Base, External0} = capi_bouncer_context:new(),
-    External1 = External0#{<<"token-keeper">> => tk_auth_data:get_context_fragment(AuthData)},
+    External1 = External0#{<<"token-keeper">> => token_keeper_auth_data:get_context_fragment(AuthData)},
     {add_requester_context(ReqCtx, Base), maybe_add_userorg(External1, AuthData, WoodyCtx)}.
 
 -spec judge(capi_bouncer_context:fragments(), woody_context:ctx()) -> capi_auth:resolution().
@@ -31,7 +31,7 @@ judge({Acc, External}, WoodyCtx) ->
 %%
 
 maybe_add_userorg(External, AuthData, WoodyCtx) ->
-    case tk_auth_data:get_user_id(AuthData) of
+    case token_keeper_auth_data:get_user_id(AuthData) of
         UserID when UserID =/= undefined ->
             case bouncer_context_helpers:get_user_orgs_fragment(UserID, WoodyCtx) of
                 {ok, UserOrgsFragment} ->

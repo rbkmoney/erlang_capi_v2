@@ -102,21 +102,31 @@ api_key_handler(PartyID) ->
 
 -spec make_handler_fun(Authority :: binary(), ContextSpec :: any(), MetadataSpec :: any()) -> handler_fun().
 make_handler_fun(Authority, ContextSpec, MetadataSpec) ->
-    fun('GetByToken', {Token, _}) ->
-        case uac_authorizer_jwt:verify(Token, #{}) of
-            {ok, TokenInfo} ->
-                AuthData = #token_keeper_AuthData{
-                    token = Token,
-                    status = active,
-                    context = encode_context(get_context(TokenInfo, ContextSpec)),
-                    authority = Authority,
-                    metadata = get_metadata(TokenInfo, MetadataSpec)
-                },
-                {ok, AuthData};
-            {error, Error} ->
-                _ = logger:warning("Token-keeper ct-helper could not verify the token: ~p", [Error]),
-                woody_error:raise(business, #token_keeper_AuthDataNotFound{})
-        end
+    fun
+        ('GetByToken', {Token, _}) ->
+            case uac_authorizer_jwt:verify(Token, #{}) of
+                {ok, TokenInfo} ->
+                    AuthData = #token_keeper_AuthData{
+                        token = Token,
+                        status = active,
+                        context = encode_context(get_context(TokenInfo, ContextSpec)),
+                        authority = Authority,
+                        metadata = get_metadata(TokenInfo, MetadataSpec)
+                    },
+                    {ok, AuthData};
+                {error, Error} ->
+                    _ = logger:warning("Token-keeper ct-helper could not verify the token: ~p", [Error]),
+                    woody_error:raise(business, #token_keeper_AuthDataNotFound{})
+            end;
+        ('CreateEphemeral', {ContextFragment, Metadata}) ->
+            AuthData = #token_keeper_AuthData{
+                token = issue_token(),
+                status = active,
+                context = ContextFragment,
+                authority = Authority,
+                metadata = Metadata
+            },
+            {ok, AuthData}
     end.
 
 %%
@@ -148,6 +158,9 @@ start_client(ServiceURLs) ->
     ]).
 
 %%
+
+issue_token() ->
+    capi_ct_helper:issue_token(unlimited, #{<<"cons">> => <<"client">>}).
 
 get_context(TokenInfo, Spec) ->
     Acc0 = bouncer_context_helpers:empty(),

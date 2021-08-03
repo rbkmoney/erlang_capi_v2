@@ -28,8 +28,8 @@ prepare('CreateInvoiceTemplate' = OperationID, Req, Context) ->
         Resolution = capi_auth:authorize_operation(Prototypes, Context),
         {ok, Resolution}
     end,
+    WoodyCtx = capi_handler_utils:get_woody_context(Context),
     Process = fun() ->
-        ExtraProperties = capi_handler_utils:get_extra_properties(Context),
         try
             InvoiceTemplateID = generate_invoice_template_id(OperationID, InvoiceTemplateParams, PartyID, Context),
             CallArgs = {encode_invoice_tpl_create_params(InvoiceTemplateID, PartyID, InvoiceTemplateParams)},
@@ -40,7 +40,7 @@ prepare('CreateInvoiceTemplate' = OperationID, Req, Context) ->
             )
         of
             {ok, InvoiceTpl} ->
-                {ok, {201, #{}, make_invoice_tpl_and_token(InvoiceTpl, PartyID, ExtraProperties)}};
+                {ok, {201, #{}, make_invoice_tpl_and_token(InvoiceTpl, PartyID, WoodyCtx)}};
             {exception, Exception} ->
                 case Exception of
                     #'InvalidRequest'{errors = Errors} ->
@@ -171,10 +171,10 @@ prepare('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
         Resolution = capi_auth:authorize_operation(Prototypes, Context),
         {ok, Resolution}
     end,
+    WoodyCtx = capi_handler_utils:get_woody_context(Context),
     Process = fun() ->
         capi_handler:respond_if_undefined(InvoiceTpl, general_error(404, <<"Invoice template not found">>)),
         InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
-        ExtraProperties = capi_handler_utils:get_extra_properties(Context),
         PartyID = InvoiceTpl#domain_InvoiceTemplate.owner_id,
         try create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, OperationID) of
             {ok, #'payproc_Invoice'{invoice = Invoice}} ->
@@ -183,7 +183,7 @@ prepare('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
                         capi_handler_decoder_invoicing:make_invoice_and_token(
                             Invoice,
                             Invoice#domain_Invoice.owner_id,
-                            ExtraProperties
+                            WoodyCtx
                         )}};
             {exception, Reason} ->
                 case Reason of
@@ -306,14 +306,14 @@ encode_invoice_tpl_update_params(Params) ->
         context = encode_optional_context(Params)
     }.
 
-make_invoice_tpl_and_token(InvoiceTpl, PartyID, ExtraProperties) ->
+make_invoice_tpl_and_token(InvoiceTpl, PartyID, WoodyContext) ->
     #{
         <<"invoiceTemplate">> => decode_invoice_tpl(InvoiceTpl),
         <<"invoiceTemplateAccessToken">> =>
             capi_handler_utils:issue_access_token(
                 PartyID,
                 {invoice_tpl, InvoiceTpl#domain_InvoiceTemplate.id},
-                ExtraProperties
+                WoodyContext
             )
     }.
 

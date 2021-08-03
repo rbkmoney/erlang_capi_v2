@@ -10,10 +10,7 @@
 -export([authorize_api_key/3]).
 -export([authorize_operation/2]).
 
-% @NOTE Token issuing facilities are not yet available for tokenkeeper, use capi_auth_legacy
-%-export([issue_access_token/2]).
-%-export([issue_access_token/3]).
-%-export([get_extra_properties/0]).
+-export([issue_access_token/3]).
 
 %% Legacy compatability functions
 -export([get_consumer/1]).
@@ -27,7 +24,7 @@
 -type auth_context() ::
     {authorized, #{
         legacy := capi_auth_legacy:context(),
-        auth_data => tk_auth_data:auth_data()
+        auth_data => token_keeper_auth_data:auth_data()
     }}.
 
 -type resolution() :: allowed | forbidden.
@@ -50,18 +47,18 @@
 
 -spec get_subject_id(auth_context()) -> binary() | undefined.
 get_subject_id(?authorized(#{auth_data := AuthData})) ->
-    case tk_auth_data:get_party_id(AuthData) of
+    case token_keeper_auth_data:get_party_id(AuthData) of
         PartyId when is_binary(PartyId) ->
             PartyId;
         undefined ->
-            tk_auth_data:get_user_id(AuthData)
+            token_keeper_auth_data:get_user_id(AuthData)
     end;
 get_subject_id(?authorized(#{legacy := Context})) ->
     capi_auth_legacy:get_subject_id(Context).
 
 -spec get_subject_email(auth_context()) -> binary() | undefined.
 get_subject_email(?authorized(#{auth_data := AuthData})) ->
-    tk_auth_data:get_user_email(AuthData);
+    token_keeper_auth_data:get_user_email(AuthData);
 get_subject_email(?authorized(#{legacy := Context})) ->
     capi_auth_legacy:get_subject_email(Context).
 
@@ -115,8 +112,78 @@ get_legacy_claims(?authorized(#{legacy := AuthContext})) ->
     capi_auth_legacy:get_claims(AuthContext).
 
 %%
+
+-define(METADATA_NAMESPACE, <<"com.rbkmoney.apikeymgmt">>).
+
+-spec issue_access_token(PartyID :: binary(), token_spec(), woody_context:ctx()) -> token_keeper_client:token().
+issue_access_token(PartyID, TokenSpec, WoodyContext) ->
+    ContextFragment0 = bouncer_context_helpers:make_auth_fragment(resolve_bouncer_ctx(TokenSpec, PartyID)),
+    {encoded_fragment, ContextFragment} = bouncer_client:bake_context_fragment(ContextFragment0),
+    Metadata = make_metadata(?METADATA_NAMESPACE, PartyID),
+    AuthData = token_keeper_client:create_ephemeral(ContextFragment, Metadata, WoodyContext),
+    token_keeper_auth_data:get_token(AuthData).
+
+%%
 %% Internal functions
 %%
+
+%% TODO
+%% Hardcode for now, should pass it here probably as an argument
+-define(DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME, 259200).
+-define(DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME, 259200).
+
+-include_lib("bouncer_proto/include/bouncer_context_v1_thrift.hrl").
+
+-type token_spec() ::
+    {invoice, InvoiceID :: binary()}
+    | {invoice_tpl, InvoiceTplID :: binary()}
+    | {customer, CustomerID :: binary()}.
+
+-spec resolve_bouncer_ctx(token_spec(), _PartyID :: binary()) -> bouncer_context_helpers:auth_params().
+resolve_bouncer_ctx({invoice, InvoiceID}, PartyID) ->
+    #{
+        method => ?BCTX_V1_AUTHMETHOD_INVOICEACCESSTOKEN,
+        expiration => make_auth_expiration(lifetime_to_expiration(?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME)),
+        scope => [
+            #{
+                party => #{id => PartyID},
+                invoice => #{id => InvoiceID}
+            }
+        ]
+    };
+resolve_bouncer_ctx({invoice_tpl, InvoiceTemplateID}, PartyID) ->
+    #{
+        method => ?BCTX_V1_AUTHMETHOD_INVOICETEMPLATEACCESSTOKEN,
+        expiration => make_auth_expiration(unlimited),
+        scope => [
+            #{
+                party => #{id => PartyID},
+                invoice_template => #{id => InvoiceTemplateID}
+            }
+        ]
+    };
+resolve_bouncer_ctx({customer, CustomerID}, PartyID) ->
+    #{
+        method => ?BCTX_V1_AUTHMETHOD_CUSTOMERACCESSTOKEN,
+        expiration => make_auth_expiration(lifetime_to_expiration(?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME)),
+        scope => [
+            #{
+                party => #{id => PartyID},
+                customer => #{id => CustomerID}
+            }
+        ]
+    }.
+
+lifetime_to_expiration(Lt) when is_integer(Lt) ->
+    genlib_time:unow() + Lt.
+
+make_auth_expiration(Timestamp) when is_integer(Timestamp) ->
+    genlib_rfc3339:format(Timestamp, second);
+make_auth_expiration(unlimited) ->
+    undefined.
+
+make_metadata(Namespace, PartyID) ->
+    #{Namespace => #{<<"party_id">> => PartyID}}.
 
 extract_auth_context(#{swagger_context := #{auth_context := ?authorized(AuthContext)}}) ->
     AuthContext.

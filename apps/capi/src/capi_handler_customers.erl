@@ -26,6 +26,7 @@ prepare('CreateCustomer' = OperationID, Req, Context) ->
         Prototypes = [{operation, #{id => OperationID, party => PartyID, shop => ShopID}}],
         {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
+    WoodyCtx = capi_handler_utils:get_woody_context(Context),
     Process = fun() ->
         try
             CustomerID = generate_customer_id(OperationID, PartyID, CustomerParams, Context),
@@ -33,7 +34,7 @@ prepare('CreateCustomer' = OperationID, Req, Context) ->
             Call = {customer_management, 'Create', {EncodedCustomerParams}},
             case capi_handler_utils:service_call(Call, Context) of
                 {ok, Customer} ->
-                    {ok, {201, #{}, make_customer_and_token(Customer, PartyID)}};
+                    {ok, {201, #{}, make_customer_and_token(Customer, PartyID, WoodyCtx)}};
                 {exception, #payproc_InvalidUser{}} ->
                     {ok, logic_error(invalidPartyID, <<"Party not found">>)};
                 {exception, #payproc_InvalidPartyStatus{}} ->
@@ -107,10 +108,11 @@ prepare('CreateCustomerAccessToken' = OperationID, Req, Context) ->
         ],
         {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
+    WoodyCtx = capi_handler_utils:get_woody_context(Context),
     Process = fun() ->
         case Customer of
             #payproc_Customer{owner_id = PartyID} ->
-                Response = capi_handler_utils:issue_access_token(PartyID, {customer, CustomerID}),
+                Response = capi_handler_utils:issue_access_token(PartyID, {customer, CustomerID}, WoodyCtx),
                 {ok, {201, #{}, Response}};
             undefined ->
                 {ok, general_error(404, <<"Customer not found">>)}
@@ -373,11 +375,11 @@ encode_legacy_payment_tool_token(Token) ->
             erlang:throw(invalid_token)
     end.
 
-make_customer_and_token(Customer, PartyID) ->
+make_customer_and_token(Customer, PartyID, WoodyCtx) ->
     #{
         <<"customer">> => decode_customer(Customer),
         <<"customerAccessToken">> =>
-            capi_handler_utils:issue_access_token(PartyID, {customer, Customer#payproc_Customer.id})
+            capi_handler_utils:issue_access_token(PartyID, {customer, Customer#payproc_Customer.id}, WoodyCtx)
     }.
 
 decode_customer(Customer) ->
