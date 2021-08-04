@@ -318,11 +318,15 @@ make_auth_expiration(unlimited) ->
     undefined.
 
 deep_merge(L, R) ->
-    maps:fold(fun(K, V0, Acc) ->
-        case Acc of
-            #{K := V1} ->
-                Acc#{K => deep_merge(V1, V0)};
-            _ ->
-                Acc#{K => V0}
-        end
-    end, L, R).
+    maps:fold(
+        fun(K, V0, Acc) ->
+            case Acc of
+                #{K := V1} ->
+                    Acc#{K => deep_merge(V1, V0)};
+                _ ->
+                    Acc#{K => V0}
+            end
+        end,
+        L,
+        R
+    ).
