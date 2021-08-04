@@ -258,7 +258,7 @@ build_binding_ctx(#payproc_CustomerBinding{id = ID}) ->
 %%
 
 build_payout_ctx(ID, WoodyCtx) when is_binary(ID) ->
-    maybe_with_woody_result(payouts, 'Get', {ID}, WoodyCtx, fun build_payout_ctx/1);
+    maybe_with_woody_result(payouts, 'GetPayout', {ID}, WoodyCtx, fun build_payout_ctx/1);
 build_payout_ctx(Payout, _WoodyCtx) ->
     build_payout_ctx(Payout).
 
