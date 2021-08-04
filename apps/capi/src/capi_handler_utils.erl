@@ -19,7 +19,6 @@
 -export([get_user_info/1]).
 -export([get_user_id/1]).
 -export([get_party_id/1]).
--export([get_extra_properties/1]).
 
 -export([issue_access_token/3]).
 -export([merge_and_compact/2]).
@@ -130,11 +129,6 @@ get_user_id(Context) ->
 get_party_id(Context) ->
     get_user_id(Context).
 
--spec get_extra_properties(processing_context()) -> map().
-get_extra_properties(Context) ->
-    Claims = capi_auth:get_legacy_claims(get_auth_context(Context)),
-    maps:with(capi_auth_legacy:get_extra_properties(), Claims).
-
 %% Utils
 
 -spec append_to_tuple(any(), tuple()) -> tuple().
@@ -142,8 +136,12 @@ append_to_tuple(Item, Tuple) ->
     list_to_tuple([Item | tuple_to_list(Tuple)]).
 
 -spec issue_access_token(binary(), tuple(), woody_context:ctx()) -> map().
-issue_access_token(PartyID, TokenSpec, WoodyContext) ->
-    #{<<"payload">> => capi_auth:issue_access_token(PartyID, TokenSpec, WoodyContext)}.
+issue_access_token(PartyID, TokenAccess, WoodyContext) ->
+    TokenSpec = #{
+        access => TokenAccess,
+        subject => PartyID
+    },
+    #{<<"payload">> => capi_auth:issue_access_token(TokenSpec, WoodyContext)}.
 
 -spec merge_and_compact(map(), map()) -> map().
 merge_and_compact(M1, M2) ->

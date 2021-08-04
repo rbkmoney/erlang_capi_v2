@@ -10,6 +10,7 @@
 -export([authorize_api_key/3]).
 -export([authorize_operation/2]).
 
+-export([issue_access_token/2]).
 -export([issue_access_token/3]).
 
 %% Legacy compatability functions
@@ -40,6 +41,18 @@
 
 -define(authorized(Ctx), {authorized, Ctx}).
 -define(unauthorized(Ctx), {unauthorized, Ctx}).
+
+-type token_access() ::
+    {invoice, InvoiceID :: binary()}
+    | {invoice_tpl, InvoiceTplID :: binary()}
+    | {customer, CustomerID :: binary()}.
+-type token_lifetime() :: pos_integer() | unlimited.
+
+-type token_spec() :: #{
+    access := token_access(),
+    subject := binary(),
+    lifetime => token_lifetime()
+}.
 
 %%
 %% API functions
@@ -115,11 +128,24 @@ get_legacy_claims(?authorized(#{legacy := AuthContext})) ->
 
 -define(METADATA_NAMESPACE, <<"com.rbkmoney.apikeymgmt">>).
 
--spec issue_access_token(PartyID :: binary(), token_spec(), woody_context:ctx()) -> token_keeper_client:token().
-issue_access_token(PartyID, TokenSpec, WoodyContext) ->
-    ContextFragment0 = bouncer_context_helpers:make_auth_fragment(resolve_bouncer_ctx(TokenSpec, PartyID)),
-    {encoded_fragment, ContextFragment} = bouncer_client:bake_context_fragment(ContextFragment0),
-    Metadata = make_metadata(?METADATA_NAMESPACE, PartyID),
+-spec issue_access_token(
+    TokenSpec :: token_spec(),
+    WoodyContext :: woody_context:ctx()
+) ->
+    token_keeper_client:token().
+issue_access_token(TokenSpec, WoodyContext) ->
+    issue_access_token(TokenSpec, #{}, WoodyContext).
+
+-spec issue_access_token(
+    TokenSpec :: token_spec(),
+    ExtraProperties :: token_keeper_auth_data:metadata_content(),
+    WoodyContext :: woody_context:ctx()
+) ->
+    token_keeper_client:token().
+issue_access_token(#{access := Access, subject := PartyID} = TokenSpec, ExtraProperties, WoodyContext) ->
+    ContextFragment = create_context_fragment(Access, PartyID, maps:get(lifetime, TokenSpec, undefined)),
+    Metadata = create_metadata(?METADATA_NAMESPACE, PartyID, ExtraProperties),
+    %%TODO InvoiceTemplateAccessTokens are technically not ephemeral and should become so in the future
     AuthData = token_keeper_client:create_ephemeral(ContextFragment, Metadata, WoodyContext),
     token_keeper_auth_data:get_token(AuthData).
 
@@ -127,23 +153,35 @@ issue_access_token(PartyID, TokenSpec, WoodyContext) ->
 %% Internal functions
 %%
 
-%% TODO
-%% Hardcode for now, should pass it here probably as an argument
 -define(DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME, 259200).
 -define(DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME, 259200).
 
 -include_lib("bouncer_proto/include/bouncer_context_v1_thrift.hrl").
 
--type token_spec() ::
-    {invoice, InvoiceID :: binary()}
-    | {invoice_tpl, InvoiceTplID :: binary()}
-    | {customer, CustomerID :: binary()}.
+create_context_fragment(Access, PartyID, undefined) ->
+    create_context_fragment(Access, PartyID, get_default_token_lifetime(Access));
+create_context_fragment(Access, PartyID, Expiration) ->
+    ok = verify_token_lifetime(Access, Expiration),
+    ContextFragment0 = bouncer_context_helpers:make_auth_fragment(resolve_bouncer_ctx(Access, PartyID, Expiration)),
+    {encoded_fragment, ContextFragment} = bouncer_client:bake_context_fragment(ContextFragment0),
+    ContextFragment.
 
--spec resolve_bouncer_ctx(token_spec(), _PartyID :: binary()) -> bouncer_context_helpers:auth_params().
-resolve_bouncer_ctx({invoice, InvoiceID}, PartyID) ->
+get_default_token_lifetime({invoice, _}) -> ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME;
+get_default_token_lifetime({invoice_tpl, _}) -> unlimited;
+get_default_token_lifetime({customer, _}) -> ?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME.
+
+%% Forbid creation of unlimited lifetime invoice and customer tokens
+verify_token_lifetime({invoice, _}, Expiration) when Expiration =/= unlimited -> ok;
+verify_token_lifetime({customer, _}, Expiration) when Expiration =/= unlimited -> ok;
+verify_token_lifetime({invoice_tpl, _}, _Expiration) -> ok;
+verify_token_lifetime(_, _) -> error.
+
+-spec resolve_bouncer_ctx(token_access(), _PartyID :: binary(), token_lifetime()) ->
+    bouncer_context_helpers:auth_params().
+resolve_bouncer_ctx({invoice, InvoiceID}, PartyID, Lifetime) ->
     #{
         method => ?BCTX_V1_AUTHMETHOD_INVOICEACCESSTOKEN,
-        expiration => make_auth_expiration(lifetime_to_expiration(?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME)),
+        expiration => make_auth_expiration(Lifetime),
         scope => [
             #{
                 party => #{id => PartyID},
@@ -151,10 +189,10 @@ resolve_bouncer_ctx({invoice, InvoiceID}, PartyID) ->
             }
         ]
     };
-resolve_bouncer_ctx({invoice_tpl, InvoiceTemplateID}, PartyID) ->
+resolve_bouncer_ctx({invoice_tpl, InvoiceTemplateID}, PartyID, Lifetime) ->
     #{
         method => ?BCTX_V1_AUTHMETHOD_INVOICETEMPLATEACCESSTOKEN,
-        expiration => make_auth_expiration(unlimited),
+        expiration => make_auth_expiration(Lifetime),
         scope => [
             #{
                 party => #{id => PartyID},
@@ -162,10 +200,10 @@ resolve_bouncer_ctx({invoice_tpl, InvoiceTemplateID}, PartyID) ->
             }
         ]
     };
-resolve_bouncer_ctx({customer, CustomerID}, PartyID) ->
+resolve_bouncer_ctx({customer, CustomerID}, PartyID, Lifetime) ->
     #{
         method => ?BCTX_V1_AUTHMETHOD_CUSTOMERACCESSTOKEN,
-        expiration => make_auth_expiration(lifetime_to_expiration(?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME)),
+        expiration => make_auth_expiration(Lifetime),
         scope => [
             #{
                 party => #{id => PartyID},
@@ -174,16 +212,16 @@ resolve_bouncer_ctx({customer, CustomerID}, PartyID) ->
         ]
     }.
 
-lifetime_to_expiration(Lt) when is_integer(Lt) ->
-    genlib_time:unow() + Lt.
-
-make_auth_expiration(Timestamp) when is_integer(Timestamp) ->
-    genlib_rfc3339:format(Timestamp, second);
+make_auth_expiration(Lifetime) when is_integer(Lifetime) ->
+    genlib_rfc3339:format(lifetime_to_expiration(Lifetime), second);
 make_auth_expiration(unlimited) ->
     undefined.
 
-make_metadata(Namespace, PartyID) ->
-    #{Namespace => #{<<"party_id">> => PartyID}}.
+lifetime_to_expiration(Lt) when is_integer(Lt) ->
+    genlib_time:unow() + Lt.
+
+create_metadata(Namespace, PartyID, AdditionalMeta) ->
+    #{Namespace => AdditionalMeta#{<<"party_id">> => PartyID}}.
 
 extract_auth_context(#{swagger_context := #{auth_context := ?authorized(AuthContext)}}) ->
     AuthContext.

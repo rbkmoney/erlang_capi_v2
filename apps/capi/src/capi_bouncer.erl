@@ -14,7 +14,11 @@
 
 %%
 
--spec gather_context_fragments(token_keeper_auth_data:auth_data(), swag_server:request_context(), woody_context:ctx()) ->
+-spec gather_context_fragments(
+    AuthData :: token_keeper_auth_data:auth_data(),
+    RequestContext :: swag_server:request_context(),
+    WoodyContext :: woody_context:ctx()
+) ->
     capi_bouncer_context:fragments().
 gather_context_fragments(AuthData, ReqCtx, WoodyCtx) ->
     {Base, External0} = capi_bouncer_context:new(),
