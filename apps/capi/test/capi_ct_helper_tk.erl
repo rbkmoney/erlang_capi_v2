@@ -1,10 +1,15 @@
 -module(capi_ct_helper_tk).
 
+-include_lib("capi_dummy_data.hrl").
 -include_lib("token_keeper_proto/include/tk_token_keeper_thrift.hrl").
 -include_lib("token_keeper_proto/include/tk_context_thrift.hrl").
 
 -define(TK_META_NS_KEYCLOAK, <<"com.rbkmoney.keycloak">>).
 -define(TK_META_NS_APIKEYMGMT, <<"com.rbkmoney.apikeymgmt">>).
+
+-define(PARTY_ID, ?STRING).
+-define(USER_ID, ?STRING).
+-define(USER_EMAIL, <<"bla@bla.ru">>).
 
 -export([mock_service/2]).
 
@@ -48,7 +53,7 @@ invoice_access_token(PartyID, InvoiceID) ->
                 {scope, [[{party, PartyID}, {invoice, InvoiceID}]]}
             ]}
         ],
-        [api_key_meta]
+        [api_key_meta, {consumer_meta, <<"client">>}]
     ).
 
 -spec invoice_template_access_token(PartyID :: binary(), InvoiceTmeplateID :: binary()) -> handler_fun().
@@ -104,23 +109,17 @@ api_key_handler(PartyID) ->
 make_handler_fun(Authority, ContextSpec, MetadataSpec) ->
     fun
         ('GetByToken', {Token, _}) ->
-            case uac_authorizer_jwt:verify(Token, #{}) of
-                {ok, TokenInfo} ->
-                    AuthData = #token_keeper_AuthData{
-                        token = Token,
-                        status = active,
-                        context = encode_context(get_context(TokenInfo, ContextSpec)),
-                        authority = Authority,
-                        metadata = get_metadata(TokenInfo, MetadataSpec)
-                    },
-                    {ok, AuthData};
-                {error, Error} ->
-                    _ = logger:warning("Token-keeper ct-helper could not verify the token: ~p", [Error]),
-                    woody_error:raise(business, #token_keeper_AuthDataNotFound{})
-            end;
+            AuthData = #token_keeper_AuthData{
+                token = Token,
+                status = active,
+                context = encode_context(get_context(ContextSpec)),
+                authority = Authority,
+                metadata = get_metadata(MetadataSpec)
+            },
+            {ok, AuthData};
         ('CreateEphemeral', {ContextFragment, Metadata}) ->
             AuthData = #token_keeper_AuthData{
-                token = issue_token(),
+                token = ?API_TOKEN,
                 status = active,
                 context = ContextFragment,
                 authority = Authority,
@@ -159,139 +158,141 @@ start_client(ServiceURLs) ->
 
 %%
 
-issue_token() ->
-    capi_ct_helper:issue_token(unlimited, #{<<"cons">> => <<"client">>}).
-
-get_context(TokenInfo, Spec) ->
+get_context(Spec) ->
     Acc0 = bouncer_context_helpers:empty(),
-    add_by_spec(Acc0, TokenInfo, Spec).
+    add_by_spec(Acc0, Spec).
 
-add_by_spec(Acc0, _TokenInfo, []) ->
+add_by_spec(Acc0, []) ->
     Acc0;
-add_by_spec(Acc0, TokenInfo, [{user, UserSpec} | Rest]) ->
-    add_by_spec(add_user_spec(Acc0, UserSpec, TokenInfo), TokenInfo, Rest);
-add_by_spec(Acc0, TokenInfo, [{auth, AuthSpec} | Rest]) ->
-    add_by_spec(add_auth_spec(Acc0, AuthSpec, TokenInfo), TokenInfo, Rest).
+add_by_spec(Acc0, [{user, UserSpec} | Rest]) ->
+    add_by_spec(add_user_spec(Acc0, UserSpec), Rest);
+add_by_spec(Acc0, [{auth, AuthSpec} | Rest]) ->
+    add_by_spec(add_auth_spec(Acc0, AuthSpec), Rest).
 
-add_user_spec(Acc0, UserSpec, TokenInfo) ->
+add_user_spec(Acc0, UserSpec) ->
     bouncer_context_helpers:add_user(
-        assemble_user_fragment(UserSpec, TokenInfo),
+        assemble_user_fragment(UserSpec),
         Acc0
     ).
 
-add_auth_spec(Acc0, AuthSpec, TokenInfo) ->
+add_auth_spec(Acc0, AuthSpec) ->
     bouncer_context_helpers:add_auth(
-        assemble_auth_fragment(AuthSpec, TokenInfo),
+        assemble_auth_fragment(AuthSpec),
         Acc0
     ).
 
-assemble_user_fragment(UserSpec, TokenInfo) ->
+assemble_user_fragment(UserSpec) ->
     lists:foldl(
         fun(SpecFragment, Acc0) ->
-            FragName = get_user_fragment_name(SpecFragment, TokenInfo),
-            Acc0#{FragName => get_user_fragment_value(SpecFragment, TokenInfo)}
+            FragName = get_user_fragment_name(SpecFragment),
+            Acc0#{FragName => get_user_fragment_value(SpecFragment)}
         end,
         #{},
         UserSpec
     ).
 
-get_user_fragment_name(Atom, _TokenInfo) when is_atom(Atom) ->
+get_user_fragment_name(Atom) when is_atom(Atom) ->
     Atom;
-get_user_fragment_name({Atom, _Spec}, _TokenInfo) when is_atom(Atom) ->
+get_user_fragment_name({Atom, _Spec}) when is_atom(Atom) ->
     Atom.
 
-get_user_fragment_value(id, TokenInfo) ->
-    uac_authorizer_jwt:get_subject_id(TokenInfo);
-get_user_fragment_value({id, ID}, _TokenInfo) ->
+get_user_fragment_value(id) ->
+    ?USER_ID;
+get_user_fragment_value({id, ID}) ->
     ID;
-get_user_fragment_value(email, TokenInfo) ->
-    uac_authorizer_jwt:get_subject_email(TokenInfo);
-get_user_fragment_value({email, Email}, _TokenInfo) ->
+get_user_fragment_value(email) ->
+    ?USER_EMAIL;
+get_user_fragment_value({email, Email}) ->
     Email;
-get_user_fragment_value(realm, _TokenInfo) ->
+get_user_fragment_value(realm) ->
     #{id => <<"external">>};
-get_user_fragment_value({realm, RealmID}, _TokenInfo) ->
+get_user_fragment_value({realm, RealmID}) ->
     #{id => RealmID}.
 
-assemble_auth_fragment(AuthSpec, TokenInfo) ->
+assemble_auth_fragment(AuthSpec) ->
     lists:foldl(
         fun(SpecFragment, Acc0) ->
-            FragName = get_auth_fragment_name(SpecFragment, TokenInfo),
-            Acc0#{FragName => get_auth_fragment_value(SpecFragment, TokenInfo)}
+            FragName = get_auth_fragment_name(SpecFragment),
+            Acc0#{FragName => get_auth_fragment_value(SpecFragment)}
         end,
         #{},
         AuthSpec
     ).
 
-get_auth_fragment_name(Atom, _TokenInfo) when is_atom(Atom) ->
+get_auth_fragment_name(Atom) when is_atom(Atom) ->
     Atom;
-get_auth_fragment_name({Atom, _Spec}, _TokenInfo) when is_atom(Atom) ->
+get_auth_fragment_name({Atom, _Spec}) when is_atom(Atom) ->
     Atom.
 
-get_auth_fragment_value(method, _TokenInfo) ->
+get_auth_fragment_value(method) ->
     <<"SessionToken">>;
-get_auth_fragment_value({method, Method}, _TokenInfo) ->
+get_auth_fragment_value({method, Method}) ->
     Method;
-get_auth_fragment_value(expiration, TokenInfo) ->
-    Expiration = uac_authorizer_jwt:get_expires_at(TokenInfo),
+get_auth_fragment_value(expiration) ->
+    make_auth_expiration(unlimited);
+get_auth_fragment_value({expiration, Expiration}) ->
     make_auth_expiration(Expiration);
-get_auth_fragment_value({expiration, Expiration}, _TokenInfo) ->
-    make_auth_expiration(Expiration);
-get_auth_fragment_value(token, TokenInfo) ->
-    #{id => uac_authorizer_jwt:get_token_id(TokenInfo)};
-get_auth_fragment_value({token, ID}, _TokenInfo) ->
+get_auth_fragment_value(token) ->
+    #{id => ?STRING};
+get_auth_fragment_value({token, ID}) ->
     #{id => ID};
-get_auth_fragment_value(scope, TokenInfo) ->
-    [#{party => #{id => uac_authorizer_jwt:get_subject_id(TokenInfo)}}];
-get_auth_fragment_value({scope, ScopeSpecs}, TokenInfo) ->
+get_auth_fragment_value(scope) ->
+    [#{party => #{id => ?PARTY_ID}}];
+get_auth_fragment_value({scope, ScopeSpecs}) ->
     lists:foldl(
         fun(ScopeSpec, Acc0) ->
-            [assemble_auth_scope_fragment(ScopeSpec, TokenInfo) | Acc0]
+            [assemble_auth_scope_fragment(ScopeSpec) | Acc0]
         end,
         [],
         ScopeSpecs
     ).
 
-assemble_auth_scope_fragment(ScopeSpec, TokenInfo) ->
+assemble_auth_scope_fragment(ScopeSpec) ->
     lists:foldl(
         fun(SpecFragment, Acc0) ->
-            FragName = get_auth_scope_fragment_name(SpecFragment, TokenInfo),
-            Acc0#{FragName => get_auth_scope_fragment_value(SpecFragment, TokenInfo)}
+            FragName = get_auth_scope_fragment_name(SpecFragment),
+            Acc0#{FragName => get_auth_scope_fragment_value(SpecFragment)}
         end,
         #{},
         ScopeSpec
     ).
 
-get_auth_scope_fragment_name(Atom, _TokenInfo) when is_atom(Atom) ->
+get_auth_scope_fragment_name(Atom) when is_atom(Atom) ->
     Atom;
-get_auth_scope_fragment_name({Atom, _Spec}, _TokenInfo) when is_atom(Atom) ->
+get_auth_scope_fragment_name({Atom, _Spec}) when is_atom(Atom) ->
     Atom.
 
-get_auth_scope_fragment_value(party, TokenInfo) ->
-    #{id => uac_authorizer_jwt:get_subject_id(TokenInfo)};
-get_auth_scope_fragment_value({Name, EntityID}, _TokenInfo) when is_atom(Name) ->
+get_auth_scope_fragment_value(party) ->
+    #{id => ?PARTY_ID};
+get_auth_scope_fragment_value({Name, EntityID}) when is_atom(Name) ->
     #{id => EntityID}.
 
-get_metadata(TokenInfo, MetadataSpec) ->
+get_metadata(MetadataSpec) ->
     lists:foldl(
         fun(SpecFragment, Acc0) ->
-            maps:merge(Acc0, get_metadata_by_spec(SpecFragment, TokenInfo))
+            deep_merge(Acc0, get_metadata_by_spec(SpecFragment))
         end,
         #{},
         MetadataSpec
     ).
 
-get_metadata_by_spec(user_session_meta, TokenInfo) ->
+get_metadata_by_spec(user_session_meta) ->
     #{
-        ?TK_META_NS_KEYCLOAK => genlib_map:compact(#{
-            <<"user_id">> => uac_authorizer_jwt:get_subject_id(TokenInfo),
-            <<"user_email">> => uac_authorizer_jwt:get_subject_email(TokenInfo)
-        })
+        ?TK_META_NS_KEYCLOAK => #{
+            <<"user_id">> => ?USER_ID,
+            <<"user_email">> => ?USER_EMAIL
+        }
     };
-get_metadata_by_spec(api_key_meta, TokenInfo) ->
+get_metadata_by_spec(api_key_meta) ->
     #{
         ?TK_META_NS_APIKEYMGMT => #{
-            <<"party_id">> => uac_authorizer_jwt:get_subject_id(TokenInfo)
+            <<"party_id">> => ?PARTY_ID
+        }
+    };
+get_metadata_by_spec({consumer_meta, Cons}) ->
+    #{
+        ?TK_META_NS_APIKEYMGMT => #{
+            <<"cons">> => Cons
         }
     }.
 
@@ -315,3 +316,13 @@ make_auth_expiration(Timestamp) when is_integer(Timestamp) ->
     genlib_rfc3339:format(Timestamp, second);
 make_auth_expiration(unlimited) ->
     undefined.
+
+deep_merge(L, R) ->
+    maps:fold(fun(K, V0, Acc) ->
+        case Acc of
+            #{K := V1} ->
+                Acc#{K => deep_merge(V1, V0)};
+            _ ->
+                Acc#{K => V0}
+        end
+    end, L, R).

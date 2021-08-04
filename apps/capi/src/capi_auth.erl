@@ -4,7 +4,6 @@
 
 -export([get_subject_id/1]).
 -export([get_subject_email/1]).
--export([get_subject_name/1]).
 
 -export([preauthorize_api_key/1]).
 -export([authorize_api_key/3]).
@@ -13,9 +12,7 @@
 -export([issue_access_token/2]).
 -export([issue_access_token/3]).
 
-%% Legacy compatability functions
 -export([get_consumer/1]).
--export([get_legacy_claims/1]).
 
 %% API types
 
@@ -23,14 +20,11 @@
 
 -type preauth_context() :: {unauthorized, {token_type(), token_keeper_client:token()}}.
 -type auth_context() ::
-    {authorized, #{
-        legacy := capi_auth_legacy:context(),
-        auth_data => token_keeper_auth_data:auth_data()
-    }}.
+    {authorized, token_keeper_auth_data:auth_data()}.
 
 -type resolution() :: allowed | forbidden.
 
--type consumer() :: capi_auth_legacy:consumer().
+-type consumer() :: client | merchant | provider.
 
 -export_type([preauth_context/0]).
 -export_type([auth_context/0]).
@@ -55,32 +49,25 @@
 }.
 
 %%
+
+-define(METADATA_NAMESPACE, <<"com.rbkmoney.apikeymgmt">>).
+
+%%
 %% API functions
 %%
 
 -spec get_subject_id(auth_context()) -> binary() | undefined.
-get_subject_id(?authorized(#{auth_data := AuthData})) ->
+get_subject_id(?authorized(AuthData)) ->
     case token_keeper_auth_data:get_party_id(AuthData) of
         PartyId when is_binary(PartyId) ->
             PartyId;
         undefined ->
             token_keeper_auth_data:get_user_id(AuthData)
-    end;
-get_subject_id(?authorized(#{legacy := Context})) ->
-    capi_auth_legacy:get_subject_id(Context).
+    end.
 
 -spec get_subject_email(auth_context()) -> binary() | undefined.
-get_subject_email(?authorized(#{auth_data := AuthData})) ->
-    token_keeper_auth_data:get_user_email(AuthData);
-get_subject_email(?authorized(#{legacy := Context})) ->
-    capi_auth_legacy:get_subject_email(Context).
-
--spec get_subject_name(auth_context()) -> binary() | undefined.
-get_subject_name(?authorized(#{auth_data := _AuthData})) ->
-    %% Subject names are no longer a thing for auth_data contexts
-    undefined;
-get_subject_name(?authorized(#{legacy := Context})) ->
-    capi_auth_legacy:get_subject_name(Context).
+get_subject_email(?authorized(AuthData)) ->
+    token_keeper_auth_data:get_user_email(AuthData).
 
 %%
 
@@ -103,7 +90,7 @@ authorize_api_key(?unauthorized({TokenType, Token}), TokenContext, WoodyContext)
     ProcessingContext :: capi_handler:processing_context()
 ) -> resolution().
 authorize_operation(Prototypes, ProcessingContext) ->
-    AuthData = get_auth_data(extract_auth_context(ProcessingContext)),
+    AuthData = extract_auth_context(ProcessingContext),
     #{swagger_context := SwagContext, woody_context := WoodyContext} = ProcessingContext,
     Fragments = capi_bouncer:gather_context_fragments(AuthData, SwagContext, WoodyContext),
     Fragments1 = capi_bouncer_context:build(Prototypes, Fragments, WoodyContext),
@@ -112,21 +99,15 @@ authorize_operation(Prototypes, ProcessingContext) ->
 %%
 
 -spec get_consumer(auth_context()) -> consumer().
-get_consumer(?authorized(#{legacy := AuthContext})) ->
-    %% TODO: Can we even get to these claims now?
-    capi_auth_legacy:get_consumer(AuthContext).
-
--spec get_legacy_claims(auth_context()) -> capi_auth_legacy:claims().
-get_legacy_claims(?authorized(#{legacy := AuthContext})) ->
-    %% TODO: Seriously.
-    %% This is needed here for the ip_replacement_allowed claim to still be accessible
-    %% WE ALSO rely on email claim to be present for lazy party creation in capi_handler_parties!
-    %% (which is dropped by tk for api tokens)
-    capi_auth_legacy:get_claims(AuthContext).
+get_consumer(?authorized(AuthData)) ->
+    case token_keeper_auth_data:get_metadata(?METADATA_NAMESPACE, AuthData) of
+        #{<<"cons">> := <<"merchant">>} -> merchant;
+        #{<<"cons">> := <<"client">>} -> client;
+        #{<<"cons">> := <<"provider">>} -> provider;
+        _Default -> merchant
+    end.
 
 %%
-
--define(METADATA_NAMESPACE, <<"com.rbkmoney.apikeymgmt">>).
 
 -spec issue_access_token(
     TokenSpec :: token_spec(),
@@ -144,7 +125,7 @@ issue_access_token(TokenSpec, WoodyContext) ->
     token_keeper_client:token().
 issue_access_token(#{access := Access, subject := PartyID} = TokenSpec, ExtraProperties, WoodyContext) ->
     ContextFragment = create_context_fragment(Access, PartyID, maps:get(lifetime, TokenSpec, undefined)),
-    Metadata = create_metadata(?METADATA_NAMESPACE, PartyID, ExtraProperties),
+    Metadata = create_metadata(?METADATA_NAMESPACE, PartyID, add_consumer(Access, ExtraProperties)),
     %%TODO InvoiceTemplateAccessTokens are technically not ephemeral and should become so in the future
     AuthData = token_keeper_client:create_ephemeral(ContextFragment, Metadata, WoodyContext),
     token_keeper_auth_data:get_token(AuthData).
@@ -220,43 +201,27 @@ make_auth_expiration(unlimited) ->
 lifetime_to_expiration(Lt) when is_integer(Lt) ->
     genlib_time:unow() + Lt.
 
+add_consumer({invoice, _}, ExtraProperties) ->
+    ExtraProperties#{<<"cons">> => <<"client">>};
+add_consumer(_, ExtraProperties) ->
+    ExtraProperties.
+
 create_metadata(Namespace, PartyID, AdditionalMeta) ->
     #{Namespace => AdditionalMeta#{<<"party_id">> => PartyID}}.
 
 extract_auth_context(#{swagger_context := #{auth_context := ?authorized(AuthContext)}}) ->
     AuthContext.
 
-get_auth_data(AuthContext) ->
-    maps:get(auth_data, AuthContext).
-
-authorize_token_by_type(bearer = TokenType, Token, TokenContext, WoodyContext) ->
-    %% NONE: For now legacy auth still takes precedence over
-    %% bouncer-based auth, so we MUST have a legacy context
-    case capi_auth_legacy:authorize_api_key(restore_api_key(TokenType, Token)) of
-        {ok, LegacyContext} ->
-            case token_keeper_client:get_by_token(Token, TokenContext, WoodyContext) of
-                {ok, AuthData} ->
-                    {ok, {authorized, make_context(AuthData, LegacyContext)}};
-                {error, TokenKeeperError} ->
-                    _ = logger:warning("Token keeper authorization failed: ~p", [TokenKeeperError]),
-                    {error, {auth_failed, TokenKeeperError}}
-            end;
-        {error, LegacyError} ->
-            {error, {legacy_auth_failed, LegacyError}}
+authorize_token_by_type(bearer, Token, TokenContext, WoodyContext) ->
+    case token_keeper_client:get_by_token(Token, TokenContext, WoodyContext) of
+        {ok, AuthData} ->
+            {ok, ?authorized(AuthData)};
+        {error, TokenKeeperError} ->
+            _ = logger:warning("Token keeper authorization failed: ~p", [TokenKeeperError]),
+            {error, {auth_failed, TokenKeeperError}}
     end.
 
 parse_api_key(<<"Bearer ", Token/binary>>) ->
     {ok, {bearer, Token}};
 parse_api_key(_) ->
     {error, unsupported_auth_scheme}.
-
-restore_api_key(bearer, Token) ->
-    %% Kind of a hack since legacy auth expects the full api key string, but
-    %% token-keeper does not and we got rid of it at preauth stage
-    <<"Bearer ", Token/binary>>.
-
-make_context(AuthData, LegacyContext) ->
-    genlib_map:compact(#{
-        legacy => LegacyContext,
-        auth_data => AuthData
-    }).

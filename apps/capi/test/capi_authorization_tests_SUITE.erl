@@ -19,8 +19,7 @@
 
 -export([
     authorization_error_no_header_test/1,
-    authorization_error_no_permission_test/1,
-    authorization_bad_token_error_test/1
+    authorization_error_no_permission_test/1
 ]).
 
 -export([
@@ -56,8 +55,7 @@ groups() ->
     [
         {authorization, [], [
             authorization_error_no_header_test,
-            authorization_error_no_permission_test,
-            authorization_bad_token_error_test
+            authorization_error_no_permission_test
         ]},
         {forbidden_masking, [], [
             get_party_forbidden_notfound,
@@ -119,37 +117,9 @@ authorization_error_no_header_test(Config) ->
 
 -spec authorization_error_no_permission_test(config()) -> _.
 authorization_error_no_permission_test(Config) ->
-    Token = capi_ct_helper:issue_token(unlimited),
+    Token = ?API_TOKEN,
     _ = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_forbidden(), Config),
     ?emptyresp(401) = capi_client_parties:get_my_party(capi_ct_helper:get_context(Token)).
-
--spec authorization_bad_token_error_test(config()) -> _.
-authorization_bad_token_error_test(Config) ->
-    {ok, Token} = issue_dummy_token([{[party], read}], Config),
-    ?emptyresp(401) = capi_client_parties:get_my_party(capi_ct_helper:get_context(Token)).
-
-issue_dummy_token(ACL, Config) ->
-    Claims = #{
-        <<"jti">> => capi_utils:get_unique_id(),
-        <<"sub">> => ?STRING,
-        <<"exp">> => 0,
-        <<"resource_access">> => #{
-            <<"common-api">> => #{
-                <<"roles">> => uac_acl:encode(uac_acl:from_list(ACL))
-            }
-        }
-    },
-    BadPemFile = capi_ct_helper:get_keysource("keys/local/dummy.pem", Config),
-    BadJWK = jose_jwk:from_pem_file(BadPemFile),
-    GoodPemFile = capi_ct_helper:get_keysource("keys/local/private.pem", Config),
-    GoodJWK = jose_jwk:from_pem_file(GoodPemFile),
-    JWKPublic = jose_jwk:to_public(GoodJWK),
-    {_Module, PublicKey} = JWKPublic#jose_jwk.kty,
-    {_PemEntry, Data, _} = public_key:pem_entry_encode('SubjectPublicKeyInfo', PublicKey),
-    KID = jose_base64url:encode(crypto:hash(sha256, Data)),
-    JWT = jose_jwt:sign(BadJWK, #{<<"alg">> => <<"RS256">>, <<"kid">> => KID}, Claims),
-    {_Modules, Token} = jose_jws:compact(JWT),
-    {ok, Token}.
 
 %%%
 
@@ -214,4 +184,4 @@ get_customer_forbidden_notfound(Config) ->
     {error, {404, _}} = capi_client_customers:get_customer_by_id(mk_context(), CustomerID).
 
 mk_context() ->
-    capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited)).
+    capi_ct_helper:get_context(?API_TOKEN).

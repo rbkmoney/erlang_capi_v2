@@ -73,7 +73,7 @@ end_per_suite(C) ->
 
 -spec init_per_group(group_name(), config()) -> config().
 init_per_group(GroupName, Config) when stream_handler_tests =:= GroupName; validation_tests =:= GroupName ->
-    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited)),
+    Context = capi_ct_helper:get_context(?API_TOKEN),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
     Apps1 = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
     Apps2 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),

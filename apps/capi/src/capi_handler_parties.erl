@@ -22,14 +22,15 @@ prepare('GetMyParty' = OperationID, _Req, Context) ->
         {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
-        case get_or_create_party(PartyID, Context) of
+        case get_party(PartyID, Context) of
             {ok, Party} ->
                 DecodedParty = capi_handler_decoder_party:decode_party(Party),
                 {ok, {200, #{}, DecodedParty}};
+            %% How does one not have a party, though? 🤔
             {error, #payproc_InvalidUser{}} ->
-                {ok, logic_error(<<"invalidRequest">>, <<"Party not found">>)};
+                {ok, general_error(404, <<"Party not found">>)};
             {error, #payproc_PartyNotFound{}} ->
-                {ok, logic_error(<<"invalidRequest">>, <<"Party not found">>)}
+                {ok, general_error(404, <<"Party not found">>)}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -132,37 +133,9 @@ prepare(_OperationID, _Req, _Context) ->
 
 %%
 
--spec get_or_create_party(binary(), processing_context()) -> woody:result().
-get_or_create_party(PartyID, Context) ->
-    case capi_party:get_party(PartyID, Context) of
-        {error, #payproc_PartyNotFound{}} ->
-            _ = logger:info("Attempting to create a missing party"),
-            create_party(PartyID, Context);
-        Reply ->
-            Reply
-    end.
-
--spec create_party(binary(), processing_context()) -> woody:result().
-create_party(PartyID, Context) ->
-    PartyParams = #payproc_PartyParams{
-        contact_info = #domain_PartyContactInfo{
-            %% TODO: We rely on email claim to be present (which is dropped by tk for api key tokens).
-            email = maps:get(
-                <<"email">>,
-                capi_auth:get_legacy_claims(
-                    capi_handler_utils:get_auth_context(Context)
-                )
-            )
-        }
-    },
-    case capi_party:create_party(PartyID, PartyParams, Context) of
-        ok ->
-            capi_party:get_party(PartyID, Context);
-        {error, #payproc_PartyExists{}} ->
-            capi_party:get_party(PartyID, Context);
-        Error ->
-            Error
-    end.
+-spec get_party(binary(), processing_context()) -> woody:result().
+get_party(PartyID, Context) ->
+    capi_party:get_party(PartyID, Context).
 
 mask_party_notfound(Resolution) ->
     % ED-206

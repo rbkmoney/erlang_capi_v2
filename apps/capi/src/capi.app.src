@@ -26,7 +26,6 @@
         woody_user_identity,
         payproc_errors,
         erl_health,
-        uac,
         prometheus,
         prometheus_cowboy,
         bouncer_client,

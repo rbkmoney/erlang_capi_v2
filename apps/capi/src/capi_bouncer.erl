@@ -5,13 +5,6 @@
 -export([gather_context_fragments/3]).
 -export([judge/2]).
 
--export([get_claim/1]).
--export([set_claim/2]).
--export([decode_claim/1]).
--export([encode_claim/1]).
-
--define(CLAIM_BOUNCER_CTX, <<"bouncer_ctx">>).
-
 %%
 
 -spec gather_context_fragments(
@@ -54,62 +47,3 @@ add_requester_context(ReqCtx, FragmentAcc) ->
         #{ip => maps:get(ip_address, ClientPeer, undefined)},
         FragmentAcc
     ).
-
-%%
-
--define(CLAIM_CTX_TYPE, <<"ty">>).
--define(CLAIM_CTX_CONTEXT, <<"ct">>).
-
--define(CLAIM_CTX_TYPE_V1_THRIFT_BINARY, <<"v1_thrift_binary">>).
-
--type claim() :: term().
--type claims() :: uac_authorizer_jwt:claims().
-
--spec get_claim(claims()) -> {ok, capi_bouncer_context:fragment()} | {error, {unsupported, claim()}} | undefined.
-get_claim(Claims) ->
-    case maps:get(?CLAIM_BOUNCER_CTX, Claims, undefined) of
-        Claim when Claim /= undefined ->
-            decode_claim(Claim);
-        undefined ->
-            undefined
-    end.
-
--spec decode_claim(claim()) ->
-    {ok, capi_bouncer_context:fragment()} | {error, {unsupported, claim()} | {malformed, binary()}}.
-decode_claim(#{
-    ?CLAIM_CTX_TYPE := ?CLAIM_CTX_TYPE_V1_THRIFT_BINARY,
-    ?CLAIM_CTX_CONTEXT := Content
-}) ->
-    try
-        {ok,
-            {encoded_fragment, #bctx_ContextFragment{
-                type = v1_thrift_binary,
-                content = base64:decode(Content)
-            }}}
-    catch
-        % NOTE
-        % The `base64:decode/1` fails in unpredictable ways.
-        error:_ ->
-            {error, {malformed, Content}}
-    end;
-decode_claim(Ctx) ->
-    {error, {unsupported, Ctx}}.
-
--spec set_claim(capi_bouncer_context:fragment(), claims()) -> claims().
-set_claim(ContextFragment, Claims) ->
-    false = maps:is_key(?CLAIM_BOUNCER_CTX, Claims),
-    Claims#{?CLAIM_BOUNCER_CTX => encode_claim(ContextFragment)}.
-
--spec encode_claim(capi_bouncer_context:fragment()) -> claim().
-encode_claim(
-    {encoded_fragment, #bctx_ContextFragment{
-        type = v1_thrift_binary,
-        content = Content
-    }}
-) ->
-    #{
-        ?CLAIM_CTX_TYPE => ?CLAIM_CTX_TYPE_V1_THRIFT_BINARY,
-        ?CLAIM_CTX_CONTEXT => base64:encode(Content)
-    };
-encode_claim(ContextFragment) ->
-    encode_claim(bouncer_client:bake_context_fragment(ContextFragment)).

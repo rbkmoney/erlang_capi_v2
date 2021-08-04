@@ -122,8 +122,7 @@ end_per_suite(C) ->
 -spec init_per_group(group_name(), config()) -> config().
 init_per_group(payment_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    ExtraProperties = #{<<"ip_replacement_allowed">> => true},
-    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited, ExtraProperties)),
+    Context = capi_ct_helper:get_context(?API_TOKEN),
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end},
@@ -163,13 +162,11 @@ init_per_group(GroupName, Config) when
         GroupName =:= customer_creation orelse
         GroupName =:= invoice_with_template_creation
 ->
-    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited)),
-    Context2 = capi_ct_helper:get_context(capi_ct_helper:issue_token(<<"TEST2">>, unlimited, #{})),
+    Context = capi_ct_helper:get_context(?API_TOKEN),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
     Apps1 = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
     Apps2 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     [
-        {context_with_diff_party, Context2},
         {context, Context},
         {group_apps, Apps1 ++ Apps2},
         {group_test_sup, SupPid}
