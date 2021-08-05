@@ -2,8 +2,8 @@
 
 -include_lib("common_test/include/ct.hrl").
 
--include_lib("damsel/include/dmsl_domain_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
+-include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("jose/include/jose_jwk.hrl").
 
 -export([all/0]).
@@ -18,15 +18,18 @@
 -export([init/1]).
 
 -export([
-    authorization_unlimited_lifetime_ok_test/1,
-    authorization_far_future_deadline_ok_test/1,
-    authorization_permission_ok_test/1,
-    authorization_negative_lifetime_error_test/1,
-    authorization_bad_deadline_error_test/1,
     authorization_error_no_header_test/1,
     authorization_error_no_permission_test/1,
-    authorization_blacklisted_token_error_test/1,
     authorization_bad_token_error_test/1
+]).
+
+-export([
+    get_party_forbidden_notfound/1,
+    get_invoice_forbidden_notfound/1,
+    get_invoice_by_external_id_forbidden_notfound/1,
+    get_payment_by_external_id_forbidden_notfound/1,
+    get_refund_by_external_id_forbidden_notfound/1,
+    get_customer_forbidden_notfound/1
 ]).
 
 -define(emptyresp(Code), {error, {Code, #{}}}).
@@ -44,22 +47,25 @@ init([]) ->
 -spec all() -> [{group, test_case_name()}].
 all() ->
     [
-        {group, authorization}
+        {group, authorization},
+        {group, forbidden_masking}
     ].
 
 -spec groups() -> [{group_name(), list(), [test_case_name()]}].
 groups() ->
     [
         {authorization, [], [
-            authorization_unlimited_lifetime_ok_test,
-            authorization_far_future_deadline_ok_test,
-            authorization_permission_ok_test,
-            authorization_negative_lifetime_error_test,
-            authorization_bad_deadline_error_test,
             authorization_error_no_header_test,
             authorization_error_no_permission_test,
-            authorization_blacklisted_token_error_test,
             authorization_bad_token_error_test
+        ]},
+        {forbidden_masking, [], [
+            get_party_forbidden_notfound,
+            get_invoice_forbidden_notfound,
+            get_invoice_by_external_id_forbidden_notfound,
+            get_payment_by_external_id_forbidden_notfound,
+            get_refund_by_external_id_forbidden_notfound,
+            get_customer_forbidden_notfound
         ]}
     ].
 
@@ -76,18 +82,6 @@ end_per_suite(C) ->
     _ = [application:stop(App) || App <- proplists:get_value(apps, C)],
     ok.
 
--spec init_per_group(group_name(), config()) -> config().
-init_per_group(_, Config) ->
-    SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps0 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
-    Apps1 = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
-    [{group_apps, Apps0 ++ Apps1}, {group_test_sup, SupPid} | Config].
-
--spec end_per_group(group_name(), config()) -> _.
-end_per_group(_Group, C) ->
-    _ = capi_utils:maybe(?config(group_test_sup, C), fun capi_ct_helper:stop_mocked_service_sup/1),
-    ok.
-
 -spec init_per_testcase(test_case_name(), config()) -> config().
 init_per_testcase(_Name, C) ->
     [{test_sup, capi_ct_helper:start_mocked_service_sup(?MODULE)} | C].
@@ -97,65 +91,36 @@ end_per_testcase(_Name, C) ->
     capi_ct_helper:stop_mocked_service_sup(?config(test_sup, C)),
     ok.
 
+-spec init_per_group(group_name(), config()) -> config().
+init_per_group(GroupName, Config) ->
+    SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
+    Apps1 = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
+    Apps2 =
+        case GroupName of
+            forbidden_masking ->
+                capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_forbidden(), SupPid);
+            _ ->
+                []
+        end,
+    [{group_apps, Apps1 ++ Apps2}, {group_test_sup, SupPid} | Config].
+
+-spec end_per_group(group_name(), config()) -> _.
+end_per_group(_Group, C) ->
+    _ = capi_utils:maybe(?config(group_test_sup, C), fun capi_ct_helper:stop_mocked_service_sup/1),
+    ok.
+
 %%% Tests
 
--spec authorization_unlimited_lifetime_ok_test(config()) -> _.
-authorization_unlimited_lifetime_ok_test(_Config) ->
-    {ok, Token} = capi_ct_helper:issue_token([], unlimited),
-    {ok, _} = capi_client_categories:get_categories(capi_ct_helper:get_context(Token)).
-
--spec authorization_far_future_deadline_ok_test(config()) -> _.
-authorization_far_future_deadline_ok_test(_Config) ->
-    % 01/01/2100 @ 12:00am (UTC)
-    {ok, Token} = capi_ct_helper:issue_token([], 4102444800),
-    {ok, _} = capi_client_categories:get_categories(capi_ct_helper:get_context(Token)).
-
--spec authorization_permission_ok_test(config()) -> _.
-authorization_permission_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services(
-        [
-            {party_management, fun
-                ('GetRevision', _) -> {ok, ?INTEGER};
-                ('Checkout', _) -> {ok, ?PARTY}
-            end}
-        ],
-        Config
-    ),
-    {ok, Token} = capi_ct_helper:issue_token([{[party], read}], unlimited),
-    {ok, _} = capi_client_parties:get_my_party(capi_ct_helper:get_context(Token)).
-
--spec authorization_negative_lifetime_error_test(config()) -> _.
-authorization_negative_lifetime_error_test(_Config) ->
-    ok.
-
-% {ok, Token} = capi_ct_helper:issue_token([], {lifetime, -10}),
-% ?emptyresp(401) = capi_client_categories:get_categories(capi_ct_helper:get_context(Token)).
-
--spec authorization_bad_deadline_error_test(config()) -> _.
-authorization_bad_deadline_error_test(_Config) ->
-    ok.
-
-% {ok, Token} = capi_ct_helper:issue_token([], {deadline, -10}),
-% ?emptyresp(401) = capi_client_categories:get_categories(capi_ct_helper:get_context(Token)).
-
 -spec authorization_error_no_header_test(config()) -> _.
-authorization_error_no_header_test(_Config) ->
+authorization_error_no_header_test(Config) ->
     Token = <<>>,
+    _ = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), Config),
     ?emptyresp(401) = capi_client_categories:get_categories(capi_ct_helper:get_context(Token)).
 
 -spec authorization_error_no_permission_test(config()) -> _.
-authorization_error_no_permission_test(_Config) ->
-    {ok, Token} = capi_ct_helper:issue_token([], 4102444800),
-    ?emptyresp(401) = capi_client_parties:get_my_party(capi_ct_helper:get_context(Token)).
-
--spec authorization_blacklisted_token_error_test(config()) -> _.
-authorization_blacklisted_token_error_test(Config) ->
-    {ok, Token} = capi_ct_helper:issue_token(<<"BlackListedToken">>, [{[party], read}], unlimited, #{}),
-    DataDir = get_blacklisted_keys_dir(Config),
-    ok = file:write_file(filename:join(DataDir, "1.key"), Token),
-    ok = file:write_file(filename:join(DataDir, "2.key"), Token),
-    ok = file:write_file(filename:join(DataDir, "3.key"), Token),
-    ok = capi_api_key_blacklist:update(),
+authorization_error_no_permission_test(Config) ->
+    Token = capi_ct_helper:issue_token(unlimited),
+    _ = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_forbidden(), Config),
     ?emptyresp(401) = capi_client_parties:get_my_party(capi_ct_helper:get_context(Token)).
 
 -spec authorization_bad_token_error_test(config()) -> _.
@@ -186,5 +151,67 @@ issue_dummy_token(ACL, Config) ->
     {_Modules, Token} = jose_jws:compact(JWT),
     {ok, Token}.
 
-get_blacklisted_keys_dir(Config) ->
-    filename:join(?config(data_dir, Config), "blacklisted_keys").
+%%%
+
+-spec get_party_forbidden_notfound(config()) -> _.
+-spec get_invoice_forbidden_notfound(config()) -> _.
+-spec get_invoice_by_external_id_forbidden_notfound(config()) -> _.
+-spec get_payment_by_external_id_forbidden_notfound(config()) -> _.
+-spec get_refund_by_external_id_forbidden_notfound(config()) -> _.
+-spec get_customer_forbidden_notfound(config()) -> _.
+
+get_party_forbidden_notfound(Config) ->
+    PartyID = <<"NONEXISTENT">>,
+    _ = capi_ct_helper:mock_services(
+        [
+            {party_management, fun
+                ('GetRevision', _) -> {ok, ?INTEGER};
+                ('Checkout', _) -> {throwing, #payproc_PartyNotFound{}}
+            end}
+        ],
+        Config
+    ),
+    {error, {404, _}} = capi_client_parties:get_party_by_id(mk_context(), PartyID).
+
+get_invoice_forbidden_notfound(Config) ->
+    InvoiceID = <<"NONEXISTENT">>,
+    _ = capi_ct_helper:mock_services(
+        [{invoicing, fun('Get', _) -> {throwing, #payproc_InvoiceNotFound{}} end}],
+        Config
+    ),
+    {error, {404, _}} = capi_client_invoices:get_invoice_by_id(mk_context(), InvoiceID).
+
+get_invoice_by_external_id_forbidden_notfound(Config) ->
+    ExternalID = <<"NEVERWAS">>,
+    _ = capi_ct_helper:mock_services(
+        [{bender, fun('GetInternalID', _) -> {throwing, capi_ct_helper_bender:no_internal_id()} end}],
+        Config
+    ),
+    {error, {404, _}} = capi_client_invoices:get_invoice_by_external_id(mk_context(), ExternalID).
+
+get_payment_by_external_id_forbidden_notfound(Config) ->
+    ExternalID = <<"NEVERWAS">>,
+    _ = capi_ct_helper:mock_services(
+        [{bender, fun('GetInternalID', _) -> {throwing, capi_ct_helper_bender:no_internal_id()} end}],
+        Config
+    ),
+    {error, {404, _}} = capi_client_payments:get_payment_by_external_id(mk_context(), ExternalID).
+
+get_refund_by_external_id_forbidden_notfound(Config) ->
+    ExternalID = <<"WHEREDIDYOUGETIT">>,
+    _ = capi_ct_helper:mock_services(
+        [{bender, fun('GetInternalID', _) -> {throwing, capi_ct_helper_bender:no_internal_id()} end}],
+        Config
+    ),
+    {error, {404, _}} = capi_client_payments:get_refund_by_external_id(mk_context(), ExternalID).
+
+get_customer_forbidden_notfound(Config) ->
+    CustomerID = <<"NONEXISTENT">>,
+    _ = capi_ct_helper:mock_services(
+        [{customer_management, fun('Get', _) -> {throwing, #payproc_CustomerNotFound{}} end}],
+        Config
+    ),
+    {error, {404, _}} = capi_client_customers:get_customer_by_id(mk_context(), CustomerID).
+
+mk_context() ->
+    capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited)).

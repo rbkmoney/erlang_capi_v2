@@ -105,6 +105,25 @@
     payout = ?CTX_ENTITY(PayoutID)
 }).
 
+-define(CTX_REPORT_OP(ID, ReportID), #bctx_v1_CommonAPIOperation{
+    id = ID,
+    report = ?CTX_ENTITY(ReportID)
+}).
+
+-define(CTX_REPORT_OP(ID, PartyID, ShopID, ReportID, FileID), #bctx_v1_CommonAPIOperation{
+    id = ID,
+    party = ?CTX_ENTITY(PartyID),
+    shop = ?CTX_ENTITY(ShopID),
+    report = ?CTX_ENTITY(ReportID),
+    file = ?CTX_ENTITY(FileID)
+}).
+
+-define(CTX_FILE_OP(ID, ReportID, FileID), #bctx_v1_CommonAPIOperation{
+    id = ID,
+    report = ?CTX_ENTITY(ReportID),
+    file = ?CTX_ENTITY(FileID)
+}).
+
 -define(CTX_SEARCH_REFUND_OP(ID, PartyID, ShopID, InvoiceID, PaymentID, RefundID), #bctx_v1_CommonAPIOperation{
     id = ID,
     party = ?CTX_ENTITY(PartyID),
@@ -186,6 +205,10 @@
     party = ?CTX_ENTITY(PartyID),
     shop = ?CTX_ENTITY(ShopID),
     files = Files
+}).
+
+-define(CTX_CONTEXT_REPORTS(Report), #bctx_v1_ContextReports{
+    report = Report
 }).
 
 -define(assertContextMatches(Expect), fun(Context) ->

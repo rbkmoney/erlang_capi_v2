@@ -1,8 +1,8 @@
 -module(capi_client_lib).
 
+-export([get_context/4]).
 -export([get_context/5]).
 -export([get_context/6]).
--export([get_context/7]).
 
 -export([handle_response/1]).
 -export([make_request/2]).
@@ -10,16 +10,18 @@
 -export([make_search_query_string/1]).
 -export([default_event_handler/0]).
 
+-type deadline() :: iodata() | woody_deadline:deadline() | undefined.
+
 -type context() :: #{
     url := string(),
     token := term(),
     timeout := integer(),
     event_handler := event_handler(),
     protocol := protocol(),
-    deadline := iodata() | undefined,
-    extra_properties := map()
+    deadline := deadline()
 }.
 
+-export_type([deadline/0]).
 -export_type([context/0]).
 
 -type event_handler() :: fun((event_type(), code(), duration()) -> ok).
@@ -108,24 +110,23 @@ handle_response(Code, _, Body) when Code div 100 == 2 ->
 handle_response(Code, _, Body) ->
     {error, {Code, Body}}.
 
--spec get_context(string(), term(), integer(), protocol(), map()) -> context().
-get_context(Url, Token, Timeout, Protocol, ExtraProperties) ->
-    get_context(Url, Token, Timeout, Protocol, ExtraProperties, default_event_handler()).
+-spec get_context(string(), term(), integer(), protocol()) -> context().
+get_context(Url, Token, Timeout, Protocol) ->
+    get_context(Url, Token, Timeout, Protocol, default_event_handler()).
 
--spec get_context(string(), term(), integer(), protocol(), map(), event_handler()) -> context().
-get_context(Url, Token, Timeout, Protocol, ExtraProperties, EventHandler) ->
-    get_context(Url, Token, Timeout, Protocol, ExtraProperties, EventHandler, undefined).
+-spec get_context(string(), term(), integer(), protocol(), event_handler()) -> context().
+get_context(Url, Token, Timeout, Protocol, EventHandler) ->
+    get_context(Url, Token, Timeout, Protocol, EventHandler, undefined).
 
--spec get_context(string(), term(), integer(), protocol(), map(), event_handler(), iodata() | undefined) -> context().
-get_context(Url, Token, Timeout, Protocol, ExtraProperties, EventHandler, Deadline) ->
+-spec get_context(string(), term(), integer(), protocol(), event_handler(), iodata() | undefined) -> context().
+get_context(Url, Token, Timeout, Protocol, EventHandler, Deadline) ->
     #{
         url => Url,
         token => Token,
         timeout => Timeout,
         protocol => Protocol,
         event_handler => EventHandler,
-        deadline => Deadline,
-        extra_properties => ExtraProperties
+        deadline => Deadline
     }.
 
 -spec default_event_handler() -> event_handler().
@@ -165,6 +166,8 @@ x_request_id_header() ->
 -spec x_request_deadline_header(iodata() | undefined, list()) -> list().
 x_request_deadline_header(undefined, Headers) ->
     Headers;
+x_request_deadline_header(WoodyDeadline = {_, _}, Headers) ->
+    [{<<"X-Request-Deadline">>, woody_deadline:to_binary(WoodyDeadline)} | Headers];
 x_request_deadline_header(Time, Headers) ->
     [{<<"X-Request-Deadline">>, Time} | Headers].
 

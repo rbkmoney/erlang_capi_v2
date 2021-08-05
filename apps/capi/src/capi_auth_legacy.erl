@@ -8,7 +8,6 @@
 -export([get_claims/1]).
 
 -export([authorize_api_key/1]).
--export([authorize_operation/3]).
 
 -export([issue_access_token/2]).
 -export([issue_access_token/3]).
@@ -68,27 +67,13 @@ get_claims(Context) ->
 %%
 
 -spec authorize_api_key(ApiKey :: binary()) ->
-    {ok, context()} | {error, {authorize_api_key_failed | blacklisted_token, _Reason}}.
+    {ok, context()} | {error, {authorize_api_key_failed, _Reason}}.
 authorize_api_key(ApiKey) ->
     case uac:authorize_api_key(ApiKey, #{}) of
         {ok, Context} ->
-            check_blacklist(ApiKey, Context);
+            {ok, Context};
         {error, Error} ->
             {error, {authorize_api_key_failed, Error}}
-    end.
-
--spec authorize_operation(
-    AuthContext :: context(),
-    OperationID :: capi_handler:processing_context(),
-    Req :: capi_handler:request_data()
-) -> resolution().
-authorize_operation(AuthContext, #{operation_id := OperationID}, Req) ->
-    OperationACL = capi_operation_access:get_operation_access(OperationID, Req),
-    case uac:authorize_operation(OperationACL, AuthContext) of
-        ok ->
-            allowed;
-        {error, Reason} ->
-            {forbidden, Reason}
     end.
 
 %%
@@ -158,18 +143,6 @@ get_access_config() ->
 
 %%
 %% Internal functions
-%%
-
-check_blacklist(Token, Context) ->
-    case capi_api_key_blacklist:check(Token) of
-        true ->
-            SubjectId = get_subject_id(Context),
-            _ = logger:warning("Blacklisted API Key usage detected for subject_id: ~p", [SubjectId]),
-            {error, {blacklisted_token, Token}};
-        false ->
-            {ok, Context}
-    end.
-
 %%
 
 -spec resolve_token_spec(token_spec()) -> claims().

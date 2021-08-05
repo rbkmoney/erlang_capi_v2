@@ -82,7 +82,7 @@ get_service_modname(merchant_stat) ->
 get_service_modname(reporting) ->
     {reporter_reports_thrift, 'Reporting'};
 get_service_modname(payouts) ->
-    {dmsl_payout_processing_thrift, 'PayoutManagement'};
+    {payouts_payout_manager_thrift, 'PayoutManagement'};
 get_service_modname(accounter) ->
     {dmsl_accounter_thrift, 'Accounter'};
 get_service_modname(geo_ip_service) ->

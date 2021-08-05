@@ -6,7 +6,11 @@
 
 -export([prepare/3]).
 
--import(capi_handler_utils, [general_error/2, logic_error/2]).
+-import(capi_handler_utils, [
+    general_error/2,
+    logic_error/2,
+    map_service_result/1
+]).
 
 -spec prepare(
     OperationID :: capi_handler:operation_id(),
@@ -24,7 +28,7 @@ prepare('CreateInvoice' = OperationID, Req, Context) ->
         Prototypes = [
             {operation, #{id => OperationID, party => PartyID, shop => ShopID}}
         ],
-        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -74,26 +78,19 @@ prepare('CreateInvoice' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('CreateInvoiceAccessToken' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    ResultInvoice =
-        case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
-            {ok, Result} ->
-                Result;
-            {exception, _Exception} ->
-                undefined
-        end,
+    ResultInvoice = map_service_result(capi_handler_utils:get_invoice_by_id(InvoiceID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID}},
             {payproc, #{invoice => ResultInvoice}}
         ],
-        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context),
         {ok, Resolution}
     end,
     Process = fun() ->
         capi_handler:respond_if_undefined(ResultInvoice, general_error(404, <<"Invoice not found">>)),
-        #'payproc_Invoice'{invoice = Invoice} = ResultInvoice,
+        #payproc_Invoice{invoice = #domain_Invoice{owner_id = PartyID}} = ResultInvoice,
         ExtraProperties = capi_handler_utils:get_extra_properties(Context),
-        #'domain_Invoice'{owner_id = PartyID} = Invoice,
         Response = capi_handler_utils:issue_access_token(
             PartyID,
             {invoice, InvoiceID},
@@ -104,19 +101,13 @@ prepare('CreateInvoiceAccessToken' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('GetInvoiceByID' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    ResultInvoice =
-        case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
-            {ok, Result} ->
-                Result;
-            {exception, _Exception} ->
-                undefined
-        end,
+    ResultInvoice = map_service_result(capi_handler_utils:get_invoice_by_id(InvoiceID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID}},
             {payproc, #{invoice => ResultInvoice}}
         ],
-        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
+        Resolution = mask_invoice_notfound(capi_auth:authorize_operation(Prototypes, Context)),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -141,7 +132,7 @@ prepare('GetInvoiceByExternalID' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID}},
             {payproc, #{invoice => ResultInvoice}}
         ],
-        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
+        Resolution = mask_invoice_notfound(capi_auth:authorize_operation(Prototypes, Context)),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -157,7 +148,7 @@ prepare('FulfillInvoice' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID}},
             {payproc, #{invoice => InvoiceID}}
         ],
-        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -189,7 +180,7 @@ prepare('RescindInvoice' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID}},
             {payproc, #{invoice => InvoiceID}}
         ],
-        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
+        Resolution = capi_auth:authorize_operation(Prototypes, Context),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -224,7 +215,7 @@ prepare('GetInvoiceEvents' = OperationID, Req, Context) ->
             {operation, #{id => OperationID, invoice => InvoiceID}},
             {payproc, #{invoice => InvoiceID}}
         ],
-        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
+        Resolution = mask_invoice_notfound(capi_auth:authorize_operation(Prototypes, Context)),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -262,19 +253,13 @@ prepare('GetInvoiceEvents' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('GetInvoicePaymentMethods' = OperationID, Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
-    ResultInvoice =
-        case capi_handler_utils:get_invoice_by_id(InvoiceID, Context) of
-            {ok, Result} ->
-                Result;
-            {exception, _Exception} ->
-                undefined
-        end,
+    ResultInvoice = map_service_result(capi_handler_utils:get_invoice_by_id(InvoiceID, Context)),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID}},
             {payproc, #{invoice => ResultInvoice}}
         ],
-        Resolution = capi_auth:authorize_operation(Prototypes, Context, Req),
+        Resolution = mask_invoice_notfound(capi_auth:authorize_operation(Prototypes, Context)),
         {ok, Resolution}
     end,
     Process = fun() ->
@@ -504,3 +489,12 @@ get_invoice_by_external_id(ExternalID, #{woody_context := WoodyContext} = Contex
         Error ->
             Error
     end.
+
+mask_invoice_notfound(Resolution) ->
+    % ED-206
+    % When bouncer says "forbidden" we can't really tell the difference between "forbidden because
+    % of no such invoice", "forbidden because client has no access to it" and "forbidden because
+    % client has no permission to act on it". From the point of view of existing integrations this
+    % is not great, so we have to mask specific instances of missing authorization as if specified
+    % invoice is nonexistent.
+    capi_handler:respond_if_forbidden(Resolution, general_error(404, <<"Invoice not found">>)).

@@ -16,7 +16,7 @@
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare(OperationID = 'GetPaymentInstitutions', Req, #{woody_context := WoodyContext} = Context) ->
-    Authorize = mk_authorize_operation(OperationID, Context, Req),
+    Authorize = mk_authorize_operation(OperationID, Context),
     Process = fun() ->
         try
             Residence = capi_handler_encoder:encode_residence(genlib_map:get(residence, Req)),
@@ -42,7 +42,7 @@ prepare(OperationID = 'GetPaymentInstitutions', Req, #{woody_context := WoodyCon
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetPaymentInstitutionByRef', Req, Context) ->
-    Authorize = mk_authorize_operation(OperationID, Context, Req),
+    Authorize = mk_authorize_operation(OperationID, Context),
     Process = fun() ->
         PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
         case capi_domain:get({payment_institution, ?payment_institution_ref(PaymentInstitutionID)}, Context) of
@@ -54,7 +54,7 @@ prepare(OperationID = 'GetPaymentInstitutionByRef', Req, Context) ->
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetPaymentInstitutionPaymentTerms', Req, Context) ->
-    Authorize = mk_authorize_operation(OperationID, Context, Req),
+    Authorize = mk_authorize_operation(OperationID, Context),
     Process = fun() ->
         PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
         case compute_payment_institution_terms(PaymentInstitutionID, #payproc_Varset{}, Context) of
@@ -66,7 +66,7 @@ prepare(OperationID = 'GetPaymentInstitutionPaymentTerms', Req, Context) ->
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetPaymentInstitutionPayoutMethods', Req, Context) ->
-    Authorize = mk_authorize_operation(OperationID, Context, Req),
+    Authorize = mk_authorize_operation(OperationID, Context),
     Process = fun() ->
         PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
         case compute_payment_institution_terms(PaymentInstitutionID, prepare_request_varset(Req, Context), Context) of
@@ -80,7 +80,7 @@ prepare(OperationID = 'GetPaymentInstitutionPayoutMethods', Req, Context) ->
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetPaymentInstitutionPayoutSchedules', Req, Context) ->
-    Authorize = mk_authorize_operation(OperationID, Context, Req),
+    Authorize = mk_authorize_operation(OperationID, Context),
     Process = fun() ->
         PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
         case compute_payment_institution_terms(PaymentInstitutionID, prepare_request_varset(Req, Context), Context) of
@@ -98,12 +98,12 @@ prepare(_OperationID, _Req, _Context) ->
 
 %%
 
-mk_authorize_operation(OperationID, Context, Req) ->
+mk_authorize_operation(OperationID, Context) ->
     fun() ->
         Prototypes = [
             {operation, #{id => OperationID}}
         ],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end.
 
 check_payment_institution(Realm, Residence, PaymentInstitution) ->
@@ -143,6 +143,8 @@ encode_optional_payout_method('InternationalBankAccount') ->
     #domain_PayoutMethodRef{id = international_bank_account};
 encode_optional_payout_method('Wallet') ->
     #domain_PayoutMethodRef{id = wallet_info};
+encode_optional_payout_method('PaymentInstitutionAccount') ->
+    #domain_PayoutMethodRef{id = payment_institution_account};
 encode_optional_payout_method(undefined) ->
     undefined.
 
@@ -181,7 +183,9 @@ decode_payout_method(#domain_PayoutMethodRef{id = russian_bank_account}) ->
 decode_payout_method(#domain_PayoutMethodRef{id = international_bank_account}) ->
     <<"InternationalBankAccount">>;
 decode_payout_method(#domain_PayoutMethodRef{id = wallet_info}) ->
-    <<"Wallet">>.
+    <<"Wallet">>;
+decode_payout_method(#domain_PayoutMethodRef{id = payment_institution_account}) ->
+    <<"PaymentInstitutionAccount">>.
 
 decode_payout_methods_selector({value, Val}) when is_list(Val) ->
     lists:map(fun decode_payout_method/1, Val);

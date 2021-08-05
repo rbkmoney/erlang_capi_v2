@@ -12,6 +12,7 @@
 
 -export([service_call_with/3]).
 -export([service_call/2]).
+-export([map_service_result/1]).
 
 -export([get_auth_context/1]).
 -export([get_user_info/1]).
@@ -98,6 +99,13 @@ service_call_with_([], Call, Context) ->
 -spec service_call({atom(), atom(), tuple()}, processing_context()) -> woody:result().
 service_call({ServiceName, Function, Args}, #{woody_context := WoodyContext}) ->
     capi_woody_client:call_service(ServiceName, Function, Args, WoodyContext).
+
+-spec map_service_result({ok, Result} | {exception, woody_error:business_error()}) ->
+    Result | undefined.
+map_service_result({ok, Result}) ->
+    Result;
+map_service_result({exception, _}) ->
+    undefined.
 
 -spec get_auth_context(processing_context()) -> any().
 get_auth_context(#{swagger_context := #{auth_context := AuthContext}}) ->

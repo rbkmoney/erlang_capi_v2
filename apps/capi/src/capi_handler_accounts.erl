@@ -17,7 +17,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'GetAccountByID' ->
     PartyID = capi_handler_utils:get_party_id(Context),
     Authorize = fun() ->
         Prototypes = [{operation, #{id => OperationID, party => PartyID}}],
-        {ok, capi_auth:authorize_operation(Prototypes, Context, Req)}
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         AccountID = genlib:to_int(maps:get('accountID', Req)),
