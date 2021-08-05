@@ -4,8 +4,8 @@
 -include_lib("token_keeper_proto/include/tk_token_keeper_thrift.hrl").
 -include_lib("token_keeper_proto/include/tk_context_thrift.hrl").
 
--define(TK_META_NS_KEYCLOAK, <<"com.rbkmoney.keycloak">>).
--define(TK_META_NS_APIKEYMGMT, <<"com.rbkmoney.apikeymgmt">>).
+-define(TK_META_NS_KEYCLOAK, <<"test.rbkmoney.keycloak">>).
+-define(TK_META_NS_APIKEYMGMT, <<"test.rbkmoney.apikeymgmt">>).
 
 -define(PARTY_ID, ?STRING).
 -define(USER_ID, ?STRING).
@@ -149,10 +149,6 @@ start_client(ServiceURLs) ->
     capi_ct_helper:start_app(token_keeper_client, [
         {service_client, #{
             url => maps:get(token_keeper, ServiceURLs)
-        }},
-        {namespace_mappings, #{
-            user_session => ?TK_META_NS_KEYCLOAK,
-            api_key => ?TK_META_NS_APIKEYMGMT
         }}
     ]).
 

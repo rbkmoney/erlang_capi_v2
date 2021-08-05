@@ -3,7 +3,9 @@
 %% API functions
 
 -export([get_subject_id/1]).
--export([get_subject_email/1]).
+-export([get_party_id/1]).
+-export([get_user_id/1]).
+-export([get_user_email/1]).
 
 -export([preauthorize_api_key/1]).
 -export([authorize_api_key/3]).
@@ -49,25 +51,29 @@
 }.
 
 %%
-
--define(METADATA_NAMESPACE, <<"com.rbkmoney.apikeymgmt">>).
-
-%%
 %% API functions
 %%
 
 -spec get_subject_id(auth_context()) -> binary() | undefined.
-get_subject_id(?authorized(AuthData)) ->
-    case token_keeper_auth_data:get_party_id(AuthData) of
+get_subject_id(AuthContext) ->
+    case get_party_id(AuthContext) of
         PartyId when is_binary(PartyId) ->
             PartyId;
         undefined ->
-            token_keeper_auth_data:get_user_id(AuthData)
+            get_user_id(AuthContext)
     end.
 
--spec get_subject_email(auth_context()) -> binary() | undefined.
-get_subject_email(?authorized(AuthData)) ->
-    token_keeper_auth_data:get_user_email(AuthData).
+-spec get_party_id(auth_context()) -> binary() | undefined.
+get_party_id(?authorized(AuthData)) ->
+    token_keeper_auth_data:get_metadata(get_api_key_namespace(), <<"party_id">>, AuthData).
+
+-spec get_user_id(auth_context()) -> binary() | undefined.
+get_user_id(?authorized(AuthData)) ->
+    token_keeper_auth_data:get_metadata(get_user_session_namespace(), <<"user_id">>, AuthData).
+
+-spec get_user_email(auth_context()) -> binary() | undefined.
+get_user_email(?authorized(AuthData)) ->
+    token_keeper_auth_data:get_metadata(get_user_session_namespace(), <<"user_email">>, AuthData).
 
 %%
 
@@ -90,9 +96,14 @@ authorize_api_key(?unauthorized({TokenType, Token}), TokenContext, WoodyContext)
     ProcessingContext :: capi_handler:processing_context()
 ) -> resolution().
 authorize_operation(Prototypes, ProcessingContext) ->
-    AuthData = extract_auth_context(ProcessingContext),
+    AuthContext = extract_auth_context(ProcessingContext),
     #{swagger_context := SwagContext, woody_context := WoodyContext} = ProcessingContext,
-    Fragments = capi_bouncer:gather_context_fragments(AuthData, SwagContext, WoodyContext),
+    Fragments = capi_bouncer:gather_context_fragments(
+        get_token_keeper_fragment(AuthContext),
+        get_user_id(AuthContext),
+        SwagContext,
+        WoodyContext
+    ),
     Fragments1 = capi_bouncer_context:build(Prototypes, Fragments, WoodyContext),
     capi_bouncer:judge(Fragments1, WoodyContext).
 
@@ -100,7 +111,7 @@ authorize_operation(Prototypes, ProcessingContext) ->
 
 -spec get_consumer(auth_context()) -> consumer().
 get_consumer(?authorized(AuthData)) ->
-    case token_keeper_auth_data:get_metadata(?METADATA_NAMESPACE, AuthData) of
+    case token_keeper_auth_data:get_metadata(get_api_key_namespace(), AuthData) of
         #{<<"cons">> := <<"merchant">>} -> merchant;
         #{<<"cons">> := <<"client">>} -> client;
         #{<<"cons">> := <<"provider">>} -> provider;
@@ -125,7 +136,7 @@ issue_access_token(TokenSpec, WoodyContext) ->
     token_keeper_client:token().
 issue_access_token(#{access := Access, subject := PartyID} = TokenSpec, ExtraProperties, WoodyContext) ->
     ContextFragment = create_context_fragment(Access, PartyID, maps:get(lifetime, TokenSpec, undefined)),
-    Metadata = create_metadata(?METADATA_NAMESPACE, PartyID, add_consumer(Access, ExtraProperties)),
+    Metadata = create_metadata(get_api_key_namespace(), PartyID, add_consumer(Access, ExtraProperties)),
     %%TODO InvoiceTemplateAccessTokens are technically not ephemeral and should become so in the future
     AuthData = token_keeper_client:create_ephemeral(ContextFragment, Metadata, WoodyContext),
     token_keeper_auth_data:get_token(AuthData).
@@ -209,8 +220,11 @@ add_consumer(_, ExtraProperties) ->
 create_metadata(Namespace, PartyID, AdditionalMeta) ->
     #{Namespace => AdditionalMeta#{<<"party_id">> => PartyID}}.
 
-extract_auth_context(#{swagger_context := #{auth_context := ?authorized(AuthContext)}}) ->
+extract_auth_context(#{swagger_context := #{auth_context := AuthContext}}) ->
     AuthContext.
+
+get_token_keeper_fragment(?authorized(AuthData)) ->
+    token_keeper_auth_data:get_context_fragment(AuthData).
 
 authorize_token_by_type(bearer, Token, TokenContext, WoodyContext) ->
     case token_keeper_client:get_by_token(Token, TokenContext, WoodyContext) of
@@ -225,3 +239,12 @@ parse_api_key(<<"Bearer ", Token/binary>>) ->
     {ok, {bearer, Token}};
 parse_api_key(_) ->
     {error, unsupported_auth_scheme}.
+
+get_user_session_namespace() ->
+    maps:get(user_session_token, get_meta_ns_conf()).
+
+get_api_key_namespace() ->
+    maps:get(api_key_token, get_meta_ns_conf()).
+
+get_meta_ns_conf() ->
+    genlib_app:env(capi, namespace_mappings, #{}).

@@ -253,7 +253,7 @@ collect_user_identity(AuthContext) ->
         id => capi_auth:get_subject_id(AuthContext),
         %%TODO: Store user realm in authdata meta and extract it here
         realm => ?REALM,
-        email => capi_auth:get_subject_email(AuthContext)
+        email => capi_auth:get_user_email(AuthContext)
     }).
 
 attach_deadline(#{'X-Request-Deadline' := undefined}, Context) ->

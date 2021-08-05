@@ -25,6 +25,9 @@
 -define(CAPI_HOST_NAME, "localhost").
 -define(CAPI_URL, ?CAPI_HOST_NAME ++ ":" ++ integer_to_list(?CAPI_PORT)).
 
+-define(TK_META_NS_KEYCLOAK, <<"test.rbkmoney.keycloak">>).
+-define(TK_META_NS_APIKEYMGMT, <<"test.rbkmoney.apikeymgmt">>).
+
 %%
 -type config() :: [{atom(), any()}].
 -type app_name() :: atom().
@@ -110,6 +113,10 @@ start_capi(Config, ExtraEnv) ->
                 {lechiffre_opts, #{
                     encryption_source => JwkPublSource,
                     decryption_sources => [JwkPrivSource]
+                }},
+                {namespace_mappings, #{
+                    user_session_token => ?TK_META_NS_KEYCLOAK,
+                    api_key_token => ?TK_META_NS_APIKEYMGMT
                 }}
             ],
     start_app(capi, CapiEnv).

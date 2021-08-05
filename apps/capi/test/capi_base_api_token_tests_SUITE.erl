@@ -1092,7 +1092,7 @@ get_my_party_not_found_test(Config) ->
     ),
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetMyParty">>, ?STRING, Config),
     ?assertMatch(
-        {error, {404, _}},
+        {error, {400, _}},
         capi_client_parties:get_my_party(?config(context, Config))
     ).
 

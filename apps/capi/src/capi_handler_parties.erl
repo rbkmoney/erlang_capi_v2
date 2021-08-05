@@ -26,11 +26,10 @@ prepare('GetMyParty' = OperationID, _Req, Context) ->
             {ok, Party} ->
                 DecodedParty = capi_handler_decoder_party:decode_party(Party),
                 {ok, {200, #{}, DecodedParty}};
-            %% How does one not have a party, though? 🤔
             {error, #payproc_InvalidUser{}} ->
-                {ok, general_error(404, <<"Party not found">>)};
+                {ok, logic_error(<<"invalidRequest">>, <<"Party not found">>)};
             {error, #payproc_PartyNotFound{}} ->
-                {ok, general_error(404, <<"Party not found">>)}
+                {ok, logic_error(<<"invalidRequest">>, <<"Party not found">>)}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
