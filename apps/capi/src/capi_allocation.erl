@@ -7,23 +7,23 @@
 -export([decode/1]).
 
 -type allocation() :: dmsl_domain_thrift:'Allocation'().
--type encode_data() :: _.
+-type allocation_prototype() :: dmsl_domain_thrift:'AllocationPrototype'().
 -type decode_data() :: _.
 -type validate_error() :: allocation_duplicate | allocation_wrong_cart.
 
--spec validate(map()) -> ok | validate_error().
+-spec validate(list() | undefined) -> ok | validate_error().
 validate(undefined) ->
     ok;
-validate(#{<<"items">> := []}) ->
+validate([]) ->
     allocation_wrong_cart;
-validate(#{<<"items">> := Transactions}) ->
+validate(Transactions) ->
     Uniq = lists:usort([maps:get(<<"shopID">>, Target) || #{<<"target">> := Target} <- Transactions]),
     case erlang:length(Uniq) =/= erlang:length(Transactions) of
         true -> allocation_duplicate;
         _ -> ok
     end.
 
--spec encode(map() | undefined, binary()) -> encode_data() | undefined.
+-spec encode(list() | undefined, binary()) -> allocation_prototype() | undefined.
 encode(undefined, _PartyID) ->
     undefined;
 encode(Transactions, PartyID) ->
@@ -171,16 +171,14 @@ decode_parts(Parts) ->
 -spec validate_test_() -> _.
 validate_test_() ->
     [
-        ?_assertEqual(allocation_wrong_cart, validate(#{<<"items">> => []})),
+        ?_assertEqual(allocation_wrong_cart, validate([])),
         ?_assertEqual(
             allocation_duplicate,
-            validate(#{
-                <<"items">> => [
-                    #{<<"target">> => #{<<"shopID">> => <<"shop1">>}},
-                    #{<<"target">> => #{<<"shopID">> => <<"shop2">>}},
-                    #{<<"target">> => #{<<"shopID">> => <<"shop1">>}}
-                ]
-            })
+            validate([
+                #{<<"target">> => #{<<"shopID">> => <<"shop1">>}},
+                #{<<"target">> => #{<<"shopID">> => <<"shop2">>}},
+                #{<<"target">> => #{<<"shopID">> => <<"shop1">>}}
+            ])
         )
     ].
 

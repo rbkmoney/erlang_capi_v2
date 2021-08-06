@@ -1,5 +1,6 @@
 -module(capi_handler_decoder_utils).
 
+-include_lib("damsel/include/dmsl_domain_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("damsel/include/dmsl_merch_stat_thrift.hrl").
 
@@ -19,12 +20,13 @@
 -export_type([decode_data/0]).
 
 -type decode_data() :: #{binary() => term()}.
+-type encoded_currency() :: dmsl_domain_thrift:'Currency'() | dmsl_domain_thrift:'CurrencyRef'().
 
 -spec decode_map(map(), fun((_) -> any())) -> [any()].
 decode_map(Items, Fun) ->
     lists:map(Fun, maps:values(Items)).
 
--spec decode_currency(capi_handler_encoder:encode_data()) -> binary().
+-spec decode_currency(encoded_currency()) -> binary().
 decode_currency(#domain_Currency{symbolic_code = SymbolicCode}) -> SymbolicCode;
 decode_currency(#domain_CurrencyRef{symbolic_code = SymbolicCode}) -> SymbolicCode.
 

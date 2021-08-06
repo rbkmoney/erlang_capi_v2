@@ -161,7 +161,9 @@ decode_stat_invoice(Invoice, _Context) ->
             <<"metadata">> => capi_handler_decoder_utils:decode_context(Invoice#merchstat_StatInvoice.context),
             <<"product">> => Invoice#merchstat_StatInvoice.product,
             <<"description">> => Invoice#merchstat_StatInvoice.description,
-            <<"cart">> => capi_handler_decoder_invoicing:decode_invoice_cart(Invoice#merchstat_StatInvoice.cart)
+            <<"cart">> => capi_handler_decoder_invoicing:decode_invoice_cart(Invoice#merchstat_StatInvoice.cart),
+            <<"externalID">> => Invoice#merchstat_StatInvoice.external_id,
+            <<"allocation">> => capi_allocation:decode(Invoice#merchstat_StatInvoice.allocation)
         },
         decode_stat_invoice_status(Invoice#merchstat_StatInvoice.status)
     ).
@@ -478,7 +480,9 @@ decode_stat_refund(Refund, Context) ->
             <<"reason">> => Refund#merchstat_StatRefund.reason,
             <<"cart">> => capi_handler_decoder_invoicing:decode_invoice_cart(
                 Refund#merchstat_StatRefund.cart
-            )
+            ),
+            <<"externalID">> => Refund#merchstat_StatRefund.external_id,
+            <<"allocation">> => capi_allocation:decode(Refund#merchstat_StatRefund.allocation)
         },
         decode_stat_refund_status(Refund#merchstat_StatRefund.status, Context)
     ).
