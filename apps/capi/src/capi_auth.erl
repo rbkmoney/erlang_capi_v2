@@ -65,15 +65,15 @@ get_subject_id(AuthContext) ->
 
 -spec get_party_id(auth_context()) -> binary() | undefined.
 get_party_id(?authorized(AuthData)) ->
-    token_keeper_auth_data:get_metadata(get_api_key_namespace(), <<"party_id">>, AuthData).
+    token_keeper_auth_data:get_metadata(get_party_namespace(), <<"party_id">>, AuthData).
 
 -spec get_user_id(auth_context()) -> binary() | undefined.
 get_user_id(?authorized(AuthData)) ->
-    token_keeper_auth_data:get_metadata(get_user_session_namespace(), <<"user_id">>, AuthData).
+    token_keeper_auth_data:get_metadata(get_user_namespace(), <<"user_id">>, AuthData).
 
 -spec get_user_email(auth_context()) -> binary() | undefined.
 get_user_email(?authorized(AuthData)) ->
-    token_keeper_auth_data:get_metadata(get_user_session_namespace(), <<"user_email">>, AuthData).
+    token_keeper_auth_data:get_metadata(get_user_namespace(), <<"user_email">>, AuthData).
 
 %%
 
@@ -111,7 +111,7 @@ authorize_operation(Prototypes, ProcessingContext) ->
 
 -spec get_consumer(auth_context()) -> consumer().
 get_consumer(?authorized(AuthData)) ->
-    case token_keeper_auth_data:get_metadata(get_api_key_namespace(), AuthData) of
+    case token_keeper_auth_data:get_metadata(get_party_namespace(), AuthData) of
         #{<<"cons">> := <<"merchant">>} -> merchant;
         #{<<"cons">> := <<"client">>} -> client;
         #{<<"cons">> := <<"provider">>} -> provider;
@@ -136,7 +136,7 @@ issue_access_token(TokenSpec, WoodyContext) ->
     token_keeper_client:token().
 issue_access_token(#{scope := Scope, party_id := PartyID} = TokenSpec, ExtraProperties, WoodyContext) ->
     ContextFragment = create_context_fragment(Scope, PartyID, maps:get(lifetime, TokenSpec, undefined)),
-    Metadata = create_metadata(get_api_key_namespace(), PartyID, add_consumer(Scope, ExtraProperties)),
+    Metadata = create_metadata(get_party_namespace(), PartyID, add_consumer(Scope, ExtraProperties)),
     %%TODO InvoiceTemplateAccessTokens are technically not ephemeral and should become so in the future
     AuthData = token_keeper_client:create_ephemeral(ContextFragment, Metadata, WoodyContext),
     token_keeper_auth_data:get_token(AuthData).
@@ -240,11 +240,12 @@ parse_api_key(<<"Bearer ", Token/binary>>) ->
 parse_api_key(_) ->
     {error, unsupported_auth_scheme}.
 
-get_user_session_namespace() ->
-    maps:get(user_session_token, get_meta_ns_conf()).
+get_user_namespace() ->
+    maps:get(user_namespace, get_meta_ns_conf()).
 
-get_api_key_namespace() ->
-    maps:get(api_key_token, get_meta_ns_conf()).
+get_party_namespace() ->
+    maps:get(party_namespace, get_meta_ns_conf()).
 
 get_meta_ns_conf() ->
-    genlib_app:env(capi, namespace_mappings, #{}).
+    AuthConfig = genlib_app:env(capi, auth_config),
+    maps:get(metadata_namespaces, AuthConfig).

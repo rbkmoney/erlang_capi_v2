@@ -114,9 +114,11 @@ start_capi(Config, ExtraEnv) ->
                     encryption_source => JwkPublSource,
                     decryption_sources => [JwkPrivSource]
                 }},
-                {namespace_mappings, #{
-                    user_session_token => ?TK_META_NS_KEYCLOAK,
-                    api_key_token => ?TK_META_NS_APIKEYMGMT
+                {auth_config, #{
+                    metadata_namespaces => #{
+                        user_namespace => ?TK_META_NS_KEYCLOAK,
+                        party_namespace => ?TK_META_NS_APIKEYMGMT
+                    }
                 }}
             ],
     start_app(capi, CapiEnv).
