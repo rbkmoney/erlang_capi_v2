@@ -22,6 +22,7 @@
 -export([get_party_id/1]).
 
 -export([issue_access_token/3]).
+-export([issue_access_token/4]).
 -export([merge_and_compact/2]).
 -export([get_time/2]).
 -export([get_split_interval/2]).
@@ -145,14 +146,14 @@ append_to_tuple(Item, Tuple) ->
     list_to_tuple([Item | tuple_to_list(Tuple)]).
 
 -spec issue_access_token(binary(), tuple(), woody_context:ctx()) -> map().
-issue_access_token(PartyID, TokenAccess, WoodyContext) ->
-    issue_access_token(PartyID, TokenAccess, #{}, WoodyContext).
+issue_access_token(PartyID, TokenScope, WoodyContext) ->
+    issue_access_token(PartyID, TokenScope, #{}, WoodyContext).
 
 -spec issue_access_token(binary(), tuple(), map(), woody_context:ctx()) -> map().
-issue_access_token(PartyID, TokenAccess, ExtraProperties, WoodyContext) ->
+issue_access_token(PartyID, TokenScope, ExtraProperties, WoodyContext) ->
     TokenSpec = #{
-        access => TokenAccess,
-        subject => PartyID
+        scope => TokenScope,
+        party_id => PartyID
     },
     #{
         <<"payload">> =>
