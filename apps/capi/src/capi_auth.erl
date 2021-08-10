@@ -38,15 +38,15 @@
 -define(authorized(Ctx), {authorized, Ctx}).
 -define(unauthorized(Ctx), {unauthorized, Ctx}).
 
--type token_access() ::
+-type token_scope() ::
     {invoice, InvoiceID :: binary()}
     | {invoice_tpl, InvoiceTplID :: binary()}
     | {customer, CustomerID :: binary()}.
 -type token_lifetime() :: pos_integer() | unlimited.
 
 -type token_spec() :: #{
-    access := token_access(),
-    subject := binary(),
+    scope := token_scope(),
+    party_id := binary(),
     lifetime => token_lifetime()
 }.
 
@@ -134,9 +134,9 @@ issue_access_token(TokenSpec, WoodyContext) ->
     WoodyContext :: woody_context:ctx()
 ) ->
     token_keeper_client:token().
-issue_access_token(#{access := Access, subject := PartyID} = TokenSpec, ExtraProperties, WoodyContext) ->
-    ContextFragment = create_context_fragment(Access, PartyID, maps:get(lifetime, TokenSpec, undefined)),
-    Metadata = create_metadata(get_api_key_namespace(), PartyID, add_consumer(Access, ExtraProperties)),
+issue_access_token(#{scope := Scope, party_id := PartyID} = TokenSpec, ExtraProperties, WoodyContext) ->
+    ContextFragment = create_context_fragment(Scope, PartyID, maps:get(lifetime, TokenSpec, undefined)),
+    Metadata = create_metadata(get_api_key_namespace(), PartyID, add_consumer(Scope, ExtraProperties)),
     %%TODO InvoiceTemplateAccessTokens are technically not ephemeral and should become so in the future
     AuthData = token_keeper_client:create_ephemeral(ContextFragment, Metadata, WoodyContext),
     token_keeper_auth_data:get_token(AuthData).
@@ -152,9 +152,9 @@ issue_access_token(#{access := Access, subject := PartyID} = TokenSpec, ExtraPro
 
 create_context_fragment(Access, PartyID, undefined) ->
     create_context_fragment(Access, PartyID, get_default_token_lifetime(Access));
-create_context_fragment(Access, PartyID, Expiration) ->
-    ok = verify_token_lifetime(Access, Expiration),
-    ContextFragment0 = bouncer_context_helpers:make_auth_fragment(resolve_bouncer_ctx(Access, PartyID, Expiration)),
+create_context_fragment(Access, PartyID, Lifetime) ->
+    ok = verify_token_lifetime(Access, Lifetime),
+    ContextFragment0 = bouncer_context_helpers:make_auth_fragment(resolve_bouncer_ctx(Access, PartyID, Lifetime)),
     {encoded_fragment, ContextFragment} = bouncer_client:bake_context_fragment(ContextFragment0),
     ContextFragment.
 
@@ -163,12 +163,12 @@ get_default_token_lifetime({invoice_tpl, _}) -> unlimited;
 get_default_token_lifetime({customer, _}) -> ?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME.
 
 %% Forbid creation of unlimited lifetime invoice and customer tokens
-verify_token_lifetime({invoice, _}, Expiration) when Expiration =/= unlimited -> ok;
-verify_token_lifetime({customer, _}, Expiration) when Expiration =/= unlimited -> ok;
-verify_token_lifetime({invoice_tpl, _}, _Expiration) -> ok;
+verify_token_lifetime({invoice, _}, Lifetime) when Lifetime =/= unlimited -> ok;
+verify_token_lifetime({customer, _}, Lifetime) when Lifetime =/= unlimited -> ok;
+verify_token_lifetime({invoice_tpl, _}, _Lifetime) -> ok;
 verify_token_lifetime(_, _) -> error.
 
--spec resolve_bouncer_ctx(token_access(), _PartyID :: binary(), token_lifetime()) ->
+-spec resolve_bouncer_ctx(token_scope(), _PartyID :: binary(), token_lifetime()) ->
     bouncer_context_helpers:auth_params().
 resolve_bouncer_ctx({invoice, InvoiceID}, PartyID, Lifetime) ->
     #{

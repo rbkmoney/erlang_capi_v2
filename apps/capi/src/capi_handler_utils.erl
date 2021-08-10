@@ -146,11 +146,18 @@ append_to_tuple(Item, Tuple) ->
 
 -spec issue_access_token(binary(), tuple(), woody_context:ctx()) -> map().
 issue_access_token(PartyID, TokenAccess, WoodyContext) ->
+    issue_access_token(PartyID, TokenAccess, #{}, WoodyContext).
+
+-spec issue_access_token(binary(), tuple(), map(), woody_context:ctx()) -> map().
+issue_access_token(PartyID, TokenAccess, ExtraProperties, WoodyContext) ->
     TokenSpec = #{
         access => TokenAccess,
         subject => PartyID
     },
-    #{<<"payload">> => capi_auth:issue_access_token(TokenSpec, WoodyContext)}.
+    #{
+        <<"payload">> =>
+            capi_auth:issue_access_token(TokenSpec, ExtraProperties, WoodyContext)
+    }.
 
 -spec merge_and_compact(map(), map()) -> map().
 merge_and_compact(M1, M2) ->
