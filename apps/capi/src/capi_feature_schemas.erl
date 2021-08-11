@@ -877,14 +877,14 @@ compare_allocation_transaction_test() ->
         ]
     },
     Request4 = Request1#{
-        <<"fee">> => deep_merge(maps:get(<<"fee">>, ?ALLOCATION_TRANSACTION_PARAMS), #{
+        <<"fee">> => deep_merge(maps:get(<<"fee">>, Request1), #{
             <<"amount">> => 1024,
             <<"share">> => #{<<"m">> => 1024, <<"exp">> => 1024}
         })
     },
     Request5 = Request1#{
         <<"allocationBodyType">> => <<"AllocationBodyAmount">>,
-        <<"fee">> => deep_merge(maps:get(<<"fee">>, ?ALLOCATION_TRANSACTION_PARAMS), #{
+        <<"fee">> => deep_merge(maps:get(<<"fee">>, Request1), #{
             <<"allocationFeeType">> => <<"AllocationFeeFixed">>
         })
     },
