@@ -888,13 +888,15 @@
     created_at = ?TIMESTAMP,
     status = Status,
     amount = ?INTEGER,
-    flow = {instant, #merchstat_InvoicePaymentFlowInstant{}},
     fee = ?INTEGER,
     currency_symbolic_code = ?RUB,
     payer = Payer,
     context = ?CONTENT,
+    flow = {instant, #merchstat_InvoicePaymentFlowInstant{}},
     domain_revision = ?INTEGER,
-    additional_transaction_info = ?ADDITIONAL_TX_INFO
+    additional_transaction_info = ?ADDITIONAL_TX_INFO,
+    external_id = ?STRING,
+    allocation = ?ALLOCATION
 }).
 
 -define(TX_INFO, #domain_TransactionInfo{

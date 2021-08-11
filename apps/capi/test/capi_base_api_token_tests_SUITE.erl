@@ -1976,7 +1976,7 @@ search_refunds_ok_test(Config) ->
         [
             {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end},
             {customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end},
-            {merchant_stat, fun('GetPayments', _) -> {ok, ?STAT_RESPONSE_REFUNDS} end}
+            {merchant_stat, fun('GetRefunds', _) -> {ok, ?STAT_RESPONSE_REFUNDS} end}
         ],
         Config
     ),
