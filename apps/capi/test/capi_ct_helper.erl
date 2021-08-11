@@ -115,9 +115,11 @@ start_capi(Config, ExtraEnv) ->
                     decryption_sources => [JwkPrivSource]
                 }},
                 {auth_config, #{
-                    metadata_namespaces => #{
-                        user_namespace => ?TK_META_NS_KEYCLOAK,
-                        party_namespace => ?TK_META_NS_APIKEYMGMT
+                    metadata_mappings => #{
+                        party_id => [?TK_META_NS_APIKEYMGMT, <<"party_id">>],
+                        token_consumer => [?TK_META_NS_APIKEYMGMT, <<"cons">>],
+                        user_id => [?TK_META_NS_KEYCLOAK, <<"user_id">>],
+                        user_email => [?TK_META_NS_KEYCLOAK, <<"user_email">>]
                     }
                 }}
             ],
