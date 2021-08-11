@@ -57,6 +57,14 @@
 -define(email, 51).
 -define(phone_number, 52).
 
+-define(allocation, 53).
+-define(target, 54).
+-define(total, 55).
+-define(fee, 56).
+-define(share, 57).
+-define(matisse, 58).
+-define(exponent, 59).
+
 -export([payment/0]).
 -export([invoice/0]).
 -export([invoice_template/0]).
@@ -103,7 +111,8 @@ invoice() ->
         ?due_date => [<<"dueDate">>],
         ?cart => [<<"cart">>, {set, cart_line_schema()}],
         ?bank_account => [<<"bankAccount">>, bank_account_schema()],
-        ?invoice_template_id => [<<"invoiceTemplateID">>]
+        ?invoice_template_id => [<<"invoiceTemplateID">>],
+        ?allocation => [<<"allocation">>, {set, allocation_transaction()}]
     }.
 
 -spec invoice_template() -> schema().
@@ -134,7 +143,8 @@ refund() ->
     #{
         ?amount => [<<"amount">>],
         ?currency => [<<"currency">>],
-        ?cart => [<<"cart">>, {set, cart_line_schema()}]
+        ?cart => [<<"cart">>, {set, cart_line_schema()}],
+        ?allocation => [<<"allocation">>, {set, allocation_transaction()}]
     }.
 
 -spec customer() -> schema().
@@ -179,6 +189,40 @@ payment_tool_schema() ->
             ?operator => [<<"operator">>],
             ?phone => [<<"phone">>]
         }
+    }.
+
+-spec allocation_transaction() -> schema().
+allocation_transaction() ->
+    #{
+        ?target => [<<"target">>, allocation_target()],
+        ?discriminator => [<<"allocationBodyType">>],
+        ?amount => [<<"amount">>],
+        ?total => [<<"total">>],
+        ?currency => [<<"currency">>],
+        ?fee => [
+            <<"fee">>,
+            #{
+                ?target => [<<"target">>, allocation_target()],
+                ?discriminator => [<<"allocationFeeType">>],
+                ?amount => [<<"amount">>],
+                ?share => [<<"share">>, decimal()]
+            }
+        ],
+        ?cart => [<<"cart">>, {set, cart_line_schema()}]
+    }.
+
+-spec allocation_target() -> schema().
+allocation_target() ->
+    #{
+        ?discriminator => [<<"allocationTargetType">>],
+        ?shop_id => [<<"shopID">>]
+    }.
+
+-spec decimal() -> schema().
+decimal() ->
+    #{
+        ?matisse => [<<"m">>],
+        ?exponent => [<<"exp">>]
     }.
 
 -spec cart_line_schema() -> schema().
@@ -470,7 +514,8 @@ read_invoice_features_test() ->
             [1, Product],
             [0, Product2]
         ],
-        ?invoice_template_id => undefined
+        ?invoice_template_id => undefined,
+        ?allocation => undefined
     },
     Request = #{
         <<"externalID">> => <<"externalID">>,
@@ -749,6 +794,104 @@ compare_invoice_template_features_test() ->
         <<"details.currency">>,
         <<"details.cart">>
     ]).
+
+-spec read_allocation_transaction_test_() -> _.
+read_allocation_transaction_test_() ->
+    Request1 = ?ALLOCATION_TRANSACTION_PARAMS,
+    Features1 = #{
+        ?target => #{
+            ?discriminator => hash(<<"AllocationTargetShop">>),
+            ?shop_id => hash(?STRING)
+        },
+        ?discriminator => hash(<<"AllocationBodyTotal">>),
+        ?amount => undefined,
+        ?total => hash(?INTEGER),
+        ?currency => hash(?USD),
+        ?fee => #{
+            ?target => #{
+                ?discriminator => hash(<<"AllocationTargetShop">>),
+                ?shop_id => hash(?STRING)
+            },
+            ?discriminator => hash(<<"AllocationFeeShare">>),
+            ?amount => hash(?INTEGER),
+            ?share => #{
+                ?matisse => hash(?INTEGER),
+                ?exponent => hash(?INTEGER)
+            }
+        },
+        ?cart => [
+            [
+                0,
+                #{
+                    ?product => hash(?STRING),
+                    ?quantity => hash(?INTEGER),
+                    ?price => hash(?INTEGER),
+                    ?tax => undefined
+                }
+            ]
+        ]
+    },
+    Request2 = Request1#{
+        <<"fee">> => #{
+            <<"target">> => ?ALLOCATION_TARGET,
+            <<"allocationFeeType">> => <<"AllocationFeeFixed">>,
+            <<"amount">> => 1024
+        }
+    },
+    Features2 = Features1#{
+        ?fee => #{
+            ?target => #{
+                ?discriminator => hash(<<"AllocationTargetShop">>),
+                ?shop_id => hash(?STRING)
+            },
+            ?discriminator => hash(<<"AllocationFeeFixed">>),
+            ?amount => hash(1024),
+            ?share => undefined
+        }
+    },
+    [
+        ?_assertEqual(Features1, read(allocation_transaction(), Request1)),
+        ?_assertEqual(Features2, read(allocation_transaction(), Request2))
+    ].
+
+-spec compare_allocation_transaction_test() -> _.
+compare_allocation_transaction_test() ->
+    Request1 = ?ALLOCATION_TRANSACTION_PARAMS,
+    Request2 = ?ALLOCATION_TRANSACTION_PARAMS#{
+        <<"total">> => 1024,
+        <<"amount">> => 512,
+        <<"fee">> => #{
+            <<"target">> => ?ALLOCATION_TARGET,
+            <<"allocationFeeType">> => <<"AllocationFeeFixed">>,
+            <<"amount">> => ?INTEGER,
+            <<"share">> => undefined
+        }
+    },
+    Request3 = #{
+        <<"target">> => ?ALLOCATION_TARGET#{<<"shopID">> => <<"SomeShop">>},
+        <<"allocationBodyType">> => <<"AllocationBodyAmount">>,
+        <<"amount">> => ?INTEGER,
+        <<"currency">> => ?RUB,
+        <<"cart">> => [
+            #{<<"product">> => ?STRING, <<"quantity">> => 1, <<"price">> => ?INTEGER}
+        ]
+    },
+    Request4 = Request1#{
+        <<"fee">> => deep_merge(maps:get(<<"fee">>, ?ALLOCATION_TRANSACTION_PARAMS), #{
+            <<"share">> => #{<<"m">> => 1024, <<"exp">> => 1024}
+        })
+    },
+    common_compare_tests(allocation_transaction(), Request1, Request2, [
+        <<"amount">>, <<"total">>, <<"fee">>
+    ]),
+    common_compare_tests(allocation_transaction(), Request1, Request3, [
+        <<"target.shopID">>, <<"allocationBodyType">>, <<"currency">>, <<"amount">>, <<"cart.0.quantity">>
+    ]),
+    common_compare_tests(allocation_transaction(), Request1, Request4, [
+        <<"fee.share.m">>, <<"fee.share.exp">>
+    ]).
+
+%%
 
 payment_resource(Session, Tool) ->
     #{

@@ -1365,3 +1365,24 @@
     <<"metadata">> => ?JSON,
     <<"processingDeadline">> => <<"5m">>
 }).
+
+-define(ALLOCATION_TARGET, #{
+    <<"allocationTargetType">> => <<"AllocationTargetShop">>,
+    <<"shopID">> => ?STRING
+}).
+
+-define(ALLOCATION_TRANSACTION_PARAMS, #{
+    <<"target">> => ?ALLOCATION_TARGET,
+    <<"allocationBodyType">> => <<"AllocationBodyTotal">>,
+    <<"total">> => ?INTEGER,
+    <<"currency">> => ?USD,
+    <<"fee">> => #{
+        <<"target">> => ?ALLOCATION_TARGET,
+        <<"allocationFeeType">> => <<"AllocationFeeShare">>,
+        <<"amount">> => ?INTEGER,
+        <<"share">> => #{<<"m">> => ?INTEGER, <<"exp">> => ?INTEGER}
+    },
+    <<"cart">> => [
+        #{<<"product">> => ?STRING, <<"quantity">> => ?INTEGER, <<"price">> => ?INTEGER}
+    ]
+}).
