@@ -882,12 +882,6 @@ compare_allocation_transaction_test() ->
             <<"share">> => #{<<"m">> => 1024, <<"exp">> => 1024}
         })
     },
-    Request5 = Request1#{
-        <<"allocationBodyType">> => <<"AllocationBodyAmount">>,
-        <<"fee">> => deep_merge(maps:get(<<"fee">>, Request1), #{
-            <<"allocationFeeType">> => <<"AllocationFeeFixed">>
-        })
-    },
     common_compare_tests(allocation_transaction(), Request1, Request2, [
         <<"amount">>, <<"total">>, <<"fee">>
     ]),
@@ -896,9 +890,6 @@ compare_allocation_transaction_test() ->
     ]),
     common_compare_tests(allocation_transaction(), Request1, Request4, [
         <<"fee.amount">>, <<"fee.share.m">>, <<"fee.share.exp">>
-    ]),
-    common_compare_tests(allocation_transaction(), Request1, Request5, [
-        <<"allocationBodyType">>, <<"fee">>
     ]).
 
 %%
