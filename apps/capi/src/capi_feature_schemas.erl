@@ -878,7 +878,14 @@ compare_allocation_transaction_test() ->
     },
     Request4 = Request1#{
         <<"fee">> => deep_merge(maps:get(<<"fee">>, ?ALLOCATION_TRANSACTION_PARAMS), #{
+            <<"amount">> => 1024,
             <<"share">> => #{<<"m">> => 1024, <<"exp">> => 1024}
+        })
+    },
+    Request5 = Request1#{
+        <<"allocationBodyType">> => <<"AllocationBodyAmount">>,
+        <<"fee">> => deep_merge(maps:get(<<"fee">>, ?ALLOCATION_TRANSACTION_PARAMS), #{
+            <<"allocationFeeType">> => <<"AllocationFeeFixed">>
         })
     },
     common_compare_tests(allocation_transaction(), Request1, Request2, [
@@ -888,7 +895,10 @@ compare_allocation_transaction_test() ->
         <<"target.shopID">>, <<"allocationBodyType">>, <<"currency">>, <<"amount">>, <<"cart.0.quantity">>
     ]),
     common_compare_tests(allocation_transaction(), Request1, Request4, [
-        <<"fee.share.m">>, <<"fee.share.exp">>
+        <<"fee.amount">>, <<"fee.share.m">>, <<"fee.share.exp">>
+    ]),
+    common_compare_tests(allocation_transaction(), Request1, Request5, [
+        <<"allocationBodyType">>, <<"fee">>
     ]).
 
 %%
