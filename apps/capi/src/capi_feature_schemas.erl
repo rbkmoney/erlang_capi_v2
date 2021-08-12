@@ -892,6 +892,25 @@ compare_allocation_transaction_test() ->
         <<"fee.amount">>, <<"fee.share.m">>, <<"fee.share.exp">>
     ]).
 
+-spec demo_compare_allocation_transaction_test() -> _.
+demo_compare_allocation_transaction_test() ->
+    Request1 = ?ALLOCATION_TRANSACTION_PARAMS,
+    Request2 = #{
+        <<"allocationBodyType">> => <<"AllocationBodyAmount">>
+    },
+    Request3 = #{
+        <<"fee">> => deep_merge(maps:get(<<"fee">>, Request1), #{
+            <<"allocationFeeType">> => <<"AllocationFeeFixed">>
+        })
+    },
+    common_compare_tests(allocation_transaction(), Request1, Request2, [
+        <<"allocationBodyType">>
+    ]),
+    common_compare_tests(allocation_transaction(), Request1, Request3, [
+        <<"fee">>
+        % <<"fee.allocationFeeType">>
+    ]).
+
 %%
 
 payment_resource(Session, Tool) ->
