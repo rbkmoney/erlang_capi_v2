@@ -173,24 +173,22 @@ get_token_keeper_fragment(AuthData) ->
 %%
 
 get_party_id(AuthData) ->
-    get_metadata(party_id, token_keeper_auth_data:get_metadata(AuthData)).
+    get_metadata(get_metadata_mapped_key(party_id), token_keeper_auth_data:get_metadata(AuthData)).
 
 get_user_id(AuthData) ->
-    get_metadata(user_id, token_keeper_auth_data:get_metadata(AuthData)).
+    get_metadata(get_metadata_mapped_key(user_id), token_keeper_auth_data:get_metadata(AuthData)).
 
 get_user_email(AuthData) ->
-    get_metadata(user_email, token_keeper_auth_data:get_metadata(AuthData)).
+    get_metadata(get_metadata_mapped_key(user_email), token_keeper_auth_data:get_metadata(AuthData)).
 
 get_token_consumer(AuthData) ->
-    get_metadata(token_consumer, token_keeper_auth_data:get_metadata(AuthData)).
+    get_metadata(get_metadata_mapped_key(token_consumer), token_keeper_auth_data:get_metadata(AuthData)).
 
 get_metadata(Key, Metadata) ->
-    case maps:get(Key, get_meta_mappings(), undefined) of
-        MetadataKey when MetadataKey =/= undefined ->
-            maps:get(MetadataKey, Metadata, undefined);
-        _ ->
-            undefined
-    end.
+    maps:get(Key, Metadata, undefined).
+
+get_metadata_mapped_key(Key) ->
+    maps:get(Key, get_meta_mappings()).
 
 get_meta_mappings() ->
     AuthConfig = genlib_app:env(capi, auth_config),
