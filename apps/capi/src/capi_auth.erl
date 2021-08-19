@@ -128,7 +128,7 @@ issue_access_token(TokenSpec, WoodyContext) ->
 
 -spec issue_access_token(
     TokenSpec :: token_spec(),
-    ExtraProperties :: token_keeper_auth_data:metadata_content(),
+    ExtraProperties :: token_keeper_auth_data:metadata(),
     WoodyContext :: woody_context:ctx()
 ) ->
     token_keeper_client:token().
