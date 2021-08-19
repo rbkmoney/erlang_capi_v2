@@ -145,19 +145,19 @@ get_party_id(Context) ->
 append_to_tuple(Item, Tuple) ->
     list_to_tuple([Item | tuple_to_list(Tuple)]).
 
--spec issue_access_token(binary(), tuple(), woody_context:ctx()) -> map().
-issue_access_token(PartyID, TokenScope, WoodyContext) ->
-    issue_access_token(PartyID, TokenScope, #{}, WoodyContext).
+-spec issue_access_token(binary(), tuple(), processing_context()) -> map().
+issue_access_token(PartyID, TokenScope, ProcessingContext) ->
+    issue_access_token(PartyID, TokenScope, #{}, ProcessingContext).
 
--spec issue_access_token(binary(), tuple(), map(), woody_context:ctx()) -> map().
-issue_access_token(PartyID, TokenScope, ExtraProperties, WoodyContext) ->
+-spec issue_access_token(binary(), tuple(), map(), processing_context()) -> map().
+issue_access_token(PartyID, TokenScope, ExtraProperties, ProcessingContext) ->
     TokenSpec = #{
         scope => TokenScope,
         party_id => PartyID
     },
     #{
         <<"payload">> =>
-            capi_auth:issue_access_token(TokenSpec, ExtraProperties, WoodyContext)
+            capi_auth:issue_access_token(TokenSpec, ExtraProperties, get_woody_context(ProcessingContext))
     }.
 
 -spec merge_and_compact(map(), map()) -> map().
