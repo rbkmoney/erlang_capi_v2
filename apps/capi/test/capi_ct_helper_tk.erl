@@ -3,8 +3,7 @@
 -include_lib("token_keeper_proto/include/tk_token_keeper_thrift.hrl").
 -include_lib("token_keeper_proto/include/tk_context_thrift.hrl").
 
--define(TK_META_NS_KEYCLOAK, <<"com.rbkmoney.keycloak">>).
--define(TK_META_NS_APIKEYMGMT, <<"com.rbkmoney.apikeymgmt">>).
+-include_lib("capi_tk_data.hrl").
 
 -export([mock_service/2]).
 
@@ -28,7 +27,7 @@ not_found_handler() ->
 -spec user_session_handler() -> handler_fun().
 user_session_handler() ->
     make_handler_fun(
-        ?TK_META_NS_KEYCLOAK,
+        ?TK_AUTHORITY_KEYCLOAK,
         [
             {user, [id, email, realm]},
             {auth, [{method, <<"SessionToken">>}, expiration, token]}
@@ -48,7 +47,7 @@ invoice_access_token(PartyID, InvoiceID) ->
                 {scope, [[{party, PartyID}, {invoice, InvoiceID}]]}
             ]}
         ],
-        [api_key_meta]
+        [api_key_meta, consumer_meta]
     ).
 
 -spec invoice_template_access_token(PartyID :: binary(), InvoiceTmeplateID :: binary()) -> handler_fun().
@@ -84,7 +83,7 @@ customer_access_token(PartyID, CustomerID) ->
 -spec api_key_handler(PartyID :: binary()) -> handler_fun().
 api_key_handler(PartyID) ->
     make_handler_fun(
-        ?TK_META_NS_APIKEYMGMT,
+        ?TK_AUTHORITY_APIKEYMGMT,
         [
             {auth, [
                 {method, <<"ApiKeyToken">>},
@@ -140,10 +139,6 @@ start_client(ServiceURLs) ->
     capi_ct_helper:start_app(token_keeper_client, [
         {service_client, #{
             url => maps:get(token_keeper, ServiceURLs)
-        }},
-        {namespace_mappings, #{
-            user_session => ?TK_META_NS_KEYCLOAK,
-            api_key => ?TK_META_NS_APIKEYMGMT
         }}
     ]).
 
@@ -269,18 +264,18 @@ get_metadata(TokenInfo, MetadataSpec) ->
     ).
 
 get_metadata_by_spec(user_session_meta, TokenInfo) ->
-    #{
-        ?TK_META_NS_KEYCLOAK => genlib_map:compact(#{
-            <<"user_id">> => uac_authorizer_jwt:get_subject_id(TokenInfo),
-            <<"user_email">> => uac_authorizer_jwt:get_subject_email(TokenInfo)
-        })
-    };
+    genlib_map:compact(#{
+        ?TK_META_USER_ID => uac_authorizer_jwt:get_subject_id(TokenInfo),
+        ?TK_META_USER_EMAIL => uac_authorizer_jwt:get_subject_email(TokenInfo)
+    });
 get_metadata_by_spec(api_key_meta, TokenInfo) ->
     #{
-        ?TK_META_NS_APIKEYMGMT => #{
-            <<"party_id">> => uac_authorizer_jwt:get_subject_id(TokenInfo)
-        }
-    }.
+        ?TK_META_PARTY_ID => uac_authorizer_jwt:get_subject_id(TokenInfo)
+    };
+get_metadata_by_spec(consumer_meta, TokenInfo) ->
+    genlib_map:compact(#{
+        ?TK_META_TOKEN_CONSUMER => uac_authorizer_jwt:get_claim(<<"cons">>, TokenInfo, undefined)
+    }).
 
 encode_context(Context) ->
     #bctx_ContextFragment{

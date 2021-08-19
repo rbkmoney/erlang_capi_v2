@@ -27,7 +27,7 @@
 -type auth_context() ::
     {authorized, #{
         legacy := capi_auth_legacy:context(),
-        auth_data => tk_auth_data:auth_data()
+        auth_data => token_keeper_auth_data:auth_data()
     }}.
 
 -type resolution() :: allowed | forbidden.
@@ -50,18 +50,18 @@
 
 -spec get_subject_id(auth_context()) -> binary() | undefined.
 get_subject_id(?authorized(#{auth_data := AuthData})) ->
-    case tk_auth_data:get_party_id(AuthData) of
+    case get_party_id(AuthData) of
         PartyId when is_binary(PartyId) ->
             PartyId;
         undefined ->
-            tk_auth_data:get_user_id(AuthData)
+            get_user_id(AuthData)
     end;
 get_subject_id(?authorized(#{legacy := Context})) ->
     capi_auth_legacy:get_subject_id(Context).
 
 -spec get_subject_email(auth_context()) -> binary() | undefined.
 get_subject_email(?authorized(#{auth_data := AuthData})) ->
-    tk_auth_data:get_user_email(AuthData);
+    get_user_email(AuthData);
 get_subject_email(?authorized(#{legacy := Context})) ->
     capi_auth_legacy:get_subject_email(Context).
 
@@ -95,16 +95,27 @@ authorize_api_key(?unauthorized({TokenType, Token}), TokenContext, WoodyContext)
 authorize_operation(Prototypes, ProcessingContext) ->
     AuthData = get_auth_data(extract_auth_context(ProcessingContext)),
     #{swagger_context := SwagContext, woody_context := WoodyContext} = ProcessingContext,
-    Fragments = capi_bouncer:gather_context_fragments(AuthData, SwagContext, WoodyContext),
+    Fragments = capi_bouncer:gather_context_fragments(
+        get_token_keeper_fragment(AuthData),
+        get_user_id(AuthData),
+        SwagContext,
+        WoodyContext
+    ),
     Fragments1 = capi_bouncer_context:build(Prototypes, Fragments, WoodyContext),
     capi_bouncer:judge(Fragments1, WoodyContext).
 
 %%
 
 -spec get_consumer(auth_context()) -> consumer().
-get_consumer(?authorized(#{legacy := AuthContext})) ->
-    %% TODO: Can we even get to these claims now?
-    capi_auth_legacy:get_consumer(AuthContext).
+get_consumer(?authorized(#{auth_data := AuthData})) ->
+    case get_token_consumer(AuthData) of
+        <<"merchant">> -> merchant;
+        <<"client">> -> client;
+        <<"provider">> -> provider;
+        _Default -> merchant
+    end;
+get_consumer(?authorized(#{legacy := LegacyContext})) ->
+    capi_auth_legacy:get_consumer(LegacyContext).
 
 -spec get_legacy_claims(auth_context()) -> capi_auth_legacy:claims().
 get_legacy_claims(?authorized(#{legacy := AuthContext})) ->
@@ -155,3 +166,30 @@ make_context(AuthData, LegacyContext) ->
         legacy => LegacyContext,
         auth_data => AuthData
     }).
+
+get_token_keeper_fragment(AuthData) ->
+    token_keeper_auth_data:get_context_fragment(AuthData).
+
+%%
+
+get_party_id(AuthData) ->
+    get_metadata(get_metadata_mapped_key(party_id), token_keeper_auth_data:get_metadata(AuthData)).
+
+get_user_id(AuthData) ->
+    get_metadata(get_metadata_mapped_key(user_id), token_keeper_auth_data:get_metadata(AuthData)).
+
+get_user_email(AuthData) ->
+    get_metadata(get_metadata_mapped_key(user_email), token_keeper_auth_data:get_metadata(AuthData)).
+
+get_token_consumer(AuthData) ->
+    get_metadata(get_metadata_mapped_key(token_consumer), token_keeper_auth_data:get_metadata(AuthData)).
+
+get_metadata(Key, Metadata) ->
+    maps:get(Key, Metadata, undefined).
+
+get_metadata_mapped_key(Key) ->
+    maps:get(Key, get_meta_mappings()).
+
+get_meta_mappings() ->
+    AuthConfig = genlib_app:env(capi, auth_config),
+    maps:get(metadata_mappings, AuthConfig).
