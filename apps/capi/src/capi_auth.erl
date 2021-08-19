@@ -51,10 +51,6 @@
 }.
 
 %%
-
--define(CAPI_META_NAMESPACE, <<"com.rbkmoney.capi">>).
-
-%%
 %% API functions
 %%
 
@@ -69,15 +65,24 @@ get_subject_id(AuthContext) ->
 
 -spec get_party_id(auth_context()) -> binary() | undefined.
 get_party_id(?authorized(AuthData)) ->
-    get_metadata(party_id, token_keeper_auth_data:get_metadata(AuthData)).
+    get_metadata(get_metadata_mapped_key(party_id), token_keeper_auth_data:get_metadata(AuthData)).
 
 -spec get_user_id(auth_context()) -> binary() | undefined.
 get_user_id(?authorized(AuthData)) ->
-    get_metadata(user_id, token_keeper_auth_data:get_metadata(AuthData)).
+    get_metadata(get_metadata_mapped_key(user_id), token_keeper_auth_data:get_metadata(AuthData)).
 
 -spec get_user_email(auth_context()) -> binary() | undefined.
 get_user_email(?authorized(AuthData)) ->
-    get_metadata(user_email, token_keeper_auth_data:get_metadata(AuthData)).
+    get_metadata(get_metadata_mapped_key(user_email), token_keeper_auth_data:get_metadata(AuthData)).
+
+-spec get_consumer(auth_context()) -> consumer().
+get_consumer(?authorized(AuthData)) ->
+    case get_metadata(get_metadata_mapped_key(token_consumer), token_keeper_auth_data:get_metadata(AuthData)) of
+        <<"merchant">> -> merchant;
+        <<"client">> -> client;
+        <<"provider">> -> provider;
+        _Default -> merchant
+    end.
 
 %%
 
@@ -110,17 +115,6 @@ authorize_operation(Prototypes, ProcessingContext) ->
     ),
     Fragments1 = capi_bouncer_context:build(Prototypes, Fragments, WoodyContext),
     capi_bouncer:judge(Fragments1, WoodyContext).
-
-%%
-
--spec get_consumer(auth_context()) -> consumer().
-get_consumer(?authorized(AuthData)) ->
-    case get_metadata(token_consumer, token_keeper_auth_data:get_metadata(AuthData)) of
-        <<"merchant">> -> merchant;
-        <<"client">> -> client;
-        <<"provider">> -> provider;
-        _Default -> merchant
-    end.
 
 %%
 
@@ -217,13 +211,12 @@ lifetime_to_expiration(Lt) when is_integer(Lt) ->
     genlib_time:unow() + Lt.
 
 add_consumer({invoice, _}, Metadata) ->
-    put_metadata(token_consumer, <<"client">>, Metadata);
+    put_metadata(get_metadata_mapped_key(token_consumer), <<"client">>, Metadata);
 add_consumer(_, Metadata) ->
     Metadata.
 
-create_metadata(Scope, PartyID, AdditionalMeta) ->
-    Metadata0 = #{?CAPI_META_NAMESPACE => AdditionalMeta},
-    Metadata1 = put_metadata(party_id, PartyID, Metadata0),
+create_metadata(Scope, PartyID, Metadata0) ->
+    Metadata1 = put_metadata(get_metadata_mapped_key(party_id), PartyID, Metadata0),
     add_consumer(Scope, Metadata1).
 
 extract_auth_context(#{swagger_context := #{auth_context := AuthContext}}) ->
@@ -246,54 +239,17 @@ parse_api_key(<<"Bearer ", Token/binary>>) ->
 parse_api_key(_) ->
     {error, unsupported_auth_scheme}.
 
+%%
+
 get_metadata(Key, Metadata) ->
-    case maps:get(Key, get_meta_mappings(), undefined) of
-        Path when Path =/= undefined ->
-            get_from_path(Path, Metadata);
-        _ ->
-            undefined
-    end.
+    maps:get(Key, Metadata, undefined).
 
 put_metadata(Key, Value, Metadata) ->
-    case maps:get(Key, get_meta_mappings(), undefined) of
-        Path when Path =/= undefined ->
-            put_at_path(Path, Value, Metadata);
-        _ ->
-            undefined
-    end.
+    maps:put(Key, Value, Metadata).
 
-get_from_path([Key], Map) ->
-    maps:get(Key, Map, undefined);
-get_from_path([Key | Rest], Map) ->
-    get_from_path(Rest, maps:get(Key, Map, #{})).
-
-put_at_path([Key], Value, Map) ->
-    maps:put(Key, Value, Map);
-put_at_path([Key | Rest], Value, Map) ->
-    maps:put(Key, put_at_path(Rest, Value, maps:get(Key, Map, #{})), Map).
+get_metadata_mapped_key(Key) ->
+    maps:get(Key, get_meta_mappings()).
 
 get_meta_mappings() ->
     AuthConfig = genlib_app:env(capi, auth_config),
     maps:get(metadata_mappings, AuthConfig).
-
--ifdef(EUNIT).
-
--include_lib("eunit/include/eunit.hrl").
-
--spec test() -> _.
-
--spec get_from_path_test() -> _.
--spec put_at_path_test() -> _.
-
-get_from_path_test() ->
-    Map = #{<<"a">> => #{<<"b">> => <<"c">>}},
-    ?assertEqual(<<"c">>, get_from_path([<<"a">>, <<"b">>], Map)),
-    ?assertEqual(undefined, get_from_path([<<"a">>, <<"c">>], Map)).
-
-put_at_path_test() ->
-    Map = #{<<"a">> => #{<<"b">> => <<"c">>}},
-    Target = #{<<"a">> => #{<<"b">> => <<"c">>, <<"d">> => <<"e">>}},
-    ?assertEqual(Map, put_at_path([<<"a">>, <<"b">>], <<"c">>, #{})),
-    ?assertEqual(Target, put_at_path([<<"a">>, <<"d">>], <<"e">>, Map)).
-
--endif.

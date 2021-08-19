@@ -4,8 +4,7 @@
 -include_lib("token_keeper_proto/include/tk_token_keeper_thrift.hrl").
 -include_lib("token_keeper_proto/include/tk_context_thrift.hrl").
 
--define(TK_META_NS_KEYCLOAK, <<"test.rbkmoney.keycloak">>).
--define(TK_META_NS_APIKEYMGMT, <<"test.rbkmoney.apikeymgmt">>).
+-include_lib("capi_tk_data.hrl").
 
 -define(PARTY_ID, ?STRING).
 -define(USER_ID, ?STRING).
@@ -33,7 +32,7 @@ not_found_handler() ->
 -spec user_session_handler() -> handler_fun().
 user_session_handler() ->
     make_handler_fun(
-        ?TK_META_NS_KEYCLOAK,
+        ?TK_AUTHORITY_KEYCLOAK,
         [
             {user, [id, email, realm]},
             {auth, [{method, <<"SessionToken">>}, expiration, token]}
@@ -89,7 +88,7 @@ customer_access_token(PartyID, CustomerID) ->
 -spec api_key_handler(PartyID :: binary()) -> handler_fun().
 api_key_handler(PartyID) ->
     make_handler_fun(
-        ?TK_META_NS_APIKEYMGMT,
+        ?TK_AUTHORITY_APIKEYMGMT,
         [
             {auth, [
                 {method, <<"ApiKeyToken">>},
@@ -274,22 +273,16 @@ get_metadata(MetadataSpec) ->
 
 get_metadata_by_spec(user_session_meta) ->
     #{
-        ?TK_META_NS_KEYCLOAK => #{
-            <<"user_id">> => ?USER_ID,
-            <<"user_email">> => ?USER_EMAIL
-        }
+        ?TK_META_USER_ID => ?USER_ID,
+        ?TK_META_USER_EMAIL => ?USER_EMAIL
     };
 get_metadata_by_spec(api_key_meta) ->
     #{
-        ?TK_META_NS_APIKEYMGMT => #{
-            <<"party_id">> => ?PARTY_ID
-        }
+        ?TK_META_PARTY_ID => ?PARTY_ID
     };
 get_metadata_by_spec({consumer_meta, Cons}) ->
     #{
-        ?TK_META_NS_APIKEYMGMT => #{
-            <<"cons">> => Cons
-        }
+        ?TK_META_TOKEN_CONSUMER => Cons
     }.
 
 encode_context(Context) ->

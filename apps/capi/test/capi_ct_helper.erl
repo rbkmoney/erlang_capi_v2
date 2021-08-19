@@ -2,6 +2,7 @@
 
 -include_lib("common_test/include/ct.hrl").
 -include_lib("capi_dummy_data.hrl").
+-include_lib("capi_tk_data.hrl").
 -include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 
 -export([init_suite/2]).
@@ -116,10 +117,10 @@ start_capi(Config, ExtraEnv) ->
                 }},
                 {auth_config, #{
                     metadata_mappings => #{
-                        party_id => [?TK_META_NS_APIKEYMGMT, <<"party_id">>],
-                        token_consumer => [?TK_META_NS_APIKEYMGMT, <<"cons">>],
-                        user_id => [?TK_META_NS_KEYCLOAK, <<"user_id">>],
-                        user_email => [?TK_META_NS_KEYCLOAK, <<"user_email">>]
+                        party_id => ?TK_META_PARTY_ID,
+                        token_consumer => ?TK_META_TOKEN_CONSUMER,
+                        user_id => ?TK_META_USER_ID,
+                        user_email => ?TK_META_USER_EMAIL
                     }
                 }}
             ],
