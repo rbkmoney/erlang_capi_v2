@@ -265,22 +265,22 @@ get_auth_scope_fragment_value({Name, EntityID}) when is_atom(Name) ->
 get_metadata(MetadataSpec) ->
     lists:foldl(
         fun(SpecFragment, Acc0) ->
-            deep_merge(Acc0, get_metadata_by_spec(SpecFragment))
+            deep_merge(Acc0, make_metadata_by_spec(SpecFragment))
         end,
         #{},
         MetadataSpec
     ).
 
-get_metadata_by_spec(user_session_meta) ->
+make_metadata_by_spec(user_session_meta) ->
     #{
         ?TK_META_USER_ID => ?USER_ID,
         ?TK_META_USER_EMAIL => ?USER_EMAIL
     };
-get_metadata_by_spec(api_key_meta) ->
+make_metadata_by_spec(api_key_meta) ->
     #{
         ?TK_META_PARTY_ID => ?PARTY_ID
     };
-get_metadata_by_spec({consumer_meta, Cons}) ->
+make_metadata_by_spec({consumer_meta, Cons}) ->
     #{
         ?TK_META_TOKEN_CONSUMER => Cons
     }.
