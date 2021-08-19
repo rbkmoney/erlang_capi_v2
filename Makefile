@@ -21,7 +21,7 @@ BASE_IMAGE_TAG := fe43cb7176f34abcde7b101755600ecd8be635e3
 
 # Build image tag to be used
 BUILD_IMAGE_NAME := build-erlang
-BUILD_IMAGE_TAG := d2d1596cf70bede667f875691650ccde788c7148
+BUILD_IMAGE_TAG := fa504f6bdbf6d77944c71cfd7b7760cf90cb37a0
 
 CALL_ANYWHERE := \
 	submodules \
