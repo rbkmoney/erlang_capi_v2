@@ -491,7 +491,7 @@ create_payment(Invoice, PaymentParams, Context, BenderPrefix) ->
     IdempotentKey = {BenderPrefix, PartyID, ExternalID},
     {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
 
-    % Temprory desicion was made for analytics
+    % Temprory decision was made for analytics
     % TODO: delete this after analytics research will be down
     _ = log_payer_client_url(Payer, PartyID, ShopID, Context),
 
