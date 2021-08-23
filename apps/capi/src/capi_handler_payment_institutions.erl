@@ -161,7 +161,7 @@ decode_payment_institution_obj(#domain_PaymentInstitutionObject{ref = Ref, data 
         <<"realm">> => genlib:to_binary(Data#domain_PaymentInstitution.realm),
         <<"residences">> => [
             capi_handler_decoder_party:decode_residence(R)
-            || R <- ordsets:to_list(Data#domain_PaymentInstitution.residences)
+         || R <- ordsets:to_list(Data#domain_PaymentInstitution.residences)
         ]
     }).
 
