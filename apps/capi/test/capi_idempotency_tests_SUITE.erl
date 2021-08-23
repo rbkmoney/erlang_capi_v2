@@ -709,7 +709,8 @@ create_payment(BenderKey, Requests, Config) ->
             end},
             {bender, fun('GenerateID', {_, _, CtxMsgPack}) ->
                 capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
-            end}
+            end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),
@@ -847,7 +848,7 @@ create_customers(BenderKey, Requests, Config) ->
             ),
             [
                 with_feature_storage(fun() -> capi_client_customers:create_customer(Context, R) end)
-             || R <- Requests
+                || R <- Requests
             ]
         end
     ).
@@ -879,7 +880,7 @@ create_customer_bindings(BenderKey, Requests, Config) ->
             ),
             [
                 with_feature_storage(fun() -> capi_client_customers:create_binding(Context, ?STRING, R) end)
-             || R <- Requests
+                || R <- Requests
             ]
         end
     ).
@@ -904,7 +905,7 @@ create_invoice_templates(BenderKey, Requests, Config) ->
             ),
             [
                 with_feature_storage(fun() -> capi_client_invoice_templates:create(Context, R) end)
-             || R <- Requests
+                || R <- Requests
             ]
         end
     ).
@@ -934,7 +935,7 @@ create_invoices_with_templates(BenderKey, Requests, Config) ->
                 with_feature_storage(fun() ->
                     capi_client_invoice_templates:create_invoice(Context, InvoiceTemplateID, Request)
                 end)
-             || {InvoiceTemplateID, Request} <- Requests
+                || {InvoiceTemplateID, Request} <- Requests
             ]
         end
     ).

@@ -363,7 +363,7 @@ prepare(OperationID = 'GetRefunds', Req, Context) ->
                 {ok,
                     {200, #{}, [
                         capi_handler_decoder_invoicing:decode_refund(R, Context)
-                     || #payproc_InvoicePaymentRefund{refund = R} <- Refunds
+                        || #payproc_InvoicePaymentRefund{refund = R} <- Refunds
                     ]}};
             undefined ->
                 {ok, general_error(404, <<"Payment not found">>)}
@@ -487,9 +487,13 @@ prepare(_OperationID, _Req, _Context) ->
 
 create_payment(Invoice, PaymentParams, Context, BenderPrefix) ->
     ExternalID = maps:get(<<"externalID">>, PaymentParams, undefined),
-    #payproc_Invoice{invoice = #domain_Invoice{id = InvoiceID, owner_id = PartyID}} = Invoice,
+    #payproc_Invoice{invoice = #domain_Invoice{id = InvoiceID, owner_id = PartyID, shop_id = ShopID}} = Invoice,
     IdempotentKey = {BenderPrefix, PartyID, ExternalID},
     {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
+
+    % Temprory desicion was made for analytics
+    % TODO: delete this after analytics research will be down
+    _ = log_payer_client_url(Payer, PartyID, ShopID, Context),
 
     PaymentParamsFull = PaymentParams#{<<"invoiceID">> => InvoiceID},
     PaymentParamsDecrypted = PaymentParamsFull#{<<"payer">> => Payer},
@@ -504,6 +508,28 @@ create_payment(Invoice, PaymentParams, Context, BenderPrefix) ->
     CtxData = #{<<"invoice_id">> => InvoiceID},
     PaymentID = capi_bender:try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyCtx, CtxData),
     start_payment(PaymentID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context).
+
+log_payer_client_url(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer, PartyID, ShopID, Context) ->
+    EncodedSession = maps:get(<<"paymentSession">>, Payer),
+    {ClientInfo, _} = capi_handler_utils:unwrap_payment_session(EncodedSession),
+    ClientUrl = maps:get(<<"url">>, ClientInfo, undefined),
+    ClientIP = maps:get(<<"ip">>, ClientInfo, undefined),
+    ShopLocation = get_shop_location(PartyID, ShopID, Context),
+    MetaInfo = genlib_map:compact(#{
+        party_id => PartyID,
+        shop_id => ShopID,
+        shop_location => ShopLocation,
+        ip => ClientIP,
+        client_url => ClientUrl
+    }),
+    logger:info("Request location info.", [], MetaInfo);
+log_payer_client_url(_, _, _, _) ->
+    skipped.
+
+get_shop_location(PartyID, ShopID, Context) ->
+    {ok, Shop} = capi_party:get_shop(PartyID, ShopID, Context),
+    {url, Url} = Shop#domain_Shop.location,
+    Url.
 
 start_payment(ID, InvoiceID, ExternalID, PaymentParams, PaymentToolThrift, Context) ->
     InvoicePaymentParams = encode_invoice_payment_params(ID, ExternalID, PaymentParams, PaymentToolThrift),
@@ -682,8 +708,7 @@ get_refund_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context
             undefined
     end.
 
--spec get_payment_by_external_id(binary(), capi_handler:processing_context()) ->
-    {binary(), binary()} | undefined.
+-spec get_payment_by_external_id(binary(), capi_handler:processing_context()) -> {binary(), binary()} | undefined.
 get_payment_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     IdempotentKey = {'CreatePayment', PartyID, ExternalID},

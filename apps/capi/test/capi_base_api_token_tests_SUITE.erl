@@ -711,6 +711,9 @@ create_payment_ok_test(Config) ->
                         PaymentParams,
                     {ok, ?PAYPROC_PAYMENT(ID, EID)}
             end},
+            {party_management, fun('GetShop', _) ->
+                {ok, ?SHOP}
+            end},
             {bender, fun('GenerateID', _) ->
                 {ok, capi_ct_helper_bender:get_result(BenderKey)}
             end}
@@ -1673,10 +1676,16 @@ get_payout_tool_by_id_for_party(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetPayoutToolByIDForParty">>, ?STRING, Config),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id_for_party(
-        ?config(context, Config), ?STRING, ?STRING, ?WALLET_TOOL
+        ?config(context, Config),
+        ?STRING,
+        ?STRING,
+        ?WALLET_TOOL
     ),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id_for_party(
-        ?config(context, Config), ?STRING, ?STRING, ?PI_ACCOUNT_TOOL
+        ?config(context, Config),
+        ?STRING,
+        ?STRING,
+        ?PI_ACCOUNT_TOOL
     ).
 
 -spec create_payout(config()) -> _.

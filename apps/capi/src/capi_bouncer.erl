@@ -19,8 +19,7 @@
     UserID :: binary() | undefined,
     RequestContext :: swag_server:request_context(),
     WoodyContext :: woody_context:ctx()
-) ->
-    capi_bouncer_context:fragments().
+) -> capi_bouncer_context:fragments().
 gather_context_fragments(TokenContextFragment, UserID, ReqCtx, WoodyCtx) ->
     {Base, External0} = capi_bouncer_context:new(),
     External1 = External0#{<<"token-keeper">> => {encoded_fragment, TokenContextFragment}},

@@ -66,8 +66,7 @@ get_claims(Context) ->
 
 %%
 
--spec authorize_api_key(ApiKey :: binary()) ->
-    {ok, context()} | {error, {authorize_api_key_failed, _Reason}}.
+-spec authorize_api_key(ApiKey :: binary()) -> {ok, context()} | {error, {authorize_api_key_failed, _Reason}}.
 authorize_api_key(ApiKey) ->
     case uac:authorize_api_key(ApiKey, #{}) of
         {ok, Context} ->
