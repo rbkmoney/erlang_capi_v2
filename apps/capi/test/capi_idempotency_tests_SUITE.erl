@@ -709,7 +709,8 @@ create_payment(BenderKey, Requests, Config) ->
             end},
             {bender, fun('GenerateID', {_, _, CtxMsgPack}) ->
                 capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
-            end}
+            end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),

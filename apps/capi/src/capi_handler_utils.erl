@@ -100,8 +100,7 @@ service_call_with_([], Call, Context) ->
 service_call({ServiceName, Function, Args}, #{woody_context := WoodyContext}) ->
     capi_woody_client:call_service(ServiceName, Function, Args, WoodyContext).
 
--spec map_service_result({ok, Result} | {exception, woody_error:business_error()}) ->
-    Result | undefined.
+-spec map_service_result({ok, Result} | {exception, woody_error:business_error()}) -> Result | undefined.
 map_service_result({ok, Result}) ->
     Result;
 map_service_result({exception, _}) ->

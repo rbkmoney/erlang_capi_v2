@@ -268,7 +268,8 @@ create_payment_ok_test(Config) ->
             end},
             {bender, fun('GenerateID', _) ->
                 {ok, capi_ct_helper_bender:get_result(BenderKey)}
-            end}
+            end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),
@@ -354,7 +355,8 @@ create_payment_with_empty_cvv_ok_test(Config) ->
                 ) ->
                     {ok, ?PAYPROC_PAYMENT}
             end},
-            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),
@@ -406,7 +408,8 @@ create_payment_qiwi_access_token_ok_test(Config) ->
                 ) ->
                     {ok, ?PAYPROC_PAYMENT}
             end},
-            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),
@@ -460,7 +463,8 @@ create_payment_with_googlepay_encrypt_ok_test(Config) ->
                 ) ->
                     {ok, ?PAYPROC_PAYMENT}
             end},
-            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),
@@ -648,7 +652,8 @@ create_first_recurrent_payment_ok_test(Config) ->
             end},
             {generator, fun('GenerateID', _) ->
                 capi_ct_helper_bender:generate_id(<<"bender_key">>)
-            end}
+            end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),
