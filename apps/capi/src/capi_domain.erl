@@ -62,10 +62,6 @@ map_to_dictionary_id(ObjectName, LegacyID) ->
 
 -spec map_to_dictionary_id(dmt_client:object_type(), ID :: undefined | term(), NewRef) -> NewRef when
     NewRef :: term() | no_return().
-%% map_to_dictionary_id(ObjectName, undefined, undefined) ->
-%%     ;
-%% map_to_dictionary_id(_ObjectName, undefined, NewRef) ->
-%%     NewRef;
 map_to_dictionary_id(ObjectName, LegacyID, NewRef) ->
     DictionaryID =
         case LegacyID of
@@ -95,30 +91,6 @@ map_to_dictionary_id(ObjectName, LegacyID, NewRef) ->
         DictionaryID ->
             DictionaryID
     end.
-
-%% -spec map_to_dictionary_id(dmt_client:object_type(), ID :: undefined | term(), NewRef) -> NewRef when
-%%     NewRef :: term() | no_return().
-%% map_to_dictionary_id(ObjectName, undefined, undefined) ->
-%%     error({no_mapping, {ObjectName, undefined, undefined}});
-%% map_to_dictionary_id(_ObjectName, undefined, NewRef) ->
-%%     NewRef;
-%% map_to_dictionary_id(ObjectName, LegacyID, NewRef) ->
-%%     case fetch_dictionary_id(ObjectName, LegacyID) of
-%%         {ok, Ref} when Ref =:= NewRef; NewRef == undefined ->
-%%             Ref;
-%%         {ok, OtherRef} ->
-%%             logger:warning(
-%%                 "Mismatch in mapped to dictionary value and passed ~p: ~p->~p and ~p: Using passed new ref",
-%%                 [ObjectName, LegacyID, OtherRef, NewRef]
-%%             ),
-%%             map_to_dictionary_id(ObjectName, undefined, NewRef);
-%%         {error, _} ->
-%%             logger:warning(
-%%                 "Failed to find mapping ~p with id ~p: chance of domain misconifuration. Using passed new ref",
-%%                 [ObjectName, LegacyID]
-%%             ),
-%%             map_to_dictionary_id(ObjectName, undefined, NewRef)
-%%     end.
 
 fetch_dictionary_id(ObjectName, LegacyID) ->
     {dmsl_domain_thrift, RefRecordShortName} =
