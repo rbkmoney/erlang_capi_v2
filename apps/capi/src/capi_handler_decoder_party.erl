@@ -454,9 +454,9 @@ gen_phone_number(#{<<"cc">> := Cc, <<"ctn">> := Ctn}) ->
     <<"+", Cc/binary, Ctn/binary>>.
 
 map_to_dictionary_id(_ObjectName, undefined) -> undefined;
-map_to_dictionary_id(ObjectName, LegacyID) ->
-    unwrap_ref(capi_domain:map_to_dictionary_id(ObjectName, LegacyID)).
-map_to_dictionary_id(_ObjectName, undefined, undefined) -> undefined;
+map_to_dictionary_id(ObjectName, LegacyID) -> unwrap_ref(capi_domain:map_to_dictionary_id(ObjectName, LegacyID)).
+map_to_dictionary_id(_ObjectName, undefined, undefined) ->
+    undefined;
 map_to_dictionary_id(ObjectName, LegacyID, NewRef) ->
     unwrap_ref(capi_domain:map_to_dictionary_id(ObjectName, LegacyID, NewRef)).
 
