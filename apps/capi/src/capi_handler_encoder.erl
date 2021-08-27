@@ -53,22 +53,34 @@ encode_payment_tool(PaymentTool) ->
             encode_mobile_commerce(Encoded)
     end.
 
+%% TODO shlyop all encode_*
 encode_bank_card(BankCard) ->
+    {PaymentSystemDeprecated, PaymentSystem} =
+        infer_legacy_and_dictionary_ids(
+            payment_system_legacy,
+            maps:get(<<"payment_system">>, BankCard)
+        ),
+
+    {PaymentTokenProvider, LegacyTokenProvider} =
+        infer_legacy_and_dictionary_ids(
+            payment_token_legacy,
+            genlib_map:get(<<"token_provider">>, BankCard)
+        ),
+
     {bank_card, #domain_BankCard{
         token = maps:get(<<"token">>, BankCard),
-        payment_system_deprecated = encode_payment_system(maps:get(<<"payment_system">>, BankCard)),
+        payment_system = PaymentSystem,
+        payment_system_deprecated = PaymentSystemDeprecated,
         bin = maps:get(<<"bin">>, BankCard, <<>>),
         last_digits = maps:get(<<"masked_pan">>, BankCard),
-        token_provider_deprecated = encode_token_provider(genlib_map:get(<<"token_provider">>, BankCard)),
+        payment_token = PaymentTokenProvider,
+        token_provider_deprecated = LegacyTokenProvider,
         issuer_country = encode_residence(genlib_map:get(<<"issuer_country">>, BankCard)),
         bank_name = genlib_map:get(<<"bank_name">>, BankCard),
         metadata = encode_bank_card_metadata(genlib_map:get(<<"metadata">>, BankCard)),
         is_cvv_empty = encode_bank_card_cvv_flag(genlib_map:get(<<"is_cvv_empty">>, BankCard)),
         tokenization_method = genlib_map:get(<<"tokenization_method">>, BankCard)
     }}.
-
-encode_payment_system(PaymentSystem) ->
-    binary_to_existing_atom(PaymentSystem, utf8).
 
 encode_bank_card_cvv_flag(undefined) ->
     undefined;
@@ -80,41 +92,51 @@ encode_bank_card_metadata(undefined) ->
 encode_bank_card_metadata(Meta) ->
     maps:map(fun(_, Data) -> capi_msgp_marshalling:marshal(Data) end, Meta).
 
-encode_token_provider(TokenProvider) when TokenProvider /= undefined ->
-    binary_to_existing_atom(TokenProvider, utf8);
-encode_token_provider(undefined) ->
-    undefined.
-
 -spec encode_residence(binary() | undefined) -> atom().
 encode_residence(undefined) ->
     undefined;
 encode_residence(Residence) when is_binary(Residence) ->
-    try
-        list_to_existing_atom(string:to_lower(binary_to_list(Residence)))
-    catch
-        error:badarg ->
-            throw({encode_residence, invalid_residence})
+    case capi_domain:encode_enum('CountryCode', string:lowercase(Residence)) of
+        {ok, EncodedResidence} -> EncodedResidence;
+        {error, _} -> throw({encode_residence, invalid_residence})
     end.
 
 encode_payment_terminal(#{<<"terminal_type">> := Type}) ->
+    {LegacyTerminalProvider, PaymentService} =
+        infer_legacy_and_dictionary_ids(terminal_provider_legacy, Type),
     {payment_terminal, #domain_PaymentTerminal{
-        terminal_type_deprecated = binary_to_existing_atom(Type, utf8)
+        payment_service = PaymentService,
+        terminal_type_deprecated = LegacyTerminalProvider
     }}.
 
 encode_digital_wallet(#{<<"provider">> := Provider, <<"id">> := ID} = Wallet) ->
+    {LegacyDigitalWalletProvider, PaymentService} =
+        infer_legacy_and_dictionary_ids(payment_service_legacy, Provider),
     {digital_wallet, #domain_DigitalWallet{
-        provider_deprecated = binary_to_existing_atom(Provider, utf8),
+        payment_service = PaymentService,
+        provider_deprecated = LegacyDigitalWalletProvider,
         id = ID,
         token = maps:get(<<"token">>, Wallet, undefined)
     }}.
 
-encode_crypto_wallet(#{<<"crypto_currency">> := CryptoCurrency}) ->
-    {crypto_currency, capi_handler_decoder_utils:convert_crypto_currency_from_swag(CryptoCurrency)}.
+encode_crypto_wallet(#{<<"crypto_currency">> := CryptoCurrency0}) ->
+    CryptoCurrency =
+        erlang:atom_to_binary(
+            capi_handler_decoder_utils:convert_crypto_currency_from_swag(CryptoCurrency0)
+        ),
+    case infer_legacy_and_dictionary_ids(payment_service_legacy, CryptoCurrency) of
+        {LegacyCryptoCurrency, undefined} ->
+            {crypto_currency_deprecated, LegacyCryptoCurrency};
+        {_, CryptoCurrencyRef} ->
+            {crypto_currency, CryptoCurrencyRef}
+    end.
 
 encode_mobile_commerce(#{<<"phoneNumber">> := PhoneNumber, <<"operator">> := Operator}) ->
     #{<<"cc">> := Cc, <<"ctn">> := Ctn} = PhoneNumber,
+    {LegacyOperator, OperatorRef} = infer_legacy_and_dictionary_ids(mobile_operator_legacy, Operator),
     {mobile_commerce, #domain_MobileCommerce{
-        operator = binary_to_existing_atom(Operator, utf8),
+        operator = OperatorRef,
+        operator_deprecated = LegacyOperator,
         phone = #domain_MobilePhone{
             cc = Cc,
             ctn = Ctn
@@ -228,3 +250,33 @@ encode_stat_request(Dsl, ContinuationToken) when is_binary(Dsl) ->
         dsl = Dsl,
         continuation_token = ContinuationToken
     }.
+
+infer_legacy_and_dictionary_ids(ObjectVariant, ID) ->
+    {dmsl_domain_thrift, LegacyIDType} =
+        capi_domain:extract_type(
+            capi_domain:fetch_type_info(
+                'DomainObject',
+                [
+                    {variant, ObjectVariant},
+                    {field, ref},
+                    {field, id}
+                ]
+            )
+        ),
+
+    case capi_domain:encode_enum(LegacyIDType, ID) of
+        {ok, LegacyID} ->
+            DictionaryID = map_to_dictionary_id(ObjectVariant, LegacyID),
+            {LegacyID, DictionaryID};
+        {error, _} ->
+            %% DISCUSS: should we try to map back to LegacyID for completeness of data?
+            DictionaryID = ID,
+            {undefined, DictionaryID}
+    end.
+
+map_to_dictionary_id(ObjectVariant, LegacyID) ->
+    try
+        capi_domain:map_to_dictionary_id(ObjectVariant, LegacyID)
+    catch
+        error:{no_mapping, _} -> undefined
+    end.

@@ -363,7 +363,7 @@ prepare(OperationID = 'GetRefunds', Req, Context) ->
                 {ok,
                     {200, #{}, [
                         capi_handler_decoder_invoicing:decode_refund(R, Context)
-                     || #payproc_InvoicePaymentRefund{refund = R} <- Refunds
+                        || #payproc_InvoicePaymentRefund{refund = R} <- Refunds
                     ]}};
             undefined ->
                 {ok, general_error(404, <<"Payment not found">>)}

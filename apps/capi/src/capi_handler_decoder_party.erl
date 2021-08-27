@@ -172,10 +172,12 @@ decode_payment_tool({payment_terminal, PaymentTerminal}) ->
     decode_payment_terminal(PaymentTerminal);
 decode_payment_tool({digital_wallet, DigitalWallet}) ->
     decode_digital_wallet(DigitalWallet);
+decode_payment_tool({mobile_commerce, MobileCommerce}) ->
+    decode_mobile_commerce(MobileCommerce);
 decode_payment_tool({crypto_currency, CryptoCurrency}) ->
     decode_crypto_wallet(CryptoCurrency);
-decode_payment_tool({mobile_commerce, MobileCommerce}) ->
-    decode_mobile_commerce(MobileCommerce).
+decode_payment_tool({crypto_currency_deprecated, LegacyCryptoCurrency}) ->
+    decode_legacy_crypto_wallet(LegacyCryptoCurrency).
 
 -spec wrap_payment_tool_token(capi_handler_decoder_utils:decode_data()) -> binary().
 wrap_payment_tool_token(#{<<"type">> := <<"bank_card">>} = BankCard) ->
@@ -203,7 +205,8 @@ wrap_payment_tool_token(#{<<"type">> := <<"mobile_commerce">>} = MobileCommerce)
 
 decode_bank_card(#domain_BankCard{
     'token' = Token,
-    'payment_system_deprecated' = PaymentSystem,
+    'payment_system' = NewPaymentSystem,
+    'payment_system_deprecated' = LegacyPaymentSystem,
     'bin' = Bin,
     'last_digits' = LastDigits,
     'token_provider_deprecated' = TokenProvider,
@@ -213,8 +216,11 @@ decode_bank_card(#domain_BankCard{
     'is_cvv_empty' = IsCVVEmpty,
     'exp_date' = ExpDate,
     'cardholder_name' = CardHolder
-    % 'tokenization_method' = TokenizationMethod
+    %% 'tokenization_method' = TokenizationMethod,
+    %% 'payment_token' = BankCardTokenServiceRef,
+    %% 'token_provider_deprecated' = LegacyTokenProvider
 }) ->
+    PaymentSystem = map_to_dictionary_id(payment_system_legacy, LegacyPaymentSystem, NewPaymentSystem),
     genlib_map:compact(#{
         <<"type">> => <<"bank_card">>,
         <<"token">> => Token,
@@ -243,54 +249,56 @@ decode_bank_card_metadata(Meta) ->
     maps:map(fun(_, Data) -> capi_msgp_marshalling:unmarshal(Data) end, Meta).
 
 decode_payment_terminal(#domain_PaymentTerminal{
-    terminal_type_deprecated = Type
+    payment_service = PaymentService,
+    terminal_type_deprecated = LegacyTerminalType
 }) ->
+    Type = map_to_dictionary_id(terminal_provider_legacy, LegacyTerminalType, PaymentService),
     #{
         <<"type">> => <<"payment_terminal">>,
         <<"terminal_type">> => Type
     }.
 
 decode_digital_wallet(#domain_DigitalWallet{
-    provider_deprecated = Provider,
-    id = ID,
-    token = undefined
-}) ->
-    #{
-        <<"type">> => <<"digital_wallet">>,
-        <<"provider">> => atom_to_binary(Provider, utf8),
-        <<"id">> => ID
-    };
-decode_digital_wallet(#domain_DigitalWallet{
-    provider_deprecated = Provider,
+    payment_service = PaymentService,
+    provider_deprecated = LegacyProvider,
     id = ID,
     token = Token
 }) ->
-    #{
+    Provider = map_to_dictionary_id(payment_service_legacy, LegacyProvider, PaymentService),
+    genlib_map:compact(#{
         <<"type">> => <<"digital_wallet">>,
-        <<"provider">> => atom_to_binary(Provider, utf8),
+        <<"provider">> => Provider,
         <<"id">> => ID,
         <<"token">> => Token
-    }.
+    }).
 
 decode_crypto_wallet(CryptoCurrency) ->
     #{
         <<"type">> => <<"crypto_wallet">>,
-        <<"crypto_currency">> => capi_handler_decoder_utils:convert_crypto_currency_to_swag(CryptoCurrency)
+        <<"crypto_currency">> => CryptoCurrency
+    }.
+decode_legacy_crypto_wallet(LegacyCryptoCurrency) ->
+    CryptoCurrency = map_to_dictionary_id(crypto_currency_legacy, LegacyCryptoCurrency),
+    #{
+        <<"type">> => <<"crypto_wallet">>,
+        <<"crypto_currency">> => CryptoCurrency
     }.
 
 decode_mobile_commerce(MobileCommerce) ->
     #domain_MobileCommerce{
-        operator = Operator,
+        operator = NewMobileOperator,
+        operator_deprecated = LegacyOperator,
         phone = #domain_MobilePhone{
             cc = Cc,
             ctn = Ctn
         }
     } = MobileCommerce,
+    MobileOperator = map_to_dictionary_id(mobile_operator_legacy, LegacyOperator, NewMobileOperator),
     Phone = #{<<"cc">> => Cc, <<"ctn">> => Ctn},
     #{
         <<"type">> => <<"mobile_commerce">>,
         <<"phone">> => Phone,
-        <<"operator">> => atom_to_binary(Operator, utf8)
+        <<"operator">> => MobileOperator
     }.
 
 -spec decode_payment_tool_details(capi_handler_encoder:encode_data()) -> capi_handler_decoder_utils:decode_data().
@@ -300,10 +308,16 @@ decode_payment_tool_details({payment_terminal, V}) ->
     decode_payment_terminal_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsPaymentTerminal">>});
 decode_payment_tool_details({digital_wallet, V}) ->
     decode_digital_wallet_details(V, #{<<"detailsType">> => <<"PaymentToolDetailsDigitalWallet">>});
-decode_payment_tool_details({crypto_currency, CryptoCurrency}) ->
+decode_payment_tool_details({crypto_currency, #domain_CryptoCurrencyRef{id = CryptoCurrency}}) ->
     #{
         <<"detailsType">> => <<"PaymentToolDetailsCryptoWallet">>,
-        <<"cryptoCurrency">> => capi_handler_decoder_utils:convert_crypto_currency_to_swag(CryptoCurrency)
+        <<"cryptoCurrency">> => CryptoCurrency
+    };
+decode_payment_tool_details({crypto_currency_deprecated, LegacyCryptoCurrency}) ->
+    CryptoCurrency = map_to_dictionary_id(crypto_currency_legacy, LegacyCryptoCurrency),
+    #{
+        <<"detailsType">> => <<"PaymentToolDetailsCryptoWallet">>,
+        <<"cryptoCurrency">> => CryptoCurrency
     };
 decode_payment_tool_details({mobile_commerce, MobileCommerce}) ->
     #domain_MobileCommerce{
@@ -318,24 +332,40 @@ decode_payment_tool_details({mobile_commerce, MobileCommerce}) ->
 decode_bank_card_details(BankCard, V) ->
     LastDigits = capi_handler_decoder_utils:decode_last_digits(BankCard#domain_BankCard.last_digits),
     Bin = capi_handler_decoder_utils:decode_bank_card_bin(BankCard#domain_BankCard.bin),
+    PaymentSystem =
+        map_to_dictionary_id(
+            payment_system_legacy,
+            BankCard#domain_BankCard.payment_system_deprecated,
+            BankCard#domain_BankCard.payment_system
+        ),
+
+    TokenProvider =
+        map_to_dictionary_id(
+            payment_token_legacy,
+            BankCard#domain_BankCard.token_provider_deprecated,
+            BankCard#domain_BankCard.payment_token
+        ),
+
     capi_handler_utils:merge_and_compact(V, #{
         <<"last4">> => LastDigits,
         <<"first6">> => Bin,
         <<"cardNumberMask">> => capi_handler_decoder_utils:decode_masked_pan(Bin, LastDigits),
-        <<"paymentSystem">> => genlib:to_binary(BankCard#domain_BankCard.payment_system_deprecated),
-        <<"tokenProvider">> => decode_token_provider(BankCard#domain_BankCard.token_provider_deprecated)
+        <<"paymentSystem">> => PaymentSystem,
+        <<"tokenProvider">> => TokenProvider
         % TODO: Uncomment or delete this when we negotiate deploying non-breaking changes
         % <<"tokenizationMethod">> => genlib:to_binary(BankCard#domain_BankCard.tokenization_method)
     }).
 
-decode_token_provider(Provider) when Provider /= undefined ->
-    genlib:to_binary(Provider);
-decode_token_provider(undefined) ->
-    undefined.
-
-decode_payment_terminal_details(#domain_PaymentTerminal{terminal_type_deprecated = Type}, V) ->
+decode_payment_terminal_details(
+    #domain_PaymentTerminal{
+        payment_service = PaymentService,
+        terminal_type_deprecated = LegacyTerminalType
+    },
+    V
+) ->
+    Type = map_to_dictionary_id(terminal_provider_legacy, LegacyTerminalType, PaymentService),
     V#{
-        <<"provider">> => genlib:to_binary(Type)
+        <<"provider">> => Type
     }.
 
 decode_digital_wallet_details(#domain_DigitalWallet{provider_deprecated = qiwi, id = ID}, V) ->
@@ -422,3 +452,13 @@ decode_mobile_phone(#domain_MobilePhone{cc = Cc, ctn = Ctn}) ->
 
 gen_phone_number(#{<<"cc">> := Cc, <<"ctn">> := Ctn}) ->
     <<"+", Cc/binary, Ctn/binary>>.
+
+map_to_dictionary_id(_ObjectName, undefined) -> undefined;
+map_to_dictionary_id(ObjectName, LegacyID) ->
+    unwrap_ref(capi_domain:map_to_dictionary_id(ObjectName, LegacyID)).
+map_to_dictionary_id(_ObjectName, undefined, undefined) -> undefined;
+map_to_dictionary_id(ObjectName, LegacyID, NewRef) ->
+    unwrap_ref(capi_domain:map_to_dictionary_id(ObjectName, LegacyID, NewRef)).
+
+unwrap_ref({Type, ID}) when is_atom(Type) ->
+    ID.

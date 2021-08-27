@@ -181,6 +181,7 @@ clamp_max_request_deadline(Value) when is_integer(Value) ->
             Value
     end.
 
+%% TODO probably shlyop
 -spec deduplicate_payment_methods(list()) -> list().
 deduplicate_payment_methods(Methods) ->
     F = fun(Value, AccIn) ->
@@ -198,17 +199,6 @@ deduplicate_payment_methods(Methods) ->
 
 % payment methods are considered equivalent if they have the same method and token provider
 % in case there no token provider method equality is enough
-payment_methods_equivalent(
-    #{
-        <<"method">> := M,
-        <<"tokenProviders">> := P
-    },
-    #{
-        <<"method">> := M,
-        <<"tokenProviders">> := P
-    }
-) ->
-    true;
 payment_methods_equivalent(#{<<"method">> := M} = M1, #{<<"method">> := M} = M2) ->
     maps:get(<<"tokenProviders">>, M1, undefined) =:= maps:get(<<"tokenProviders">>, M2, undefined);
 payment_methods_equivalent(_, _) ->

@@ -12,7 +12,7 @@ encode_country_code(undefined) ->
     undefined;
 encode_country_code(Code) when is_binary(Code) ->
     try
-        list_to_existing_atom(string:to_lower(binary_to_list(Code)))
+        binary_to_existing_atom(string:lowercase(Code))
     catch
         error:badarg ->
             throw({encode_country_code, invalid_country_code})
