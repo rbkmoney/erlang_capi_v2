@@ -79,7 +79,8 @@ map_to_dictionary_id(ObjectName, LegacyID, NewRef) ->
                         NewRef;
                     {error, _} = Error ->
                         logger:warning(
-                            "Failed to find mapping ~w with id ~w: chance of domain misconifuration (Error: ~w). Using passed new ref",
+                            "Failed to find mapping ~w with id ~w: "
+                            "chance of domain misconifuration (Error: ~w). Using passed new ref",
                             [ObjectName, LegacyID, Error]
                         ),
                         NewRef
