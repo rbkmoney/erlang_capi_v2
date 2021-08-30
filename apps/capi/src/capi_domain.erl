@@ -46,7 +46,7 @@ get_payment_institutions(Context) ->
 
     {ok, PaymentInstitutions}.
 
--spec get(ref(), context()) -> {ok, data()} | {error, not_found}.
+-spec get(ref(), context() | undefined) -> {ok, data()} | {error, not_found}.
 get(Ref, Context) ->
     try
         {_Type, Object} = dmt_client:checkout_object(latest, Ref, genlib_map:compact(#{woody_context => Context})),
