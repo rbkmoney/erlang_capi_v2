@@ -120,15 +120,20 @@ encode_digital_wallet(#{<<"provider">> := Provider, <<"id">> := ID} = Wallet) ->
 
 encode_crypto_wallet(#{<<"crypto_currency">> := CryptoCurrency0}) ->
     CryptoCurrency =
-        erlang:atom_to_binary(
-            capi_handler_decoder_utils:convert_crypto_currency_from_swag(CryptoCurrency0)
-        ),
+        convert_crypto_currency_from_swag(CryptoCurrency0),
+
     case infer_legacy_and_dictionary_ids(payment_service_legacy, CryptoCurrency) of
         {LegacyCryptoCurrency, undefined} ->
             {crypto_currency_deprecated, LegacyCryptoCurrency};
         {_, CryptoCurrencyRef} ->
             {crypto_currency, CryptoCurrencyRef}
     end.
+
+-spec convert_crypto_currency_from_swag(binary()) -> atom().
+convert_crypto_currency_from_swag(<<"bitcoinCash">>) ->
+    <<"bitcoin_cash">>;
+convert_crypto_currency_from_swag(CryptoCurrency) when is_binary(CryptoCurrency) ->
+    CryptoCurrency.
 
 encode_mobile_commerce(#{<<"phoneNumber">> := PhoneNumber, <<"operator">> := Operator}) ->
     #{<<"cc">> := Cc, <<"ctn">> := Ctn} = PhoneNumber,

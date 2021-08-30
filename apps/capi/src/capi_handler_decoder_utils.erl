@@ -86,12 +86,6 @@ decode_optional(Arg, DecodeFun) when Arg /= undefined ->
 decode_optional(undefined, _) ->
     undefined.
 
--spec convert_crypto_currency_from_swag(binary()) -> atom().
-convert_crypto_currency_from_swag(<<"bitcoinCash">>) ->
-    bitcoin_cash;
-convert_crypto_currency_from_swag(CryptoCurrency) when is_binary(CryptoCurrency) ->
-    binary_to_existing_atom(CryptoCurrency, utf8).
-
 -spec convert_crypto_currency_to_swag(atom()) -> binary().
 convert_crypto_currency_to_swag(bitcoin_cash) ->
     <<"bitcoinCash">>;
