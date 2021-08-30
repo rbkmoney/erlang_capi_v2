@@ -13,7 +13,6 @@
 -export([decode_category_ref/1]).
 -export([decode_context/1]).
 -export([decode_optional/2]).
--export([convert_crypto_currency_from_swag/1]).
 -export([convert_crypto_currency_to_swag/1]).
 
 -export_type([decode_data/0]).
