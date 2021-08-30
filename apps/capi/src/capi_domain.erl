@@ -73,10 +73,11 @@ map_to_dictionary_id(ObjectName, LegacyID, NewRef) ->
                         Ref;
                     {ok, OtherRef} ->
                         logger:warning(
-                            "Mismatch in mapped to dictionary value and passed ~p: ~p->~p and ~p: Using passed new ref",
+                            "Mismatch in mapped to dictionary value and passed ~p: ~p->~p and ~p."
+                            "Using dictionary value (the latter)",
                             [ObjectName, LegacyID, OtherRef, NewRef]
                         ),
-                        NewRef;
+                        OtherRef;
                     {error, _} = Error ->
                         logger:warning(
                             "Failed to find mapping ~w with id ~w: "
