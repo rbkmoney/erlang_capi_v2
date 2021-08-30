@@ -53,7 +53,6 @@ encode_payment_tool(PaymentTool) ->
             encode_mobile_commerce(Encoded)
     end.
 
-%% TODO shlyop all encode_*
 encode_bank_card(BankCard) ->
     {PaymentSystemDeprecated, PaymentSystem} =
         infer_legacy_and_dictionary_ids(

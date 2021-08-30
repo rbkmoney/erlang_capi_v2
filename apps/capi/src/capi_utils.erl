@@ -181,7 +181,6 @@ clamp_max_request_deadline(Value) when is_integer(Value) ->
             Value
     end.
 
-%% TODO probably shlyop
 -spec deduplicate_payment_methods(list()) -> list().
 deduplicate_payment_methods(Methods) ->
     F = fun(Value, AccIn) ->
