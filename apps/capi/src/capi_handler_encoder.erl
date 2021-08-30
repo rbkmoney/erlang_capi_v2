@@ -129,7 +129,6 @@ encode_crypto_wallet(#{<<"crypto_currency">> := CryptoCurrency0}) ->
             {crypto_currency, CryptoCurrencyRef}
     end.
 
--spec convert_crypto_currency_from_swag(binary()) -> atom().
 convert_crypto_currency_from_swag(<<"bitcoinCash">>) ->
     <<"bitcoin_cash">>;
 convert_crypto_currency_from_swag(CryptoCurrency) when is_binary(CryptoCurrency) ->
