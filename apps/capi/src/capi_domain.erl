@@ -69,7 +69,7 @@ map_to_dictionary_id(ObjectName, LegacyID, NewRef) ->
                 NewRef;
             _ ->
                 case fetch_dictionary_id(ObjectName, LegacyID) of
-                    {ok, Ref} when Ref =:= NewRef; NewRef == undefined ->
+                    {ok, Ref} when Ref =:= NewRef; NewRef =:= undefined ->
                         Ref;
                     {ok, OtherRef} ->
                         logger:warning(
