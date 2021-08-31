@@ -272,7 +272,6 @@ infer_legacy_and_dictionary_ids(ObjectVariant, ID) ->
             DictionaryID = map_to_dictionary_id(ObjectVariant, LegacyID),
             {LegacyID, DictionaryID};
         {error, _} ->
-            %% DISCUSS: should we try to map back to LegacyID for completeness of data?
             DictionaryID = ID,
             {undefined, DictionaryID}
     end.
