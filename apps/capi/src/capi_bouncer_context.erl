@@ -22,6 +22,7 @@
     | {payouts, prototype_payouts()}
     | {reports, prototype_reports()}
     | {webhooks, prototype_webhooks()}
+    | {payment_tool, prototype_payment_tool()}
 ].
 
 -type prototype_operation() :: #{
@@ -40,6 +41,12 @@
     webhook => entity_id(),
     claim => entity_id(),
     payout => entity_id()
+}.
+
+-type prototype_payment_tool() :: #{
+    invoice => entity_id(),
+    customer => entity_id(),
+    expiration => timestamp()
 }.
 
 -type prototype_payproc() :: #{
@@ -80,6 +87,7 @@
 -type payout() :: payouts_payout_manager_thrift:'Payout'().
 
 -type entity_id() :: binary().
+-type timestamp() :: binary().
 
 -export_type([prototypes/0]).
 -export_type([prototype_operation/0]).
@@ -87,6 +95,7 @@
 -export_type([prototype_payouts/0]).
 -export_type([prototype_webhooks/0]).
 -export_type([prototype_reports/0]).
+-export_type([prototype_payment_tool/0]).
 
 -export([new/0]).
 -export([build/3]).
@@ -128,6 +137,16 @@ build(operation, Params = #{id := OperationID}, Acc, _WoodyCtx) ->
                 claim = maybe_entity(claim, Params),
                 payout = maybe_entity(payout, Params)
             }
+        }
+    };
+build(payment_tool, Params = #{}, Acc, _WoodyCtx) ->
+    Acc#bctx_v1_ContextFragment{
+        payment_tool = #bctx_v1_ContextPaymentTool{
+            scope = #bctx_v1_AuthScope{
+                invoice = maybe_entity(invoice, Params),
+                customer = maybe_entity(customer, Params)
+            },
+            expiration = maps:get(expiration, Params, undefined)
         }
     };
 build(payproc, Params = #{}, Acc, WoodyCtx) ->

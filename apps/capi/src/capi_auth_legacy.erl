@@ -98,16 +98,21 @@ issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
             token => #{id => TokenID}
         }
     ),
+    % Метаданные для привязки платежных токенов в createPaymentResource
     Claims0 = maps:merge(
         ExtraProperties,
+        resolve_payment_token_metadata(TokenSpec)
+    ),
+    Claims1 = maps:merge(
+        Claims0,
         resolve_token_spec(TokenSpec)
     ),
-    Claims1 = capi_bouncer:set_claim(
+    Claims2 = capi_bouncer:set_claim(
         bouncer_client:bake_context_fragment(ContextFragment),
-        Claims0
+        Claims1
     ),
     capi_utils:unwrap(
-        uac_authorizer_jwt:issue(TokenID, PartyID, Claims1, ?SIGNEE)
+        uac_authorizer_jwt:issue(TokenID, PartyID, Claims2, ?SIGNEE)
     ).
 
 %%
@@ -194,6 +199,18 @@ resolve_token_spec({customer, CustomerID}) ->
 resolve_token_spec({_Entity, _EntityID}) ->
     % ED-123:  для ролей другие сущности не используются
     undefined.
+
+-spec resolve_payment_token_metadata(token_spec()) -> claims().
+resolve_payment_token_metadata(TokenSpec) ->
+    maps:fold(
+        fun
+            (invoice, EntityID, Meta) -> Meta#{<<"invoice_link">> => EntityID};
+            (customer, EntityID, Meta) -> Meta#{<<"customer_link">> => EntityID};
+            (_Entity, _EntityID, Meta) -> Meta
+        end,
+        #{},
+        TokenSpec
+    ).
 
 -spec resolve_bouncer_ctx(token_spec(), _PartyID :: binary()) -> bouncer_context_helpers:auth_params().
 resolve_bouncer_ctx(TokenSpec, PartyID) ->

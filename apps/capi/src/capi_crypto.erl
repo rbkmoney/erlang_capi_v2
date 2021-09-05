@@ -5,8 +5,10 @@
 -type token() :: binary().
 -type token_data() :: #{
     payment_tool := payment_tool(),
-    valid_until := deadline()
+    valid_until := deadline(),
+    bouncer_data => bouncer_data()
 }.
+-type bouncer_data() :: term().
 -type payment_tool() :: dmsl_domain_thrift:'PaymentTool'().
 -type payment_tool_token() :: dmsl_payment_tool_token_thrift:'PaymentToolToken'().
 -type payment_tool_token_payload() :: dmsl_payment_tool_token_thrift:'PaymentToolTokenPayload'().
@@ -14,6 +16,7 @@
 
 -export_type([token/0]).
 -export_type([token_data/0]).
+-export_type([bouncer_data/0]).
 
 -export([encode_token/1]).
 -export([decode_token/1]).
@@ -48,9 +51,11 @@ decrypt_token(EncryptedPaymentToolToken) ->
         {ok, PaymentToolToken} ->
             Payload = PaymentToolToken#ptt_PaymentToolToken.payload,
             ValidUntil = PaymentToolToken#ptt_PaymentToolToken.valid_until,
+            BouncerContext = PaymentToolToken#ptt_PaymentToolToken.bouncer_data,
             {ok, #{
                 payment_tool => decode_payment_tool_token_payload(Payload),
-                valid_until => decode_deadline(ValidUntil)
+                valid_until => decode_deadline(ValidUntil),
+                bouncer_data => decode_bouncer_data(BouncerContext)
             }};
         {error, _} = Error ->
             Error
@@ -60,10 +65,18 @@ decrypt_token(EncryptedPaymentToolToken) ->
 encode_payment_tool_token(TokenData) ->
     Payload = maps:get(payment_tool, TokenData),
     ValidUntil = maps:get(valid_until, TokenData),
+    BouncerContext = maps:get(bouncer_data, TokenData, undefined),
     #ptt_PaymentToolToken{
         payload = encode_payment_tool_token_payload(Payload),
-        valid_until = encode_deadline(ValidUntil)
+        valid_until = encode_deadline(ValidUntil),
+        bouncer_data = encode_bouncer_data(BouncerContext)
     }.
+
+-spec encode_bouncer_data(bouncer_data()) -> binary() | undefined.
+encode_bouncer_data(undefined) ->
+    undefined;
+encode_bouncer_data(BouncerData) ->
+    base64:encode(erlang:term_to_binary(BouncerData)).
 
 -spec encode_deadline(deadline()) -> binary() | undefined.
 encode_deadline(undefined) ->
@@ -92,6 +105,17 @@ encode_payment_tool_token_payload({mobile_commerce, MobileCommerce}) ->
     {mobile_commerce_payload, #ptt_MobileCommercePayload{
         mobile_commerce = MobileCommerce
     }}.
+
+-spec decode_bouncer_data(binary()) -> bouncer_data() | undefined | no_return().
+decode_bouncer_data(undefined) ->
+    undefined;
+decode_bouncer_data(Content) ->
+    try
+        erlang:binary_to_term(base64:decode(Content))
+    catch
+        error:Error ->
+            erlang:error({malformed_token, Error}, [Content])
+    end.
 
 -spec decode_deadline(binary()) -> deadline() | undefined.
 decode_deadline(undefined) ->

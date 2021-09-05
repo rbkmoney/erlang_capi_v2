@@ -23,7 +23,8 @@ prepare(OperationID = 'CreatePayment', Req, Context) ->
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID}},
-            {payproc, #{invoice => Invoice}}
+            {payproc, #{invoice => Invoice}},
+            {payment_tool, prepare_payment_tool_prototype(PaymentToken)}
         ],
         {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
@@ -474,6 +475,22 @@ prepare(OperationID = 'GetChargebackByID', Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
+
+%%
+
+prepare_payment_tool_prototype(undefined) ->
+    #{};
+prepare_payment_tool_prototype(PaymentToken) ->
+    #{
+        expiration => prepare_payment_tool_expire(PaymentToken),
+        scope => prepare_payment_tool_scope(PaymentToken)
+    }.
+
+prepare_payment_tool_expire(#{valid_until := ValidUntil}) ->
+    capi_utils:deadline_to_binary(ValidUntil).
+
+prepare_payment_tool_scope(#{bouncer_data := BouncerData}) ->
+    BouncerData.
 
 %%
 
