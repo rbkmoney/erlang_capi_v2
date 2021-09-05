@@ -7,7 +7,6 @@
 
 -export([get_claim/1]).
 -export([set_claim/2]).
--export([set_named_claim/3]).
 -export([decode_claim/1]).
 -export([encode_claim/1]).
 
@@ -95,11 +94,7 @@ decode_claim(Ctx) ->
 
 -spec set_claim(capi_bouncer_context:fragment(), claims()) -> claims().
 set_claim(ContextFragment, Claims) ->
-    set_named_claim(?CLAIM_BOUNCER_CTX, ContextFragment, Claims).
-
--spec set_named_claim(binary(), capi_bouncer_context:fragment(), claims()) -> claims().
-set_named_claim(Name, ContextFragment, Claims) ->
-    false = maps:is_key(Name, Claims),
+    false = maps:is_key(?CLAIM_BOUNCER_CTX, Claims),
     Claims#{?CLAIM_BOUNCER_CTX => encode_claim(ContextFragment)}.
 
 -spec encode_claim(capi_bouncer_context:fragment()) -> claim().
