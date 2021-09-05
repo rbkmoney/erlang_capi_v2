@@ -1,6 +1,7 @@
 -module(capi_handler_utils).
 
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
+-include_lib("damsel/include/dmsl_domain_thrift.hrl").
 
 -export([general_error/2]).
 -export([logic_error/2]).
@@ -22,6 +23,7 @@
 
 -export([issue_access_token/2]).
 -export([issue_access_token/3]).
+
 -export([merge_and_compact/2]).
 -export([get_time/2]).
 -export([get_split_interval/2]).
@@ -30,9 +32,12 @@
 
 -export([unwrap_payment_session/1]).
 -export([wrap_payment_session/2]).
+-export([wrap_merchant_id/3]).
+
 -export([get_invoice_by_id/2]).
 -export([get_payment_by_id/3]).
 -export([get_refund_by_id/4]).
+-export([get_realm_by_contract/3]).
 
 -export([create_dsl/3]).
 
@@ -136,11 +141,13 @@ get_extra_properties(Context) ->
 append_to_tuple(Item, Tuple) ->
     list_to_tuple([Item | tuple_to_list(Tuple)]).
 
--spec issue_access_token(binary(), tuple()) -> map().
+-spec issue_access_token(binary(), map() | tuple()) -> map().
 issue_access_token(PartyID, TokenSpec) ->
     issue_access_token(PartyID, TokenSpec, #{}).
 
--spec issue_access_token(binary(), tuple(), map()) -> map().
+-spec issue_access_token(binary(), map() | tuple(), map()) -> map().
+issue_access_token(PartyID, {Entity, EntityID}, ExtraProperties) ->
+    issue_access_token(PartyID, #{Entity => EntityID}, ExtraProperties);
 issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
     #{<<"payload">> => capi_auth_legacy:issue_access_token(PartyID, TokenSpec, ExtraProperties)}.
 
@@ -253,6 +260,10 @@ wrap_payment_session(ClientInfo, PaymentSession) ->
         <<"paymentSession">> => PaymentSession
     }).
 
+-spec wrap_merchant_id(binary(), binary(), binary()) -> binary().
+wrap_merchant_id(RealmMode, PartyID, EntityID) ->
+    <<RealmMode/binary, $:, PartyID/binary, $:, EntityID/binary>>.
+
 -spec get_invoice_by_id(binary(), processing_context()) -> woody:result().
 get_invoice_by_id(InvoiceID, Context) ->
     EventRange = #payproc_EventRange{},
@@ -266,6 +277,14 @@ get_payment_by_id(InvoiceID, PaymentID, Context) ->
 -spec get_refund_by_id(binary(), binary(), binary(), processing_context()) -> woody:result().
 get_refund_by_id(InvoiceID, PaymentID, RefundID, Context) ->
     service_call_with([user_info], {invoicing, 'GetPaymentRefund', {InvoiceID, PaymentID, RefundID}}, Context).
+
+-spec get_realm_by_contract(binary(), binary(), processing_context()) -> {ok, capi_domain:realm()}.
+get_realm_by_contract(PartyID, ContractID, Context) ->
+    {ok, Contract} = capi_party:get_contract(PartyID, ContractID, Context),
+    #domain_Contract{payment_institution = PiRef} = Contract,
+    {ok, Pi} = capi_domain:get_payment_institution(PiRef, Context),
+    #domain_PaymentInstitution{realm = Realm} = Pi,
+    {ok, Realm}.
 
 -spec create_dsl(atom(), map(), map()) -> map().
 create_dsl(QueryType, QueryBody, QueryParams) ->

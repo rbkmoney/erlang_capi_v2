@@ -191,9 +191,9 @@ check_party_in_payout(PartyID, #payouts_Payout{party_id = PartyID}) ->
 check_party_in_payout(_PartyID, _) ->
     false.
 
-get_schedule_by_id(ScheduleID, #{woody_context := WoodyContext}) ->
+get_schedule_by_id(ScheduleID, Context) ->
     Ref = {business_schedule, #domain_BusinessScheduleRef{id = ScheduleID}},
-    capi_domain:get(Ref, WoodyContext).
+    capi_domain:get(Ref, Context).
 
 get_payout_tool(Payout, Context) ->
     PayoutToolID = Payout#payouts_Payout.payout_tool_id,
