@@ -11,7 +11,6 @@
 -export([authorize_operation/2]).
 
 % @NOTE Token issuing facilities are not yet available for tokenkeeper, use capi_auth_legacy
-%-export([issue_access_token/2]).
 %-export([issue_access_token/3]).
 %-export([get_extra_properties/0]).
 

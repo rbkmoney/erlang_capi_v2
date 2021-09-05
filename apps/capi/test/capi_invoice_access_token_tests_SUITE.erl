@@ -1,6 +1,7 @@
 -module(capi_invoice_access_token_tests_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
+-include_lib("stdlib/include/assert.hrl").
 
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_errors_thrift.hrl").
@@ -133,7 +134,11 @@ init_per_group(operations_by_invoice_access_token_after_token_creation, Config) 
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end},
-            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
+            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end},
+            {party_management, fun
+                ('GetShop', _) -> {ok, ?SHOP};
+                ('GetContract', _) -> {ok, ?CONTRACT}
+            end}
         ],
         MockServiceSup
     ),
@@ -233,7 +238,9 @@ get_invoice_payment_methods_ok_test(Config) ->
             end},
             {party_management, fun
                 ('GetRevision', _) -> {ok, ?INTEGER};
-                ('Checkout', _) -> {ok, ?PARTY}
+                ('Checkout', _) -> {ok, ?PARTY};
+                ('GetShop', _) -> {ok, ?SHOP};
+                ('GetContract', _) -> {ok, ?CONTRACT}
             end}
         ],
         Config
@@ -245,7 +252,24 @@ get_invoice_payment_methods_ok_test(Config) ->
         ?STRING,
         Config
     ),
-    {ok, _} = capi_client_invoices:get_invoice_payment_methods(?config(context, Config), ?STRING).
+    {ok, Methods} = capi_client_invoices:get_invoice_payment_methods(
+        ?config(context, Config), ?STRING
+    ),
+    [ProviderMethod] = lists:filter(
+        fun(Method) ->
+            maps:get(<<"tokenProviderData">>, Method, undefined) /= undefined
+        end,
+        Methods
+    ),
+    ?assertMatch(
+        #{
+            <<"merchantID">> := <<"test:", _/binary>>,
+            <<"merchantName">> := ?STRING,
+            <<"orderID">> := ?STRING,
+            <<"realm">> := <<"test">>
+        },
+        maps:get(<<"tokenProviderData">>, ProviderMethod)
+    ).
 
 -spec create_payment_ok_test(config()) -> _.
 create_payment_ok_test(Config) ->
@@ -310,7 +334,7 @@ create_payment_expired_test(Config) ->
         Config
     ),
     ValidUntil = capi_utils:deadline_from_timeout(0),
-    PaymentToolToken = capi_crypto:create_encrypted_payment_tool_token(PaymentTool, ValidUntil),
+    PaymentToolToken = encrypt_payment_tool(PaymentTool, ValidUntil),
     Req = #{
         <<"externalID">> => <<"merch_id">>,
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
@@ -645,10 +669,8 @@ create_first_recurrent_payment_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun
-                ('Get', _) ->
-                    {ok, ?PAYPROC_INVOICE};
-                ('StartPayment', _) ->
-                    {ok, ?PAYPROC_PAYMENT}
+                ('Get', _) -> {ok, ?PAYPROC_INVOICE};
+                ('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT}
             end},
             {generator, fun('GenerateID', _) ->
                 capi_ct_helper_bender:generate_id(<<"bender_key">>)
@@ -767,7 +789,7 @@ get_encrypted_token({qiwi, Phone, TokenID}) ->
             id = Phone,
             token = TokenID
         }},
-    capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined).
+    encrypt_payment_tool(PaymentTool).
 
 get_encrypted_token(PS, ExpDate) ->
     get_encrypted_token(PS, ExpDate, undefined).
@@ -783,4 +805,10 @@ get_encrypted_token(PS, ExpDate, IsCvvEmpty) ->
             cardholder_name = <<"Degus Degusovich">>,
             is_cvv_empty = IsCvvEmpty
         }},
-    capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined).
+    encrypt_payment_tool(PaymentTool).
+
+encrypt_payment_tool(PaymentTool) ->
+    encrypt_payment_tool(PaymentTool, undefined).
+
+encrypt_payment_tool(PaymentTool, ValidUntil) ->
+    capi_crypto:encode_token(#{payment_tool => PaymentTool, valid_until => ValidUntil}).

@@ -9,7 +9,6 @@
 
 -export([authorize_api_key/1]).
 
--export([issue_access_token/2]).
 -export([issue_access_token/3]).
 
 -export([get_consumer/1]).
@@ -86,14 +85,9 @@ authorize_api_key(ApiKey) ->
 
 -include_lib("bouncer_proto/include/bouncer_context_v1_thrift.hrl").
 
--type token_spec() ::
-    {invoice, InvoiceID :: binary()}
-    | {invoice_tpl, InvoiceTplID :: binary()}
-    | {customer, CustomerID :: binary()}.
-
--spec issue_access_token(PartyID :: binary(), token_spec()) -> uac_authorizer_jwt:token().
-issue_access_token(PartyID, TokenSpec) ->
-    issue_access_token(PartyID, TokenSpec, #{}).
+-type token_spec() :: #{
+    invoice | invoice_tpl | customer | shop => binary()
+}.
 
 -spec issue_access_token(PartyID :: binary(), token_spec(), map()) -> uac_authorizer_jwt:token().
 issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
@@ -104,16 +98,16 @@ issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
             token => #{id => TokenID}
         }
     ),
-    Claims1 = maps:merge(
+    Claims0 = maps:merge(
         ExtraProperties,
         resolve_token_spec(TokenSpec)
     ),
-    Claims2 = capi_bouncer:set_claim(
+    Claims1 = capi_bouncer:set_claim(
         bouncer_client:bake_context_fragment(ContextFragment),
-        Claims1
+        Claims0
     ),
     capi_utils:unwrap(
-        uac_authorizer_jwt:issue(TokenID, PartyID, Claims2, ?SIGNEE)
+        uac_authorizer_jwt:issue(TokenID, PartyID, Claims1, ?SIGNEE)
     ).
 
 %%
@@ -144,7 +138,18 @@ get_access_config() ->
 %% Internal functions
 %%
 
--spec resolve_token_spec(token_spec()) -> claims().
+-spec resolve_token_spec(token_spec() | tuple()) -> claims().
+resolve_token_spec(#{} = TokenSpec) ->
+    maps:fold(
+        fun
+            (Entity, EntityID, undefined) ->
+                resolve_token_spec({Entity, EntityID});
+            (_Entity, _EntityID, Context) ->
+                Context
+        end,
+        undefined,
+        TokenSpec
+    );
 resolve_token_spec({invoice, InvoiceID}) ->
     DomainRoles = #{
         <<"common-api">> => uac_acl:from_list([
@@ -185,42 +190,51 @@ resolve_token_spec({customer, CustomerID}) ->
     #{
         <<"exp">> => Expiration,
         <<"resource_access">> => DomainRoles
-    }.
+    };
+resolve_token_spec({_Entity, _EntityID}) ->
+    % ED-123:  для ролей другие сущности не используются
+    undefined.
 
 -spec resolve_bouncer_ctx(token_spec(), _PartyID :: binary()) -> bouncer_context_helpers:auth_params().
-resolve_bouncer_ctx({invoice, InvoiceID}, PartyID) ->
+resolve_bouncer_ctx(TokenSpec, PartyID) ->
+    Scope = maps:map(
+        fun(_Entity, EntityID) ->
+            #{id => EntityID}
+        end,
+        TokenSpec#{party => PartyID}
+    ),
+
+    AuthContext = maps:fold(
+        fun
+            (Entity, _EntityID, undefined) ->
+                resolve_bouncer_ctx(Entity);
+            (_Entity, _EntityID, Context) ->
+                Context
+        end,
+        undefined,
+        TokenSpec
+    ),
+    AuthContext#{
+        scope => [Scope]
+    }.
+
+resolve_bouncer_ctx(invoice) ->
     #{
         method => ?BCTX_V1_AUTHMETHOD_INVOICEACCESSTOKEN,
-        expiration => make_auth_expiration(lifetime_to_expiration(?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME)),
-        scope => [
-            #{
-                party => #{id => PartyID},
-                invoice => #{id => InvoiceID}
-            }
-        ]
+        expiration => make_auth_expiration(lifetime_to_expiration(?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME))
     };
-resolve_bouncer_ctx({invoice_tpl, InvoiceTemplateID}, PartyID) ->
+resolve_bouncer_ctx(invoice_tpl) ->
     #{
         method => ?BCTX_V1_AUTHMETHOD_INVOICETEMPLATEACCESSTOKEN,
-        expiration => make_auth_expiration(unlimited),
-        scope => [
-            #{
-                party => #{id => PartyID},
-                invoice_template => #{id => InvoiceTemplateID}
-            }
-        ]
+        expiration => make_auth_expiration(unlimited)
     };
-resolve_bouncer_ctx({customer, CustomerID}, PartyID) ->
+resolve_bouncer_ctx(customer) ->
     #{
         method => ?BCTX_V1_AUTHMETHOD_CUSTOMERACCESSTOKEN,
-        expiration => make_auth_expiration(lifetime_to_expiration(?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME)),
-        scope => [
-            #{
-                party => #{id => PartyID},
-                customer => #{id => CustomerID}
-            }
-        ]
-    }.
+        expiration => make_auth_expiration(lifetime_to_expiration(?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME))
+    };
+resolve_bouncer_ctx(_) ->
+    undefined.
 
 lifetime_to_expiration(Lt) when is_integer(Lt) ->
     genlib_time:unow() + Lt.
