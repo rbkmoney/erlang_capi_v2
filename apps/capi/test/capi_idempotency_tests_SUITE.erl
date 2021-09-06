@@ -141,7 +141,7 @@ init_per_group(payment_creation, Config) ->
         <<"description">> => <<"test_invoice_description">>
     },
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
+    Apps1 = capi_ct_helper_token_keeper:mock_user_session_token(SupPid),
     Apps2 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     {
         {ok, #{
@@ -166,7 +166,7 @@ init_per_group(GroupName, Config) when
     Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited)),
     Context2 = capi_ct_helper:get_context(capi_ct_helper:issue_token(<<"TEST2">>, unlimited, #{})),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
+    Apps1 = capi_ct_helper_token_keeper:mock_user_session_token(SupPid),
     Apps2 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     [
         {context_with_diff_party, Context2},
