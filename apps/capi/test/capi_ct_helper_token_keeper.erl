@@ -181,8 +181,8 @@ consumer_metadata(TokenInfo) ->
 %%
 
 create_bouncer_context(AuthParams) ->
-  Fragment0 = bouncer_context_helpers:make_auth_fragment(AuthParams),
-  encode_context(Fragment0).
+    Fragment0 = bouncer_context_helpers:make_auth_fragment(AuthParams),
+    encode_context(Fragment0).
 
 create_bouncer_context(AuthParams, UserParams) ->
     Fragment0 = bouncer_context_helpers:make_auth_fragment(AuthParams),
