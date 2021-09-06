@@ -111,7 +111,7 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
         ],
         MockServiceSup
     ),
-    _ = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:api_key_handler(?STRING), MockServiceSup),
+    _ = capi_ct_helper_token_keeper:mock_api_key_token(?STRING, MockServiceSup),
     _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"CreateInvoice">>, ?STRING, ?STRING, MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
@@ -137,7 +137,7 @@ init_per_group(operations_by_invoice_access_token_after_token_creation, Config) 
         ],
         MockServiceSup
     ),
-    _ = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:api_key_handler(?STRING), MockServiceSup),
+    _ = capi_ct_helper_token_keeper:mock_api_key_token(?STRING, MockServiceSup),
     _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
         <<"CreateInvoiceAccessToken">>,
         ?STRING,
@@ -159,7 +159,7 @@ end_per_group(_Group, C) ->
 -spec init_per_testcase(test_case_name(), config()) -> config().
 init_per_testcase(_Name, C) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    _ = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:invoice_access_token(?STRING, ?STRING), MockServiceSup),
+    _ = capi_ct_helper_token_keeper:mock_invoice_access_token(?STRING, ?STRING, MockServiceSup),
     [{test_sup, MockServiceSup} | C].
 
 -spec end_per_testcase(test_case_name(), config()) -> _.
