@@ -94,7 +94,7 @@ end_per_testcase(_Name, C) ->
 -spec init_per_group(group_name(), config()) -> config().
 init_per_group(GroupName, Config) ->
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
+    Apps1 = capi_ct_helper_token_keeper:mock_user_session_token(SupPid),
     Apps2 =
         case GroupName of
             forbidden_masking ->

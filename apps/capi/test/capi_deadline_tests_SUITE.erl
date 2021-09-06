@@ -66,7 +66,7 @@ end_per_suite(C) ->
 -spec init_per_group(group_name(), config()) -> config().
 init_per_group(deadline_header, Config) ->
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
+    Apps1 = capi_ct_helper_token_keeper:mock_user_session_token(SupPid),
     Apps2 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     [{group_apps, Apps1 ++ Apps2}, {group_test_sup, SupPid} | Config];
 init_per_group(_, Config) ->
