@@ -1059,6 +1059,44 @@
                     name = <<"European Economic Area">>,
                     description = <<"Extension of EU">>
                 }
+            }},
+
+        {payment_system, #domain_PaymentSystemRef{id = <<"visa">>}} =>
+            {payment_system, #domain_PaymentSystemObject{
+                ref = #domain_PaymentSystemRef{id = <<"visa">>},
+                data = #domain_PaymentSystem{name = <<"Visa">>}
+            }},
+
+        {payment_system, #domain_PaymentSystemRef{id = <<"mastercard">>}} =>
+            {payment_system, #domain_PaymentSystemObject{
+                ref = #domain_PaymentSystemRef{id = <<"mastercard">>},
+                data = #domain_PaymentSystem{name = <<"Mastercard">>}
+            }},
+
+        {payment_service, #domain_PaymentServiceRef{id = <<"qiwi">>}} =>
+            {payment_service, #domain_PaymentServiceObject{
+                ref = #domain_PaymentServiceRef{id = <<"qiwi">>},
+                data = #domain_PaymentService{name = <<"Qiwi">>}
+            }},
+
+        {payment_system_legacy, #domain_LegacyBankCardPaymentSystemRef{id = visa}} =>
+            {payment_system_legacy, #domain_LegacyBankCardPaymentSystemObject{
+                ref = #domain_LegacyBankCardPaymentSystemRef{id = visa},
+                data = #domain_PaymentSystemRef{id = <<"visa">>}
+            }},
+
+        {payment_system_legacy, #domain_LegacyBankCardPaymentSystemRef{id = mastercard}} =>
+            {payment_system_legacy, #domain_LegacyBankCardPaymentSystemObject{
+                ref = #domain_LegacyBankCardPaymentSystemRef{id = mastercard},
+                data = #domain_PaymentSystemRef{id = <<"mastercard">>}
+            }},
+
+        {payment_service_legacy, #domain_LegacyDigitalWalletProviderRef{id = qiwi}} =>
+            {payment_service_legacy, #domain_LegacyDigitalWalletProviderObject{
+                ref = #domain_LegacyDigitalWalletProviderRef{id = qiwi},
+                data = #domain_PaymentServiceRef{
+                    id = <<"qiwi">>
+                }
             }}
     }
 }).

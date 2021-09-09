@@ -140,7 +140,7 @@ init_per_group(payment_creation, Config) ->
         <<"description">> => <<"test_invoice_description">>
     },
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
+    Apps1 = capi_ct_helper_token_keeper:mock_user_session_token(SupPid),
     Apps2 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     {
         {ok, #{
@@ -164,7 +164,7 @@ init_per_group(GroupName, Config) when
 ->
     Context = capi_ct_helper:get_context(?API_TOKEN),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
+    Apps1 = capi_ct_helper_token_keeper:mock_user_session_token(SupPid),
     Apps2 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     [
         {context, Context},
@@ -706,7 +706,8 @@ create_payment(BenderKey, Requests, Config) ->
             end},
             {bender, fun('GenerateID', {_, _, CtxMsgPack}) ->
                 capi_ct_helper_bender:get_internal_id(Tid, BenderKey, CtxMsgPack)
-            end}
+            end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),

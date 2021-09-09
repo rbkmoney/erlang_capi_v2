@@ -110,7 +110,7 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
         ],
         MockServiceSup
     ),
-    _ = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:api_key_handler(?STRING), MockServiceSup),
+    _ = capi_ct_helper_token_keeper:mock_api_key_token(?STRING, MockServiceSup),
     _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"CreateInvoice">>, ?STRING, ?STRING, MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
@@ -136,7 +136,7 @@ init_per_group(operations_by_invoice_access_token_after_token_creation, Config) 
         ],
         MockServiceSup
     ),
-    _ = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:api_key_handler(?STRING), MockServiceSup),
+    _ = capi_ct_helper_token_keeper:mock_api_key_token(?STRING, MockServiceSup),
     _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
         <<"CreateInvoiceAccessToken">>,
         ?STRING,
@@ -158,7 +158,7 @@ end_per_group(_Group, C) ->
 -spec init_per_testcase(test_case_name(), config()) -> config().
 init_per_testcase(_Name, C) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    _ = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:invoice_access_token(?STRING, ?STRING), MockServiceSup),
+    _ = capi_ct_helper_token_keeper:mock_invoice_access_token(?STRING, ?STRING, MockServiceSup),
     [{test_sup, MockServiceSup} | C].
 
 -spec end_per_testcase(test_case_name(), config()) -> _.
@@ -267,7 +267,8 @@ create_payment_ok_test(Config) ->
             end},
             {bender, fun('GenerateID', _) ->
                 {ok, capi_ct_helper_bender:get_result(BenderKey)}
-            end}
+            end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),
@@ -353,7 +354,8 @@ create_payment_with_empty_cvv_ok_test(Config) ->
                 ) ->
                     {ok, ?PAYPROC_PAYMENT}
             end},
-            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),
@@ -405,7 +407,8 @@ create_payment_qiwi_access_token_ok_test(Config) ->
                 ) ->
                     {ok, ?PAYPROC_PAYMENT}
             end},
-            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),
@@ -459,7 +462,8 @@ create_payment_with_googlepay_encrypt_ok_test(Config) ->
                 ) ->
                     {ok, ?PAYPROC_PAYMENT}
             end},
-            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),
@@ -647,7 +651,8 @@ create_first_recurrent_payment_ok_test(Config) ->
             end},
             {generator, fun('GenerateID', _) ->
                 capi_ct_helper_bender:generate_id(<<"bender_key">>)
-            end}
+            end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),

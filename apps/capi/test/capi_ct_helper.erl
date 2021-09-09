@@ -2,7 +2,7 @@
 
 -include_lib("common_test/include/ct.hrl").
 -include_lib("capi_dummy_data.hrl").
--include_lib("capi_tk_data.hrl").
+-include_lib("capi_token_keeper_data.hrl").
 -include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 
 -export([init_suite/2]).
@@ -32,6 +32,11 @@
 %%
 -type config() :: [{atom(), any()}].
 -type app_name() :: atom().
+-type sup_or_config() :: config() | pid().
+
+-export_type([config/0]).
+-export_type([app_name/0]).
+-export_type([sup_or_config/0]).
 
 -spec init_suite(module(), config()) -> config().
 init_suite(Module, Config) ->
@@ -157,7 +162,7 @@ start_mocked_service_sup(Module) ->
 stop_mocked_service_sup(SupPid) ->
     proc_lib:stop(SupPid, shutdown, 5000).
 
--spec mock_services(_, _) -> _.
+-spec mock_services(list(), sup_or_config()) -> _.
 mock_services(Services, SupOrConfig) ->
     {PartyClientServices, Other} = lists:partition(
         fun
@@ -186,7 +191,7 @@ start_bender_client(Services) ->
 start_woody_client(Services) ->
     start_app(capi_woody_client, [{services, Services}]).
 
--spec mock_services_(_, _) -> _.
+-spec mock_services_(list(), sup_or_config()) -> map().
 % TODO need a better name
 mock_services_([], _Config) ->
     #{};

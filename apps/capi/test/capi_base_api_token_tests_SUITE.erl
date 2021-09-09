@@ -314,11 +314,11 @@ end_per_suite(C) ->
 -spec init_per_group(group_name(), config()) -> config().
 init_per_group(auth_by_api_key, Config) ->
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:api_key_handler(?STRING), SupPid),
+    Apps = capi_ct_helper_token_keeper:mock_api_key_token(?STRING, SupPid),
     [{group_apps, Apps}, {group_test_sup, SupPid} | Config];
 init_per_group(auth_by_user_session_token, Config) ->
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
+    Apps = capi_ct_helper_token_keeper:mock_user_session_token(SupPid),
     [{group_apps, Apps}, {group_test_sup, SupPid} | Config];
 init_per_group(operations_by_base_api_token, Config) ->
     [{context, capi_ct_helper:get_context(?API_TOKEN)} | Config];
@@ -710,6 +710,9 @@ create_payment_ok_test(Config) ->
                     } =
                         PaymentParams,
                     {ok, ?PAYPROC_PAYMENT(ID, EID)}
+            end},
+            {party_management, fun('GetShop', _) ->
+                {ok, ?SHOP}
             end},
             {bender, fun('GenerateID', _) ->
                 {ok, capi_ct_helper_bender:get_result(BenderKey)}
@@ -1663,10 +1666,16 @@ get_payout_tool_by_id_for_party(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetPayoutToolByIDForParty">>, ?STRING, Config),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id_for_party(
-        ?config(context, Config), ?STRING, ?STRING, ?WALLET_TOOL
+        ?config(context, Config),
+        ?STRING,
+        ?STRING,
+        ?WALLET_TOOL
     ),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id_for_party(
-        ?config(context, Config), ?STRING, ?STRING, ?PI_ACCOUNT_TOOL
+        ?config(context, Config),
+        ?STRING,
+        ?STRING,
+        ?PI_ACCOUNT_TOOL
     ).
 
 -spec create_payout(config()) -> _.
