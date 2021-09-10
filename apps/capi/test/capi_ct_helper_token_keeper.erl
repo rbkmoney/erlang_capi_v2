@@ -89,7 +89,9 @@ mock_invoice_access_token(PartyID, InvoiceID, SupOrConfig) ->
             token => #{id => ?STRING},
             scope => [#{party => #{id => PartyID}, invoice => #{id => InvoiceID}}]
         },
-        {<<"com.rbkmoney.capi">>, create_bouncer_context(AuthParams), [api_key_metadata(), consumer_metadata(<<"client">>)]}
+        {<<"com.rbkmoney.capi">>, create_bouncer_context(AuthParams), [
+            api_key_metadata(), consumer_metadata(<<"client">>)
+        ]}
     end),
     mock_token(Handler, SupOrConfig).
 
