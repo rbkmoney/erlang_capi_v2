@@ -288,6 +288,7 @@ encode_invoice_tpl_create_params(InvoiceTemplateID, PartyID, Params) ->
         shop_id = genlib_map:get(<<"shopID">>, Params),
         invoice_lifetime = encode_lifetime(Params),
         product = Product,
+        name = genlib_map:get(<<"name">>, Params),
         description = genlib_map:get(<<"description">>, Params),
         details = Details,
         context = capi_handler_encoder:encode_invoice_context(Params)
@@ -299,6 +300,7 @@ encode_invoice_tpl_update_params(Params) ->
     #payproc_InvoiceTemplateUpdateParams{
         invoice_lifetime = encode_lifetime(Params),
         product = Product,
+        name = genlib_map:get(<<"name">>, Params),
         description = genlib_map:get(<<"description">>, Params),
         details = Details,
         context = encode_optional_context(Params)
@@ -407,7 +409,9 @@ decode_invoice_tpl(InvoiceTpl) ->
     genlib_map:compact(#{
         <<"id">> => InvoiceTpl#domain_InvoiceTemplate.id,
         <<"shopID">> => InvoiceTpl#domain_InvoiceTemplate.shop_id,
+        <<"name">> => InvoiceTpl#domain_InvoiceTemplate.name,
         <<"description">> => InvoiceTpl#domain_InvoiceTemplate.description,
+        <<"createdAt">> => InvoiceTpl#domain_InvoiceTemplate.created_at,
         <<"lifetime">> => #{
             <<"days">> => undef_to_zero(DD),
             <<"months">> => undef_to_zero(MM),
