@@ -388,7 +388,7 @@
     contract_id = ?STRING
 }).
 
--define(SHOP_LOCATION, {url, ?STRING}).
+-define(SHOP_LOCATION, {url, ?URL}).
 
 -define(SHOP_DETAILS, #domain_ShopDetails{name = ?STRING}).
 
@@ -781,7 +781,7 @@
                     }}
             ])
         }},
-    url = ?STRING,
+    url = ?URL,
     pub_key = ?STRING,
     enabled = true
 }).
