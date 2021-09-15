@@ -1,5 +1,6 @@
 -module(capi_party).
 
+-export([create_party/3]).
 -export([get_party/2]).
 -export([checkout_party/3]).
 -export([activate_party/2]).
@@ -19,6 +20,7 @@
 -type processing_context() :: capi_handler:processing_context().
 
 -type party_id() :: party_client_thrift:party_id().
+-type party_params() :: party_client_thrift:party_params().
 -type party_revision_param() :: party_client_thrift:party_revision_param().
 -type payment_institution_ref() :: party_client_thrift:payment_institution_ref().
 -type varset() :: party_client_thrift:varset().
@@ -29,6 +31,11 @@
 -type changeset() :: party_client_thrift:changeset().
 -type revoke_reason() :: party_client_thrift:revoke_reason().
 -type account_id() :: party_client_thrift:account_id().
+
+-spec create_party(party_id(), party_params(), processing_context()) -> result().
+create_party(PartyID, PartyParams, Context) ->
+    {Client, ClientContext} = client_context(Context),
+    party_client_thrift:create(PartyID, PartyParams, Client, ClientContext).
 
 -spec get_party(party_id(), processing_context()) -> result().
 get_party(PartyID, Context) ->

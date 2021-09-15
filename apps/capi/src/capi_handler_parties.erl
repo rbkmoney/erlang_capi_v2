@@ -22,7 +22,7 @@ prepare('GetMyParty' = OperationID, _Req, Context) ->
         {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
-        case get_party(PartyID, Context) of
+        case get_or_create_party(PartyID, Context) of
             {ok, Party} ->
                 DecodedParty = capi_handler_decoder_party:decode_party(Party),
                 {ok, {200, #{}, DecodedParty}};
@@ -132,9 +132,38 @@ prepare(_OperationID, _Req, _Context) ->
 
 %%
 
--spec get_party(binary(), processing_context()) -> woody:result().
-get_party(PartyID, Context) ->
-    capi_party:get_party(PartyID, Context).
+-spec get_or_create_party(binary(), processing_context()) -> woody:result().
+get_or_create_party(PartyID, Context) ->
+    case capi_party:get_party(PartyID, Context) of
+        {error, #payproc_PartyNotFound{}} = NotFound ->
+            _ = logger:info("Attempting to create a missing party"),
+            case capi_auth:get_user_email(capi_handler_utils:get_auth_context(Context)) of
+                Email when Email =/= undefined ->
+                    create_party(PartyID, Email, Context);
+                undefined ->
+                    %% API keys dont have an email attached to them, which makes it impossible to create parties
+                    _ = logger:info("Can't create missing party: no email found"),
+                    NotFound
+            end;
+        Reply ->
+            Reply
+    end.
+
+-spec create_party(binary(), binary(), processing_context()) -> woody:result().
+create_party(PartyID, Email, Context) ->
+    PartyParams = #payproc_PartyParams{
+        contact_info = #domain_PartyContactInfo{
+            email = Email
+        }
+    },
+    case capi_party:create_party(PartyID, PartyParams, Context) of
+        ok ->
+            capi_party:get_party(PartyID, Context);
+        {error, #payproc_PartyExists{}} ->
+            capi_party:get_party(PartyID, Context);
+        Error ->
+            Error
+    end.
 
 mask_party_notfound(Resolution) ->
     % ED-206
