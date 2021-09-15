@@ -15,13 +15,14 @@
 -export([map_service_result/1]).
 
 -export([get_auth_context/1]).
+-export([get_woody_context/1]).
 -export([get_user_info/1]).
+-export([get_subject_id/1]).
 -export([get_user_id/1]).
 -export([get_party_id/1]).
--export([get_extra_properties/1]).
 
--export([issue_access_token/2]).
 -export([issue_access_token/3]).
+-export([issue_access_token/4]).
 -export([merge_and_compact/2]).
 -export([get_time/2]).
 -export([get_split_interval/2]).
@@ -110,6 +111,10 @@ map_service_result({exception, _}) ->
 get_auth_context(#{swagger_context := #{auth_context := AuthContext}}) ->
     AuthContext.
 
+-spec get_woody_context(processing_context()) -> any().
+get_woody_context(#{woody_context := WoodyContext}) ->
+    WoodyContext.
+
 -spec get_user_info(processing_context()) -> dmsl_payment_processing_thrift:'UserInfo'().
 get_user_info(Context) ->
     #payproc_UserInfo{
@@ -117,18 +122,21 @@ get_user_info(Context) ->
         type = {external_user, #payproc_ExternalUser{}}
     }.
 
+-spec get_subject_id(processing_context()) -> binary().
+get_subject_id(Context) ->
+    capi_auth:get_subject_id(get_auth_context(Context)).
+
 -spec get_user_id(processing_context()) -> binary().
 get_user_id(Context) ->
-    capi_auth:get_subject_id(get_auth_context(Context)).
+    %% TODO Replace when user ids finally stop being equal to party ids
+    %% capi_auth:get_user_id(get_auth_context(Context)).
+    get_subject_id(Context).
 
 -spec get_party_id(processing_context()) -> binary().
 get_party_id(Context) ->
-    get_user_id(Context).
-
--spec get_extra_properties(processing_context()) -> map().
-get_extra_properties(Context) ->
-    Claims = capi_auth:get_legacy_claims(get_auth_context(Context)),
-    maps:with(capi_auth_legacy:get_extra_properties(), Claims).
+    %% TODO Replace when user ids finally stop being equal to party ids
+    %% capi_auth:get_party_id(get_auth_context(Context)).
+    get_subject_id(Context).
 
 %% Utils
 
@@ -136,13 +144,20 @@ get_extra_properties(Context) ->
 append_to_tuple(Item, Tuple) ->
     list_to_tuple([Item | tuple_to_list(Tuple)]).
 
--spec issue_access_token(binary(), tuple()) -> map().
-issue_access_token(PartyID, TokenSpec) ->
-    issue_access_token(PartyID, TokenSpec, #{}).
+-spec issue_access_token(binary(), tuple(), processing_context()) -> map().
+issue_access_token(PartyID, TokenScope, ProcessingContext) ->
+    issue_access_token(PartyID, TokenScope, #{}, ProcessingContext).
 
--spec issue_access_token(binary(), tuple(), map()) -> map().
-issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
-    #{<<"payload">> => capi_auth_legacy:issue_access_token(PartyID, TokenSpec, ExtraProperties)}.
+-spec issue_access_token(binary(), tuple(), map(), processing_context()) -> map().
+issue_access_token(PartyID, TokenScope, ExtraProperties, ProcessingContext) ->
+    TokenSpec = #{
+        scope => TokenScope,
+        party_id => PartyID
+    },
+    #{
+        <<"payload">> =>
+            capi_auth:issue_access_token(TokenSpec, ExtraProperties, get_woody_context(ProcessingContext))
+    }.
 
 -spec merge_and_compact(map(), map()) -> map().
 merge_and_compact(M1, M2) ->

@@ -90,12 +90,12 @@ end_per_testcase(_Name, C) ->
 
 -spec deadline_error_test(config()) -> _.
 deadline_error_test(_Config) ->
-    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited), <<"blabla">>),
+    Context = capi_ct_helper:get_context(?API_TOKEN, <<"blabla">>),
     {error, {400, _}} = capi_client_categories:get_categories(Context).
 
 -spec deadline_absolute_ok_test(config()) -> _.
 deadline_absolute_ok_test(Config) ->
-    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited)),
+    Context = capi_ct_helper:get_context(?API_TOKEN),
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Get', _) ->
@@ -113,7 +113,7 @@ deadline_absolute_ok_test(Config) ->
 -spec deadline_relative_ok_test(config()) -> _.
 deadline_relative_ok_test(Config) ->
     DeadlineRelative = <<"3s">>,
-    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited), DeadlineRelative),
+    Context = capi_ct_helper:get_context(?API_TOKEN, DeadlineRelative),
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Get', _) ->

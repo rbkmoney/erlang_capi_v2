@@ -52,7 +52,7 @@
     delete_invoice_template_ok_test/1,
     get_account_by_id_ok_test/1,
     get_my_party_ok_test/1,
-    get_my_party_lazy_creation_ok_test/1,
+    get_my_party_not_found_test/1,
     suspend_my_party_ok_test/1,
     activate_my_party_ok_test/1,
     get_party_by_id_ok_test/1,
@@ -187,7 +187,7 @@ groups() ->
             delete_invoice_template_ok_test,
 
             get_my_party_ok_test,
-            get_my_party_lazy_creation_ok_test,
+            get_my_party_not_found_test,
             suspend_my_party_ok_test,
             activate_my_party_ok_test,
             get_party_by_id_ok_test,
@@ -321,7 +321,7 @@ init_per_group(auth_by_user_session_token, Config) ->
     Apps = capi_ct_helper_token_keeper:mock_user_session_token(SupPid),
     [{group_apps, Apps}, {group_test_sup, SupPid} | Config];
 init_per_group(operations_by_base_api_token, Config) ->
-    [{context, capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited))} | Config];
+    [{context, capi_ct_helper:get_context(?API_TOKEN)} | Config];
 init_per_group(_, Config) ->
     Config.
 
@@ -1080,34 +1080,24 @@ get_my_party_ok_test(Config) ->
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetMyParty">>, ?STRING, Config),
     {ok, _} = capi_client_parties:get_my_party(?config(context, Config)).
 
--spec get_my_party_lazy_creation_ok_test(config()) -> _.
-get_my_party_lazy_creation_ok_test(Config) ->
-    TestETS = ets:new(get_my_party_lazy_creation_ok_test, [public]),
+-spec get_my_party_not_found_test(config()) -> _.
+get_my_party_not_found_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {party_management, fun
                 ('GetRevision', _) ->
-                    case ets:lookup(TestETS, party_created) of
-                        [{party_created, true}] -> {ok, ?INTEGER};
-                        _ -> {throwing, #payproc_PartyNotFound{}}
-                    end;
+                    {throwing, #payproc_PartyNotFound{}};
                 ('Checkout', _) ->
-                    case ets:lookup(TestETS, party_created) of
-                        [{party_created, true}] -> {ok, ?PARTY};
-                        _ -> {throwing, #payproc_PartyNotFound{}}
-                    end;
-                ('Create', _) ->
-                    case ets:insert_new(TestETS, {party_created, true}) of
-                        true -> {ok, ok};
-                        _ -> {throwing, #payproc_PartyExists{}}
-                    end
+                    {throwing, #payproc_PartyNotFound{}}
             end}
         ],
         Config
     ),
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetMyParty">>, ?STRING, Config),
-    {ok, _} = capi_client_parties:get_my_party(?config(context, Config)),
-    true = ets:delete(TestETS).
+    ?assertMatch(
+        {error, {400, _}},
+        capi_client_parties:get_my_party(?config(context, Config))
+    ).
 
 -spec suspend_my_party_ok_test(config()) -> _.
 suspend_my_party_ok_test(Config) ->

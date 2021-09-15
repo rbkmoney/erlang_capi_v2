@@ -581,15 +581,15 @@ decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
 compute_terms(ServiceName, Args, Context) ->
     capi_handler_utils:service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
 
--spec make_invoice_and_token(capi_handler_encoder:encode_data(), binary(), map()) ->
+-spec make_invoice_and_token(capi_handler_encoder:encode_data(), binary(), processing_context()) ->
     capi_handler_decoder_utils:decode_data().
-make_invoice_and_token(Invoice, PartyID, ExtraProperties) ->
+make_invoice_and_token(Invoice, PartyID, ProcessingContext) ->
     #{
         <<"invoice">> => decode_invoice(Invoice),
         <<"invoiceAccessToken">> => capi_handler_utils:issue_access_token(
             PartyID,
             {invoice, Invoice#domain_Invoice.id},
-            ExtraProperties
+            ProcessingContext
         )
     }.
 

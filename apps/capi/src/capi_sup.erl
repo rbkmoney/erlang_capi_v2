@@ -23,8 +23,6 @@ start_link() ->
 
 -spec init([]) -> {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
-    UacConf = get_uac_config(),
-    ok = uac:configure(UacConf),
     LechiffreOpts = genlib_app:env(capi, lechiffre_opts),
     LechiffreSpec = lechiffre:child_spec(lechiffre, LechiffreOpts),
     HealthCheck = enable_health_logging(genlib_app:env(?APP, health_check, #{})),
@@ -49,13 +47,6 @@ get_logic_handler_info(HandlerOpts) ->
 enable_health_logging(Check) ->
     EvHandler = {erl_health_event_handler, []},
     maps:map(fun(_, V = {_, _, _}) -> #{runner => V, event_handler => EvHandler} end, Check).
-
--spec get_uac_config() -> uac:configuration(capi_auth_legacy:metadata()).
-get_uac_config() ->
-    maps:merge(
-        genlib_app:env(capi, access_conf),
-        #{access => capi_auth_legacy:get_access_config()}
-    ).
 
 -spec get_prometheus_route() -> {iodata(), module(), _Opts :: any()}.
 get_prometheus_route() ->

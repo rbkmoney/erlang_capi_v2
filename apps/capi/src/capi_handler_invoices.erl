@@ -33,7 +33,6 @@ prepare('CreateInvoice' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         try
-            ExtraProperties = capi_handler_utils:get_extra_properties(Context),
             case create_invoice(PartyID, InvoiceParams, Context, OperationID) of
                 {ok, #'payproc_Invoice'{invoice = Invoice}} ->
                     {ok,
@@ -41,7 +40,7 @@ prepare('CreateInvoice' = OperationID, Req, Context) ->
                             capi_handler_decoder_invoicing:make_invoice_and_token(
                                 Invoice,
                                 PartyID,
-                                ExtraProperties
+                                Context
                             )}};
                 {exception, Exception} ->
                     case Exception of
@@ -84,11 +83,10 @@ prepare('CreateInvoiceAccessToken' = OperationID, Req, Context) ->
     Process = fun() ->
         capi_handler:respond_if_undefined(ResultInvoice, general_error(404, <<"Invoice not found">>)),
         #payproc_Invoice{invoice = #domain_Invoice{owner_id = PartyID}} = ResultInvoice,
-        ExtraProperties = capi_handler_utils:get_extra_properties(Context),
         Response = capi_handler_utils:issue_access_token(
             PartyID,
             {invoice, InvoiceID},
-            ExtraProperties
+            Context
         ),
         {ok, {201, #{}, Response}}
     end,
