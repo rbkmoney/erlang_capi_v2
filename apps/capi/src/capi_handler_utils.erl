@@ -4,6 +4,7 @@
 -include_lib("damsel/include/dmsl_domain_thrift.hrl").
 
 -export([general_error/2]).
+-export([logic_error/1]).
 -export([logic_error/2]).
 -export([server_error/1]).
 -export([format_request_errors/1]).
@@ -46,6 +47,12 @@
 -spec general_error(cowboy:http_status(), binary()) -> response().
 general_error(Code, Message) ->
     create_error_resp(Code, #{<<"message">> => genlib:to_binary(Message)}).
+
+-spec logic_error(term()) -> response().
+logic_error(invalidPaymentToolToken) ->
+    logic_error(invalidPaymentToolToken, <<"Specified payment tool token is invalid">>);
+logic_error(Other) ->
+    logic_error(Other, undefined).
 
 -spec logic_error
     (term(), io_lib:chars() | binary()) -> response();

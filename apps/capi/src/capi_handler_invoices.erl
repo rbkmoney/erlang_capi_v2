@@ -6,11 +6,7 @@
 
 -export([prepare/3]).
 
--import(capi_handler_utils, [
-    general_error/2,
-    logic_error/2,
-    map_service_result/1
-]).
+-import(capi_handler_utils, [general_error/2, logic_error/2, map_service_result/1]).
 
 -spec prepare(
     OperationID :: capi_handler:operation_id(),

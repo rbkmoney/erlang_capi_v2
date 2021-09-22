@@ -6,7 +6,7 @@
 
 -export([prepare/3]).
 
--import(capi_handler_utils, [general_error/2, logic_error/2]).
+-import(capi_handler_utils, [general_error/2, logic_error/1, logic_error/2]).
 
 -define(DEFAULT_PROCESSING_DEADLINE, <<"30m">>).
 
@@ -675,15 +675,15 @@ decode_payment_token(#{<<"paymentToolToken">> := Token}) ->
             case capi_utils:deadline_is_reached(ValidUntil) of
                 true ->
                     logger:warning("Payment tool token expired: ~p", [capi_utils:deadline_to_binary(ValidUntil)]),
-                    erlang:throw(invalid_payment_token);
+                    capi_handler:respond(logic_error(invalidPaymentToolToken));
                 _ ->
                     TokenData
             end;
         unrecognized ->
-            erlang:throw(invalid_payment_token);
+            capi_handler:respond(logic_error(invalidPaymentToolToken));
         {error, {decryption_failed, Error}} ->
             logger:warning("Payment tool token decryption failed: ~p", [Error]),
-            erlang:throw(invalid_payment_token)
+            capi_handler:respond(logic_error(invalidPaymentToolToken))
     end;
 decode_payment_token(_Other) ->
     undefined.

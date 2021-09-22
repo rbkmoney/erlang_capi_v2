@@ -166,12 +166,6 @@ handle_function_(OperationID, Req, SwagContext0, HandlerOpts) ->
         throw:{handler_function_clause, _OperationID} ->
             _ = logger:error("Operation ~p failed due to missing handler", [OperationID]),
             {error, {501, #{}, undefined}};
-        throw:invalid_payment_token ->
-            {ok,
-                logic_error(
-                    invalidPaymentToolToken,
-                    <<"Specified payment tool token is invalid">>
-                )};
         error:{woody_error, {Source, Class, Details}} ->
             process_woody_error(Source, Class, Details);
         Class:Reason:Stacktrace ->
