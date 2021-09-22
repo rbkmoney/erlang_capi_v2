@@ -26,37 +26,48 @@
 
 -export_type([realm/0]).
 
--spec get_payment_institution(payment_institution_ref(), processing_context()) -> {ok, payment_institution()}.
+-spec get_payment_institution(payment_institution_ref(), processing_context()) ->
+    {ok, payment_institution()} | {error, not_found}.
 get_payment_institution(Ref, Context) ->
-    {ok, PiObject} = get({payment_institution, Ref}, Context),
-    #domain_PaymentInstitutionObject{data = Pi} = PiObject,
-    {ok, Pi}.
+    case get({payment_institution, Ref}, Context) of
+        {ok, PiObject} ->
+            {ok, PiObject#domain_PaymentInstitutionObject.data};
+        Error ->
+            Error
+    end.
 
--spec get_payment_institutions(processing_context()) -> {ok, [payment_institution_object()]}.
+-spec get_payment_institutions(processing_context()) -> {ok, [payment_institution_object()]} | {error, not_found}.
 get_payment_institutions(Context) ->
-    Opts = make_opts(Context),
+    try
+        Opts = make_opts(Context),
 
-    #'VersionedObject'{
-        version = Version,
-        object = {globals, #domain_GlobalsObject{data = Globals}}
-    } = dmt_client:checkout_versioned_object(latest, globals(), Opts),
+        #'VersionedObject'{
+            version = Version,
+            object = {globals, #domain_GlobalsObject{data = Globals}}
+        } = dmt_client:checkout_versioned_object(latest, globals(), Opts),
 
-    PaymentInstitutionRefs =
-        case Globals#domain_Globals.payment_institutions of
-            undefined -> [];
-            List -> List
-        end,
-
-    PaymentInstitutions =
-        lists:map(
-            fun(Ref) ->
-                {payment_institution, Object} = dmt_client:checkout_object(Version, {payment_institution, Ref}, Opts),
-                Object
+        PaymentInstitutionRefs =
+            case Globals#domain_Globals.payment_institutions of
+                undefined -> [];
+                List -> List
             end,
-            PaymentInstitutionRefs
-        ),
 
-    {ok, PaymentInstitutions}.
+        PaymentInstitutions =
+            lists:map(
+                fun(Ref) ->
+                    {payment_institution, Object} = dmt_client:checkout_object(
+                        Version, {payment_institution, Ref}, Opts
+                    ),
+                    Object
+                end,
+                PaymentInstitutionRefs
+            ),
+
+        {ok, PaymentInstitutions}
+    catch
+        throw:#'ObjectNotFound'{} ->
+            {error, not_found}
+    end.
 
 -spec get(ref(), processing_context() | undefined) -> {ok, data()} | {error, not_found}.
 get(Ref, Context) ->
