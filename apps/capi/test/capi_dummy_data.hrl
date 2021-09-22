@@ -15,6 +15,7 @@
 -define(SHA256, <<"94EE059335E587E501CC4BF90613E0814F00A7B08BC7C648FD865A2AF6A22CC2">>).
 -define(TEST_USER_REALM, <<"external">>).
 -define(TEST_RULESET_ID, <<"test/api">>).
+-define(API_TOKEN, <<"letmein">>).
 
 -define(DETAILS, #domain_InvoiceDetails{
     product = ?STRING,
@@ -388,7 +389,7 @@
     contract_id = ?STRING
 }).
 
--define(SHOP_LOCATION, {url, ?STRING}).
+-define(SHOP_LOCATION, {url, ?URL}).
 
 -define(SHOP_DETAILS, #domain_ShopDetails{name = ?STRING}).
 
@@ -781,7 +782,7 @@
                     }}
             ])
         }},
-    url = ?STRING,
+    url = ?URL,
     pub_key = ?STRING,
     enabled = true
 }).

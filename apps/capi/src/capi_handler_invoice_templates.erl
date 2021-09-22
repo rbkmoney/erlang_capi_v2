@@ -29,7 +29,6 @@ prepare('CreateInvoiceTemplate' = OperationID, Req, Context) ->
         {ok, Resolution}
     end,
     Process = fun() ->
-        ExtraProperties = capi_handler_utils:get_extra_properties(Context),
         try
             InvoiceTemplateID = generate_invoice_template_id(OperationID, InvoiceTemplateParams, PartyID, Context),
             CallArgs = {encode_invoice_tpl_create_params(InvoiceTemplateID, PartyID, InvoiceTemplateParams)},
@@ -40,7 +39,7 @@ prepare('CreateInvoiceTemplate' = OperationID, Req, Context) ->
             )
         of
             {ok, InvoiceTpl} ->
-                {ok, {201, #{}, make_invoice_tpl_and_token(InvoiceTpl, PartyID, ExtraProperties)}};
+                {ok, {201, #{}, make_invoice_tpl_and_token(InvoiceTpl, Context)}};
             {exception, Exception} ->
                 case Exception of
                     #'InvalidRequest'{errors = Errors} ->
@@ -174,17 +173,10 @@ prepare('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
     Process = fun() ->
         capi_handler:respond_if_undefined(InvoiceTpl, general_error(404, <<"Invoice template not found">>)),
         InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
-        ExtraProperties = capi_handler_utils:get_extra_properties(Context),
         PartyID = InvoiceTpl#domain_InvoiceTemplate.owner_id,
         try create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, OperationID) of
             {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-                {ok,
-                    {201, #{},
-                        capi_handler_decoder_invoicing:make_invoice_and_token(
-                            Invoice,
-                            Invoice#domain_Invoice.owner_id,
-                            ExtraProperties
-                        )}};
+                {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, Context)}};
             {exception, Reason} ->
                 case Reason of
                     #payproc_InvalidUser{} ->
@@ -291,6 +283,7 @@ encode_invoice_tpl_create_params(InvoiceTemplateID, PartyID, Params) ->
         shop_id = genlib_map:get(<<"shopID">>, Params),
         invoice_lifetime = encode_lifetime(Params),
         product = Product,
+        name = genlib_map:get(<<"name">>, Params),
         description = genlib_map:get(<<"description">>, Params),
         details = Details,
         context = capi_handler_encoder:encode_invoice_context(Params)
@@ -302,19 +295,22 @@ encode_invoice_tpl_update_params(Params) ->
     #payproc_InvoiceTemplateUpdateParams{
         invoice_lifetime = encode_lifetime(Params),
         product = Product,
+        name = genlib_map:get(<<"name">>, Params),
         description = genlib_map:get(<<"description">>, Params),
         details = Details,
         context = encode_optional_context(Params)
     }.
 
-make_invoice_tpl_and_token(InvoiceTpl, PartyID, ExtraProperties) ->
+make_invoice_tpl_and_token(InvoiceTpl, ProcessingContext) ->
+    TokenSpec = #{
+        party => InvoiceTpl#domain_InvoiceTemplate.owner_id,
+        invoice_template => InvoiceTpl#domain_InvoiceTemplate.id,
+        shop => InvoiceTpl#domain_InvoiceTemplate.shop_id
+    },
     #{
         <<"invoiceTemplate">> => decode_invoice_tpl(InvoiceTpl),
-        <<"invoiceTemplateAccessToken">> => capi_handler_utils:issue_access_token(
-            PartyID,
-            {invoice_tpl, InvoiceTpl#domain_InvoiceTemplate.id},
-            ExtraProperties
-        )
+        <<"invoiceTemplateAccessToken">> =>
+            capi_handler_utils:issue_access_token(TokenSpec, ProcessingContext)
     }.
 
 encode_invoice_tpl_details(#{<<"templateType">> := <<"InvoiceTemplateSingleLine">>} = Details) ->
@@ -409,7 +405,9 @@ decode_invoice_tpl(InvoiceTpl) ->
     genlib_map:compact(#{
         <<"id">> => InvoiceTpl#domain_InvoiceTemplate.id,
         <<"shopID">> => InvoiceTpl#domain_InvoiceTemplate.shop_id,
+        <<"name">> => InvoiceTpl#domain_InvoiceTemplate.name,
         <<"description">> => InvoiceTpl#domain_InvoiceTemplate.description,
+        <<"createdAt">> => InvoiceTpl#domain_InvoiceTemplate.created_at,
         <<"lifetime">> => #{
             <<"days">> => undef_to_zero(DD),
             <<"months">> => undef_to_zero(MM),

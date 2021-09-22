@@ -33,16 +33,9 @@ prepare('CreateInvoice' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         try
-            ExtraProperties = capi_handler_utils:get_extra_properties(Context),
             case create_invoice(PartyID, InvoiceParams, Context, OperationID) of
                 {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-                    {ok,
-                        {201, #{},
-                            capi_handler_decoder_invoicing:make_invoice_and_token(
-                                Invoice,
-                                PartyID,
-                                ExtraProperties
-                            )}};
+                    {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, Context)}};
                 {exception, Exception} ->
                     case Exception of
                         #'payproc_InvalidUser'{} ->
@@ -83,11 +76,13 @@ prepare('CreateInvoiceAccessToken' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         capi_handler:respond_if_undefined(ResultInvoice, general_error(404, <<"Invoice not found">>)),
-        ExtraProperties = capi_handler_utils:get_extra_properties(Context),
         Invoice = ResultInvoice#payproc_Invoice.invoice,
-        PartyID = Invoice#domain_Invoice.owner_id,
-        TokenSpec = #{invoice => Invoice#domain_Invoice.id, shop => Invoice#domain_Invoice.shop_id},
-        Response = capi_handler_utils:issue_access_token(PartyID, TokenSpec, ExtraProperties),
+        TokenSpec = #{
+            party => Invoice#domain_Invoice.owner_id,
+            invoice => Invoice#domain_Invoice.id,
+            shop => Invoice#domain_Invoice.shop_id
+        },
+        Response = capi_handler_utils:issue_access_token(TokenSpec, Context),
         {ok, {201, #{}, Response}}
     end,
     {ok, #{authorize => Authorize, process => Process}};

@@ -33,7 +33,7 @@ prepare('CreateCustomer' = OperationID, Req, Context) ->
             Call = {customer_management, 'Create', {EncodedCustomerParams}},
             case capi_handler_utils:service_call(Call, Context) of
                 {ok, Customer} ->
-                    {ok, {201, #{}, make_customer_and_token(Customer, PartyID)}};
+                    {ok, {201, #{}, make_customer_and_token(Customer, Context)}};
                 {exception, #payproc_InvalidUser{}} ->
                     {ok, logic_error(invalidPartyID, <<"Party not found">>)};
                 {exception, #payproc_InvalidPartyStatus{}} ->
@@ -110,8 +110,12 @@ prepare('CreateCustomerAccessToken' = OperationID, Req, Context) ->
     Process = fun() ->
         case Customer of
             #payproc_Customer{owner_id = PartyID, shop_id = ShopID} ->
-                TokenSpec = #{customer => CustomerID, shop => ShopID},
-                Response = capi_handler_utils:issue_access_token(PartyID, TokenSpec),
+                TokenSpec = #{
+                    party => PartyID,
+                    customer => CustomerID,
+                    shop => ShopID
+                },
+                Response = capi_handler_utils:issue_access_token(TokenSpec, Context),
                 {ok, {201, #{}, Response}};
             undefined ->
                 {ok, general_error(404, <<"Customer not found">>)}
@@ -375,15 +379,15 @@ encode_legacy_payment_tool_token(Token) ->
             erlang:throw(invalid_payment_token)
     end.
 
-make_customer_and_token(Customer, PartyID) ->
+make_customer_and_token(Customer, ProcessingContext) ->
     TokenSpec = #{
+        party => Customer#payproc_Customer.owner_id,
         customer => Customer#payproc_Customer.id,
         shop => Customer#payproc_Customer.shop_id
     },
     #{
         <<"customer">> => decode_customer(Customer),
-        <<"customerAccessToken">> =>
-            capi_handler_utils:issue_access_token(PartyID, TokenSpec)
+        <<"customerAccessToken">> => capi_handler_utils:issue_access_token(TokenSpec, ProcessingContext)
     }.
 
 decode_customer(Customer) ->

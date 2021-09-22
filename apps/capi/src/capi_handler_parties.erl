@@ -135,24 +135,25 @@ prepare(_OperationID, _Req, _Context) ->
 -spec get_or_create_party(binary(), processing_context()) -> woody:result().
 get_or_create_party(PartyID, Context) ->
     case capi_party:get_party(PartyID, Context) of
-        {error, #payproc_PartyNotFound{}} ->
+        {error, #payproc_PartyNotFound{}} = NotFound ->
             _ = logger:info("Attempting to create a missing party"),
-            create_party(PartyID, Context);
+            case capi_auth:get_user_email(capi_handler_utils:get_auth_context(Context)) of
+                Email when Email =/= undefined ->
+                    create_party(PartyID, Email, Context);
+                undefined ->
+                    %% API keys dont have an email attached to them, which makes it impossible to create parties
+                    _ = logger:info("Can't create missing party: no email found"),
+                    NotFound
+            end;
         Reply ->
             Reply
     end.
 
--spec create_party(binary(), processing_context()) -> woody:result().
-create_party(PartyID, Context) ->
+-spec create_party(binary(), binary(), processing_context()) -> woody:result().
+create_party(PartyID, Email, Context) ->
     PartyParams = #payproc_PartyParams{
         contact_info = #domain_PartyContactInfo{
-            %% TODO: We rely on email claim to be present (which is dropped by tk for api key tokens).
-            email = maps:get(
-                <<"email">>,
-                capi_auth:get_legacy_claims(
-                    capi_handler_utils:get_auth_context(Context)
-                )
-            )
+            email = Email
         }
     },
     case capi_party:create_party(PartyID, PartyParams, Context) of

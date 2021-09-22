@@ -21,7 +21,7 @@
 
 -export([emplace_token_provider_data/2]).
 -export([construct_payment_methods/3]).
--export([make_invoice_and_token/3]).
+-export([make_invoice_and_token/2]).
 
 -type processing_context() :: capi_handler:processing_context().
 -type decode_data() :: capi_handler_decoder_utils:decode_data().
@@ -595,21 +595,17 @@ decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
 
 compute_terms(ServiceName, Args, Context) ->
     capi_handler_utils:service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
-
--spec make_invoice_and_token(capi_handler_encoder:encode_data(), binary(), map()) ->
-    decode_data().
-make_invoice_and_token(Invoice, PartyID, ExtraProperties) ->
+-spec make_invoice_and_token(capi_handler_encoder:encode_data(), processing_context()) ->
+    capi_handler_decoder_utils:decode_data().
+make_invoice_and_token(Invoice, ProcessingContext) ->
     TokenSpec = #{
+        party => Invoice#domain_Invoice.owner_id,
         invoice => Invoice#domain_Invoice.id,
         shop => Invoice#domain_Invoice.shop_id
     },
     #{
         <<"invoice">> => decode_invoice(Invoice),
-        <<"invoiceAccessToken">> => capi_handler_utils:issue_access_token(
-            PartyID,
-            TokenSpec,
-            ExtraProperties
-        )
+        <<"invoiceAccessToken">> => capi_handler_utils:issue_access_token(TokenSpec, ProcessingContext)
     }.
 
 %%
