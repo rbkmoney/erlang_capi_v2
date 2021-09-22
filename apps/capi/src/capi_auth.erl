@@ -21,25 +21,26 @@
 -type auth_context() :: {authorized, token_keeper_auth_data:auth_data()}.
 -type resolution() :: allowed | forbidden.
 -type consumer() :: client | merchant | provider.
-
--export_type([preauth_context/0]).
--export_type([auth_context/0]).
--export_type([resolution/0]).
--export_type([consumer/0]).
-
-%% Internal types
-
--define(authorized(Ctx), {authorized, Ctx}).
--define(unauthorized(Ctx), {unauthorized, Ctx}).
-
 -type token_spec() :: #{
-    party := binary(),
+    party => binary(),
+    shop => binary(),
     invoice => binary(),
     invoice_template => binary(),
     customer => binary(),
     lifetime => pos_integer() | unlimited,
     metadata => token_keeper_auth_data:metadata()
 }.
+
+-export_type([preauth_context/0]).
+-export_type([auth_context/0]).
+-export_type([resolution/0]).
+-export_type([consumer/0]).
+-export_type([token_spec/0]).
+
+%% Internal types
+
+-define(authorized(Ctx), {authorized, Ctx}).
+-define(unauthorized(Ctx), {unauthorized, Ctx}).
 
 %%
 %% API functions

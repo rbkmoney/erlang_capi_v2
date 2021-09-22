@@ -50,9 +50,7 @@ general_error(Code, Message) ->
 
 -spec logic_error(term()) -> response().
 logic_error(invalidPaymentToolToken) ->
-    logic_error(invalidPaymentToolToken, <<"Specified payment tool token is invalid">>);
-logic_error(Other) ->
-    logic_error(Other, undefined).
+    logic_error(invalidPaymentToolToken, <<"Specified payment tool token is invalid">>).
 
 -spec logic_error
     (term(), io_lib:chars() | binary()) -> response();
@@ -154,7 +152,7 @@ get_party_id(Context) ->
 append_to_tuple(Item, Tuple) ->
     list_to_tuple([Item | tuple_to_list(Tuple)]).
 
--spec issue_access_token(map(), processing_context()) -> map().
+-spec issue_access_token(capi_auth:token_spec(), processing_context()) -> map().
 issue_access_token(TokenSpec, ProcessingContext) ->
     #{
         <<"payload">> =>
