@@ -494,7 +494,9 @@ create_payment_id(Invoice, PaymentParams, Context, OperationID, PaymentTool) ->
     % TODO: delete this after analytics research will be down
     _ = log_payer_client_url(Payer, InvoiceID),
 
-    % При наличии paymentToolToken заменяем его раскодированной структурой paymentTool
+    % TODO При наличии paymentToolToken заменяем его раскодированной структурой paymentTool
+    % В противном случае токены будут оказывать влияние на расчет hash2, удаление paymentToolToken
+    % не потребуется при удалении capi_bender:check_idempotent_conflict_deprecated
     ClearPayer =
         case PaymentTool of
             undefined ->

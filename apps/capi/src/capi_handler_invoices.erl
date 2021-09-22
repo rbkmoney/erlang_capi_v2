@@ -460,6 +460,7 @@ construct_token_provider_data(Invoice, Context) ->
     InvoiceID = Invoice#domain_Invoice.id,
     PartyID = Invoice#domain_Invoice.owner_id,
     ShopID = Invoice#domain_Invoice.shop_id,
+    % TODO #ED-123 #ED-272 получить сущности одним агрегатным запросом
     {ok, Shop} = capi_party:get_shop(PartyID, ShopID, Context),
     ShopName = Shop#domain_Shop.details#domain_ShopDetails.name,
     ContractID = Shop#domain_Shop.contract_id,

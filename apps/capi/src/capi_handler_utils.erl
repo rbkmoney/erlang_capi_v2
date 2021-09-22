@@ -272,6 +272,8 @@ wrap_payment_session(ClientInfo, PaymentSession) ->
 
 -spec wrap_merchant_id(binary(), binary(), binary()) -> binary().
 wrap_merchant_id(RealmMode, PartyID, EntityID) ->
+    % Упакованные идентификаторы используются для контроля привязки провайдерских токенов в capi_pcidss
+    % TODO #ED-273 сделать закрытый формат MerchantID
     <<RealmMode/binary, $:, PartyID/binary, $:, EntityID/binary>>.
 
 -spec get_invoice_by_id(binary(), processing_context()) -> woody:result().
@@ -290,6 +292,7 @@ get_refund_by_id(InvoiceID, PaymentID, RefundID, Context) ->
 
 -spec get_realm_by_contract(binary(), binary(), processing_context()) -> {ok, capi_domain:realm()}.
 get_realm_by_contract(PartyID, ContractID, Context) ->
+    % TODO #ED-123 #542 PaymentInstitution может отсутствовать
     {ok, Contract} = capi_party:get_contract(PartyID, ContractID, Context),
     #domain_Contract{payment_institution = PiRef} = Contract,
     {ok, Pi} = capi_domain:get_payment_institution(PiRef, Context),
