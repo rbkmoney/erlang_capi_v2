@@ -100,7 +100,6 @@ get_handlers() ->
         capi_handler_accounts,
         capi_handler_analytics,
         capi_handler_categories,
-        capi_handler_claims,
         capi_handler_contracts,
         capi_handler_countries,
         capi_handler_customers,
