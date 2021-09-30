@@ -391,11 +391,7 @@ get_invoice_by_external_id(Config) ->
 create_invoice_access_token_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
-            {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end},
-            {party_management, fun
-                ('GetShop', _) -> {ok, ?SHOP};
-                ('GetContract', _) -> {ok, ?CONTRACT}
-            end}
+            {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}
         ],
         Config
     ),

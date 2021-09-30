@@ -133,11 +133,7 @@ init_per_group(operations_by_invoice_access_token_after_token_creation, Config) 
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end},
-            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end},
-            {party_management, fun
-                ('GetShop', _) -> {ok, ?SHOP};
-                ('GetContract', _) -> {ok, ?CONTRACT}
-            end}
+            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(<<"bender_key">>)} end}
         ],
         MockServiceSup
     ),
@@ -238,8 +234,7 @@ get_invoice_payment_methods_ok_test(Config) ->
             {party_management, fun
                 ('GetRevision', _) -> {ok, ?INTEGER};
                 ('Checkout', _) -> {ok, ?PARTY};
-                ('GetShop', _) -> {ok, ?SHOP};
-                ('GetContract', _) -> {ok, ?CONTRACT}
+                ('GetShopContract', _) -> {ok, ?SHOP_CONTRACT}
             end}
         ],
         Config

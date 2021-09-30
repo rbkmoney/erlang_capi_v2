@@ -37,12 +37,18 @@
 -export([get_invoice_by_id/2]).
 -export([get_payment_by_id/3]).
 -export([get_refund_by_id/4]).
--export([get_realm_by_contract/3]).
 
 -export([create_dsl/3]).
+-export([construct_token_provider_data/3]).
+-export([emplace_token_provider_data/2]).
 
 -type processing_context() :: capi_handler:processing_context().
 -type response() :: capi_handler:response().
+-type token_source() ::
+    capi_auth:token_spec()
+    | dmsl_domain_thrift:'Invoice'()
+    | dmsl_domain_thrift:'Customer'()
+    | dmsl_domain_thrift:'InvoiceTemplate'().
 
 -spec general_error(cowboy:http_status(), binary()) -> response().
 general_error(Code, Message) ->
@@ -152,7 +158,28 @@ get_party_id(Context) ->
 append_to_tuple(Item, Tuple) ->
     list_to_tuple([Item | tuple_to_list(Tuple)]).
 
--spec issue_access_token(capi_auth:token_spec(), processing_context()) -> map().
+-spec issue_access_token(token_source(), processing_context()) -> map().
+issue_access_token(#domain_Invoice{} = Invoice, ProcessingContext) ->
+    TokenSpec = #{
+        party => Invoice#domain_Invoice.owner_id,
+        scope => {invoice, Invoice#domain_Invoice.id},
+        shop => Invoice#domain_Invoice.shop_id
+    },
+    issue_access_token(TokenSpec, ProcessingContext);
+issue_access_token(#payproc_Customer{} = Customer, ProcessingContext) ->
+    TokenSpec = #{
+        party => Customer#payproc_Customer.owner_id,
+        scope => {customer, Customer#payproc_Customer.id},
+        shop => Customer#payproc_Customer.shop_id
+    },
+    issue_access_token(TokenSpec, ProcessingContext);
+issue_access_token(#domain_InvoiceTemplate{} = InvoiceTpl, ProcessingContext) ->
+    TokenSpec = #{
+        party => InvoiceTpl#domain_InvoiceTemplate.owner_id,
+        scope => {invoice_template, InvoiceTpl#domain_InvoiceTemplate.id},
+        shop => InvoiceTpl#domain_InvoiceTemplate.shop_id
+    },
+    issue_access_token(TokenSpec, ProcessingContext);
 issue_access_token(TokenSpec, ProcessingContext) ->
     #{
         <<"payload">> =>
@@ -288,15 +315,6 @@ get_payment_by_id(InvoiceID, PaymentID, Context) ->
 get_refund_by_id(InvoiceID, PaymentID, RefundID, Context) ->
     service_call_with([user_info], {invoicing, 'GetPaymentRefund', {InvoiceID, PaymentID, RefundID}}, Context).
 
--spec get_realm_by_contract(binary(), binary(), processing_context()) -> {ok, capi_domain:realm()}.
-get_realm_by_contract(PartyID, ContractID, Context) ->
-    % TODO #ED-123 #542 PaymentInstitution может отсутствовать
-    {ok, Contract} = capi_party:get_contract(PartyID, ContractID, Context),
-    #domain_Contract{payment_institution = PiRef} = Contract,
-    {ok, Pi} = capi_domain:get_payment_institution(PiRef, Context),
-    #domain_PaymentInstitution{realm = Realm} = Pi,
-    {ok, Realm}.
-
 -spec create_dsl(atom(), map(), map()) -> map().
 create_dsl(QueryType, QueryBody, QueryParams) ->
     merge_and_compact(
@@ -319,3 +337,29 @@ run_if_party_accessible(UserID, PartyID, Fun) ->
         throw:party_inaccessible ->
             {ok, general_error(404, <<"Party not found">>)}
     end.
+
+-spec construct_token_provider_data(binary(), binary(), processing_context()) -> map().
+construct_token_provider_data(PartyID, ShopID, Context) ->
+    {ok, ShopContract} = capi_party:get_shop_contract(PartyID, ShopID, Context),
+    ShopName = ShopContract#payproc_ShopContract.shop#domain_Shop.details#domain_ShopDetails.name,
+    PiRef = ShopContract#payproc_ShopContract.contract#domain_Contract.payment_institution,
+    {ok, Pi} = capi_domain:get_payment_institution(PiRef, Context),
+    RealmMode = genlib:to_binary(Pi#domain_PaymentInstitution.realm),
+    MerchantID = capi_handler_utils:wrap_merchant_id(RealmMode, PartyID, ShopID),
+    #{
+        <<"merchantID">> => MerchantID,
+        <<"merchantName">> => ShopName,
+        <<"realm">> => RealmMode
+    }.
+
+-spec emplace_token_provider_data(list(), map()) -> list().
+emplace_token_provider_data(PaymentMethods, TokenProviderData) ->
+    lists:map(
+        fun
+            (#{<<"tokenProviders">> := _Providers} = PaymentMethod) ->
+                PaymentMethod#{<<"tokenProviderData">> => TokenProviderData};
+            (PaymentMethod) ->
+                PaymentMethod
+        end,
+        PaymentMethods
+    ).

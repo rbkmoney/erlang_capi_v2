@@ -105,13 +105,8 @@ prepare('CreateCustomerAccessToken' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         case Customer of
-            #payproc_Customer{owner_id = PartyID, shop_id = ShopID} ->
-                TokenSpec = #{
-                    party => PartyID,
-                    customer => CustomerID,
-                    shop => ShopID
-                },
-                Response = capi_handler_utils:issue_access_token(TokenSpec, Context),
+            #payproc_Customer{} ->
+                Response = capi_handler_utils:issue_access_token(Customer, Context),
                 {ok, {201, #{}, Response}};
             undefined ->
                 {ok, general_error(404, <<"Customer not found">>)}
@@ -372,14 +367,9 @@ encode_legacy_payment_tool_token(Token) ->
     end.
 
 make_customer_and_token(Customer, ProcessingContext) ->
-    TokenSpec = #{
-        party => Customer#payproc_Customer.owner_id,
-        customer => Customer#payproc_Customer.id,
-        shop => Customer#payproc_Customer.shop_id
-    },
     #{
         <<"customer">> => decode_customer(Customer),
-        <<"customerAccessToken">> => capi_handler_utils:issue_access_token(TokenSpec, ProcessingContext)
+        <<"customerAccessToken">> => capi_handler_utils:issue_access_token(Customer, ProcessingContext)
     }.
 
 decode_customer(Customer) ->

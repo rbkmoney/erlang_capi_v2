@@ -19,7 +19,6 @@
 -export([decode_recurrent_parent/1]).
 -export([decode_make_recurrent/1]).
 
--export([emplace_token_provider_data/2]).
 -export([construct_payment_methods/3]).
 -export([make_invoice_and_token/2]).
 
@@ -459,18 +458,6 @@ decode_invoice_line_tax_mode(#{<<"TaxMode">> := {str, TM}}) ->
 decode_invoice_line_tax_mode(_) ->
     undefined.
 
--spec emplace_token_provider_data([decode_data()], decode_data()) -> [decode_data()].
-emplace_token_provider_data(PaymentMethods, TokenProviderData) ->
-    lists:map(
-        fun
-            (#{<<"tokenProviders">> := _Providers} = PaymentMethod) ->
-                PaymentMethod#{<<"tokenProviderData">> => TokenProviderData};
-            (PaymentMethod) ->
-                PaymentMethod
-        end,
-        PaymentMethods
-    ).
-
 -spec construct_payment_methods(atom(), tuple(), processing_context()) -> {ok, list()} | woody:result().
 construct_payment_methods(ServiceName, Args, Context) ->
     case compute_terms(ServiceName, Args, Context) of
@@ -598,14 +585,9 @@ compute_terms(ServiceName, Args, Context) ->
 -spec make_invoice_and_token(capi_handler_encoder:encode_data(), processing_context()) ->
     capi_handler_decoder_utils:decode_data().
 make_invoice_and_token(Invoice, ProcessingContext) ->
-    TokenSpec = #{
-        party => Invoice#domain_Invoice.owner_id,
-        invoice => Invoice#domain_Invoice.id,
-        shop => Invoice#domain_Invoice.shop_id
-    },
     #{
         <<"invoice">> => decode_invoice(Invoice),
-        <<"invoiceAccessToken">> => capi_handler_utils:issue_access_token(TokenSpec, ProcessingContext)
+        <<"invoiceAccessToken">> => capi_handler_utils:issue_access_token(Invoice, ProcessingContext)
     }.
 
 %%

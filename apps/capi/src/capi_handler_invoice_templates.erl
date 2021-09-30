@@ -298,15 +298,9 @@ encode_invoice_tpl_update_params(Params) ->
     }.
 
 make_invoice_tpl_and_token(InvoiceTpl, ProcessingContext) ->
-    TokenSpec = #{
-        party => InvoiceTpl#domain_InvoiceTemplate.owner_id,
-        invoice_template => InvoiceTpl#domain_InvoiceTemplate.id,
-        shop => InvoiceTpl#domain_InvoiceTemplate.shop_id
-    },
     #{
         <<"invoiceTemplate">> => decode_invoice_tpl(InvoiceTpl),
-        <<"invoiceTemplateAccessToken">> =>
-            capi_handler_utils:issue_access_token(TokenSpec, ProcessingContext)
+        <<"invoiceTemplateAccessToken">> => capi_handler_utils:issue_access_token(InvoiceTpl, ProcessingContext)
     }.
 
 encode_invoice_tpl_details(#{<<"templateType">> := <<"InvoiceTemplateSingleLine">>} = Details) ->
@@ -459,20 +453,7 @@ decode_invoice_tpl_line_cost({range, #domain_CashRange{upper = {_, UpperCashBoun
     }.
 
 emplace_token_provider_data(PaymentMethods, InvoiceTemplate, Context) ->
-    TokenProviderData = construct_token_provider_data(InvoiceTemplate, Context),
-    capi_handler_decoder_invoicing:emplace_token_provider_data(PaymentMethods, TokenProviderData).
-
-construct_token_provider_data(InvoiceTemplate, Context) ->
     PartyID = InvoiceTemplate#domain_InvoiceTemplate.owner_id,
     ShopID = InvoiceTemplate#domain_InvoiceTemplate.shop_id,
-    {ok, Shop} = capi_party:get_shop(PartyID, ShopID, Context),
-    ShopName = Shop#domain_Shop.details#domain_ShopDetails.name,
-    ContractID = Shop#domain_Shop.contract_id,
-    {ok, Realm} = capi_handler_utils:get_realm_by_contract(PartyID, ContractID, Context),
-    RealmMode = genlib:to_binary(Realm),
-    MerchantID = capi_handler_utils:wrap_merchant_id(RealmMode, PartyID, ShopID),
-    #{
-        <<"merchantID">> => MerchantID,
-        <<"merchantName">> => ShopName,
-        <<"realm">> => RealmMode
-    }.
+    TokenProviderData = capi_handler_utils:construct_token_provider_data(PartyID, ShopID, Context),
+    capi_handler_utils:emplace_token_provider_data(PaymentMethods, TokenProviderData).

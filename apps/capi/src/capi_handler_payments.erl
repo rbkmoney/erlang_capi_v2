@@ -506,9 +506,10 @@ create_payment_id(Invoice, PaymentParams, Context, OperationID, PaymentTool) ->
                 Payer0#{<<"paymentTool">> => capi_handler_decoder_party:decode_payment_tool(PaymentTool)}
         end,
 
-    % Помешиваем invoideID и замещаем плательщика
     FullParams = PaymentParams#{
+        % Требуется для последующей кодировки параметров плательщика
         <<"invoiceID">> => InvoiceID,
+        % Заменяем на структуру без токена
         <<"payer">> => ClearPayer
     },
 

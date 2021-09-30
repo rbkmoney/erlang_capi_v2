@@ -389,6 +389,11 @@
     contract_id = ?STRING
 }).
 
+-define(SHOP_CONTRACT, #payproc_ShopContract{
+    shop = ?SHOP,
+    contract = ?CONTRACT
+}).
+
 -define(SHOP_LOCATION, {url, ?URL}).
 
 -define(SHOP_DETAILS, #domain_ShopDetails{name = ?STRING}).

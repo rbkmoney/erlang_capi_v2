@@ -73,12 +73,7 @@ prepare('CreateInvoiceAccessToken' = OperationID, Req, Context) ->
     Process = fun() ->
         capi_handler:respond_if_undefined(ResultInvoice, general_error(404, <<"Invoice not found">>)),
         Invoice = ResultInvoice#payproc_Invoice.invoice,
-        TokenSpec = #{
-            party => Invoice#domain_Invoice.owner_id,
-            invoice => Invoice#domain_Invoice.id,
-            shop => Invoice#domain_Invoice.shop_id
-        },
-        Response = capi_handler_utils:issue_access_token(TokenSpec, Context),
+        Response = capi_handler_utils:issue_access_token(Invoice, Context),
         {ok, {201, #{}, Response}}
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -253,8 +248,9 @@ prepare('GetInvoicePaymentMethods' = OperationID, Req, Context) ->
         Args = {InvoiceID, {revision, Party#domain_Party.revision}},
         case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, Args, Context) of
             {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
+                #payproc_Invoice{invoice = Invoice} = ResultInvoice,
                 PaymentMethods1 = capi_utils:deduplicate_payment_methods(PaymentMethods0),
-                PaymentMethods = emplace_token_provider_data(PaymentMethods1, ResultInvoice, Context),
+                PaymentMethods = emplace_token_provider_data(PaymentMethods1, Invoice, Context),
                 {ok, {200, #{}, PaymentMethods}};
             {exception, Exception} ->
                 case Exception of
@@ -451,28 +447,15 @@ decode_refund_for_event(#domain_InvoicePaymentRefund{cash = undefined} = Refund,
         capi_handler_utils:get_payment_by_id(InvoiceID, PaymentID, Context),
     capi_handler_decoder_invoicing:decode_refund(Refund#domain_InvoicePaymentRefund{cash = Cash}, Context).
 
-emplace_token_provider_data(PaymentMethods, PayprocInvoice, Context) ->
-    #payproc_Invoice{invoice = Invoice} = PayprocInvoice,
-    TokenProviderData = construct_token_provider_data(Invoice, Context),
-    capi_handler_decoder_invoicing:emplace_token_provider_data(PaymentMethods, TokenProviderData).
-
-construct_token_provider_data(Invoice, Context) ->
+emplace_token_provider_data(PaymentMethods, Invoice, Context) ->
     InvoiceID = Invoice#domain_Invoice.id,
     PartyID = Invoice#domain_Invoice.owner_id,
     ShopID = Invoice#domain_Invoice.shop_id,
-    % TODO #ED-123 #ED-272 получить сущности одним агрегатным запросом
-    {ok, Shop} = capi_party:get_shop(PartyID, ShopID, Context),
-    ShopName = Shop#domain_Shop.details#domain_ShopDetails.name,
-    ContractID = Shop#domain_Shop.contract_id,
-    {ok, Realm} = capi_handler_utils:get_realm_by_contract(PartyID, ContractID, Context),
-    RealmMode = genlib:to_binary(Realm),
-    MerchantID = capi_handler_utils:wrap_merchant_id(RealmMode, PartyID, ShopID),
-    #{
-        <<"merchantID">> => MerchantID,
-        <<"merchantName">> => ShopName,
-        <<"orderID">> => InvoiceID,
-        <<"realm">> => RealmMode
-    }.
+    TokenProviderData = maps:merge(
+        #{<<"orderID">> => InvoiceID},
+        capi_handler_utils:construct_token_provider_data(PartyID, ShopID, Context)
+    ),
+    capi_handler_utils:emplace_token_provider_data(PaymentMethods, TokenProviderData).
 
 get_invoice_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),

@@ -22,11 +22,9 @@
 -type resolution() :: allowed | forbidden.
 -type consumer() :: client | merchant | provider.
 -type token_spec() :: #{
-    party => binary(),
+    party := binary(),
+    scope := {invoice | invoice_template | customer, binary()},
     shop => binary(),
-    invoice => binary(),
-    invoice_template => binary(),
-    customer => binary(),
     lifetime => pos_integer() | unlimited,
     metadata => token_keeper_auth_data:metadata()
 }.
@@ -149,25 +147,20 @@ resolve_auth_scope(TokenSpec) ->
         fun
             (party = Entity, EntityID, Scope) ->
                 Scope#{Entity => #{id => EntityID}};
-            (invoice = Entity, EntityID, Scope) ->
-                Scope#{Entity => #{id => EntityID}};
-            (invoice_template = Entity, EntityID, Scope) ->
-                Scope#{Entity => #{id => EntityID}};
-            (customer = Entity, EntityID, Scope) ->
+            (scope, {Entity, EntityID}, Scope) ->
                 Scope#{Entity => #{id => EntityID}};
             (shop = Entity, EntityID, Scope) ->
                 Scope#{Entity => #{id => EntityID}};
-            (_Entity, _EntityID, Scope) ->
+            (_Key, _Value, Scope) ->
                 Scope
         end,
         #{},
         TokenSpec
     ).
 
-resolve_auth_method(#{invoice := _}) -> ?BCTX_V1_AUTHMETHOD_INVOICEACCESSTOKEN;
-resolve_auth_method(#{customer := _}) -> ?BCTX_V1_AUTHMETHOD_CUSTOMERACCESSTOKEN;
-resolve_auth_method(#{invoice_template := _}) -> ?BCTX_V1_AUTHMETHOD_INVOICETEMPLATEACCESSTOKEN;
-resolve_auth_method(_) -> undefined.
+resolve_auth_method(#{scope := {invoice, _}}) -> ?BCTX_V1_AUTHMETHOD_INVOICEACCESSTOKEN;
+resolve_auth_method(#{scope := {customer, _}}) -> ?BCTX_V1_AUTHMETHOD_CUSTOMERACCESSTOKEN;
+resolve_auth_method(#{scope := {invoice_template, _}}) -> ?BCTX_V1_AUTHMETHOD_INVOICETEMPLATEACCESSTOKEN.
 
 resolve_auth_expiration(TokenSpec) ->
     case get_token_lifetime(TokenSpec) of
@@ -181,18 +174,17 @@ resolve_auth_expiration(TokenSpec) ->
 get_token_lifetime(#{lifetime := LifeTime} = TokenSpec) when LifeTime =/= undefined ->
     ok = verify_token_lifetime(TokenSpec, LifeTime),
     LifeTime;
-get_token_lifetime(#{invoice := _}) ->
+get_token_lifetime(#{scope := {invoice, _}}) ->
     ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME;
-get_token_lifetime(#{invoice_template := _}) ->
+get_token_lifetime(#{scope := {invoice_template, _}}) ->
     unlimited;
-get_token_lifetime(#{customer := _}) ->
+get_token_lifetime(#{scope := {customer, _}}) ->
     ?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME.
 
 %% Forbid creation of unlimited lifetime invoice and customer tokens
-verify_token_lifetime(#{invoice := _}, LifeTime) when LifeTime =/= unlimited -> ok;
-verify_token_lifetime(#{customer := _}, LifeTime) when LifeTime =/= unlimited -> ok;
-verify_token_lifetime(#{invoice_template := _}, _LifeTime) -> ok;
-verify_token_lifetime(_, _) -> error.
+verify_token_lifetime(#{scope := {invoice, _}}, LifeTime) when LifeTime =/= unlimited -> ok;
+verify_token_lifetime(#{scope := {customer, _}}, LifeTime) when LifeTime =/= unlimited -> ok;
+verify_token_lifetime(#{scope := {invoice_template, _}}, _LifeTime) -> ok.
 
 %%
 
@@ -200,12 +192,7 @@ create_metadata(TokenSpec) ->
     PartyID = maps:get(party, TokenSpec),
     Metadata0 = maps:get(metadata, TokenSpec, #{}),
     Metadata1 = put_metadata(get_metadata_mapped_key(party_id), PartyID, Metadata0),
-    add_consumer(TokenSpec, Metadata1).
-
-add_consumer(#{invoice := _}, Metadata) ->
-    put_metadata(get_metadata_mapped_key(token_consumer), <<"client">>, Metadata);
-add_consumer(_, Metadata) ->
-    Metadata.
+    put_metadata(get_metadata_mapped_key(token_consumer), <<"client">>, Metadata1).
 
 extract_auth_context(#{swagger_context := #{auth_context := AuthContext}}) ->
     AuthContext.
