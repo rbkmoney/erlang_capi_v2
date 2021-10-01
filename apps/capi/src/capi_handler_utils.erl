@@ -32,23 +32,21 @@
 
 -export([unwrap_payment_session/1]).
 -export([wrap_payment_session/2]).
--export([wrap_merchant_id/3]).
 
 -export([get_invoice_by_id/2]).
 -export([get_payment_by_id/3]).
 -export([get_refund_by_id/4]).
 
 -export([create_dsl/3]).
--export([construct_token_provider_data/3]).
--export([emplace_token_provider_data/2]).
+-export([emplace_token_provider_data/3]).
 
 -type processing_context() :: capi_handler:processing_context().
 -type response() :: capi_handler:response().
--type token_source() ::
-    capi_auth:token_spec()
-    | dmsl_domain_thrift:'Invoice'()
-    | dmsl_domain_thrift:'Customer'()
+-type entity() ::
+    dmsl_domain_thrift:'Invoice'()
+    | dmsl_payment_processing_thrift:'Customer'()
     | dmsl_domain_thrift:'InvoiceTemplate'().
+-type token_source() :: capi_auth:token_spec() | entity().
 
 -spec general_error(cowboy:http_status(), binary()) -> response().
 general_error(Code, Message) ->
@@ -295,12 +293,6 @@ wrap_payment_session(ClientInfo, PaymentSession) ->
         <<"paymentSession">> => PaymentSession
     }).
 
--spec wrap_merchant_id(binary(), binary(), binary()) -> binary().
-wrap_merchant_id(RealmMode, PartyID, EntityID) ->
-    % Упакованные идентификаторы используются для контроля привязки провайдерских токенов в capi_pcidss
-    % TODO #ED-273 сделать закрытый формат MerchantID
-    <<RealmMode/binary, $:, PartyID/binary, $:, EntityID/binary>>.
-
 -spec get_invoice_by_id(binary(), processing_context()) -> woody:result().
 get_invoice_by_id(InvoiceID, Context) ->
     EventRange = #payproc_EventRange{},
@@ -338,21 +330,22 @@ run_if_party_accessible(UserID, PartyID, Fun) ->
             {ok, general_error(404, <<"Party not found">>)}
     end.
 
--spec construct_token_provider_data(binary(), binary(), processing_context()) -> map().
-construct_token_provider_data(PartyID, ShopID, Context) ->
-    {ok, ShopContract} = capi_party:get_shop_contract(PartyID, ShopID, Context),
-    ShopName = ShopContract#payproc_ShopContract.shop#domain_Shop.details#domain_ShopDetails.name,
-    PiRef = ShopContract#payproc_ShopContract.contract#domain_Contract.payment_institution,
-    {ok, Pi} = capi_domain:get_payment_institution(PiRef, Context),
-    RealmMode = genlib:to_binary(Pi#domain_PaymentInstitution.realm),
-    MerchantID = capi_handler_utils:wrap_merchant_id(RealmMode, PartyID, ShopID),
-    #{
-        <<"merchantID">> => MerchantID,
-        <<"merchantName">> => ShopName,
-        <<"realm">> => RealmMode
-    }.
+-spec emplace_token_provider_data(entity(), list(), processing_context()) -> map().
+emplace_token_provider_data(#domain_Invoice{} = Invoice, PaymentMethods, Context) ->
+    InvoiceID = Invoice#domain_Invoice.id,
+    PartyID = Invoice#domain_Invoice.owner_id,
+    ShopID = Invoice#domain_Invoice.shop_id,
+    TokenProviderData = maps:merge(
+        #{<<"orderID">> => InvoiceID},
+        construct_token_provider_data(PartyID, ShopID, Context)
+    ),
+    emplace_token_provider_data(PaymentMethods, TokenProviderData);
+emplace_token_provider_data(#domain_InvoiceTemplate{} = InvoiceTemplate, PaymentMethods, Context) ->
+    PartyID = InvoiceTemplate#domain_InvoiceTemplate.owner_id,
+    ShopID = InvoiceTemplate#domain_InvoiceTemplate.shop_id,
+    TokenProviderData = construct_token_provider_data(PartyID, ShopID, Context),
+    emplace_token_provider_data(PaymentMethods, TokenProviderData).
 
--spec emplace_token_provider_data(list(), map()) -> list().
 emplace_token_provider_data(PaymentMethods, TokenProviderData) ->
     lists:map(
         fun
@@ -363,3 +356,21 @@ emplace_token_provider_data(PaymentMethods, TokenProviderData) ->
         end,
         PaymentMethods
     ).
+
+construct_token_provider_data(PartyID, ShopID, Context) ->
+    {ok, ShopContract} = capi_party:get_shop_contract(PartyID, ShopID, Context),
+    ShopName = ShopContract#payproc_ShopContract.shop#domain_Shop.details#domain_ShopDetails.name,
+    PiRef = ShopContract#payproc_ShopContract.contract#domain_Contract.payment_institution,
+    {ok, Pi} = capi_domain:get_payment_institution(PiRef, Context),
+    RealmMode = genlib:to_binary(Pi#domain_PaymentInstitution.realm),
+    MerchantID = create_merchant_id(RealmMode, PartyID, ShopID),
+    #{
+        <<"merchantID">> => MerchantID,
+        <<"merchantName">> => ShopName,
+        <<"realm">> => RealmMode
+    }.
+
+create_merchant_id(RealmMode, PartyID, EntityID) ->
+    % Упакованные идентификаторы используются для контроля привязки провайдерских токенов в capi_pcidss
+    % TODO #ED-273 сделать закрытый формат MerchantID
+    <<RealmMode/binary, $:, PartyID/binary, $:, EntityID/binary>>.

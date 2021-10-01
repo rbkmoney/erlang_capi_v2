@@ -250,7 +250,7 @@ prepare('GetInvoicePaymentMethods' = OperationID, Req, Context) ->
             {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
                 #payproc_Invoice{invoice = Invoice} = ResultInvoice,
                 PaymentMethods1 = capi_utils:deduplicate_payment_methods(PaymentMethods0),
-                PaymentMethods = emplace_token_provider_data(PaymentMethods1, Invoice, Context),
+                PaymentMethods = capi_handler_utils:emplace_token_provider_data(Invoice, PaymentMethods1, Context),
                 {ok, {200, #{}, PaymentMethods}};
             {exception, Exception} ->
                 case Exception of
@@ -446,16 +446,6 @@ decode_refund_for_event(#domain_InvoicePaymentRefund{cash = undefined} = Refund,
     {ok, #payproc_InvoicePayment{payment = #domain_InvoicePayment{cost = Cash}}} =
         capi_handler_utils:get_payment_by_id(InvoiceID, PaymentID, Context),
     capi_handler_decoder_invoicing:decode_refund(Refund#domain_InvoicePaymentRefund{cash = Cash}, Context).
-
-emplace_token_provider_data(PaymentMethods, Invoice, Context) ->
-    InvoiceID = Invoice#domain_Invoice.id,
-    PartyID = Invoice#domain_Invoice.owner_id,
-    ShopID = Invoice#domain_Invoice.shop_id,
-    TokenProviderData = maps:merge(
-        #{<<"orderID">> => InvoiceID},
-        capi_handler_utils:construct_token_provider_data(PartyID, ShopID, Context)
-    ),
-    capi_handler_utils:emplace_token_provider_data(PaymentMethods, TokenProviderData).
 
 get_invoice_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),

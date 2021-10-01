@@ -222,7 +222,9 @@ prepare('GetInvoicePaymentMethodsByTemplateID' = OperationID, Req, Context) ->
         case capi_handler_decoder_invoicing:construct_payment_methods(invoice_templating, Args, Context) of
             {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
                 PaymentMethods1 = capi_utils:deduplicate_payment_methods(PaymentMethods0),
-                PaymentMethods = emplace_token_provider_data(PaymentMethods1, InvoiceTemplate, Context),
+                PaymentMethods = capi_handler_utils:emplace_token_provider_data(
+                    InvoiceTemplate, PaymentMethods1, Context
+                ),
                 {ok, {200, #{}, PaymentMethods}};
             {exception, E} when
                 E == #payproc_InvalidUser{};
@@ -451,9 +453,3 @@ decode_invoice_tpl_line_cost({range, #domain_CashRange{upper = {_, UpperCashBoun
             <<"lowerBound">> => LowerBound
         }
     }.
-
-emplace_token_provider_data(PaymentMethods, InvoiceTemplate, Context) ->
-    PartyID = InvoiceTemplate#domain_InvoiceTemplate.owner_id,
-    ShopID = InvoiceTemplate#domain_InvoiceTemplate.shop_id,
-    TokenProviderData = capi_handler_utils:construct_token_provider_data(PartyID, ShopID, Context),
-    capi_handler_utils:emplace_token_provider_data(PaymentMethods, TokenProviderData).
