@@ -330,7 +330,7 @@ run_if_party_accessible(UserID, PartyID, Fun) ->
             {ok, general_error(404, <<"Party not found">>)}
     end.
 
--spec emplace_token_provider_data(entity(), list(), processing_context()) -> map().
+-spec emplace_token_provider_data(entity(), list(), processing_context()) -> list().
 emplace_token_provider_data(#domain_Invoice{} = Invoice, PaymentMethods, Context) ->
     InvoiceID = Invoice#domain_Invoice.id,
     PartyID = Invoice#domain_Invoice.owner_id,
