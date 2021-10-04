@@ -18,6 +18,8 @@
 -export([stop_mocked_service_sup/1]).
 -export([mock_services/2]).
 -export([mock_services_/2]).
+-export([replace_env/1]).
+-export([restore_env/1]).
 -export([get_lifetime/0]).
 -export([map_to_flat/1]).
 
@@ -33,6 +35,7 @@
 -type config() :: [{atom(), any()}].
 -type app_name() :: atom().
 -type sup_or_config() :: config() | pid().
+-type replaces() :: #{App :: atom() => #{Key :: atom() => undefined | {value, term()}}}.
 
 -export_type([config/0]).
 -export_type([app_name/0]).
@@ -181,6 +184,45 @@ mock_services(Services, SupOrConfig) ->
     _ = start_party_client(mock_services_(PartyClientServices, SupOrConfig)),
     _ = start_bender_client(mock_services_(BenderClientServices, SupOrConfig)),
     start_woody_client(mock_services_(WoodyServices, SupOrConfig)).
+
+-spec replace_env(#{App :: atom() => #{Key :: atom() => Value :: term()}}) -> replaces().
+replace_env(Env) ->
+    maps:fold(
+        fun(App, AppEnv, Acc) ->
+            AppReplaces =
+                maps:fold(
+                    fun(Key, Value, AppAcc) ->
+                        AccValue =
+                            case application:get_env(App, Key) of
+                                undefined -> undefined;
+                                {ok, Original} -> {value, Original}
+                            end,
+                        application:set_env(App, Key, Value),
+                        AppAcc#{Key => AccValue}
+                    end,
+                    #{},
+                    AppEnv
+                ),
+            Acc#{App => AppReplaces}
+        end,
+        #{},
+        Env
+    ).
+
+-spec restore_env(replaces()) -> ok.
+restore_env(Replaces) ->
+    maps:foreach(
+        fun(App, AppReplaces) ->
+            maps:foreach(
+                fun
+                    (Key, undefined) -> application:unset_env(App, Key);
+                    (Key, {value, Original}) -> application:set_env(App, Key, Original)
+                end,
+                AppReplaces
+            )
+        end,
+        Replaces
+    ).
 
 start_party_client(Services) ->
     start_app(party_client, [{services, Services}]).

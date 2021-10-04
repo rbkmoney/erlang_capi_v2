@@ -22,15 +22,21 @@ get_unused_params() ->
     maps:keys(capi_ct_helper:map_to_flat(Req)).
 
 -spec handle_event(capi_idemp_features:event(), capi_idemp_features:options()) -> ok.
-handle_event({invalid_schema_fragment, Key, Request}, _Opts) ->
-    throw({extact_idemp_feature, Key, Request});
-handle_event({request_visited, {request, Req}}, _Opts) ->
+handle_event({request_visited, Req}, _Opts) ->
     save_request(Req),
     ok;
-handle_event({request_key_index_visit, N}, _Opts) ->
+handle_event({request_key_visit, Key, Value}, _Opts) ->
+    push_path({Key, Value}),
+    ok;
+handle_event({request_key_visited, Key, _Value}, _Opts) ->
+    Path = get_path(),
+    [{Key, Value} | Tail] = Path,
+    delete_subpath(Key, Value, Tail),
+    ok;
+handle_event({request_index_visit, N, _Value}, _Opts) ->
     push_path({key_index, N}),
     ok;
-handle_event({request_key_index_visited, _N}, _Opts) ->
+handle_event({request_index_visited, _N, _Value}, _Opts) ->
     %% delete  key_index from stack
     pop_path(),
     {Key, List} = pop_path(),
@@ -45,14 +51,12 @@ handle_event({request_key_index_visited, _N}, _Opts) ->
     ),
     push_path({Key, List2}),
     ok;
-handle_event({request_key_visit, {key, Key, SubReq}}, _Opts) ->
-    push_path({Key, SubReq}),
+handle_event({request_variant_visit, _FeatureName, _Variant, _Value}, _Opts) ->
     ok;
-handle_event({request_key_visited, {key, Key}}, _Opts) ->
-    Path = get_path(),
-    [{Key, SubReq} | Tail] = Path,
-    delete_subpath(Key, SubReq, Tail),
-    ok.
+handle_event({request_variant_visited, _FeatureName, _Variant, _Value}, _Opts) ->
+    ok;
+handle_event(Error, _Opts) ->
+    throw(Error).
 
 delete_subpath(Key, SubReq, []) when is_map(SubReq), map_size(SubReq) > 0; is_list(SubReq), length(SubReq) > 0 ->
     Request = get_request(),

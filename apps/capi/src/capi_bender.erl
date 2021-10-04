@@ -9,22 +9,21 @@
 -type issuer_id() :: dmsl_domain_thrift:'PartyID'() | dmsl_payment_processing_thrift:'UserID'().
 -type idempotent_key() :: binary().
 -type idempotent_key_params() :: {idempotent_key_prefix(), issuer_id(), external_id() | undefined}.
--type identity() :: {identity, identity_hash(), identity_features(), identity_schema()}.
+-type identity() :: {identity, identity_features(), identity_schema()}.
 -type identity_params() ::
-    {schema, identity_schema(), capi_idemp_features:request()}
-    | {schema, identity_schema(), capi_idemp_features:request(), HashedRequest :: capi_idemp_features:request()}
+    {schema, identity_schema(), feat:request()}
+    | {schema, identity_schema(), feat:request(), HashedRequest :: feat:request()}
     | identity().
 
--type identity_hash() :: non_neg_integer().
--type identity_features() :: capi_idemp_features:features().
--type identity_schema() :: capi_idemp_features:schema().
+-type identity_features() :: feat:features().
+-type identity_schema() :: feat:schema().
 -type woody_context() :: woody_context:ctx().
 -type context_data() :: #{binary() => term()}.
 -type bender_context() :: #{binary() => term()}.
 
 -type sequence_id() :: binary().
 -type sequence_params() :: #{minimum => integer()}.
--type difference() :: capi_idemp_features:difference().
+-type difference() :: feat:difference().
 
 -type constant_id() :: binary().
 
@@ -63,8 +62,8 @@
 -export([get_internal_id/2]).
 
 %% deprecated
--define(SCHEMA_VER1, 1).
 -define(SCHEMA_VER2, 2).
+-define(SCHEMA_VER3, 3).
 
 -spec gen_snowflake(idempotent_key_params() | undefined, identity_params(), woody_context()) ->
     {ok, id()} | {ok, id(), context_data()} | {error, generation_error()}.
@@ -155,14 +154,9 @@ try_gen_constant(IdempotentKey, Identity, ConstantID, WoodyContext, Context) ->
 
 -spec make_identity(identity_params()) -> identity().
 make_identity({schema, Schema, Data}) ->
-    Hash = erlang:phash2(Data),
-    Features = capi_idemp_features:read(Schema, Data),
-    {identity, Hash, Features, Schema};
-make_identity({schema, Schema, Data, HashedData}) ->
-    Hash = erlang:phash2(HashedData),
-    Features = capi_idemp_features:read(Schema, Data),
-    {identity, Hash, Features, Schema};
-make_identity(Identity = {identity, _Hash, _Features, _Schema}) ->
+    Features = feat:read(Schema, Data),
+    {identity, Features, Schema};
+make_identity(Identity = {identity, _Features, _Schema}) ->
     Identity.
 
 -spec get_internal_id(idempotent_key_params(), woody_context()) ->
@@ -193,7 +187,7 @@ build_sequence_schema(SequenceID, SequenceParams) ->
 
 build_bender_ctx(Features, Ctx) ->
     #{
-        <<"version">> => ?SCHEMA_VER2,
+        <<"version">> => ?SCHEMA_VER3,
         <<"features">> => Features,
         <<"context_data">> => Ctx
     }.
@@ -210,7 +204,7 @@ try_generate_id(BenderIdSchema, IdempotentKey, Identity, WoodyContext, CtxData) 
             SourceID = get_external_id(IdempotentKey),
             throw({external_id_conflict, ID, SourceID, Schema});
         {error, {external_id_conflict, ID, Difference, Schema}} ->
-            ReadableDiff = capi_idemp_features:list_diff_fields(Schema, Difference),
+            ReadableDiff = feat:list_diff_fields(Schema, Difference),
             logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, ReadableDiff]),
             SourceID = get_external_id(IdempotentKey),
             throw({external_id_conflict, ID, SourceID, Schema})
@@ -233,7 +227,7 @@ make_idempotent_key({Prefix, PartyID, ExternalID}) ->
     <<"capi/", Prefix/binary, "/", PartyID/binary, "/", ExternalID/binary>>.
 
 bender_generate_id(BenderIdSchema, IdempKey, IdempIdentity, WoodyContext, CtxData) ->
-    {identity, Hash, Features, Schema} = make_identity(IdempIdentity),
+    {identity, Features, Schema} = make_identity(IdempIdentity),
     BenderCtx = build_bender_ctx(Features, CtxData),
     Args = {IdempKey, BenderIdSchema, capi_msgp_marshalling:marshal(BenderCtx)},
     Result =
@@ -246,9 +240,9 @@ bender_generate_id(BenderIdSchema, IdempKey, IdempIdentity, WoodyContext, CtxDat
     case Result of
         {ok, ID} ->
             {ok, ID};
-        {ok, ID, #{<<"version">> := ?SCHEMA_VER1} = DeprecatedCtx} ->
-            check_idempotent_conflict_deprecated(ID, Hash, DeprecatedCtx, Schema);
         {ok, ID, #{<<"version">> := ?SCHEMA_VER2} = SavedBenderCtx} ->
+            check_idempotent_conflict_deprecated_v2(ID, Features, SavedBenderCtx, Schema);
+        {ok, ID, #{<<"version">> := ?SCHEMA_VER3} = SavedBenderCtx} ->
             check_idempotent_conflict(ID, Features, SavedBenderCtx, Schema)
     end.
 
@@ -269,10 +263,10 @@ generator_generate_id(BenderIDSchema, WoodyContext) ->
 
 check_idempotent_conflict(ID, Features, SavedBenderCtx, Schema) ->
     #{
-        <<"version">> := ?SCHEMA_VER2,
+        <<"version">> := ?SCHEMA_VER3,
         <<"features">> := OtherFeatures
     } = SavedBenderCtx,
-    case capi_idemp_features:compare(Features, OtherFeatures) of
+    case feat:compare(Features, OtherFeatures) of
         true ->
             {ok, ID};
         {false, Difference} ->
@@ -281,10 +275,17 @@ check_idempotent_conflict(ID, Features, SavedBenderCtx, Schema) ->
 
 %% Deprecated idempotent context
 
-check_idempotent_conflict_deprecated(ID, Hash, #{<<"params_hash">> := Hash}, _schema) ->
-    {ok, ID};
-check_idempotent_conflict_deprecated(ID, _Hash, #{<<"params_hash">> := _OtherHash}, Schema) ->
-    {error, {external_id_conflict, ID, undefined, Schema}}.
+check_idempotent_conflict_deprecated_v2(ID, Features, SavedBenderCtx, Schema) ->
+    #{
+        <<"version">> := ?SCHEMA_VER2,
+        <<"features">> := OtherFeatures
+    } = SavedBenderCtx,
+    case capi_legacy_idemp_features:compare(Features, OtherFeatures) of
+        true ->
+            {ok, ID};
+        {false, Difference} ->
+            {error, {external_id_conflict, ID, Difference, Schema}}
+    end.
 
 -spec get_context_data(bender_context()) -> undefined | context_data().
 get_context_data(Context) ->

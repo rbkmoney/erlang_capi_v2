@@ -19,7 +19,6 @@ prepare(OperationID = 'CreatePayment', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     Invoice = get_invoice_by_id(InvoiceID, Context),
     PaymentParams = maps:get('PaymentParams', Req),
-    PaymentToken = decode_payment_token(PaymentParams),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID}},
@@ -31,8 +30,7 @@ prepare(OperationID = 'CreatePayment', Req, Context) ->
         try
             capi_handler:respond_if_undefined(Invoice, general_error(404, <<"Invoice not found">>)),
             DomainInvoice = Invoice#payproc_Invoice.invoice,
-            PaymentTool = capi_utils:maybe(PaymentToken, fun(#{payment_tool := V}) -> V end),
-            Result = create_payment(DomainInvoice, PaymentParams, Context, OperationID, PaymentTool),
+            Result = create_payment(DomainInvoice, PaymentParams, Context, OperationID),
             case Result of
                 {ok, Payment} ->
                     {ok, {201, #{}, decode_invoice_payment(InvoiceID, Payment, Context)}};
@@ -526,7 +524,10 @@ validate_refund(Params) ->
         _ -> throw(refund_cart_conflict)
     end.
 
-create_payment(Invoice, PaymentParams, Context, OperationID, PaymentTool) ->
+create_payment(Invoice, PaymentParams, Context, OperationID) ->
+    PaymentToken = decode_payment_token(PaymentParams),
+    PaymentTool = capi_utils:maybe(PaymentToken, fun(#{payment_tool := V}) -> V end),
+
     InvoiceID = Invoice#domain_Invoice.id,
     PaymentID = create_payment_id(Invoice, PaymentParams, Context, OperationID, PaymentTool),
     ExternalID = maps:get(<<"externalID">>, PaymentParams, undefined),
@@ -534,44 +535,74 @@ create_payment(Invoice, PaymentParams, Context, OperationID, PaymentTool) ->
     Call = {invoicing, 'StartPayment', {InvoiceID, InvoicePaymentParams}},
     capi_handler_utils:service_call_with([user_info], Call, Context).
 
-create_payment_id(Invoice, PaymentParams, Context, OperationID, PaymentTool) ->
+create_payment_id(Invoice, PaymentParams0, Context, OperationID, PaymentToolThrift) ->
     InvoiceID = Invoice#domain_Invoice.id,
     PartyID = Invoice#domain_Invoice.owner_id,
-    Payer = maps:get(<<"payer">>, PaymentParams),
+    Payer = maps:get(<<"payer">>, PaymentParams0),
+    PaymentTool = capi_utils:maybe(PaymentToolThrift, fun capi_handler_decoder_party:decode_payment_tool/1),
 
-    % Temprory decision was made for analytics
+    % Temporary decision for analytics team
     % TODO: delete this after analytics research will be down
     _ = log_payer_client_url(Payer, InvoiceID),
 
-    % TODO При наличии paymentToolToken заменяем его раскодированной структурой paymentTool
-    % В противном случае токены будут оказывать влияние на расчет hash2, удаление paymentToolToken
-    % не потребуется при удалении capi_bender:check_idempotent_conflict_deprecated
-    ClearPayer =
-        case PaymentTool of
-            undefined ->
-                Payer;
-            _ ->
-                Payer0 = maps:without([<<"paymentToolToken">>], Payer),
-                Payer0#{<<"paymentTool">> => capi_handler_decoder_party:decode_payment_tool(PaymentTool)}
-        end,
-
-    FullParams = PaymentParams#{
+    PaymentParams = PaymentParams0#{
         % Требуется для последующей кодировки параметров плательщика
         <<"invoiceID">> => InvoiceID,
         % Заменяем на структуру без токена
-        <<"payer">> => ClearPayer
+        <<"payer">> => Payer#{<<"paymentTool">> => PaymentTool}
     },
-
-    Identity = capi_bender:make_identity({schema, capi_feature_schemas:payment(), FullParams, PaymentParams}),
     ExternalID = maps:get(<<"externalID">>, PaymentParams, undefined),
     BenderPrefix = OperationID,
     IdempotentKey = {BenderPrefix, PartyID, ExternalID},
     SequenceID = InvoiceID,
+    Identity = capi_bender:make_identity({schema, capi_feature_schemas:payment(), PaymentParams}),
     SequenceParams = #{},
     #{woody_context := WoodyCtx} = Context,
     %% We put `invoice_id` in a context here because `get_payment_by_external_id()` needs it to work
     CtxData = #{<<"invoice_id">> => InvoiceID},
     capi_bender:try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyCtx, CtxData).
+
+%% create_payment(Invoice, PaymentParams0, Context, BenderPrefix) ->
+%%     ExternalID = maps:get(<<"externalID">>, PaymentParams0, undefined),
+%%     #payproc_Invoice{invoice = #domain_Invoice{id = InvoiceID, owner_id = PartyID}} = Invoice,
+%%     IdempotentKey = {BenderPrefix, PartyID, ExternalID},
+%%     {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams0)),
+
+%%     % Temprory decision was made for analytics
+%%     % TODO: delete this after analytics research will be down
+%%     _ = log_payer_client_url(Payer, InvoiceID),
+
+%%     % TODO При наличии paymentToolToken заменяем его раскодированной структурой paymentTool
+%%     % В противном случае токены будут оказывать влияние на расчет hash2, удаление paymentToolToken
+%%     % не потребуется при удалении capi_bender:check_idempotent_conflict_deprecated
+%%     ClearPayer =
+%%         case PaymentTool of
+%%             undefined ->
+%%                 Payer;
+%%             _ ->
+%%                 Payer0 = maps:without([<<"paymentToolToken">>], Payer),
+%%                 Payer0#{<<"paymentTool">> => capi_handler_decoder_party:decode_payment_tool(PaymentTool)}
+%%         end,
+
+%%     FullParams = PaymentParams#{
+%%         % Требуется для последующей кодировки параметров плательщика
+%%         <<"invoiceID">> => InvoiceID,
+%%         % Заменяем на структуру без токена
+%%         <<"payer">> => ClearPayer
+%%     },
+
+%%     Identity = capi_bender:make_identity({schema, capi_feature_schemas:payment(), FullParams, PaymentParams}),
+%%     ExternalID = maps:get(<<"externalID">>, PaymentParams, undefined),
+%%     BenderPrefix = OperationID,
+%%     IdempotentKey = {BenderPrefix, PartyID, ExternalID},
+
+%%     SequenceID = InvoiceID,
+%%     SequenceParams = #{},
+%%     #{woody_context := WoodyCtx} = Context,
+%%     %% We put `invoice_id` in a context here because `get_payment_by_external_id()` needs it to work
+%%     CtxData = #{<<"invoice_id">> => InvoiceID},
+%%     PaymentID = capi_bender:try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyCtx, CtxData),
+%%     start_payment(PaymentID, InvoiceID, ExternalID, PaymentParams, PaymentToolThrift, Context).
 
 log_payer_client_url(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer, InvoiceID) ->
     EncodedSession = maps:get(<<"paymentSession">>, Payer),
@@ -780,12 +811,13 @@ encode_processing_deadline(Deadline) ->
 default_processing_deadline() ->
     genlib_app:env(capi, default_processing_deadline, ?DEFAULT_PROCESSING_DEADLINE).
 
-create_refund(InvoiceID, PaymentID, RefundParams, Context, BenderPrefix) ->
+create_refund(InvoiceID, PaymentID, RefundParams0, Context, BenderPrefix) ->
     PartyID = capi_handler_utils:get_party_id(Context),
-    RefundParamsFull = RefundParams#{<<"invoiceID">> => InvoiceID, <<"paymentID">> => PaymentID},
+    RefundParams = RefundParams0#{<<"invoiceID">> => InvoiceID, <<"paymentID">> => PaymentID},
+
     ExternalID = maps:get(<<"externalID">>, RefundParams, undefined),
     IdempotentKey = {BenderPrefix, PartyID, ExternalID},
-    Identity = {schema, capi_feature_schemas:refund(), RefundParamsFull, RefundParams},
+    Identity = {schema, capi_feature_schemas:refund(), RefundParams},
     SequenceID = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
     SequenceParams = #{minimum => 100},
     #{woody_context := WoodyCtx} = Context,
