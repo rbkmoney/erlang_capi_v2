@@ -915,7 +915,7 @@ create_invoices_with_templates(BenderKey, Requests, Config) ->
     ).
 
 with_feature_storage(Fun) ->
-    capi_ct_features_reader_event_handler:create_storage(),
+    _ = capi_ct_features_reader_event_handler:create_storage(),
     Result = Fun(),
     UnusedParams = capi_ct_features_reader_event_handler:get_unused_params(),
     capi_ct_features_reader_event_handler:delete_storage(),
