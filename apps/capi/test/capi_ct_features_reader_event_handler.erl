@@ -7,7 +7,7 @@
 
 %%
 
--spec create_storage() -> capi_idemp_features:event_handler().
+-spec create_storage() -> feat:event_handler().
 create_storage() ->
     %% TODO delete named_table. Make opportunity for concurrent tests.
     ets:new(?MODULE, [set, public, named_table]).
@@ -21,7 +21,7 @@ get_unused_params() ->
     Req = get_request(),
     maps:keys(capi_ct_helper:map_to_flat(Req)).
 
--spec handle_event(capi_idemp_features:event(), capi_idemp_features:options()) -> ok.
+-spec handle_event(feat:event(), feat:options()) -> ok.
 handle_event({request_visited, Req}, _Opts) ->
     save_request(Req),
     ok;

@@ -27,9 +27,7 @@
 
 -type constant_id() :: binary().
 
--type external_id_conflict_v1() :: {external_id_conflict, id(), undefined, identity_schema()}.
--type external_id_conflict_v2() :: {external_id_conflict, id(), difference(), identity_schema()}.
--type external_id_conflict() :: external_id_conflict_v1() | external_id_conflict_v2().
+-type external_id_conflict() :: {external_id_conflict, id(), difference(), identity_schema()}.
 -type generation_error() :: external_id_conflict().
 
 -export_type([id/0]).
@@ -199,10 +197,6 @@ try_generate_id(BenderIdSchema, IdempotentKey, Identity, WoodyContext, CtxData) 
     case generate_id(BenderIdSchema, IdempotentKey, Identity, WoodyContext, CtxData) of
         {ok, ID} ->
             ID;
-        {error, {external_id_conflict, ID, undefined, Schema}} ->
-            logger:warning("This externalID: ~p, used in another request.~n", [ID]),
-            SourceID = get_external_id(IdempotentKey),
-            throw({external_id_conflict, ID, SourceID, Schema});
         {error, {external_id_conflict, ID, Difference, Schema}} ->
             ReadableDiff = feat:list_diff_fields(Schema, Difference),
             logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, ReadableDiff]),

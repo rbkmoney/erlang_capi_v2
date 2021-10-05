@@ -9,6 +9,7 @@
         public_key,
         snowflake,
         genlib,
+        feat,
         woody,
         capi_woody_client,
         damsel,
