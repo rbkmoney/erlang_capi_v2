@@ -257,7 +257,7 @@ get_invoice_payment_methods_ok_test(Config) ->
     ),
     ?assertMatch(
         #{
-            <<"merchantID">> := <<"test:", _/binary>>,
+            <<"merchantID">> := <<_/binary>>,
             <<"merchantName">> := ?STRING,
             <<"orderID">> := ?STRING,
             <<"realm">> := <<"test">>
