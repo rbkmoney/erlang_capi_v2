@@ -362,15 +362,10 @@ construct_token_provider_data(PartyID, ShopID, Context) ->
     ShopName = ShopContract#payproc_ShopContract.shop#domain_Shop.details#domain_ShopDetails.name,
     PiRef = ShopContract#payproc_ShopContract.contract#domain_Contract.payment_institution,
     {ok, Pi} = capi_domain:get_payment_institution(PiRef, Context),
-    RealmMode = genlib:to_binary(Pi#domain_PaymentInstitution.realm),
-    MerchantID = create_merchant_id(RealmMode, PartyID, ShopID),
+    Realm = Pi#domain_PaymentInstitution.realm,
+    MerchantID = capi_merchant_id:encode(Realm, PartyID, ShopID),
     #{
         <<"merchantID">> => MerchantID,
         <<"merchantName">> => ShopName,
-        <<"realm">> => RealmMode
+        <<"realm">> => genlib:to_binary(Realm)
     }.
-
-create_merchant_id(RealmMode, PartyID, EntityID) ->
-    % Упакованные идентификаторы используются для контроля привязки провайдерских токенов в capi_pcidss
-    % TODO #ED-273 сделать закрытый формат MerchantID
-    <<RealmMode/binary, $:, PartyID/binary, $:, EntityID/binary>>.
