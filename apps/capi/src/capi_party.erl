@@ -11,6 +11,8 @@
 -export([activate_shop/3]).
 -export([suspend_shop/3]).
 -export([compute_payment_institution_terms/3]).
+-export([create_claim/3]).
+-export([revoke_claim/5]).
 -export([get_claim/3]).
 -export([get_claims/2]).
 -export([get_account_state/3]).
@@ -26,6 +28,9 @@
 -type contract_id() :: party_client_thrift:contract_id().
 -type shop_id() :: party_client_thrift:shop_id().
 -type claim_id() :: party_client_thrift:claim_id().
+-type claim_revision() :: party_client_thrift:claim_revision().
+-type changeset() :: party_client_thrift:changeset().
+-type revoke_reason() :: party_client_thrift:revoke_reason().
 -type account_id() :: party_client_thrift:account_id().
 
 -spec create_party(party_id(), party_params(), processing_context()) -> result().
@@ -88,6 +93,29 @@ compute_payment_institution_terms(Ref, Varset, Context) ->
     party_client_thrift:compute_payment_institution_terms(
         Ref,
         Varset,
+        Client,
+        ClientContext
+    ).
+
+-spec create_claim(party_id(), changeset(), processing_context()) -> result().
+create_claim(PartyID, Changeset, Context) ->
+    {Client, ClientContext} = client_context(Context),
+    party_client_thrift:create_claim(PartyID, Changeset, Client, ClientContext).
+
+-spec revoke_claim(
+    party_id(),
+    claim_id(),
+    claim_revision(),
+    revoke_reason(),
+    processing_context()
+) -> result().
+revoke_claim(PartyID, ClaimID, Revision, Reason, Context) ->
+    {Client, ClientContext} = client_context(Context),
+    party_client_thrift:revoke_claim(
+        PartyID,
+        ClaimID,
+        Revision,
+        Reason,
         Client,
         ClientContext
     ).
