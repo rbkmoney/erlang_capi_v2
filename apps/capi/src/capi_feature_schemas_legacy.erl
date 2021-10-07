@@ -2,7 +2,7 @@
 
 -type schema() :: capi_idemp_features_legacy:schema().
 
--include("capi_legacy_feature_schemas.hrl").
+-include("capi_feature_schemas_legacy.hrl").
 
 -define(id, 1).
 -define(invoice_id, 2).
