@@ -10,10 +10,7 @@
 -type idempotent_key() :: binary().
 -type idempotent_key_params() :: {idempotent_key_prefix(), issuer_id(), external_id() | undefined}.
 -type identity() :: {identity, identity_features(), identity_schema()}.
--type identity_params() ::
-    {schema, identity_schema(), feat:request()}
-    | {schema, identity_schema(), feat:request(), HashedRequest :: feat:request()}
-    | identity().
+-type identity_params() :: {schema, identity_schema(), feat:request()} | identity().
 
 -type identity_features() :: feat:features().
 -type identity_schema() :: feat:schema().
