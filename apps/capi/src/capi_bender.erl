@@ -271,7 +271,7 @@ check_idempotent_conflict_deprecated_v2(ID, Features, SavedBenderCtx, Schema) ->
         <<"version">> := ?SCHEMA_VER2,
         <<"features">> := OtherFeatures
     } = SavedBenderCtx,
-    case capi_legacy_idemp_features:compare(Features, OtherFeatures) of
+    case capi_idemp_features_legacy:compare(Features, OtherFeatures) of
         true ->
             {ok, ID};
         {false, Difference} ->

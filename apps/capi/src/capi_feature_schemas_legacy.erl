@@ -1,6 +1,6 @@
--module(capi_legacy_feature_schemas).
+-module(capi_feature_schemas_legacy).
 
--type schema() :: capi_legacy_feature_schemas:schema().
+-type schema() :: capi_idemp_features_legacy:schema().
 
 -include("capi_legacy_feature_schemas.hrl").
 
@@ -305,16 +305,16 @@ deep_fetch(Map, Keys) ->
     lists:foldl(fun(K, M) -> maps:get(K, M) end, Map, Keys).
 
 hash(Term) ->
-    capi_legacy_idemp_features:hash(Term).
+    capi_idemp_features_legacy:hash(Term).
 
 read(Schema, Request) ->
-    capi_legacy_idemp_features:read(Schema, Request).
+    capi_idemp_features_legacy:read(Schema, Request).
 
 compare(Features1, Features2) ->
-    capi_legacy_idemp_features:compare(Features1, Features2).
+    capi_idemp_features_legacy:compare(Features1, Features2).
 
 list_diff_fields(Schema, Diff) ->
-    capi_legacy_idemp_features:list_diff_fields(Schema, Diff).
+    capi_idemp_features_legacy:list_diff_fields(Schema, Diff).
 
 -spec test() -> _.
 

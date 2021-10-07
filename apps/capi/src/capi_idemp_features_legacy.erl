@@ -1,4 +1,4 @@
--module(capi_legacy_idemp_features).
+-module(capi_idemp_features_legacy).
 
 -include("capi_legacy_feature_schemas.hrl").
 
