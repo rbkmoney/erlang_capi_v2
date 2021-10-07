@@ -149,10 +149,23 @@ try_gen_constant(IdempotentKey, Identity, ConstantID, WoodyContext, Context) ->
 
 -spec make_identity(identity_params()) -> identity().
 make_identity({schema, Schema, Data}) ->
-    Features = feat:read(Schema, Data),
+    Features = feat:read(read_schema(Schema), Data),
     {identity, Features, Schema};
 make_identity(Identity = {identity, _Features, _Schema}) ->
     Identity.
+
+make_identity_deprecated_v2({schema, Schema, Data}) ->
+    Features = capi_idemp_features_legacy:read(Schema, Data),
+    {identity, Features, Schema}.
+
+%% TODO(): switch back to passing schema by value (`schemas:schema()`) and not by name (`schema`) after V2 is removed
+read_schema(SchemaName) when is_atom(SchemaName) ->
+    capi_feature_schemas:SchemaName().
+%% read_schema(Schema) ->
+%%     Schema.
+
+read_schema_deprecated_v2(SchemaName) ->
+    capi_feature_schemas_legacy:SchemaName().
 
 -spec get_internal_id(idempotent_key_params(), woody_context()) ->
     {ok, binary(), context_data()} | {error, internal_id_not_found}.
@@ -232,9 +245,15 @@ bender_generate_id(BenderIdSchema, IdempKey, IdempIdentity, WoodyContext, CtxDat
         {ok, ID} ->
             {ok, ID};
         {ok, ID, #{<<"version">> := ?SCHEMA_VER2} = SavedBenderCtx} ->
-            check_idempotent_conflict_deprecated_v2(ID, Features, SavedBenderCtx, Schema);
+            {identity, FeaturesDeprecated, SchemaDeprecated} = make_identity_deprecated_v2(IdempIdentity),
+            check_idempotent_conflict_deprecated_v2(
+                ID,
+                FeaturesDeprecated,
+                SavedBenderCtx,
+                read_schema_deprecated_v2(SchemaDeprecated)
+            );
         {ok, ID, #{<<"version">> := ?SCHEMA_VER3} = SavedBenderCtx} ->
-            check_idempotent_conflict(ID, Features, SavedBenderCtx, Schema)
+            check_idempotent_conflict(ID, Features, SavedBenderCtx, read_schema(Schema))
     end.
 
 generator_generate_id(BenderIDSchema, WoodyContext) ->

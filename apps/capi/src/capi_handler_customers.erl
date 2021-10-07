@@ -301,7 +301,7 @@ mask_customer_notfound(Resolution) ->
 generate_customer_id(OperationID, PartyID, CustomerParams, #{woody_context := WoodyContext}) ->
     ExternalID = maps:get(<<"externalID">>, CustomerParams, undefined),
     IdempKey = {OperationID, PartyID, ExternalID},
-    Identity = {schema, capi_feature_schemas:customer(), CustomerParams},
+    Identity = {schema, customer, CustomerParams},
     capi_bender:try_gen_snowflake(IdempKey, Identity, WoodyContext).
 
 encode_customer_params(CustomerID, PartyID, Params) ->
@@ -335,7 +335,7 @@ generate_binding_ids(OperationID, CustomerBindingParams, Context = #{woody_conte
         ),
 
     Identity = capi_bender:make_identity(
-        {schema, capi_feature_schemas:customer_binding(), CustomerBindingParamsEncrypted}
+        {schema, customer_binding, CustomerBindingParamsEncrypted}
     ),
 
     OperationIDBin = erlang:atom_to_binary(OperationID),
