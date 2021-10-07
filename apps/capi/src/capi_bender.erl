@@ -13,7 +13,7 @@
 -type identity_params() :: {schema, identity_schema(), feat:request()} | identity().
 
 -type identity_features() :: feat:features().
--type identity_schema() :: feat:schema().
+-type identity_schema() :: feat:schema() | Name :: atom().
 -type woody_context() :: woody_context:ctx().
 -type context_data() :: #{binary() => term()}.
 -type bender_context() :: #{binary() => term()}.
@@ -158,7 +158,8 @@ make_identity_deprecated_v2({schema, Schema, Data}) ->
     Features = capi_idemp_features_legacy:read(Schema, Data),
     {identity, Features, Schema}.
 
-%% TODO(ED-287): switch back to passing schema by value (`schemas:schema()`) and not by name (`schema`) after V2 is removed
+%% TODO(ED-287): switch back to passing schema by value (`schemas:schema()`)
+%% and not by name (`schema`) after V2 is removed
 read_schema(SchemaName) when is_atom(SchemaName) ->
     capi_feature_schemas:SchemaName();
 read_schema(Schema) ->
