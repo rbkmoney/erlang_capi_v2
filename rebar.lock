@@ -96,7 +96,7 @@
  {<<"parse_trans">>,{pkg,<<"parse_trans">>,<<"3.4.0">>},0},
  {<<"party_client">>,
   {git,"https://github.com/rbkmoney/party_client_erlang.git",
-       {ref,"a6471d4074f8098f8db0da57a2e676a22804d3ff"}},
+       {ref,"8afd535d96a9994d63c678c87688f3b4ff016781"}},
   0},
  {<<"payout_manager_proto">>,
   {git,"https://github.com/rbkmoney/payout-manager-proto.git",
