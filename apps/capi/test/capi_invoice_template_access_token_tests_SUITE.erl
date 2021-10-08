@@ -1,6 +1,7 @@
 -module(capi_invoice_template_access_token_tests_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
+-include_lib("stdlib/include/assert.hrl").
 
 -include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
@@ -175,7 +176,8 @@ get_invoice_payment_methods_by_tpl_id_ok_test(Config) ->
             end},
             {party_management, fun
                 ('GetRevision', _) -> {ok, ?INTEGER};
-                ('Checkout', _) -> {ok, ?PARTY}
+                ('Checkout', _) -> {ok, ?PARTY};
+                ('GetShopContract', _) -> {ok, ?SHOP_CONTRACT}
             end}
         ],
         Config
@@ -187,4 +189,20 @@ get_invoice_payment_methods_by_tpl_id_ok_test(Config) ->
         ?STRING,
         Config
     ),
-    {ok, _} = capi_client_invoice_templates:get_invoice_payment_methods(?config(context, Config), ?STRING).
+    {ok, Methods} = capi_client_invoice_templates:get_invoice_payment_methods(
+        ?config(context, Config), ?STRING
+    ),
+    [ProviderMethod] = lists:filter(
+        fun(Method) ->
+            maps:get(<<"tokenProviderData">>, Method, undefined) /= undefined
+        end,
+        Methods
+    ),
+    ?assertMatch(
+        #{
+            <<"merchantID">> := <<_/binary>>,
+            <<"merchantName">> := ?STRING,
+            <<"realm">> := <<"test">>
+        },
+        maps:get(<<"tokenProviderData">>, ProviderMethod)
+    ).

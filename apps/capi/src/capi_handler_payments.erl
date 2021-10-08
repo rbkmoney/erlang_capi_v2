@@ -6,7 +6,7 @@
 
 -export([prepare/3]).
 
--import(capi_handler_utils, [general_error/2, logic_error/2]).
+-import(capi_handler_utils, [general_error/2, logic_error/1, logic_error/2]).
 
 -define(DEFAULT_PROCESSING_DEADLINE, <<"30m">>).
 
@@ -19,6 +19,7 @@ prepare(OperationID = 'CreatePayment', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     Invoice = get_invoice_by_id(InvoiceID, Context),
     PaymentParams = maps:get('PaymentParams', Req),
+    PaymentToken = decode_payment_token(PaymentParams),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID}},
@@ -29,7 +30,10 @@ prepare(OperationID = 'CreatePayment', Req, Context) ->
     Process = fun() ->
         try
             capi_handler:respond_if_undefined(Invoice, general_error(404, <<"Invoice not found">>)),
-            case create_payment(Invoice, PaymentParams, Context, OperationID) of
+            DomainInvoice = Invoice#payproc_Invoice.invoice,
+            PaymentTool = capi_utils:maybe(PaymentToken, fun(#{payment_tool := V}) -> V end),
+            Result = create_payment(DomainInvoice, PaymentParams, Context, OperationID, PaymentTool),
+            case Result of
                 {ok, Payment} ->
                     {ok, {201, #{}, decode_invoice_payment(InvoiceID, Payment, Context)}};
                 {exception, #payproc_InvalidInvoiceStatus{}} ->
@@ -48,16 +52,10 @@ prepare(OperationID = 'CreatePayment', Req, Context) ->
                 {exception, #payproc_InvalidShopStatus{}} ->
                     {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
                 {exception, #payproc_InvalidContractStatus{}} ->
-                    ErrorResp = logic_error(
-                        invalidContractStatus,
-                        <<"Invalid contract status">>
-                    ),
+                    ErrorResp = logic_error(invalidContractStatus, <<"Invalid contract status">>),
                     {ok, ErrorResp};
                 {exception, #payproc_InvalidRecurrentParentPayment{}} ->
-                    ErrorResp = logic_error(
-                        invalidRecurrentParent,
-                        <<"Specified recurrent parent is invalid">>
-                    ),
+                    ErrorResp = logic_error(invalidRecurrentParent, <<"Specified recurrent parent is invalid">>),
                     {ok, ErrorResp};
                 {exception, #payproc_InvalidUser{}} ->
                     {ok, general_error(404, <<"Invoice not found">>)};
@@ -65,12 +63,6 @@ prepare(OperationID = 'CreatePayment', Req, Context) ->
                     {ok, general_error(404, <<"Invoice not found">>)}
             end
         catch
-            throw:invalid_token ->
-                {ok,
-                    logic_error(
-                        invalidPaymentToolToken,
-                        <<"Specified payment tool token is invalid">>
-                    )};
             throw:invalid_payment_session ->
                 {ok,
                     logic_error(
@@ -485,29 +477,52 @@ prepare(_OperationID, _Req, _Context) ->
 
 %%
 
-create_payment(Invoice, PaymentParams, Context, BenderPrefix) ->
+create_payment(Invoice, PaymentParams, Context, OperationID, PaymentTool) ->
+    InvoiceID = Invoice#domain_Invoice.id,
+    PaymentID = create_payment_id(Invoice, PaymentParams, Context, OperationID, PaymentTool),
     ExternalID = maps:get(<<"externalID">>, PaymentParams, undefined),
-    #payproc_Invoice{invoice = #domain_Invoice{id = InvoiceID, owner_id = PartyID}} = Invoice,
-    IdempotentKey = {BenderPrefix, PartyID, ExternalID},
-    {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams)),
+    InvoicePaymentParams = encode_invoice_payment_params(PaymentID, ExternalID, PaymentParams, PaymentTool),
+    Call = {invoicing, 'StartPayment', {InvoiceID, InvoicePaymentParams}},
+    capi_handler_utils:service_call_with([user_info], Call, Context).
+
+create_payment_id(Invoice, PaymentParams, Context, OperationID, PaymentTool) ->
+    InvoiceID = Invoice#domain_Invoice.id,
+    PartyID = Invoice#domain_Invoice.owner_id,
+    Payer = maps:get(<<"payer">>, PaymentParams),
 
     % Temprory decision was made for analytics
     % TODO: delete this after analytics research will be down
     _ = log_payer_client_url(Payer, InvoiceID),
 
-    PaymentParamsFull = PaymentParams#{<<"invoiceID">> => InvoiceID},
-    PaymentParamsDecrypted = PaymentParamsFull#{<<"payer">> => Payer},
+    % TODO При наличии paymentToolToken заменяем его раскодированной структурой paymentTool
+    % В противном случае токены будут оказывать влияние на расчет hash2, удаление paymentToolToken
+    % не потребуется при удалении capi_bender:check_idempotent_conflict_deprecated
+    ClearPayer =
+        case PaymentTool of
+            undefined ->
+                Payer;
+            _ ->
+                Payer0 = maps:without([<<"paymentToolToken">>], Payer),
+                Payer0#{<<"paymentTool">> => capi_handler_decoder_party:decode_payment_tool(PaymentTool)}
+        end,
 
-    Identity = capi_bender:make_identity(
-        {schema, capi_feature_schemas:payment(), PaymentParamsDecrypted, PaymentParams}
-    ),
+    FullParams = PaymentParams#{
+        % Требуется для последующей кодировки параметров плательщика
+        <<"invoiceID">> => InvoiceID,
+        % Заменяем на структуру без токена
+        <<"payer">> => ClearPayer
+    },
+
+    Identity = capi_bender:make_identity({schema, capi_feature_schemas:payment(), FullParams, PaymentParams}),
+    ExternalID = maps:get(<<"externalID">>, PaymentParams, undefined),
+    BenderPrefix = OperationID,
+    IdempotentKey = {BenderPrefix, PartyID, ExternalID},
     SequenceID = InvoiceID,
     SequenceParams = #{},
     #{woody_context := WoodyCtx} = Context,
     %% We put `invoice_id` in a context here because `get_payment_by_external_id()` needs it to work
     CtxData = #{<<"invoice_id">> => InvoiceID},
-    PaymentID = capi_bender:try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyCtx, CtxData),
-    start_payment(PaymentID, InvoiceID, ExternalID, PaymentParamsDecrypted, PaymentToolThrift, Context).
+    capi_bender:try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyCtx, CtxData).
 
 log_payer_client_url(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer, InvoiceID) ->
     EncodedSession = maps:get(<<"paymentSession">>, Payer),
@@ -522,11 +537,6 @@ log_payer_client_url(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer, I
     logger:info("Request location info.", [], MetaInfo);
 log_payer_client_url(_, _) ->
     skipped.
-
-start_payment(ID, InvoiceID, ExternalID, PaymentParams, PaymentToolThrift, Context) ->
-    InvoicePaymentParams = encode_invoice_payment_params(ID, ExternalID, PaymentParams, PaymentToolThrift),
-    Call = {invoicing, 'StartPayment', {InvoiceID, InvoicePaymentParams}},
-    capi_handler_utils:service_call_with([user_info], Call, Context).
 
 find_payment_by_id(PaymentID, #payproc_Invoice{payments = Payments}) ->
     Fun = fun(#payproc_InvoicePayment{payment = #domain_InvoicePayment{id = ID}}) ->
@@ -569,39 +579,13 @@ get_invoice_by_id(InvoiceID, Context) ->
             undefined
     end.
 
-decrypt_payer(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer) ->
-    #{<<"paymentToolToken">> := Token} = Payer,
-    Payer2 = maps:without([<<"paymentToolToken">>], Payer),
-    PaymentToolThrift = decrypt_payment_tool(Token),
-    PaymentTool = capi_handler_decoder_party:decode_payment_tool(PaymentToolThrift),
-    {Payer2#{<<"paymentTool">> => PaymentTool}, PaymentToolThrift};
-decrypt_payer(CustomerOrRecurrentPayer) ->
-    {CustomerOrRecurrentPayer, undefined}.
-
-decrypt_payment_tool(Token) ->
-    case capi_crypto:decrypt_payment_tool_token(Token) of
-        {ok, {PaymentToolThrift, ValidUntil}} ->
-            case capi_utils:deadline_is_reached(ValidUntil) of
-                true ->
-                    logger:warning("Payment tool token expired: ~p", [capi_utils:deadline_to_binary(ValidUntil)]),
-                    erlang:throw(invalid_token);
-                _ ->
-                    PaymentToolThrift
-            end;
-        unrecognized ->
-            erlang:throw(invalid_token);
-        {error, {decryption_failed, Error}} ->
-            logger:warning("Payment tool token decryption failed: ~p", [Error]),
-            erlang:throw(invalid_token)
-    end.
-
-encode_invoice_payment_params(ID, ExternalID, PaymentParams, PaymentToolThrift) ->
+encode_invoice_payment_params(ID, ExternalID, PaymentParams, PaymentTool) ->
     Flow = genlib_map:get(<<"flow">>, PaymentParams, #{<<"type">> => <<"PaymentFlowInstant">>}),
     Payer = genlib_map:get(<<"payer">>, PaymentParams),
     #payproc_InvoicePaymentParams{
         id = ID,
         external_id = ExternalID,
-        payer = encode_payer_params(Payer, PaymentToolThrift),
+        payer = encode_payer_params(Payer, PaymentTool),
         payer_session_info = encode_payer_session_info(Payer),
         flow = encode_flow(Flow),
         make_recurrent = genlib_map:get(<<"makeRecurrent">>, PaymentParams, false),
@@ -625,12 +609,12 @@ encode_payer_params(
         <<"paymentSession">> := EncodedSession,
         <<"contactInfo">> := ContactInfo
     },
-    PaymentToolThrift
+    PaymentTool
 ) ->
     {ClientInfo, PaymentSession} = capi_handler_utils:unwrap_payment_session(EncodedSession),
     {payment_resource, #payproc_PaymentResourcePayerParams{
         resource = #domain_DisposablePaymentResource{
-            payment_tool = PaymentToolThrift,
+            payment_tool = PaymentTool,
             payment_session_id = PaymentSession,
             client_info = capi_handler_encoder:encode_client_info(ClientInfo)
         },
@@ -684,6 +668,28 @@ encode_optional_cash(_, _, _, _) ->
     undefined.
 
 %%
+
+decode_payment_token(#{<<"payer">> := Payer}) ->
+    decode_payment_token(Payer);
+decode_payment_token(#{<<"paymentToolToken">> := Token}) ->
+    case capi_crypto:decode_token(Token) of
+        % TODO #ED-162 Проверка времени жизни будет в bouncer, возможно тут её следует убрать вместе с тестами
+        {ok, #{valid_until := ValidUntil} = TokenData} ->
+            case capi_utils:deadline_is_reached(ValidUntil) of
+                true ->
+                    logger:warning("Payment tool token expired: ~p", [capi_utils:deadline_to_binary(ValidUntil)]),
+                    capi_handler:respond(logic_error(invalidPaymentToolToken));
+                _ ->
+                    TokenData
+            end;
+        unrecognized ->
+            capi_handler:respond(logic_error(invalidPaymentToolToken));
+        {error, {decryption_failed, Error}} ->
+            logger:warning("Payment tool token decryption failed: ~p", [Error]),
+            capi_handler:respond(logic_error(invalidPaymentToolToken))
+    end;
+decode_payment_token(_Other) ->
+    undefined.
 
 decode_invoice_payment(InvoiceID, InvoicePayment, Context) ->
     capi_handler_decoder_invoicing:decode_invoice_payment(InvoiceID, InvoicePayment, Context).

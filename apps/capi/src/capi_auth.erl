@@ -10,45 +10,35 @@
 -export([preauthorize_api_key/1]).
 -export([authorize_api_key/3]).
 -export([authorize_operation/2]).
-
 -export([issue_access_token/2]).
--export([issue_access_token/3]).
 
 -export([get_consumer/1]).
 
 %% API types
 
 -type token_type() :: bearer.
-
 -type preauth_context() :: {unauthorized, {token_type(), token_keeper_client:token()}}.
--type auth_context() ::
-    {authorized, token_keeper_auth_data:auth_data()}.
-
+-type auth_context() :: {authorized, token_keeper_auth_data:auth_data()}.
 -type resolution() :: allowed | forbidden.
-
 -type consumer() :: client | merchant | provider.
+-type token_spec() :: #{
+    party := binary(),
+    scope := {invoice | invoice_template | customer, binary()},
+    shop => binary(),
+    lifetime => pos_integer() | unlimited,
+    metadata => token_keeper_auth_data:metadata()
+}.
 
 -export_type([preauth_context/0]).
 -export_type([auth_context/0]).
 -export_type([resolution/0]).
 -export_type([consumer/0]).
+-export_type([token_spec/0]).
 
 %% Internal types
 
 -define(authorized(Ctx), {authorized, Ctx}).
 -define(unauthorized(Ctx), {unauthorized, Ctx}).
-
--type token_scope() ::
-    {invoice, InvoiceID :: binary()}
-    | {invoice_tpl, InvoiceTplID :: binary()}
-    | {customer, CustomerID :: binary()}.
--type token_lifetime() :: pos_integer() | unlimited.
-
--type token_spec() :: #{
-    scope := token_scope(),
-    party_id := binary(),
-    lifetime => token_lifetime()
-}.
 
 %%
 %% API functions
@@ -118,23 +108,11 @@ authorize_operation(Prototypes, ProcessingContext) ->
 
 %%
 
--spec issue_access_token(
-    TokenSpec :: token_spec(),
-    WoodyContext :: woody_context:ctx()
-) ->
+-spec issue_access_token(TokenSpec :: token_spec(), WoodyContext :: woody_context:ctx()) ->
     token_keeper_client:token().
 issue_access_token(TokenSpec, WoodyContext) ->
-    issue_access_token(TokenSpec, #{}, WoodyContext).
-
--spec issue_access_token(
-    TokenSpec :: token_spec(),
-    ExtraProperties :: token_keeper_auth_data:metadata(),
-    WoodyContext :: woody_context:ctx()
-) ->
-    token_keeper_client:token().
-issue_access_token(#{scope := Scope, party_id := PartyID} = TokenSpec, ExtraProperties, WoodyContext) ->
-    ContextFragment = create_context_fragment(Scope, PartyID, maps:get(lifetime, TokenSpec, undefined)),
-    Metadata = create_metadata(Scope, PartyID, ExtraProperties),
+    ContextFragment = create_context_fragment(TokenSpec),
+    Metadata = create_metadata(TokenSpec),
     %%TODO InvoiceTemplateAccessTokens are technically not ephemeral and should become so in the future
     AuthData = token_keeper_client:create_ephemeral(ContextFragment, Metadata, WoodyContext),
     token_keeper_auth_data:get_token(AuthData).
@@ -148,76 +126,73 @@ issue_access_token(#{scope := Scope, party_id := PartyID} = TokenSpec, ExtraProp
 
 -include_lib("bouncer_proto/include/bouncer_context_v1_thrift.hrl").
 
-create_context_fragment(Access, PartyID, undefined) ->
-    create_context_fragment(Access, PartyID, get_default_token_lifetime(Access));
-create_context_fragment(Access, PartyID, Lifetime) ->
-    ok = verify_token_lifetime(Access, Lifetime),
-    ContextFragment0 = bouncer_context_helpers:make_auth_fragment(resolve_bouncer_ctx(Access, PartyID, Lifetime)),
+create_context_fragment(TokenSpec) ->
+    AuthContext = resolve_auth_context(TokenSpec),
+    ContextFragment0 = bouncer_context_helpers:make_auth_fragment(AuthContext),
     {encoded_fragment, ContextFragment} = bouncer_client:bake_context_fragment(ContextFragment0),
     ContextFragment.
 
-get_default_token_lifetime({invoice, _}) -> ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME;
-get_default_token_lifetime({invoice_tpl, _}) -> unlimited;
-get_default_token_lifetime({customer, _}) -> ?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME.
-
-%% Forbid creation of unlimited lifetime invoice and customer tokens
-verify_token_lifetime({invoice, _}, Lifetime) when Lifetime =/= unlimited -> ok;
-verify_token_lifetime({customer, _}, Lifetime) when Lifetime =/= unlimited -> ok;
-verify_token_lifetime({invoice_tpl, _}, _Lifetime) -> ok;
-verify_token_lifetime(_, _) -> error.
-
--spec resolve_bouncer_ctx(token_scope(), _PartyID :: binary(), token_lifetime()) ->
+-spec resolve_auth_context(token_spec()) ->
     bouncer_context_helpers:auth_params().
-resolve_bouncer_ctx({invoice, InvoiceID}, PartyID, Lifetime) ->
+resolve_auth_context(TokenSpec) ->
+    Scope = resolve_auth_scope(TokenSpec),
     #{
-        method => ?BCTX_V1_AUTHMETHOD_INVOICEACCESSTOKEN,
-        expiration => make_auth_expiration(Lifetime),
-        scope => [
-            #{
-                party => #{id => PartyID},
-                invoice => #{id => InvoiceID}
-            }
-        ]
-    };
-resolve_bouncer_ctx({invoice_tpl, InvoiceTemplateID}, PartyID, Lifetime) ->
-    #{
-        method => ?BCTX_V1_AUTHMETHOD_INVOICETEMPLATEACCESSTOKEN,
-        expiration => make_auth_expiration(Lifetime),
-        scope => [
-            #{
-                party => #{id => PartyID},
-                invoice_template => #{id => InvoiceTemplateID}
-            }
-        ]
-    };
-resolve_bouncer_ctx({customer, CustomerID}, PartyID, Lifetime) ->
-    #{
-        method => ?BCTX_V1_AUTHMETHOD_CUSTOMERACCESSTOKEN,
-        expiration => make_auth_expiration(Lifetime),
-        scope => [
-            #{
-                party => #{id => PartyID},
-                customer => #{id => CustomerID}
-            }
-        ]
+        method => resolve_auth_method(TokenSpec),
+        expiration => resolve_auth_expiration(TokenSpec),
+        scope => [Scope]
     }.
 
-make_auth_expiration(Lifetime) when is_integer(Lifetime) ->
-    genlib_rfc3339:format(lifetime_to_expiration(Lifetime), second);
-make_auth_expiration(unlimited) ->
-    undefined.
+resolve_auth_scope(TokenSpec) ->
+    maps:fold(
+        fun
+            (party = Entity, EntityID, Scope) ->
+                Scope#{Entity => #{id => EntityID}};
+            (scope, {Entity, EntityID}, Scope) ->
+                Scope#{Entity => #{id => EntityID}};
+            (shop = Entity, EntityID, Scope) ->
+                Scope#{Entity => #{id => EntityID}};
+            (_Key, _Value, Scope) ->
+                Scope
+        end,
+        #{},
+        TokenSpec
+    ).
 
-lifetime_to_expiration(Lt) when is_integer(Lt) ->
-    genlib_time:unow() + Lt.
+resolve_auth_method(#{scope := {invoice, _}}) -> ?BCTX_V1_AUTHMETHOD_INVOICEACCESSTOKEN;
+resolve_auth_method(#{scope := {customer, _}}) -> ?BCTX_V1_AUTHMETHOD_CUSTOMERACCESSTOKEN;
+resolve_auth_method(#{scope := {invoice_template, _}}) -> ?BCTX_V1_AUTHMETHOD_INVOICETEMPLATEACCESSTOKEN.
 
-add_consumer({invoice, _}, Metadata) ->
-    put_metadata(get_metadata_mapped_key(token_consumer), <<"client">>, Metadata);
-add_consumer(_, Metadata) ->
-    Metadata.
+resolve_auth_expiration(TokenSpec) ->
+    case get_token_lifetime(TokenSpec) of
+        unlimited ->
+            undefined;
+        LifeTime ->
+            Deadline = genlib_time:unow() + LifeTime,
+            genlib_rfc3339:format(Deadline, second)
+    end.
 
-create_metadata(Scope, PartyID, Metadata0) ->
+get_token_lifetime(#{lifetime := LifeTime} = TokenSpec) when LifeTime =/= undefined ->
+    ok = verify_token_lifetime(TokenSpec, LifeTime),
+    LifeTime;
+get_token_lifetime(#{scope := {invoice, _}}) ->
+    ?DEFAULT_INVOICE_ACCESS_TOKEN_LIFETIME;
+get_token_lifetime(#{scope := {invoice_template, _}}) ->
+    unlimited;
+get_token_lifetime(#{scope := {customer, _}}) ->
+    ?DEFAULT_CUSTOMER_ACCESS_TOKEN_LIFETIME.
+
+%% Forbid creation of unlimited lifetime invoice and customer tokens
+verify_token_lifetime(#{scope := {invoice, _}}, LifeTime) when LifeTime =/= unlimited -> ok;
+verify_token_lifetime(#{scope := {customer, _}}, LifeTime) when LifeTime =/= unlimited -> ok;
+verify_token_lifetime(#{scope := {invoice_template, _}}, _LifeTime) -> ok.
+
+%%
+
+create_metadata(TokenSpec) ->
+    PartyID = maps:get(party, TokenSpec),
+    Metadata0 = maps:get(metadata, TokenSpec, #{}),
     Metadata1 = put_metadata(get_metadata_mapped_key(party_id), PartyID, Metadata0),
-    add_consumer(Scope, Metadata1).
+    put_metadata(get_metadata_mapped_key(token_consumer), <<"client">>, Metadata1).
 
 extract_auth_context(#{swagger_context := #{auth_context := AuthContext}}) ->
     AuthContext.

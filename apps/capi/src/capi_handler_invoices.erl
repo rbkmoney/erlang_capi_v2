@@ -6,11 +6,7 @@
 
 -export([prepare/3]).
 
--import(capi_handler_utils, [
-    general_error/2,
-    logic_error/2,
-    map_service_result/1
-]).
+-import(capi_handler_utils, [general_error/2, logic_error/2, map_service_result/1]).
 
 -spec prepare(
     OperationID :: capi_handler:operation_id(),
@@ -35,13 +31,7 @@ prepare('CreateInvoice' = OperationID, Req, Context) ->
         try
             case create_invoice(PartyID, InvoiceParams, Context, OperationID) of
                 {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-                    {ok,
-                        {201, #{},
-                            capi_handler_decoder_invoicing:make_invoice_and_token(
-                                Invoice,
-                                PartyID,
-                                Context
-                            )}};
+                    {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, Context)}};
                 {exception, Exception} ->
                     case Exception of
                         #'payproc_InvalidUser'{} ->
@@ -82,12 +72,8 @@ prepare('CreateInvoiceAccessToken' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         capi_handler:respond_if_undefined(ResultInvoice, general_error(404, <<"Invoice not found">>)),
-        #payproc_Invoice{invoice = #domain_Invoice{owner_id = PartyID}} = ResultInvoice,
-        Response = capi_handler_utils:issue_access_token(
-            PartyID,
-            {invoice, InvoiceID},
-            Context
-        ),
+        Invoice = ResultInvoice#payproc_Invoice.invoice,
+        Response = capi_handler_utils:issue_access_token(Invoice, Context),
         {ok, {201, #{}, Response}}
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -262,7 +248,9 @@ prepare('GetInvoicePaymentMethods' = OperationID, Req, Context) ->
         Args = {InvoiceID, {revision, Party#domain_Party.revision}},
         case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, Args, Context) of
             {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
-                PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
+                #payproc_Invoice{invoice = Invoice} = ResultInvoice,
+                PaymentMethods1 = capi_utils:deduplicate_payment_methods(PaymentMethods0),
+                PaymentMethods = capi_handler_utils:emplace_token_provider_data(Invoice, PaymentMethods1, Context),
                 {ok, {200, #{}, PaymentMethods}};
             {exception, Exception} ->
                 case Exception of

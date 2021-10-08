@@ -7,11 +7,7 @@
 
 -export([prepare/3]).
 
--import(capi_handler_utils, [
-    general_error/2,
-    logic_error/2,
-    map_service_result/1
-]).
+-import(capi_handler_utils, [general_error/2, logic_error/2, map_service_result/1]).
 
 -spec prepare(
     OperationID :: capi_handler:operation_id(),
@@ -39,7 +35,7 @@ prepare('CreateInvoiceTemplate' = OperationID, Req, Context) ->
             )
         of
             {ok, InvoiceTpl} ->
-                {ok, {201, #{}, make_invoice_tpl_and_token(InvoiceTpl, PartyID, Context)}};
+                {ok, {201, #{}, make_invoice_tpl_and_token(InvoiceTpl, Context)}};
             {exception, Exception} ->
                 case Exception of
                     #'InvalidRequest'{errors = Errors} ->
@@ -176,13 +172,7 @@ prepare('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
         PartyID = InvoiceTpl#domain_InvoiceTemplate.owner_id,
         try create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, OperationID) of
             {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-                {ok,
-                    {201, #{},
-                        capi_handler_decoder_invoicing:make_invoice_and_token(
-                            Invoice,
-                            Invoice#domain_Invoice.owner_id,
-                            Context
-                        )}};
+                {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, Context)}};
             {exception, Reason} ->
                 case Reason of
                     #payproc_InvalidUser{} ->
@@ -231,7 +221,10 @@ prepare('GetInvoicePaymentMethodsByTemplateID' = OperationID, Req, Context) ->
         Args = {InvoiceTemplateID, Timestamp, {revision, Party#domain_Party.revision}},
         case capi_handler_decoder_invoicing:construct_payment_methods(invoice_templating, Args, Context) of
             {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
-                PaymentMethods = capi_utils:deduplicate_payment_methods(PaymentMethods0),
+                PaymentMethods1 = capi_utils:deduplicate_payment_methods(PaymentMethods0),
+                PaymentMethods = capi_handler_utils:emplace_token_provider_data(
+                    InvoiceTemplate, PaymentMethods1, Context
+                ),
                 {ok, {200, #{}, PaymentMethods}};
             {exception, E} when
                 E == #payproc_InvalidUser{};
@@ -306,15 +299,10 @@ encode_invoice_tpl_update_params(Params) ->
         context = encode_optional_context(Params)
     }.
 
-make_invoice_tpl_and_token(InvoiceTpl, PartyID, ProcessingContext) ->
+make_invoice_tpl_and_token(InvoiceTpl, ProcessingContext) ->
     #{
         <<"invoiceTemplate">> => decode_invoice_tpl(InvoiceTpl),
-        <<"invoiceTemplateAccessToken">> =>
-            capi_handler_utils:issue_access_token(
-                PartyID,
-                {invoice_tpl, InvoiceTpl#domain_InvoiceTemplate.id},
-                ProcessingContext
-            )
+        <<"invoiceTemplateAccessToken">> => capi_handler_utils:issue_access_token(InvoiceTpl, ProcessingContext)
     }.
 
 encode_invoice_tpl_details(#{<<"templateType">> := <<"InvoiceTemplateSingleLine">>} = Details) ->
