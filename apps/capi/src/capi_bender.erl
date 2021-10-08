@@ -155,7 +155,7 @@ make_identity(Identity = {identity, _Features, _Schema}) ->
     Identity.
 
 make_identity_deprecated_v2({schema, Schema, Data}) ->
-    Features = capi_idemp_features_legacy:read(Schema, Data),
+    Features = capi_idemp_features_legacy:read(read_schema_deprecated_v2(Schema), Data),
     {identity, Features, Schema}.
 
 %% TODO(ED-287): switch back to passing schema by value (`schemas:schema()`)
@@ -165,8 +165,10 @@ read_schema(SchemaName) when is_atom(SchemaName) ->
 read_schema(Schema) ->
     Schema.
 
+read_schema_deprecated_v2(SchemaName) when is_atom(SchemaName) ->
+    capi_feature_schemas_legacy:SchemaName();
 read_schema_deprecated_v2(SchemaName) ->
-    capi_feature_schemas_legacy:SchemaName().
+    error({legacy_schema_from_new, SchemaName}).
 
 -spec get_internal_id(idempotent_key_params(), woody_context()) ->
     {ok, binary(), context_data()} | {error, internal_id_not_found}.
