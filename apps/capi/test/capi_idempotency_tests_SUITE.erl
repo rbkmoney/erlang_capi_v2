@@ -212,7 +212,7 @@ create_payment_ok_test(Config) ->
         [
             [<<"externalID">>],
             [<<"metadata">>, <<"bla">>, 0],
-            [<<"payer">>, <<"contactInfo">>, <<"email">>],
+            [<<"payer">>, <<"contactInfo">>],
             [<<"payer">>, <<"paymentSession">>],
             [<<"payer">>, <<"paymentTool">>, <<"bin">>],
             [<<"payer">>, <<"paymentTool">>, <<"cardholder_name">>],
@@ -256,6 +256,7 @@ different_payment_tools_test(Config) ->
         [
             [<<"externalID">>],
             [<<"metadata">>, <<"bla">>, 0],
+            [<<"payer">>, <<"contactInfo">>],
             [<<"payer">>, <<"paymentSession">>],
             [<<"payer">>,<<"paymentToolToken">>],
             [<<"processingDeadline">>]
