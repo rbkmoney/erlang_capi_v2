@@ -85,7 +85,6 @@ pop_path() ->
     Path.
 
 insert(Key, Value) ->
-    erlang:display({insert, Key, Value}),
     ets:insert(?MODULE, {Key, Value}),
     ok.
 
