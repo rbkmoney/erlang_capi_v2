@@ -628,6 +628,7 @@ create_customer_ok_test(Config) ->
     Req1 = ?CUSTOMER_PARAMS#{<<"externalID">> => genlib:unique()},
     Req2 = Req1#{<<"externalID">> => genlib:unique()},
 
+    UnusedFeatures = [[<<"externalID">>], [<<"metadata">>, <<"text">>, 0], [<<"metadata">>, <<"text">>, 1]],
     Result = create_customers(BenderKey, [Req1, Req2], Config),
 
     [{{ok, #{<<"customer">> := Customer1}}, UnusedFeatures1}, {{ok, #{<<"customer">> := Customer2}}, UnusedFeatures2}] =
@@ -635,7 +636,7 @@ create_customer_ok_test(Config) ->
 
     ?assertEqual(Customer1, Customer2),
     ?assertEqual(UnusedFeatures1, UnusedFeatures2),
-    ?assertEqual(UnusedFeatures1, [[<<"externalID">>], [<<"metadata">>, <<"text">>, 0], [<<"metadata">>, <<"text">>, 1]]).
+    ?assertEqual(UnusedFeatures1, UnusedFeatures).
 
 -spec create_customer_fail_test(config()) -> _.
 create_customer_fail_test(Config) ->
