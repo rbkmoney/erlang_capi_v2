@@ -18,39 +18,19 @@ delete_storage() ->
 
 -spec get_unused_params() -> _.
 get_unused_params() ->
-    Req = get_request(),
-    maps:keys(capi_ct_helper:map_to_flat(Req)).
+    get_req_paths().
 
 -spec handle_event(feat:event(), feat:options()) -> ok.
 handle_event({request_visited, Req}, _Opts) ->
-    save_request(Req),
-    ok;
-handle_event({request_key_visit, Key, Value}, _Opts) ->
-    push_path({Key, Value}),
-    ok;
-handle_event({request_key_visited, Key, _Value}, _Opts) ->
-    Path = get_path(),
-    [{Key, Value} | Tail] = Path,
-    delete_subpath(Key, Value, Tail),
-    ok;
+    save_req_paths(unroll_request_to_paths(Req));
+handle_event({request_key_visit, Key, _Value}, _Opts) ->
+    push_path(Key);
+handle_event({request_key_visited, _Key, _Value}, _Opts) ->
+    delete_subpath(pop_path());
 handle_event({request_index_visit, N, _Value}, _Opts) ->
-    push_path({key_index, N}),
-    ok;
+    push_path(N);
 handle_event({request_index_visited, _N, _Value}, _Opts) ->
-    %% delete  key_index from stack
-    pop_path(),
-    {Key, List} = pop_path(),
-    %% delete empty map from set
-    List2 = lists:foldl(
-        fun
-            (M, AccIn) when map_size(M) =:= 0 -> AccIn;
-            (M, AccIn) -> [M | AccIn]
-        end,
-        [],
-        List
-    ),
-    push_path({Key, List2}),
-    ok;
+    delete_subpath(pop_path());
 handle_event({request_variant_visit, _FeatureName, _Variant, _Value}, _Opts) ->
     ok;
 handle_event({request_variant_visited, _FeatureName, _Variant, _Value}, _Opts) ->
@@ -58,69 +38,59 @@ handle_event({request_variant_visited, _FeatureName, _Variant, _Value}, _Opts) -
 handle_event(Error, _Opts) ->
     throw(Error).
 
-delete_subpath(Key, SubReq, []) when is_map(SubReq), map_size(SubReq) > 0; is_list(SubReq), length(SubReq) > 0 ->
-    Request = get_request(),
-    Request2 = Request#{Key => SubReq},
-    save_request(Request2),
-    ok;
-delete_subpath(Key, SubReq, [{K, Req} | T]) when
-    is_map(SubReq), map_size(SubReq) > 0; is_list(SubReq), length(SubReq) > 0
-->
-    Req2 = Req#{Key => SubReq},
-    update_path([{K, Req2} | T]),
-    ok;
-delete_subpath(Key, _SubReq, []) ->
-    Request = get_request(),
-    Request2 = maps:remove(Key, Request),
-    insert(path, []),
-    save_request(Request2);
-delete_subpath(Key, _SubReq, [{key_index, Index} = KeyIndex | Tail]) ->
-    [{KeyList, SubReqList} | T] = Tail,
-    {_, SubReqList2} = lists:foldl(
-        fun
-            (SubReq, {I, AccIn}) when I == Index ->
-                SubReq2 = maps:remove(Key, SubReq),
-                {I + 1, [SubReq2 | AccIn]};
-            (_, {N, AccIn}) ->
-                {N + 1, AccIn}
+delete_subpath(Path) ->
+    save_req_paths(
+        lists:delete(
+            lists:reverse(Path),
+            get_req_paths()
+        )
+    ).
+
+unroll_request_to_paths(Req) when is_map(Req); is_list(Req) ->
+    lists:flatmap(
+        fun({Key, Nested}) ->
+            lists:map(
+                fun(Rest) -> [Key | Rest] end,
+                unroll_request_to_paths(Nested)
+            )
         end,
-        {0, []},
-        SubReqList
-    ),
-    Path = [KeyIndex, {KeyList, lists:reverse(SubReqList2)}] ++ T,
-    update_path(Path),
-    ok;
-delete_subpath(Key, _SubReq, [{K, Req} | T]) ->
-    Req2 = maps:remove(Key, Req),
-    update_path([{K, Req2} | T]),
-    ok.
+        req_to_list(Req)
+    );
+unroll_request_to_paths(_req) ->
+    [[]].
 
-save_request(Req) ->
-    insert(request, Req).
+req_to_list(Map) when is_map(Map) ->
+    maps:to_list(Map);
+req_to_list(List) when is_list(List) ->
+    lists:zip(lists:seq(0, length(List) - 1), List).
 
-get_request() ->
-    case ets:lookup(?MODULE, request) of
-        [] -> #{};
-        [{request, Req}] -> Req
-    end.
+save_req_paths(Paths) ->
+    insert(paths, Paths).
 
-update_path(Path) ->
+get_req_paths() ->
+    get(paths, []).
+
+put_path(Path) ->
     insert(path, Path).
 
 get_path() ->
-    case ets:lookup(?MODULE, path) of
-        [] -> [];
-        [{path, Path}] -> Path
-    end.
+    get(path, []).
 
-push_path({Key, Req}) ->
-    Path = get_path(),
-    insert(path, [{Key, Req} | Path]).
+push_path(Item) ->
+    put_path([Item | get_path()]).
 
 pop_path() ->
-    [Result | Path] = get_path(),
-    insert(path, Path),
-    Result.
+    Path = get_path(),
+    put_path(tl(Path)),
+    Path.
 
 insert(Key, Value) ->
-    ets:insert(?MODULE, {Key, Value}).
+    erlang:display({insert, Key, Value}),
+    ets:insert(?MODULE, {Key, Value}),
+    ok.
+
+get(Key, Default) ->
+    case ets:lookup(?MODULE, Key) of
+        [] -> Default;
+        [{Key, Value}] -> Value
+    end.

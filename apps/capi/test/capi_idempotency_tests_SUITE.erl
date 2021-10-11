@@ -211,7 +211,8 @@ create_payment_ok_test(Config) ->
     ?assertEqual(
         [
             [<<"externalID">>],
-            [<<"metadata">>, <<"bla">>],
+            [<<"metadata">>, <<"bla">>, 0],
+            [<<"payer">>, <<"contactInfo">>, <<"email">>],
             [<<"payer">>, <<"paymentSession">>],
             [<<"payer">>, <<"paymentTool">>, <<"bin">>],
             [<<"payer">>, <<"paymentTool">>, <<"cardholder_name">>],
@@ -254,7 +255,7 @@ different_payment_tools_test(Config) ->
     ?assertEqual(
         [
             [<<"externalID">>],
-            [<<"metadata">>, <<"bla">>],
+            [<<"metadata">>, <<"bla">>, 0],
             [<<"payer">>, <<"paymentSession">>],
             [<<"payer">>,<<"paymentToolToken">>],
             [<<"processingDeadline">>]
@@ -634,7 +635,7 @@ create_customer_ok_test(Config) ->
 
     ?assertEqual(Customer1, Customer2),
     ?assertEqual(UnusedFeatures1, UnusedFeatures2),
-    ?assertEqual(UnusedFeatures1, [[<<"externalID">>], [<<"metadata">>, <<"text">>]]).
+    ?assertEqual(UnusedFeatures1, [[<<"externalID">>], [<<"metadata">>, <<"text">>, 0], [<<"metadata">>, <<"text">>, 1]]).
 
 -spec create_customer_fail_test(config()) -> _.
 create_customer_fail_test(Config) ->
@@ -646,7 +647,9 @@ create_customer_fail_test(Config) ->
     [CustomerResult1, CustomerResult2] = create_customers(BenderKey, [Req1, Req2], Config),
     ?assertMatch({{ok, _}, _}, CustomerResult1),
     ?assertEqual(
-        {response_error(409, ExternalID, BenderKey), [[<<"externalID">>], [<<"metadata">>, <<"text">>]]},
+        {response_error(409, ExternalID, BenderKey), [
+            [<<"externalID">>], [<<"metadata">>, <<"text">>, 0], [<<"metadata">>, <<"text">>, 1]
+        ]},
         CustomerResult2
     ).
 
