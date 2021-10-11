@@ -46,6 +46,8 @@ delete_subpath(Path) ->
         )
     ).
 
+unroll_request_to_paths(Req) when not is_map(Req), not is_list(Req); map_size(Req) == 0; length(Req) == 0 ->
+    [[]];
 unroll_request_to_paths(Req) when is_map(Req); is_list(Req) ->
     lists:flatmap(
         fun({Key, Nested}) ->
@@ -55,9 +57,7 @@ unroll_request_to_paths(Req) when is_map(Req); is_list(Req) ->
             )
         end,
         req_to_list(Req)
-    );
-unroll_request_to_paths(_req) ->
-    [[]].
+    ).
 
 req_to_list(Map) when is_map(Map) ->
     maps:to_list(Map);
