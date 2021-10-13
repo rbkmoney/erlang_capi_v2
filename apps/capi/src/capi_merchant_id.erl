@@ -45,7 +45,7 @@ encode(MerchantData) ->
             {ok, Codec1} ->
                 thrift_strict_binary_codec:close(Codec1)
         end,
-    jose_base64url:encode(Data, #{padding => true}).
+    jose_base64url:encode(Data, #{padding => false}).
 
 -spec decode(merchant_id()) -> merchant_data() | undefined.
 decode(MerchantID) ->
