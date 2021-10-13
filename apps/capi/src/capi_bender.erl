@@ -13,7 +13,8 @@
 -type identity_params() :: {schema, identity_schema(), feat:request()} | identity().
 
 -type identity_features() :: feat:features().
--type identity_schema() :: feat:schema() | Name :: atom().
+-type identity_schema_name() :: atom().
+-type identity_schema() :: feat:schema() | identity_schema_name().
 -type woody_context() :: woody_context:ctx().
 -type context_data() :: #{binary() => term()}.
 -type bender_context() :: #{binary() => term()}.
