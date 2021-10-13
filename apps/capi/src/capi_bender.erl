@@ -211,8 +211,14 @@ try_generate_id(BenderIdSchema, IdempotentKey, Identity, WoodyContext, CtxData) 
     case generate_id(BenderIdSchema, IdempotentKey, Identity, WoodyContext, CtxData) of
         {ok, ID} ->
             ID;
-        {error, {external_id_conflict, ID, Difference, Schema}} ->
-            ReadableDiff = feat:list_diff_fields(Schema, Difference),
+        {error, {Err, ID, Difference, Schema}} when Err == external_id_conflict; Err == external_id_conflict_legacy ->
+            ReadableDiff =
+                case Err of
+                    external_id_conflict ->
+                        feat:list_diff_fields(read_schema(Schema), Difference);
+                    external_id_conflict_legacy ->
+                        capi_idemp_features_legacy:list_diff_fields(read_schema_deprecated_v2(Schema), Difference)
+                end,
             logger:warning("This externalID: ~p, used in another request.~nDifference: ~p", [ID, ReadableDiff]),
             SourceID = get_external_id(IdempotentKey),
             throw({external_id_conflict, ID, SourceID, Schema})
@@ -298,7 +304,7 @@ check_idempotent_conflict_deprecated_v2(ID, Features, SavedBenderCtx, Schema) ->
         true ->
             {ok, ID};
         {false, Difference} ->
-            {error, {external_id_conflict, ID, Difference, Schema}}
+            {error, {external_id_conflict_legacy, ID, Difference, Schema}}
     end.
 
 -spec get_context_data(bender_context()) -> undefined | context_data().
