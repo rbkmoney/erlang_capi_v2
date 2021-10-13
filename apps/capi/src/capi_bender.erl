@@ -218,11 +218,11 @@ try_generate_id(BenderIdSchema, IdempotentKey, Identity, WoodyContext, CtxData) 
             throw({external_id_conflict, ID, SourceID, Schema})
     end.
 
-generate_id(BenderIdSchema, IdempKeyParams, IdempIdentity, WoodyContext, CtxData) ->
+generate_id(BenderIdSchema, IdempKeyParams, Identity, WoodyContext, CtxData) ->
     IdempKey = make_idempotent_key(IdempKeyParams),
     case IdempKey of
         undefined -> generator_generate_id(BenderIdSchema, WoodyContext);
-        IdempKey -> bender_generate_id(BenderIdSchema, IdempKey, IdempIdentity, WoodyContext, CtxData)
+        IdempKey -> bender_generate_id(BenderIdSchema, IdempKey, Identity, WoodyContext, CtxData)
     end.
 
 -spec make_idempotent_key(idempotent_key_params()) -> idempotent_key() | undefined.
@@ -234,8 +234,8 @@ make_idempotent_key({_Prefix, _PartyID, undefined}) ->
 make_idempotent_key({Prefix, PartyID, ExternalID}) ->
     <<"capi/", Prefix/binary, "/", PartyID/binary, "/", ExternalID/binary>>.
 
-bender_generate_id(BenderIdSchema, IdempKey, IdempIdentity, WoodyContext, CtxData) ->
-    {identity, Features, Schema} = make_identity(IdempIdentity),
+bender_generate_id(BenderIdSchema, IdempKey, Identity, WoodyContext, CtxData) ->
+    {identity, Features, Schema} = make_identity(Identity),
     BenderCtx = build_bender_ctx(Features, CtxData),
     Args = {IdempKey, BenderIdSchema, capi_msgp_marshalling:marshal(BenderCtx)},
     Result =
@@ -249,7 +249,7 @@ bender_generate_id(BenderIdSchema, IdempKey, IdempIdentity, WoodyContext, CtxDat
         {ok, ID} ->
             {ok, ID};
         {ok, ID, #{<<"version">> := ?SCHEMA_VER2} = SavedBenderCtx} ->
-            {identity, FeaturesDeprecated, SchemaDeprecated} = make_identity_deprecated_v2(IdempIdentity),
+            {identity, FeaturesDeprecated, SchemaDeprecated} = make_identity_deprecated_v2(Identity),
             check_idempotent_conflict_deprecated_v2(
                 ID,
                 FeaturesDeprecated,
