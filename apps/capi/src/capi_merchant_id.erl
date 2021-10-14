@@ -45,16 +45,20 @@ encode(MerchantData) ->
             {ok, Codec1} ->
                 thrift_strict_binary_codec:close(Codec1)
         end,
-    base64:encode(Data).
+    jose_base64url:encode(Data, #{padding => false}).
 
 -spec decode(merchant_id()) -> merchant_data() | undefined.
 decode(MerchantID) ->
-    Data = base64:decode(MerchantID),
-    Codec = thrift_strict_binary_codec:new(Data),
-    case thrift_strict_binary_codec:read(Codec, ?THRIFT_TYPE) of
-        {ok, MerchantData, Codec1} ->
-            _ = thrift_strict_binary_codec:close(Codec1),
-            MerchantData;
+    case jose_base64url:decode(MerchantID) of
+        {ok, Data} ->
+            Codec = thrift_strict_binary_codec:new(Data),
+            case thrift_strict_binary_codec:read(Codec, ?THRIFT_TYPE) of
+                {ok, MerchantData, Codec1} ->
+                    _ = thrift_strict_binary_codec:close(Codec1),
+                    MerchantData;
+                _Error ->
+                    undefined
+            end;
         _Error ->
             undefined
     end.
@@ -73,6 +77,8 @@ merchant_id_test_() ->
     MerchantID = encode(Realm, PartyID, ShopID),
     MerchantData = decode(MerchantID),
     [
+        ?_assertEqual(undefined, decode(<<"*CwABAAAAIXBhcnR5LWE0ZW">>)),
+        ?_assertEqual(undefined, decode(<<"CwABAAAAIXBhcnR5LWE0ZW">>)),
         ?_assertNotEqual(undefined, MerchantData),
         ?_assertEqual(PartyID, party_id(MerchantData)),
         ?_assertEqual(ShopID, shop_id(MerchantData)),
