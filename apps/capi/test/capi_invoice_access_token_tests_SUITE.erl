@@ -1,6 +1,7 @@
 -module(capi_invoice_access_token_tests_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
+-include_lib("stdlib/include/assert.hrl").
 
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_errors_thrift.hrl").
@@ -102,8 +103,7 @@ end_per_suite(C) ->
 -spec init_per_group(group_name(), config()) -> config().
 init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    ExtraProperties = #{<<"ip_replacement_allowed">> => true},
-    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited, ExtraProperties)),
+    Context = capi_ct_helper:get_context(?API_TOKEN),
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end},
@@ -111,7 +111,7 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
         ],
         MockServiceSup
     ),
-    _ = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:api_key_handler(?STRING), MockServiceSup),
+    _ = capi_ct_helper_token_keeper:mock_api_key_token(?STRING, MockServiceSup),
     _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(<<"CreateInvoice">>, ?STRING, ?STRING, MockServiceSup),
     Req = #{
         <<"shopID">> => ?STRING,
@@ -129,7 +129,7 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
     [{context, capi_ct_helper:get_context(InvAccToken)} | Config];
 init_per_group(operations_by_invoice_access_token_after_token_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited)),
+    Context = capi_ct_helper:get_context(?API_TOKEN),
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end},
@@ -137,7 +137,7 @@ init_per_group(operations_by_invoice_access_token_after_token_creation, Config) 
         ],
         MockServiceSup
     ),
-    _ = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:api_key_handler(?STRING), MockServiceSup),
+    _ = capi_ct_helper_token_keeper:mock_api_key_token(?STRING, MockServiceSup),
     _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
         <<"CreateInvoiceAccessToken">>,
         ?STRING,
@@ -159,7 +159,7 @@ end_per_group(_Group, C) ->
 -spec init_per_testcase(test_case_name(), config()) -> config().
 init_per_testcase(_Name, C) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    _ = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:invoice_access_token(?STRING, ?STRING), MockServiceSup),
+    _ = capi_ct_helper_token_keeper:mock_invoice_access_token(?STRING, ?STRING, MockServiceSup),
     [{test_sup, MockServiceSup} | C].
 
 -spec end_per_testcase(test_case_name(), config()) -> _.
@@ -233,7 +233,8 @@ get_invoice_payment_methods_ok_test(Config) ->
             end},
             {party_management, fun
                 ('GetRevision', _) -> {ok, ?INTEGER};
-                ('Checkout', _) -> {ok, ?PARTY}
+                ('Checkout', _) -> {ok, ?PARTY};
+                ('GetShopContract', _) -> {ok, ?SHOP_CONTRACT}
             end}
         ],
         Config
@@ -245,7 +246,24 @@ get_invoice_payment_methods_ok_test(Config) ->
         ?STRING,
         Config
     ),
-    {ok, _} = capi_client_invoices:get_invoice_payment_methods(?config(context, Config), ?STRING).
+    {ok, Methods} = capi_client_invoices:get_invoice_payment_methods(
+        ?config(context, Config), ?STRING
+    ),
+    [ProviderMethod] = lists:filter(
+        fun(Method) ->
+            maps:get(<<"tokenProviderData">>, Method, undefined) /= undefined
+        end,
+        Methods
+    ),
+    ?assertMatch(
+        #{
+            <<"merchantID">> := <<_/binary>>,
+            <<"merchantName">> := ?STRING,
+            <<"orderID">> := ?STRING,
+            <<"realm">> := <<"test">>
+        },
+        maps:get(<<"tokenProviderData">>, ProviderMethod)
+    ).
 
 -spec create_payment_ok_test(config()) -> _.
 create_payment_ok_test(Config) ->
@@ -268,7 +286,8 @@ create_payment_ok_test(Config) ->
             end},
             {bender, fun('GenerateID', _) ->
                 {ok, capi_ct_helper_bender:get_result(BenderKey)}
-            end}
+            end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),
@@ -309,7 +328,7 @@ create_payment_expired_test(Config) ->
         Config
     ),
     ValidUntil = capi_utils:deadline_from_timeout(0),
-    PaymentToolToken = capi_crypto:create_encrypted_payment_tool_token(PaymentTool, ValidUntil),
+    PaymentToolToken = encrypt_payment_tool(PaymentTool, ValidUntil),
     Req = #{
         <<"externalID">> => <<"merch_id">>,
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
@@ -354,7 +373,8 @@ create_payment_with_empty_cvv_ok_test(Config) ->
                 ) ->
                     {ok, ?PAYPROC_PAYMENT}
             end},
-            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),
@@ -406,7 +426,8 @@ create_payment_qiwi_access_token_ok_test(Config) ->
                 ) ->
                     {ok, ?PAYPROC_PAYMENT}
             end},
-            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),
@@ -460,7 +481,8 @@ create_payment_with_googlepay_encrypt_ok_test(Config) ->
                 ) ->
                     {ok, ?PAYPROC_PAYMENT}
             end},
-            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end}
+            {generator, fun('GenerateID', _) -> capi_ct_helper_bender:generate_id(<<"bender_key">>) end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),
@@ -641,14 +663,13 @@ create_first_recurrent_payment_ok_test(Config) ->
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun
-                ('Get', _) ->
-                    {ok, ?PAYPROC_INVOICE};
-                ('StartPayment', _) ->
-                    {ok, ?PAYPROC_PAYMENT}
+                ('Get', _) -> {ok, ?PAYPROC_INVOICE};
+                ('StartPayment', _) -> {ok, ?PAYPROC_PAYMENT}
             end},
             {generator, fun('GenerateID', _) ->
                 capi_ct_helper_bender:generate_id(<<"bender_key">>)
-            end}
+            end},
+            {party_management, fun('GetShop', _) -> {ok, ?SHOP} end}
         ],
         Config
     ),
@@ -762,7 +783,7 @@ get_encrypted_token({qiwi, Phone, TokenID}) ->
             id = Phone,
             token = TokenID
         }},
-    capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined).
+    encrypt_payment_tool(PaymentTool).
 
 get_encrypted_token(PS, ExpDate) ->
     get_encrypted_token(PS, ExpDate, undefined).
@@ -778,4 +799,10 @@ get_encrypted_token(PS, ExpDate, IsCvvEmpty) ->
             cardholder_name = <<"Degus Degusovich">>,
             is_cvv_empty = IsCvvEmpty
         }},
-    capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined).
+    encrypt_payment_tool(PaymentTool).
+
+encrypt_payment_tool(PaymentTool) ->
+    encrypt_payment_tool(PaymentTool, undefined).
+
+encrypt_payment_tool(PaymentTool, ValidUntil) ->
+    capi_crypto:encode_token(#{payment_tool => PaymentTool, valid_until => ValidUntil}).

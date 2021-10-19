@@ -2,6 +2,7 @@
 
 -include_lib("common_test/include/ct.hrl").
 -include_lib("capi_dummy_data.hrl").
+-include_lib("capi_token_keeper_data.hrl").
 -include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 
 -export([init_suite/2]).
@@ -10,9 +11,6 @@
 -export([start_app/2]).
 -export([start_capi/1]).
 -export([start_capi/2]).
--export([issue_token/1]).
--export([issue_token/2]).
--export([issue_token/3]).
 -export([get_context/1]).
 -export([get_context/2]).
 -export([get_keysource/2]).
@@ -28,9 +26,17 @@
 -define(CAPI_HOST_NAME, "localhost").
 -define(CAPI_URL, ?CAPI_HOST_NAME ++ ":" ++ integer_to_list(?CAPI_PORT)).
 
+-define(TK_META_NS_KEYCLOAK, <<"test.rbkmoney.keycloak">>).
+-define(TK_META_NS_APIKEYMGMT, <<"test.rbkmoney.apikeymgmt">>).
+
 %%
 -type config() :: [{atom(), any()}].
 -type app_name() :: atom().
+-type sup_or_config() :: config() | pid().
+
+-export_type([config/0]).
+-export_type([app_name/0]).
+-export_type([sup_or_config/0]).
 
 -spec init_suite(module(), config()) -> config().
 init_suite(Module, Config) ->
@@ -113,6 +119,14 @@ start_capi(Config, ExtraEnv) ->
                 {lechiffre_opts, #{
                     encryption_source => JwkPublSource,
                     decryption_sources => [JwkPrivSource]
+                }},
+                {auth_config, #{
+                    metadata_mappings => #{
+                        party_id => ?TK_META_PARTY_ID,
+                        token_consumer => ?TK_META_TOKEN_CONSUMER,
+                        user_id => ?TK_META_USER_ID,
+                        user_email => ?TK_META_USER_EMAIL
+                    }
                 }}
             ],
     start_app(capi, CapiEnv).
@@ -120,33 +134,6 @@ start_capi(Config, ExtraEnv) ->
 -spec get_keysource(_, config()) -> _.
 get_keysource(Key, Config) ->
     filename:join(?config(data_dir, Config), Key).
-
--spec issue_token(uac_authorizer_jwt:expiration()) -> binary().
-issue_token(LifeTime) ->
-    issue_token(LifeTime, #{}).
-
--spec issue_token(uac_authorizer_jwt:expiration(), uac_authorizer_jwt:claims()) -> binary().
-issue_token(LifeTime, ExtraProperties) ->
-    % ugly
-    issue_token(?STRING, LifeTime, ExtraProperties).
-
--spec issue_token(_SubjectID, uac_authorizer_jwt:expiration(), uac_authorizer_jwt:claims()) -> binary().
-issue_token(PartyID, LifeTime, ExtraProperties) ->
-    Claims = maps:merge(
-        #{
-            ?STRING => ?STRING,
-            <<"exp">> => LifeTime,
-            <<"email">> => <<"bla@bla.ru">>
-        },
-        ExtraProperties
-    ),
-    {ok, Token} = uac_authorizer_jwt:issue(
-        capi_utils:get_unique_id(),
-        PartyID,
-        Claims,
-        capi
-    ),
-    Token.
 
 -spec get_context(binary()) -> capi_client_lib:context().
 get_context(Token) ->
@@ -175,7 +162,7 @@ start_mocked_service_sup(Module) ->
 stop_mocked_service_sup(SupPid) ->
     proc_lib:stop(SupPid, shutdown, 5000).
 
--spec mock_services(_, _) -> _.
+-spec mock_services(list(), sup_or_config()) -> _.
 mock_services(Services, SupOrConfig) ->
     {PartyClientServices, Other} = lists:partition(
         fun
@@ -204,7 +191,7 @@ start_bender_client(Services) ->
 start_woody_client(Services) ->
     start_app(capi_woody_client, [{services, Services}]).
 
--spec mock_services_(_, _) -> _.
+-spec mock_services_(list(), sup_or_config()) -> map().
 % TODO need a better name
 mock_services_([], _Config) ->
     #{};

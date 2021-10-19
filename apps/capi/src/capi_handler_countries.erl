@@ -15,23 +15,22 @@
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare(OperationID, Req, Context) when OperationID =:= 'GetCountries'; OperationID =:= 'GetCountryByID' ->
-    Authorize =
-        fun() ->
-            Prototypes = [{operation, #{id => OperationID}}],
-            {ok, capi_auth:authorize_operation(Prototypes, Context)}
-        end,
+    Authorize = fun() ->
+        Prototypes = [{operation, #{id => OperationID}}],
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+    end,
     Process = fun() -> process_request(OperationID, Req, Context) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
-process_request('GetCountries', _Req, #{woody_context := WoodyContext}) ->
-    Countries = unwrap(capi_domain:get_objects_by_type(country, WoodyContext)),
+process_request('GetCountries', _Req, Context) ->
+    Countries = unwrap(capi_domain:get_objects_by_type(country, Context)),
     {ok, {200, #{}, lists:map(fun decode_country_object/1, Countries)}};
-process_request('GetCountryByID', Req, #{woody_context := WoodyContext}) ->
+process_request('GetCountryByID', Req, Context) ->
     CountryCode = capi_coder_utils:encode_country_code(maps:get(countryID, Req)),
     Ref = {country, #domain_CountryRef{id = CountryCode}},
-    case capi_domain:get(Ref, WoodyContext) of
+    case capi_domain:get(Ref, Context) of
         {ok, CountryObject} ->
             {ok, {200, #{}, decode_country_object(CountryObject)}};
         {error, not_found} ->

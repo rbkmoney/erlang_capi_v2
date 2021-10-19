@@ -53,6 +53,7 @@
     get_account_by_id_ok_test/1,
     get_my_party_ok_test/1,
     get_my_party_lazy_creation_ok_test/1,
+    get_my_party_lazy_creation_fail_test/1,
     suspend_my_party_ok_test/1,
     activate_my_party_ok_test/1,
     get_party_by_id_ok_test/1,
@@ -135,8 +136,6 @@
     get_trade_bloc_by_id_test/1,
     get_trade_bloc_by_id_not_found_test/1,
     get_trade_blocs_test/1,
-
-    check_support_decrypt_v1_test/1,
     check_support_decrypt_v2_test/1
 ]).
 
@@ -153,21 +152,23 @@ init([]) ->
 -spec all() -> [{group, test_case_name()}].
 all() ->
     [
-        {group, auth_by_api_key},
-        {group, auth_by_user_session_token},
+        {group, operations_by_api_key_token},
+        {group, operations_by_user_session_token},
         {group, payment_tool_token_support}
     ].
 
 -spec groups() -> [{group_name(), list(), [test_case_name()]}].
 groups() ->
     [
-        {auth_by_api_key, [], [
-            {group, operations_by_base_api_token}
+        {operations_by_api_key_token, [], [
+            get_my_party_lazy_creation_fail_test,
+            {group, operations_by_any_token}
         ]},
-        {auth_by_user_session_token, [], [
-            {group, operations_by_base_api_token}
+        {operations_by_user_session_token, [], [
+            get_my_party_lazy_creation_ok_test,
+            {group, operations_by_any_token}
         ]},
-        {operations_by_base_api_token, [], [
+        {operations_by_any_token, [], [
             create_customer_ok_test,
             create_customer_autorization_error_test,
             delete_customer_ok_test,
@@ -187,7 +188,6 @@ groups() ->
             delete_invoice_template_ok_test,
 
             get_my_party_ok_test,
-            get_my_party_lazy_creation_ok_test,
             suspend_my_party_ok_test,
             activate_my_party_ok_test,
             get_party_by_id_ok_test,
@@ -293,7 +293,6 @@ groups() ->
             download_report_file_not_found_test
         ]},
         {payment_tool_token_support, [], [
-            check_support_decrypt_v1_test,
             check_support_decrypt_v2_test
         ]}
     ].
@@ -312,28 +311,24 @@ end_per_suite(C) ->
     ok.
 
 -spec init_per_group(group_name(), config()) -> config().
-init_per_group(auth_by_api_key, Config) ->
+init_per_group(operations_by_api_key_token, Config) ->
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:api_key_handler(?STRING), SupPid),
-    [{group_apps, Apps}, {group_test_sup, SupPid} | Config];
-init_per_group(auth_by_user_session_token, Config) ->
+    Apps = capi_ct_helper_token_keeper:mock_api_key_token(?STRING, SupPid),
+    [{context, capi_ct_helper:get_context(?API_TOKEN)}, {group_apps, Apps}, {group_test_sup, SupPid} | Config];
+init_per_group(operations_by_user_session_token, Config) ->
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:user_session_handler(), SupPid),
-    [{group_apps, Apps}, {group_test_sup, SupPid} | Config];
-init_per_group(operations_by_base_api_token, Config) ->
-    [{context, capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited))} | Config];
+    Apps = capi_ct_helper_token_keeper:mock_user_session_token(SupPid),
+    [{context, capi_ct_helper:get_context(?API_TOKEN)}, {group_apps, Apps}, {group_test_sup, SupPid} | Config];
 init_per_group(_, Config) ->
     Config.
 
 -spec end_per_group(group_name(), config()) -> _.
 
 end_per_group(Group, C) when
-    Group =:= auth_by_api_key;
-    Group =:= auth_by_user_session_token
+    Group =:= operations_by_api_key_token;
+    Group =:= operations_by_user_session_token
 ->
     capi_utils:maybe(?config(group_test_sup, C), fun capi_ct_helper:stop_mocked_service_sup/1);
-end_per_group(operations_by_base_api_token, C) ->
-    capi_utils:maybe(?config(subgroup_test_sup, C), fun capi_ct_helper:stop_mocked_service_sup/1);
 end_per_group(_Group, _C) ->
     ok.
 
@@ -406,7 +401,12 @@ get_invoice_by_external_id(Config) ->
 
 -spec create_invoice_access_token_ok_test(config()) -> _.
 create_invoice_access_token_ok_test(Config) ->
-    _ = capi_ct_helper:mock_services([{invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}], Config),
+    _ = capi_ct_helper:mock_services(
+        [
+            {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end}
+        ],
+        Config
+    ),
     _ = capi_ct_helper_bouncer:mock_assert_invoice_op_ctx(
         <<"CreateInvoiceAccessToken">>,
         ?STRING,
@@ -711,6 +711,9 @@ create_payment_ok_test(Config) ->
                         PaymentParams,
                     {ok, ?PAYPROC_PAYMENT(ID, EID)}
             end},
+            {party_management, fun('GetShop', _) ->
+                {ok, ?SHOP}
+            end},
             {bender, fun('GenerateID', _) ->
                 {ok, capi_ct_helper_bender:get_result(BenderKey)}
             end}
@@ -725,7 +728,7 @@ create_payment_ok_test(Config) ->
         Config
     ),
     PaymentTool = {bank_card, ?BANK_CARD(visa, ?EXP_DATE(2, 2020), <<"Degus">>)},
-    PaymentToolToken = capi_crypto:create_encrypted_payment_tool_token(PaymentTool, undefined),
+    PaymentToolToken = capi_crypto:encode_token(#{payment_tool => PaymentTool, valid_until => undefined}),
     Req = ?PAYMENT_PARAMS(ExternalID, PaymentToolToken),
     {ok, _} = capi_client_payments:create_payment(?config(context, Config), Req, ?STRING).
 
@@ -1104,6 +1107,38 @@ get_my_party_lazy_creation_ok_test(Config) ->
     ),
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetMyParty">>, ?STRING, Config),
     {ok, _} = capi_client_parties:get_my_party(?config(context, Config)),
+    true = ets:delete(TestETS).
+
+-spec get_my_party_lazy_creation_fail_test(config()) -> _.
+get_my_party_lazy_creation_fail_test(Config) ->
+    TestETS = ets:new(get_my_party_lazy_creation_fail_test, [public]),
+    _ = capi_ct_helper:mock_services(
+        [
+            {party_management, fun
+                ('GetRevision', _) ->
+                    case ets:lookup(TestETS, party_created) of
+                        [{party_created, true}] -> {ok, ?INTEGER};
+                        _ -> {throwing, #payproc_PartyNotFound{}}
+                    end;
+                ('Checkout', _) ->
+                    case ets:lookup(TestETS, party_created) of
+                        [{party_created, true}] -> {ok, ?PARTY};
+                        _ -> {throwing, #payproc_PartyNotFound{}}
+                    end;
+                ('Create', _) ->
+                    case ets:insert_new(TestETS, {party_created, true}) of
+                        true -> {ok, ok};
+                        _ -> {throwing, #payproc_PartyExists{}}
+                    end
+            end}
+        ],
+        Config
+    ),
+    _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetMyParty">>, ?STRING, Config),
+    ?assertMatch(
+        {error, {400, _}},
+        capi_client_parties:get_my_party(?config(context, Config))
+    ),
     true = ets:delete(TestETS).
 
 -spec suspend_my_party_ok_test(config()) -> _.
@@ -1673,10 +1708,16 @@ get_payout_tool_by_id_for_party(Config) ->
     _ = capi_ct_helper:mock_services([{party_management, fun('GetContract', _) -> {ok, ?CONTRACT} end}], Config),
     _ = capi_ct_helper_bouncer:mock_assert_party_op_ctx(<<"GetPayoutToolByIDForParty">>, ?STRING, Config),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id_for_party(
-        ?config(context, Config), ?STRING, ?STRING, ?WALLET_TOOL
+        ?config(context, Config),
+        ?STRING,
+        ?STRING,
+        ?WALLET_TOOL
     ),
     {ok, _} = capi_client_payouts:get_payout_tool_by_id_for_party(
-        ?config(context, Config), ?STRING, ?STRING, ?PI_ACCOUNT_TOOL
+        ?config(context, Config),
+        ?STRING,
+        ?STRING,
+        ?PI_ACCOUNT_TOOL
     ).
 
 -spec create_payout(config()) -> _.
@@ -2530,28 +2571,6 @@ get_trade_blocs_test(Config) ->
         capi_client_trade_blocs:get_trade_blocs(?config(context, Config))
     ).
 
--spec check_support_decrypt_v1_test(config()) -> _.
-check_support_decrypt_v1_test(_Config) ->
-    PaymentToolToken = <<
-        "v1.eyJhbGciOiJFQ0RILUVTIiwiZW5jIjoiQTEyOEdDTSIsImVwayI6eyJhbGciOiJFQ0RILUVTIiwiY3J2IjoiUC0yNTYiLCJrdHkiOi"
-        "JFQyIsInVzZSI6ImVuYyIsIngiOiJaN0xCNXprLUtIaUd2OV9PS2lYLUZ6d1M3bE5Ob25iQm8zWlJnaWkxNEFBIiwieSI6IlFTdWVSb2I"
-        "tSjhJV1pjTmptRWxFMWlBckt4d1lHeFg5a01FMloxSXJKNVUifSwia2lkIjoia3hkRDBvclZQR29BeFdycUFNVGVRMFU1TVJvSzQ3dVp4"
-        "V2lTSmRnbzB0MCJ9..Zf3WXHtg0cg_Pg2J.wi8sq9RWZ-SO27G1sRrHAsJUALdLGniGGXNOtIGtLyppW_NYF3TSPJ-ehYzy.vRLMAbWtd"
-        "uC6jBO6F7-t_A"
-    >>,
-    {ok, {PaymentTool, ValidUntil}} = capi_crypto:decrypt_payment_tool_token(PaymentToolToken),
-    ?assertEqual(
-        {mobile_commerce, #domain_MobileCommerce{
-            phone = #domain_MobilePhone{
-                cc = <<"7">>,
-                ctn = <<"9210001122">>
-            },
-            operator_deprecated = megafone
-        }},
-        PaymentTool
-    ),
-    ?assertEqual(undefined, ValidUntil).
-
 -spec check_support_decrypt_v2_test(config()) -> _.
 check_support_decrypt_v2_test(_Config) ->
     PaymentToolToken = <<
@@ -2561,7 +2580,7 @@ check_support_decrypt_v2_test(_Config) ->
         "V2lTSmRnbzB0MCJ9..j3zEyCqyfQjpEtQM.JAc3kqJm6zbn0fMZGlK_t14Yt4PvgOuoVL2DtkEgIXIqrxxWFbykKBGxQvwYisJYIUJJwt"
         "YbwvuGEODcK2uTC2quPD2Ejew66DLJF2xcAwE.MNVimzi8r-5uTATNalgoBQ"
     >>,
-    {ok, {PaymentTool, ValidUntil}} = capi_crypto:decrypt_payment_tool_token(PaymentToolToken),
+    {ok, #{payment_tool := PaymentTool, valid_until := ValidUntil}} = capi_crypto:decode_token(PaymentToolToken),
     ?assertEqual(
         {mobile_commerce, #domain_MobileCommerce{
             phone = #domain_MobilePhone{

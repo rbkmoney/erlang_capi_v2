@@ -15,6 +15,7 @@
 -define(SHA256, <<"94EE059335E587E501CC4BF90613E0814F00A7B08BC7C648FD865A2AF6A22CC2">>).
 -define(TEST_USER_REALM, <<"external">>).
 -define(TEST_RULESET_ID, <<"test/api">>).
+-define(API_TOKEN, <<"letmein">>).
 
 -define(RATIONAL, #'Rational'{p = ?INTEGER, q = ?INTEGER}).
 
@@ -432,7 +433,12 @@
     contract_id = ?STRING
 }).
 
--define(SHOP_LOCATION, {url, ?STRING}).
+-define(SHOP_CONTRACT, #payproc_ShopContract{
+    shop = ?SHOP,
+    contract = ?CONTRACT
+}).
+
+-define(SHOP_LOCATION, {url, ?URL}).
 
 -define(SHOP_DETAILS, #domain_ShopDetails{name = ?STRING}).
 
@@ -825,7 +831,7 @@
                     }}
             ])
         }},
-    url = ?STRING,
+    url = ?URL,
     pub_key = ?STRING,
     enabled = true
 }).
@@ -1107,6 +1113,44 @@
                 data = #domain_TradeBloc{
                     name = <<"European Economic Area">>,
                     description = <<"Extension of EU">>
+                }
+            }},
+
+        {payment_system, #domain_PaymentSystemRef{id = <<"visa">>}} =>
+            {payment_system, #domain_PaymentSystemObject{
+                ref = #domain_PaymentSystemRef{id = <<"visa">>},
+                data = #domain_PaymentSystem{name = <<"Visa">>}
+            }},
+
+        {payment_system, #domain_PaymentSystemRef{id = <<"mastercard">>}} =>
+            {payment_system, #domain_PaymentSystemObject{
+                ref = #domain_PaymentSystemRef{id = <<"mastercard">>},
+                data = #domain_PaymentSystem{name = <<"Mastercard">>}
+            }},
+
+        {payment_service, #domain_PaymentServiceRef{id = <<"qiwi">>}} =>
+            {payment_service, #domain_PaymentServiceObject{
+                ref = #domain_PaymentServiceRef{id = <<"qiwi">>},
+                data = #domain_PaymentService{name = <<"Qiwi">>}
+            }},
+
+        {payment_system_legacy, #domain_LegacyBankCardPaymentSystemRef{id = visa}} =>
+            {payment_system_legacy, #domain_LegacyBankCardPaymentSystemObject{
+                ref = #domain_LegacyBankCardPaymentSystemRef{id = visa},
+                data = #domain_PaymentSystemRef{id = <<"visa">>}
+            }},
+
+        {payment_system_legacy, #domain_LegacyBankCardPaymentSystemRef{id = mastercard}} =>
+            {payment_system_legacy, #domain_LegacyBankCardPaymentSystemObject{
+                ref = #domain_LegacyBankCardPaymentSystemRef{id = mastercard},
+                data = #domain_PaymentSystemRef{id = <<"mastercard">>}
+            }},
+
+        {payment_service_legacy, #domain_LegacyDigitalWalletProviderRef{id = qiwi}} =>
+            {payment_service_legacy, #domain_LegacyDigitalWalletProviderObject{
+                ref = #domain_LegacyDigitalWalletProviderRef{id = qiwi},
+                data = #domain_PaymentServiceRef{
+                    id = <<"qiwi">>
                 }
             }}
     }

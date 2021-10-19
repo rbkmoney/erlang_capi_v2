@@ -15,13 +15,13 @@
     Req :: capi_handler:request_data(),
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
-prepare(OperationID = 'GetPaymentInstitutions', Req, #{woody_context := WoodyContext} = Context) ->
+prepare(OperationID = 'GetPaymentInstitutions', Req, Context) ->
     Authorize = mk_authorize_operation(OperationID, Context),
     Process = fun() ->
         try
             Residence = capi_handler_encoder:encode_residence(genlib_map:get(residence, Req)),
             Realm = genlib_map:get(realm, Req),
-            {ok, PaymentInstObjects} = capi_domain:get_payment_institutions(WoodyContext),
+            {ok, PaymentInstObjects} = capi_domain:get_payment_institutions(Context),
             Resp =
                 lists:filtermap(
                     fun(P) ->
@@ -45,7 +45,8 @@ prepare(OperationID = 'GetPaymentInstitutionByRef', Req, Context) ->
     Authorize = mk_authorize_operation(OperationID, Context),
     Process = fun() ->
         PaymentInstitutionID = genlib:to_int(maps:get(paymentInstitutionID, Req)),
-        case capi_domain:get({payment_institution, ?payment_institution_ref(PaymentInstitutionID)}, Context) of
+        PaymentInstitutionRef = ?payment_institution_ref(PaymentInstitutionID),
+        case capi_domain:get({payment_institution, PaymentInstitutionRef}, Context) of
             {ok, PaymentInstitution} ->
                 {ok, {200, #{}, decode_payment_institution_obj(PaymentInstitution)}};
             {error, not_found} ->

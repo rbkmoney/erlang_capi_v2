@@ -82,9 +82,9 @@ init_per_group(operations_by_customer_access_token_after_customer_creation, Conf
         ],
         MockServiceSup
     ),
-    _ = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:api_key_handler(?STRING), MockServiceSup),
+    _ = capi_ct_helper_token_keeper:mock_api_key_token(?STRING, MockServiceSup),
     _ = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), MockServiceSup),
-    Token = capi_ct_helper:issue_token(unlimited),
+    Token = ?API_TOKEN,
     Req = #{
         <<"shopID">> => ?STRING,
         <<"contactInfo">> => #{<<"email">> => <<"bla@bla.ru">>},
@@ -95,7 +95,7 @@ init_per_group(operations_by_customer_access_token_after_customer_creation, Conf
     }} = capi_client_customers:create_customer(capi_ct_helper:get_context(Token), Req),
     _ = capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:customer_access_token(?STRING, ?STRING), SupPid),
+    Apps1 = capi_ct_helper_token_keeper:mock_customer_access_token(?STRING, ?STRING, SupPid),
     Apps2 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     [
         {context, capi_ct_helper:get_context(CustAccToken)},
@@ -106,16 +106,16 @@ init_per_group(operations_by_customer_access_token_after_customer_creation, Conf
 init_per_group(operations_by_customer_access_token_after_token_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
     _ = capi_ct_helper:mock_services([{customer_management, fun('Get', _) -> {ok, ?CUSTOMER} end}], MockServiceSup),
-    _ = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:api_key_handler(?STRING), MockServiceSup),
+    _ = capi_ct_helper_token_keeper:mock_api_key_token(?STRING, MockServiceSup),
     _ = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), MockServiceSup),
-    Token = capi_ct_helper:issue_token(unlimited),
+    Token = ?API_TOKEN,
     {ok, #{<<"payload">> := CustAccToken}} = capi_client_customers:create_customer_access_token(
         capi_ct_helper:get_context(Token),
         ?STRING
     ),
     _ = capi_ct_helper:stop_mocked_service_sup(MockServiceSup),
     SupPid = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Apps1 = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:customer_access_token(?STRING, ?STRING), SupPid),
+    Apps1 = capi_ct_helper_token_keeper:mock_customer_access_token(?STRING, ?STRING, SupPid),
     Apps2 = capi_ct_helper_bouncer:mock_arbiter(capi_ct_helper_bouncer:judge_always_allowed(), SupPid),
     [
         {context, capi_ct_helper:get_context(CustAccToken)},
@@ -179,7 +179,7 @@ create_binding_expired_test(Config) ->
     ),
     PaymentTool = {bank_card, ?BANK_CARD},
     ValidUntil = capi_utils:deadline_from_timeout(0),
-    PaymentToolToken = capi_crypto:create_encrypted_payment_tool_token(PaymentTool, ValidUntil),
+    PaymentToolToken = capi_crypto:encode_token(#{payment_tool => PaymentTool, valid_until => ValidUntil}),
     Req = #{
         <<"paymentResource">> => #{
             <<"paymentSession">> => ?TEST_PAYMENT_SESSION,

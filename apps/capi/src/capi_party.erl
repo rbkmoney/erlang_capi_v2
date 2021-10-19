@@ -7,6 +7,7 @@
 -export([suspend_party/2]).
 -export([get_contract/3]).
 -export([get_shop/3]).
+-export([get_shop_contract/3]).
 -export([activate_shop/3]).
 -export([suspend_shop/3]).
 -export([compute_payment_institution_terms/3]).
@@ -66,6 +67,11 @@ get_contract(PartyID, ContractID, Context) ->
 get_shop(PartyID, ShopID, Context) ->
     {Client, ClientContext} = client_context(Context),
     party_client_thrift:get_shop(PartyID, ShopID, Client, ClientContext).
+
+-spec get_shop_contract(party_id(), shop_id(), processing_context()) -> result().
+get_shop_contract(PartyID, ShopID, Context) ->
+    {Client, ClientContext} = client_context(Context),
+    party_client_thrift:get_shop_contract(PartyID, ShopID, Client, ClientContext).
 
 -spec activate_shop(party_id(), shop_id(), processing_context()) -> result().
 activate_shop(PartyID, ShopID, Context) ->

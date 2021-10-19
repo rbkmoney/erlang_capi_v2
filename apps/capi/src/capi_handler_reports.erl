@@ -18,21 +18,19 @@
     Context :: capi_handler:processing_context()
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 prepare(OperationID = 'GetReports', Req, Context) ->
-    Authorize =
-        fun() ->
-            PartyID = capi_handler_utils:get_party_id(Context),
-            Prototypes = build_prototypes(OperationID, PartyID, undefined, Req),
-            {ok, capi_auth:authorize_operation(Prototypes, Context)}
-        end,
+    Authorize = fun() ->
+        PartyID = capi_handler_utils:get_party_id(Context),
+        Prototypes = build_prototypes(OperationID, PartyID, undefined, Req),
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+    end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetReportsForParty', Req, Context) ->
-    Authorize =
-        fun() ->
-            PartyID = maps:get(partyID, Req),
-            Prototypes = build_prototypes(OperationID, PartyID, undefined, Req),
-            {ok, capi_auth:authorize_operation(Prototypes, Context)}
-        end,
+    Authorize = fun() ->
+        PartyID = maps:get(partyID, Req),
+        Prototypes = build_prototypes(OperationID, PartyID, undefined, Req),
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+    end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetReport', Req, Context) ->
@@ -44,12 +42,11 @@ prepare(OperationID = 'GetReport', Req, Context) ->
             {exception, _} ->
                 undefined
         end,
-    Authorize =
-        fun() ->
-            PartyID = capi_handler_utils:get_party_id(Context),
-            Prototypes = build_prototypes(OperationID, PartyID, Report, Req),
-            {ok, capi_auth:authorize_operation(Prototypes, Context)}
-        end,
+    Authorize = fun() ->
+        PartyID = capi_handler_utils:get_party_id(Context),
+        Prototypes = build_prototypes(OperationID, PartyID, Report, Req),
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+    end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'GetReportForParty', Req, Context) ->
@@ -61,30 +58,27 @@ prepare(OperationID = 'GetReportForParty', Req, Context) ->
             {exception, _} ->
                 undefined
         end,
-    Authorize =
-        fun() ->
-            PartyID = maps:get(partyID, Req),
-            Prototypes = build_prototypes(OperationID, PartyID, Report, Req),
-            {ok, capi_auth:authorize_operation(Prototypes, Context)}
-        end,
+    Authorize = fun() ->
+        PartyID = maps:get(partyID, Req),
+        Prototypes = build_prototypes(OperationID, PartyID, Report, Req),
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+    end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'CreateReport', Req, Context) ->
-    Authorize =
-        fun() ->
-            PartyID = capi_handler_utils:get_party_id(Context),
-            Prototypes = build_prototypes(OperationID, PartyID, undefined, Req),
-            {ok, capi_auth:authorize_operation(Prototypes, Context)}
-        end,
+    Authorize = fun() ->
+        PartyID = capi_handler_utils:get_party_id(Context),
+        Prototypes = build_prototypes(OperationID, PartyID, undefined, Req),
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+    end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'CreateReportForParty', Req, Context) ->
-    Authorize =
-        fun() ->
-            PartyID = maps:get(partyID, Req),
-            Prototypes = build_prototypes(OperationID, PartyID, undefined, Req),
-            {ok, capi_auth:authorize_operation(Prototypes, Context)}
-        end,
+    Authorize = fun() ->
+        PartyID = maps:get(partyID, Req),
+        Prototypes = build_prototypes(OperationID, PartyID, undefined, Req),
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+    end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'DownloadFile', Req, Context) ->
@@ -96,12 +90,11 @@ prepare(OperationID = 'DownloadFile', Req, Context) ->
             {exception, _} ->
                 undefined
         end,
-    Authorize =
-        fun() ->
-            PartyID = capi_handler_utils:get_party_id(Context),
-            Prototypes = build_prototypes(OperationID, PartyID, Report, Req),
-            {ok, capi_auth:authorize_operation([{reports, #{report => Report}} | Prototypes], Context)}
-        end,
+    Authorize = fun() ->
+        PartyID = capi_handler_utils:get_party_id(Context),
+        Prototypes = build_prototypes(OperationID, PartyID, Report, Req),
+        {ok, capi_auth:authorize_operation([{reports, #{report => Report}} | Prototypes], Context)}
+    end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'DownloadFileForParty', Req, Context) ->
@@ -113,12 +106,11 @@ prepare(OperationID = 'DownloadFileForParty', Req, Context) ->
             {exception, _} ->
                 undefined
         end,
-    Authorize =
-        fun() ->
-            PartyID = maps:get(partyID, Req),
-            Prototypes = build_prototypes(OperationID, PartyID, Report, Req),
-            {ok, capi_auth:authorize_operation(Prototypes, Context)}
-        end,
+    Authorize = fun() ->
+        PartyID = maps:get(partyID, Req),
+        Prototypes = build_prototypes(OperationID, PartyID, Report, Req),
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+    end,
     Process = fun() -> process_request(OperationID, Context, Req) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->

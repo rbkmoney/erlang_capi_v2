@@ -16,22 +16,21 @@
 ) -> {ok, capi_handler:request_state()} | {error, noimpl}.
 
 prepare(OperationID, Req, Context) when OperationID =:= 'GetTradeBlocs'; OperationID =:= 'GetTradeBlocByID' ->
-    Authorize =
-        fun() ->
-            Prototypes = [{operation, #{id => OperationID}}],
-            {ok, capi_auth:authorize_operation(Prototypes, Context)}
-        end,
+    Authorize = fun() ->
+        Prototypes = [{operation, #{id => OperationID}}],
+        {ok, capi_auth:authorize_operation(Prototypes, Context)}
+    end,
     Process = fun() -> process_request(OperationID, Req, Context) end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 
-process_request('GetTradeBlocs', _Req, #{woody_context := WoodyContext}) ->
-    TradeBlocs = unwrap(capi_domain:get_objects_by_type(trade_bloc, WoodyContext)),
+process_request('GetTradeBlocs', _Req, Context) ->
+    TradeBlocs = unwrap(capi_domain:get_objects_by_type(trade_bloc, Context)),
     {ok, {200, #{}, lists:map(fun decode_trade_bloc_object/1, TradeBlocs)}};
-process_request('GetTradeBlocByID', Req, #{woody_context := WoodyContext}) ->
+process_request('GetTradeBlocByID', Req, Context) ->
     Ref = {trade_bloc, #domain_TradeBlocRef{id = maps:get('tradeBlocID', Req)}},
-    case capi_domain:get(Ref, WoodyContext) of
+    case capi_domain:get(Ref, Context) of
         {ok, TradeBlocObject} ->
             {ok, {200, #{}, decode_trade_bloc_object(TradeBlocObject)}};
         {error, not_found} ->

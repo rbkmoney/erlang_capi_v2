@@ -27,14 +27,12 @@ validate(Transactions) ->
 encode(undefined, _PartyID) ->
     undefined;
 encode(Transactions, PartyID) ->
-    Ordered = lists:zip(lists:seq(0, erlang:length(Transactions) - 1), Transactions),
     #domain_AllocationPrototype{
-        transactions = [encode_transaction(Order, PartyID, Transaction) || {Order, Transaction} <- Ordered]
+        transactions = [encode_transaction(PartyID, Transaction) || Transaction <- Transactions]
     }.
 
-encode_transaction(Index, PartyID, Transaction) ->
+encode_transaction(PartyID, Transaction) ->
     #domain_AllocationTransactionPrototype{
-        id = erlang:integer_to_binary(Index),
         target = encode_target(PartyID, maps:get(<<"target">>, Transaction)),
         body = encode_body(Transaction),
         details = encode_details(Transaction)
@@ -73,7 +71,7 @@ encode_fee(#{<<"allocationFeeType">> := <<"AllocationFeeFixed">>} = Fee, Currenc
     }};
 encode_fee(#{<<"allocationFeeType">> := <<"AllocationFeeShare">>} = Fee, _Currency) ->
     Share = maps:get(<<"share">>, Fee),
-    {share, #domain_AllocationTransactionPrototypeFeeShare{
+    {share, #domain_AllocationTransactionFeeShare{
         parts = encode_parts(Share)
     }}.
 
@@ -223,7 +221,6 @@ encode_test() ->
     Expected = #domain_AllocationPrototype{
         transactions = [
             #domain_AllocationTransactionPrototype{
-                id = <<"0">>,
                 target =
                     {shop, #domain_AllocationTransactionTargetShop{
                         owner_id = <<"partyID">>,
@@ -233,7 +230,7 @@ encode_test() ->
                     {total, #domain_AllocationTransactionPrototypeBodyTotal{
                         total = make_cash(32),
                         fee =
-                            {share, #domain_AllocationTransactionPrototypeFeeShare{
+                            {share, #domain_AllocationTransactionFeeShare{
                                 parts = make_rational(80, 10)
                             }}
                     }},

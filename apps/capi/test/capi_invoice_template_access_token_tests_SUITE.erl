@@ -1,6 +1,7 @@
 -module(capi_invoice_template_access_token_tests_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
+-include_lib("stdlib/include/assert.hrl").
 
 -include_lib("damsel/include/dmsl_domain_config_thrift.hrl").
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
@@ -72,7 +73,7 @@ end_per_suite(C) ->
 -spec init_per_group(group_name(), config()) -> config().
 init_per_group(operations_by_invoice_template_access_token, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited)),
+    Context = capi_ct_helper:get_context(?API_TOKEN),
     _ = capi_ct_helper:mock_services(
         [
             {invoice_templating, fun('Create', _) -> {ok, ?INVOICE_TPL} end},
@@ -80,7 +81,7 @@ init_per_group(operations_by_invoice_template_access_token, Config) ->
         ],
         MockServiceSup
     ),
-    _ = capi_ct_helper_tk:mock_service(capi_ct_helper_tk:api_key_handler(?STRING), MockServiceSup),
+    _ = capi_ct_helper_token_keeper:mock_api_key_token(?STRING, MockServiceSup),
     _ = capi_ct_helper_bouncer:mock_assert_shop_op_ctx(
         <<"CreateInvoiceTemplate">>,
         ?STRING,
@@ -117,10 +118,7 @@ end_per_group(_Group, _C) ->
 -spec init_per_testcase(test_case_name(), config()) -> config().
 init_per_testcase(_Name, C) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    _ = capi_ct_helper_tk:mock_service(
-        capi_ct_helper_tk:invoice_template_access_token(?STRING, ?STRING),
-        MockServiceSup
-    ),
+    _ = capi_ct_helper_token_keeper:mock_invoice_template_access_token(?STRING, ?STRING, MockServiceSup),
     [{test_sup, MockServiceSup} | C].
 
 -spec end_per_testcase(test_case_name(), config()) -> _.
@@ -178,7 +176,8 @@ get_invoice_payment_methods_by_tpl_id_ok_test(Config) ->
             end},
             {party_management, fun
                 ('GetRevision', _) -> {ok, ?INTEGER};
-                ('Checkout', _) -> {ok, ?PARTY}
+                ('Checkout', _) -> {ok, ?PARTY};
+                ('GetShopContract', _) -> {ok, ?SHOP_CONTRACT}
             end}
         ],
         Config
@@ -190,4 +189,20 @@ get_invoice_payment_methods_by_tpl_id_ok_test(Config) ->
         ?STRING,
         Config
     ),
-    {ok, _} = capi_client_invoice_templates:get_invoice_payment_methods(?config(context, Config), ?STRING).
+    {ok, Methods} = capi_client_invoice_templates:get_invoice_payment_methods(
+        ?config(context, Config), ?STRING
+    ),
+    [ProviderMethod] = lists:filter(
+        fun(Method) ->
+            maps:get(<<"tokenProviderData">>, Method, undefined) /= undefined
+        end,
+        Methods
+    ),
+    ?assertMatch(
+        #{
+            <<"merchantID">> := <<_/binary>>,
+            <<"merchantName">> := ?STRING,
+            <<"realm">> := <<"test">>
+        },
+        maps:get(<<"tokenProviderData">>, ProviderMethod)
+    ).

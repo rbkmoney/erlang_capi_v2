@@ -328,12 +328,7 @@ maybe(V, Then) ->
     Then(V).
 
 maybe_with(Name, Params, Then) ->
-    case maps:get(Name, Params, undefined) of
-        V when V /= undefined ->
-            Then(V);
-        undefined ->
-            undefined
-    end.
+    maybe(maps:get(Name, Params, undefined), Then).
 
 maybe_with_woody_result(ServiceName, Function, Args, WoodyCtx, Then) ->
     % TODO
@@ -353,9 +348,9 @@ maybe_entity(Name, Params) ->
     maybe_with(Name, Params, fun build_entity/1).
 
 build_entity(ID) when is_binary(ID) ->
-    #bctx_v1_Entity{id = ID};
+    #bouncer_base_Entity{id = ID};
 build_entity(ID) when is_integer(ID) ->
-    #bctx_v1_Entity{id = integer_to_binary(ID)}.
+    #bouncer_base_Entity{id = integer_to_binary(ID)}.
 
 build_set(L) when is_list(L) ->
     ordsets:from_list(L).
