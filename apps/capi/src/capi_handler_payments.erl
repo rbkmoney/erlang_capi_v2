@@ -350,7 +350,9 @@ prepare(OperationID = 'CreateRefund', Req, Context) ->
                     #payproc_AllocationExceededPaymentAmount{} ->
                         {ok, logic_error(invalidAllocation, <<"Exceeded payment amount">>)};
                     #payproc_AllocationInvalidTransaction{reason = Reason} ->
-                        {ok, logic_error(invalidAllocation, Reason)}
+                        {ok, logic_error(invalidAllocation, Reason)};
+                    #payproc_AllocationNotFound{} ->
+                        {ok, logic_error(invalidAllocation, <<"Not found">>)}
                 end
         catch
             throw:invoice_cart_empty ->
