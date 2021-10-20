@@ -36,6 +36,7 @@
 -export([get_invoice_by_id/2]).
 -export([get_payment_by_id/3]).
 -export([get_refund_by_id/4]).
+-export([get_payment_methods/3]).
 
 -export([create_dsl/3]).
 -export([emplace_token_provider_data/3]).
@@ -307,6 +308,21 @@ get_payment_by_id(InvoiceID, PaymentID, Context) ->
 get_refund_by_id(InvoiceID, PaymentID, RefundID, Context) ->
     service_call_with([user_info], {invoicing, 'GetPaymentRefund', {InvoiceID, PaymentID, RefundID}}, Context).
 
+-spec get_payment_methods(atom(), tuple(), processing_context()) -> woody:result().
+get_payment_methods(ServiceName, Args, Context) ->
+    case service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context) of
+        {ok, #domain_TermSet{payments = undefined}} ->
+            {ok, []};
+        {ok, #domain_TermSet{
+            payments = #domain_PaymentsServiceTerms{
+                payment_methods = {value, PaymentMethodRefs}
+            }
+        }} ->
+            {ok, PaymentMethodRefs};
+        Error ->
+            Error
+    end.
+
 -spec create_dsl(atom(), map(), map()) -> map().
 create_dsl(QueryType, QueryBody, QueryParams) ->
     merge_and_compact(
@@ -343,6 +359,11 @@ emplace_token_provider_data(#domain_Invoice{} = Invoice, PaymentMethods, Context
 emplace_token_provider_data(#domain_InvoiceTemplate{} = InvoiceTemplate, PaymentMethods, Context) ->
     PartyID = InvoiceTemplate#domain_InvoiceTemplate.owner_id,
     ShopID = InvoiceTemplate#domain_InvoiceTemplate.shop_id,
+    TokenProviderData = construct_token_provider_data(PartyID, ShopID, Context),
+    emplace_token_provider_data(PaymentMethods, TokenProviderData);
+emplace_token_provider_data(#payproc_Customer{} = Customer, PaymentMethods, Context) ->
+    PartyID = Customer#payproc_Customer.owner_id,
+    ShopID = Customer#payproc_Customer.shop_id,
     TokenProviderData = construct_token_provider_data(PartyID, ShopID, Context),
     emplace_token_provider_data(PaymentMethods, TokenProviderData).
 
