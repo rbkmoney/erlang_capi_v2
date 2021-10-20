@@ -329,7 +329,8 @@
     sessions = [],
     legacy_refunds = Refunds,
     adjustments = Adjustments,
-    last_transaction_info = ?TX_INFO
+    last_transaction_info = ?TX_INFO,
+    allocation = ?ALLOCATION
 }).
 
 -define(PAYPROC_PAYMENT, ?PAYPROC_PAYMENT(?PAYMENT, [?REFUND], [?ADJUSTMENT], [?PAYPROC_CHARGEBACK])).

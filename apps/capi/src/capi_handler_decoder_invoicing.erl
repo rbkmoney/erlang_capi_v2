@@ -159,7 +159,8 @@ decode_invoice_payment(InvoiceID, InvoicePayment = #payproc_InvoicePayment{payme
     capi_handler_utils:merge_and_compact(
         decode_payment(InvoiceID, Payment, Context),
         #{
-            <<"transactionInfo">> => decode_last_tx_info(InvoicePayment#payproc_InvoicePayment.last_transaction_info)
+            <<"transactionInfo">> => decode_last_tx_info(InvoicePayment#payproc_InvoicePayment.last_transaction_info),
+            <<"allocation">> => capi_allocation:decode(InvoicePayment#payproc_InvoicePayment.allocation)
         }
     ).
 
