@@ -24,6 +24,7 @@
 -export([second_request_without_idempotent_feature_test/1]).
 -export([create_invoice_ok_test/1]).
 -export([create_invoice_legacy_fail_test/1]).
+-export([create_invoice_legacy_ok_test/1]).
 -export([create_invoice_fail_test/1]).
 -export([create_invoice_idemp_cart_ok_test/1]).
 -export([create_invoice_idemp_cart_fail_test/1]).
@@ -77,6 +78,7 @@ groups() ->
         {invoice_creation, [], [
             create_invoice_ok_test,
             create_invoice_legacy_fail_test,
+            create_invoice_legacy_ok_test,
             create_invoice_fail_test,
             create_invoice_idemp_cart_fail_test,
             create_invoice_idemp_cart_ok_test,
@@ -321,6 +323,33 @@ create_invoice_ok_test(Config) ->
     ?assertEqual(BenderKey, maps:get(<<"id">>, Invoice1)),
     ?assertEqual(ExternalID, maps:get(<<"externalID">>, Invoice1)),
     ?assertEqual(Invoice1, Invoice2).
+
+-spec create_invoice_legacy_ok_test(config()) -> _.
+create_invoice_legacy_ok_test(Config) ->
+    BenderKey = <<"bender_key">>,
+    ExternalID = <<"ok_merch_id">>,
+    Req = invoice_params(ExternalID),
+    Unused = [
+        [<<"description">>],
+        [<<"externalID">>],
+        [<<"metadata">>, <<"invoice_dummy_metadata">>]
+    ],
+    Ctx = capi_msgp_marshalling:marshal(#{
+        <<"version">> => 2,
+        <<"features">> => capi_idemp_features_legacy:read(capi_feature_schemas_legacy:invoice(), Req)
+    }),
+    _ = capi_ct_helper:mock_services(
+        [
+            {invoicing, fun('Create', {_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}}) ->
+                {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
+            end},
+            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
+        ],
+        Config
+    ),
+    {{ok, ActualInvoice}, ActualUnused} = create_invoice_(Req, Config),
+    ?assertEqual(Unused, ActualUnused),
+    {{ok, ActualInvoice}, ActualUnused} = create_invoice_(Req, Config).
 
 -spec create_invoice_legacy_fail_test(config()) -> _.
 create_invoice_legacy_fail_test(Config) ->

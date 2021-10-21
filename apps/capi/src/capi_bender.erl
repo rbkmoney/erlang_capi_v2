@@ -255,15 +255,15 @@ bender_generate_id(BenderIdSchema, IdempKey, Identity, WoodyContext, CtxData) ->
         {ok, ID} ->
             {ok, ID};
         {ok, ID, #{<<"version">> := ?SCHEMA_VER2} = SavedBenderCtx} ->
-            {identity, FeaturesDeprecated, SchemaDeprecated} = make_identity_deprecated_v2(Identity),
+            {identity, FeaturesDeprecated, Schema} = make_identity_deprecated_v2(Identity),
             check_idempotent_conflict_deprecated_v2(
                 ID,
                 FeaturesDeprecated,
                 SavedBenderCtx,
-                read_schema_deprecated_v2(SchemaDeprecated)
+                Schema
             );
         {ok, ID, #{<<"version">> := ?SCHEMA_VER3} = SavedBenderCtx} ->
-            check_idempotent_conflict(ID, Features, SavedBenderCtx, read_schema(Schema))
+            check_idempotent_conflict(ID, Features, SavedBenderCtx, Schema)
     end.
 
 generator_generate_id(BenderIDSchema, WoodyContext) ->
