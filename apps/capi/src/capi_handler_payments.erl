@@ -555,10 +555,8 @@ create_payment_id(Invoice, PaymentParams0, Context, OperationID, PaymentToolThri
     BenderPrefix = OperationID,
     IdempotentKey = {BenderPrefix, PartyID, ExternalID},
 
-    Identity = capi_bender:make_identity(
-        {schema, payment, PaymentParams}
-    ),
     SequenceID = InvoiceID,
+    Identity = capi_bender:make_identity(payment, PaymentParams),
     SequenceParams = #{},
     #{woody_context := WoodyCtx} = Context,
     %% We put `invoice_id` in a context here because `get_payment_by_external_id()` needs it to work
@@ -820,7 +818,7 @@ create_refund(InvoiceID, PaymentID, RefundParams0, Context, BenderPrefix) ->
 
     ExternalID = maps:get(<<"externalID">>, RefundParams, undefined),
     IdempotentKey = {BenderPrefix, PartyID, ExternalID},
-    Identity = {schema, refund, RefundParams},
+    Identity = capi_bender:make_identity(refund, RefundParams),
     SequenceID = create_sequence_id([InvoiceID, PaymentID], BenderPrefix),
     SequenceParams = #{minimum => 100},
     #{woody_context := WoodyCtx} = Context,

@@ -9,12 +9,17 @@
 -type issuer_id() :: dmsl_domain_thrift:'PartyID'() | dmsl_payment_processing_thrift:'UserID'().
 -type idempotent_key() :: binary().
 -type idempotent_key_params() :: {idempotent_key_prefix(), issuer_id(), external_id() | undefined}.
--type identity() :: {identity, identity_features(), identity_schema()}.
--type identity_params() :: {schema, identity_schema(), identity_request()} | identity().
+%% TODO(ED-287): remove identity_request() from below
+-opaque identity() :: {identity, identity_features(), identity_schema(), identity_request()}.
 
 -type identity_features() :: feat:features().
+
+%% TODO(ED-287): switch back to passing schema by value (`schemas:schema()`)
+%% and not by name (`schema`) after V2 is removed
+%% -type identity_schema() :: feat:schema().
 -type identity_schema_name() :: atom().
--type identity_schema() :: feat:schema() | identity_schema_name().
+-type identity_schema() :: identity_schema_name().
+
 -type identity_request() :: feat:request().
 -type woody_context() :: woody_context:ctx().
 -type context_data() :: #{binary() => term()}.
@@ -33,7 +38,6 @@
 -export_type([external_id/0]).
 -export_type([issuer_id/0]).
 -export_type([idempotent_key_params/0]).
--export_type([identity_params/0]).
 -export_type([context_data/0]).
 -export_type([woody_context/0]).
 -export_type([difference/0]).
@@ -42,6 +46,7 @@
 -export_type([constant_id/0]).
 -export_type([external_id_conflict/0]).
 -export_type([bender_context/0]).
+-export_type([identity/0]).
 
 -export([gen_snowflake/3]).
 -export([gen_snowflake/4]).
@@ -55,37 +60,37 @@
 -export([gen_constant/5]).
 -export([try_gen_constant/4]).
 -export([try_gen_constant/5]).
--export([make_identity/1]).
+-export([make_identity/2]).
 -export([get_internal_id/2]).
 
 %% deprecated
 -define(SCHEMA_VER2, 2).
 -define(SCHEMA_VER3, 3).
 
--spec gen_snowflake(idempotent_key_params() | undefined, identity_params(), woody_context()) ->
+-spec gen_snowflake(idempotent_key_params() | undefined, identity(), woody_context()) ->
     {ok, id()} | {ok, id(), context_data()} | {error, generation_error()}.
 gen_snowflake(IdempotentKey, Identity, WoodyContext) ->
     Context = #{},
     gen_snowflake(IdempotentKey, Identity, WoodyContext, Context).
 
--spec gen_snowflake(idempotent_key_params() | undefined, identity_params(), woody_context(), context_data()) ->
+-spec gen_snowflake(idempotent_key_params() | undefined, identity(), woody_context(), context_data()) ->
     {ok, id()} | {ok, id(), context_data()} | {error, generation_error()}.
 gen_snowflake(IdempotentKey, Identity, WoodyContext, Context) ->
     IdSchema = {snowflake, #bender_SnowflakeSchema{}},
     generate_id(IdSchema, IdempotentKey, Identity, WoodyContext, Context).
 
--spec try_gen_snowflake(idempotent_key_params() | undefined, identity_params(), woody_context()) -> id().
+-spec try_gen_snowflake(idempotent_key_params() | undefined, identity(), woody_context()) -> id().
 try_gen_snowflake(IdempotentKey, Identity, WoodyContext) ->
     Context = #{},
     try_gen_snowflake(IdempotentKey, Identity, WoodyContext, Context).
 
--spec try_gen_snowflake(idempotent_key_params() | undefined, identity_params(), woody_context(), context_data()) ->
+-spec try_gen_snowflake(idempotent_key_params() | undefined, identity(), woody_context(), context_data()) ->
     id().
 try_gen_snowflake(IdempotentKey, Identity, WoodyContext, Context) ->
     IdSchema = {snowflake, #bender_SnowflakeSchema{}},
     try_generate_id(IdSchema, IdempotentKey, Identity, WoodyContext, Context).
 
--spec gen_sequence(idempotent_key_params() | undefined, identity_params(), sequence_id(), woody_context()) ->
+-spec gen_sequence(idempotent_key_params() | undefined, identity(), sequence_id(), woody_context()) ->
     {ok, id()} | {ok, id(), context_data()} | {error, generation_error()}.
 gen_sequence(IdempotentKey, Identity, SequenceID, WoodyContext) ->
     SequenceParams = #{},
@@ -93,7 +98,7 @@ gen_sequence(IdempotentKey, Identity, SequenceID, WoodyContext) ->
 
 -spec gen_sequence(
     idempotent_key_params() | undefined,
-    identity_params(),
+    identity(),
     sequence_id(),
     sequence_params(),
     woody_context()
@@ -104,7 +109,7 @@ gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyContext) 
 
 -spec gen_sequence(
     idempotent_key_params() | undefined,
-    identity_params(),
+    identity(),
     sequence_id(),
     sequence_params(),
     woody_context(),
@@ -116,7 +121,7 @@ gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyContext, 
 
 -spec try_gen_sequence(
     idempotent_key_params() | undefined,
-    identity_params(),
+    identity(),
     sequence_id(),
     sequence_params(),
     woody_context(),
@@ -126,42 +131,39 @@ try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyConte
     IdSchema = build_sequence_schema(SequenceID, SequenceParams),
     try_generate_id(IdSchema, IdempotentKey, Identity, WoodyContext, ContextData).
 
--spec gen_constant(idempotent_key_params(), identity_params(), constant_id(), woody_context()) ->
+-spec gen_constant(idempotent_key_params(), identity(), constant_id(), woody_context()) ->
     {ok, id()} | {ok, id(), context_data()} | {error, generation_error()}.
 gen_constant(IdempotentKey, Identity, ConstantID, WoodyContext) ->
     Context = #{},
     gen_constant(IdempotentKey, Identity, ConstantID, WoodyContext, Context).
 
--spec gen_constant(idempotent_key_params(), identity_params(), constant_id(), woody_context(), context_data()) ->
+-spec gen_constant(idempotent_key_params(), identity(), constant_id(), woody_context(), context_data()) ->
     {ok, id()} | {ok, id(), context_data()} | {error, generation_error()}.
 gen_constant(IdempotentKey, Identity, ConstantID, WoodyContext, Context) ->
     IdSchema = {constant, #bender_ConstantSchema{internal_id = ConstantID}},
     generate_id(IdSchema, IdempotentKey, Identity, WoodyContext, Context).
 
--spec try_gen_constant(idempotent_key_params(), identity_params(), constant_id(), woody_context()) -> id().
+-spec try_gen_constant(idempotent_key_params(), identity(), constant_id(), woody_context()) -> id().
 try_gen_constant(IdempotentKey, Identity, ConstantID, WoodyContext) ->
     Context = #{},
     try_gen_constant(IdempotentKey, Identity, ConstantID, WoodyContext, Context).
 
--spec try_gen_constant(idempotent_key_params(), identity_params(), constant_id(), woody_context(), context_data()) ->
+-spec try_gen_constant(idempotent_key_params(), identity(), constant_id(), woody_context(), context_data()) ->
     id().
 try_gen_constant(IdempotentKey, Identity, ConstantID, WoodyContext, Context) ->
     IdSchema = {constant, #bender_ConstantSchema{internal_id = ConstantID}},
     try_generate_id(IdSchema, IdempotentKey, Identity, WoodyContext, Context).
 
--spec make_identity(identity_params()) -> identity().
-make_identity({schema, Schema, Data}) ->
+-spec make_identity(identity_schema(), identity_request()) -> identity().
+make_identity(Schema, Data) ->
     Features = feat:read(read_schema(Schema), Data),
-    {identity, Features, Schema};
-make_identity(Identity = {identity, _Features, _Schema}) ->
-    Identity.
+    {identity, Features, Schema, Data}.
 
-make_identity_deprecated_v2({schema, Schema, Data}) ->
-    Features = capi_idemp_features_legacy:read(read_schema_deprecated_v2(Schema), Data),
-    {identity, Features, Schema}.
+transform_identity_to_deprecated_v2({identity, _NewFeatures, Schema, Data}) ->
+    LegacyFeatures = capi_idemp_features_legacy:read(read_schema_deprecated_v2(Schema), Data),
+    {identity, LegacyFeatures, Schema, Data}.
 
-%% TODO(ED-287): switch back to passing schema by value (`schemas:schema()`)
-%% and not by name (`schema`) after V2 is removed
+%% TODO(ED-287): (see above)
 read_schema(SchemaName) when is_atom(SchemaName) ->
     capi_feature_schemas:SchemaName();
 read_schema(Schema) ->
@@ -242,7 +244,7 @@ make_idempotent_key({Prefix, PartyID, ExternalID}) ->
     <<"capi/", Prefix/binary, "/", PartyID/binary, "/", ExternalID/binary>>.
 
 bender_generate_id(BenderIdSchema, IdempKey, Identity, WoodyContext, CtxData) ->
-    {identity, Features, Schema} = make_identity(Identity),
+    {identity, Features, Schema, _Data} = Identity,
     BenderCtx = build_bender_ctx(Features, CtxData),
     Args = {IdempKey, BenderIdSchema, capi_msgp_marshalling:marshal(BenderCtx)},
     Result =
@@ -256,7 +258,7 @@ bender_generate_id(BenderIdSchema, IdempKey, Identity, WoodyContext, CtxData) ->
         {ok, ID} ->
             {ok, ID};
         {ok, ID, #{<<"version">> := ?SCHEMA_VER2} = SavedBenderCtx} ->
-            {identity, FeaturesDeprecated, Schema} = make_identity_deprecated_v2(Identity),
+            {identity, FeaturesDeprecated, Schema, _} = transform_identity_to_deprecated_v2(Identity),
             check_idempotent_conflict_deprecated_v2(
                 ID,
                 FeaturesDeprecated,
