@@ -908,7 +908,6 @@ demo_compare_allocation_transaction_test() ->
     ]),
     common_compare_tests(allocation_transaction(), Request1, Request3, [
         <<"fee">>
-        % <<"fee.allocationFeeType">>
     ]).
 
 %%
