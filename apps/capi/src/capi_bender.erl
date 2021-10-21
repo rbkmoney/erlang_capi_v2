@@ -10,11 +10,12 @@
 -type idempotent_key() :: binary().
 -type idempotent_key_params() :: {idempotent_key_prefix(), issuer_id(), external_id() | undefined}.
 -type identity() :: {identity, identity_features(), identity_schema()}.
--type identity_params() :: {schema, identity_schema(), feat:request()} | identity().
+-type identity_params() :: {schema, identity_schema(), identity_request()} | identity().
 
 -type identity_features() :: feat:features().
 -type identity_schema_name() :: atom().
 -type identity_schema() :: feat:schema() | identity_schema_name().
+-type identity_request() :: feat:request().
 -type woody_context() :: woody_context:ctx().
 -type context_data() :: #{binary() => term()}.
 -type bender_context() :: #{binary() => term()}.
