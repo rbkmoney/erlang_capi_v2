@@ -9,9 +9,9 @@
 
 -type allocation() :: dmsl_domain_thrift:'Allocation'().
 -type allocation_prototype() :: dmsl_domain_thrift:'AllocationPrototype'().
--type invalid_transaction() :: dmsl_domain_thrift:'AllocationInvalidTransaction'().
 -type decode_data() :: _.
 -type validate_error() :: allocation_duplicate | allocation_wrong_cart.
+-type invalid_transaction() :: dmsl_payment_processing_thrift:'AllocationInvalidTransaction'().
 
 -spec validate(list() | undefined) -> ok | validate_error().
 validate(undefined) ->
@@ -29,9 +29,9 @@ validate(Transactions) ->
 transaction_error(#payproc_AllocationInvalidTransaction{reason = Reason, transaction = Transaction}) ->
     ShopID =
         case Transaction of
-            #domain_AllocationTransaction{target = {shop, Target}} ->
+            {transaction, #domain_AllocationTransaction{target = {shop, Target}}} ->
                 Target#domain_AllocationTransactionTargetShop.shop_id;
-            #domain_AllocationTransactionPrototype{target = {shop, Target}} ->
+            {transaction_prototype, #domain_AllocationTransactionPrototype{target = {shop, Target}}} ->
                 Target#domain_AllocationTransactionTargetShop.shop_id
         end,
     Message = io_lib:format("Invalid allocation transaction with shop_id \"~ts\" and error \"~ts\"", [ShopID, Reason]),
