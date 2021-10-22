@@ -3,11 +3,14 @@
 -include_lib("damsel/include/dmsl_domain_thrift.hrl").
 
 -export([validate/1]).
+-export([get_transaction_target/1]).
 -export([encode/2]).
 -export([decode/1]).
 
 -type allocation() :: dmsl_domain_thrift:'Allocation'().
 -type allocation_prototype() :: dmsl_domain_thrift:'AllocationPrototype'().
+-type allocation_transaction() :: dmsl_domain_thrift:'AllocationTransaction'().
+-type allocation_transaction_prototype() :: dmsl_domain_thrift:'AllocationTransactionPrototype'().
 -type decode_data() :: _.
 -type validate_error() :: allocation_duplicate | allocation_wrong_cart.
 
@@ -22,6 +25,12 @@ validate(Transactions) ->
         true -> allocation_duplicate;
         _ -> ok
     end.
+
+-spec get_transaction_target(allocation_transaction() | allocation_transaction_prototype()) -> binary().
+get_transaction_target(#domain_AllocationTransaction{target = {shop, Target}}) ->
+    Target#domain_AllocationTransactionTargetShop.shop_id;
+get_transaction_target(#domain_AllocationTransactionPrototype{target = {shop, Target}}) ->
+    Target#domain_AllocationTransactionTargetShop.shop_id.
 
 -spec encode(list() | undefined, binary()) -> allocation_prototype() | undefined.
 encode(undefined, _PartyID) ->

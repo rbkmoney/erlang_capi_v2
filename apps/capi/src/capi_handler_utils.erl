@@ -74,6 +74,9 @@ logic_error(externalIDConflict, ExternalID) ->
         <<"message">> => <<"This 'externalID' has been used by another request">>
     },
     create_error_resp(409, Data);
+logic_error(invalidAllocation, {Target, Reason}) ->
+    Message = io_lib:format("Invalid allocation ~ts: ~ts", [Target, Reason]),
+    logic_error(invalidAllocation, Message);
 logic_error(Code, Message) ->
     Data = #{<<"code">> => genlib:to_binary(Code), <<"message">> => genlib:to_binary(Message)},
     create_error_resp(400, Data).
