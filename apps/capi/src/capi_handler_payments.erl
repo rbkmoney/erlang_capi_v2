@@ -219,9 +219,9 @@ prepare(OperationID = 'CapturePayment', Req, Context) ->
                         {ok, logic_error(allocationNotPermitted, <<"Not allowed">>)};
                     #payproc_AllocationExceededPaymentAmount{} ->
                         {ok, logic_error(invalidAllocation, <<"Exceeded payment amount">>)};
-                    #payproc_AllocationInvalidTransaction{reason = Reason, transaction = Transaction} ->
-                        Target = capi_allocation:get_transaction_target(Transaction),
-                        {ok, logic_error(invalidAllocation, {Target, Reason})}
+                    #payproc_AllocationInvalidTransaction{} = InvalidTransaction ->
+                        Message = capi_allocation:transaction_error(InvalidTransaction),
+                        {ok, logic_error(invalidAllocation, Message)}
                 end
         catch
             throw:invoice_cart_empty ->
@@ -350,9 +350,9 @@ prepare(OperationID = 'CreateRefund', Req, Context) ->
                         {ok, logic_error(allocationNotPermitted, <<"Not allowed">>)};
                     #payproc_AllocationExceededPaymentAmount{} ->
                         {ok, logic_error(invalidAllocation, <<"Exceeded payment amount">>)};
-                    #payproc_AllocationInvalidTransaction{reason = Reason, transaction = Transaction} ->
-                        Target = capi_allocation:get_transaction_target(Transaction),
-                        {ok, logic_error(invalidAllocation, {Target, Reason})};
+                    #payproc_AllocationInvalidTransaction{} = InvalidTransaction ->
+                        Message = capi_allocation:transaction_error(InvalidTransaction),
+                        {ok, logic_error(invalidAllocation, Message)};
                     #payproc_AllocationNotFound{} ->
                         {ok, logic_error(invalidAllocation, <<"Not found">>)}
                 end
