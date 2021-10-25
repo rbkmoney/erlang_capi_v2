@@ -177,6 +177,7 @@ mock_services(Services, SupOrConfig) ->
     {BenderClientServices, WoodyServices} = lists:partition(
         fun
             ({generator, _}) -> true;
+            ({bender, _}) -> true;
             (_) -> false
         end,
         Other
@@ -262,6 +263,8 @@ mock_services_(Services, SupPid) when is_pid(SupPid) ->
 
 get_service_name({generator, _}) ->
     'Generator';
+get_service_name({bender, _}) ->
+    'Bender';
 get_service_name({ServiceName, _Fun}) ->
     ServiceName;
 get_service_name({ServiceName, _WoodyService, _Fun}) ->
@@ -269,6 +272,8 @@ get_service_name({ServiceName, _WoodyService, _Fun}) ->
 
 mock_service_handler({generator, Fun}) ->
     mock_service_handler('Generator', {bender_thrift, 'Generator'}, Fun);
+mock_service_handler({bender, Fun}) ->
+    mock_service_handler('Bender', {bender_thrift, 'Bender'}, Fun);
 mock_service_handler({party_management, Fun}) ->
     mock_service_handler(party_management, {dmsl_payment_processing_thrift, 'PartyManagement'}, Fun);
 mock_service_handler({ServiceName, Fun}) ->

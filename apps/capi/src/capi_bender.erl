@@ -63,6 +63,8 @@
 -export([make_identity/2]).
 -export([get_internal_id/2]).
 
+-define(BENDER_DOMAIN, <<"capi">>).
+
 %% deprecated
 -define(SCHEMA_VER2, 2).
 -define(SCHEMA_VER3, 3).
@@ -87,6 +89,7 @@ try_gen_snowflake(IdempotentKey, Identity, WoodyContext) ->
 -spec try_gen_snowflake(idempotent_key_params() | undefined, identity(), woody_context(), context_data()) ->
     id().
 try_gen_snowflake(IdempotentKey, Identity, WoodyContext, Context) ->
+    %% handle_result(bender_client:gen_snowflake()).
     IdSchema = {snowflake, #bender_SnowflakeSchema{}},
     try_generate_id(IdSchema, IdempotentKey, Identity, WoodyContext, Context).
 
@@ -178,15 +181,11 @@ read_schema_deprecated_v2(SchemaName) ->
     {ok, binary(), context_data()} | {error, internal_id_not_found}.
 get_internal_id(IdempotentKeyParams, WoodyContext) ->
     IdempotentKey = make_idempotent_key(IdempotentKeyParams),
-    case capi_woody_client:call_service(bender, 'GetInternalID', {IdempotentKey}, WoodyContext) of
-        {ok, #bender_GetInternalIDResult{
-            internal_id = InternalID,
-            context = Context
-        }} ->
-            UnmarshaledCtx = capi_msgp_marshalling:unmarshal(Context),
-            {ok, InternalID, get_context_data(UnmarshaledCtx)};
-        {exception, #bender_InternalIDNotFound{}} ->
-            {error, internal_id_not_found}
+    case bender_client:get_internal_id(IdempotentKey, WoodyContext) of
+        {ok, InternalID, Context} ->
+            {ok, InternalID, get_context_data(Context)};
+        {error, _} = Error ->
+            Error
     end.
 
 %%%
@@ -230,8 +229,11 @@ try_generate_id(BenderIdSchema, IdempotentKey, Identity, WoodyContext, CtxData) 
 generate_id(BenderIdSchema, IdempKeyParams, Identity, WoodyContext, CtxData) ->
     IdempKey = make_idempotent_key(IdempKeyParams),
     case IdempKey of
-        undefined -> generator_generate_id(BenderIdSchema, WoodyContext);
-        IdempKey -> bender_generate_id(BenderIdSchema, IdempKey, Identity, WoodyContext, CtxData)
+        undefined ->
+            ID = generator_generate_id(BenderIdSchema, WoodyContext),
+            {ok, ID};
+        IdempKey ->
+            bender_generate_id(BenderIdSchema, IdempKey, Identity, WoodyContext, CtxData)
     end.
 
 -spec make_idempotent_key(idempotent_key_params()) -> idempotent_key() | undefined.
@@ -241,20 +243,12 @@ make_idempotent_key({_Prefix, _PartyID, undefined}) ->
     %% If external ID is undefined, no reason to generate it: noone can really use it
     undefined;
 make_idempotent_key({Prefix, PartyID, ExternalID}) ->
-    <<"capi/", Prefix/binary, "/", PartyID/binary, "/", ExternalID/binary>>.
+    bender_client:get_idempotent_key(?BENDER_DOMAIN, Prefix, PartyID, ExternalID).
 
 bender_generate_id(BenderIdSchema, IdempKey, Identity, WoodyContext, CtxData) ->
     {identity, Features, Schema, _Data} = Identity,
     BenderCtx = build_bender_ctx(Features, CtxData),
-    Args = {IdempKey, BenderIdSchema, capi_msgp_marshalling:marshal(BenderCtx)},
-    Result =
-        case capi_woody_client:call_service(bender, 'GenerateID', Args, WoodyContext) of
-            {ok, #bender_GenerationResult{internal_id = InternalID, context = undefined}} ->
-                {ok, InternalID};
-            {ok, #bender_GenerationResult{internal_id = InternalID, context = Ctx}} ->
-                {ok, InternalID, capi_msgp_marshalling:unmarshal(Ctx)}
-        end,
-    case Result of
+    case bender_client:gen_id(IdempKey, BenderIdSchema, WoodyContext, BenderCtx) of
         {ok, ID} ->
             {ok, ID};
         {ok, ID, #{<<"version">> := ?SCHEMA_VER2} = SavedBenderCtx} ->
@@ -272,16 +266,14 @@ bender_generate_id(BenderIdSchema, IdempKey, Identity, WoodyContext, CtxData) ->
 generator_generate_id(BenderIDSchema, WoodyContext) ->
     case BenderIDSchema of
         {snowflake, #bender_SnowflakeSchema{}} ->
-            {ok, {ID, _}} = bender_generator_client:gen_snowflake(WoodyContext),
-            {ok, ID};
+            bender_generator_client:gen_snowflake(WoodyContext);
         {sequence, #bender_SequenceSchema{
             sequence_id = SequenceID,
             minimum = Minimum
         }} ->
-            {ok, {ID, _}} = bender_generator_client:gen_sequence(SequenceID, WoodyContext, #{minimum => Minimum}),
-            {ok, ID};
+            bender_generator_client:gen_sequence(SequenceID, WoodyContext, #{minimum => Minimum});
         {constant, #bender_ConstantSchema{internal_id = InternalID}} ->
-            {ok, InternalID}
+            InternalID
     end.
 
 check_idempotent_conflict(ID, Features, SavedBenderCtx, Schema) ->
@@ -310,6 +302,5 @@ check_idempotent_conflict_deprecated_v2(ID, Features, SavedBenderCtx, Schema) ->
             {error, {external_id_conflict_legacy, ID, Difference, Schema}}
     end.
 
--spec get_context_data(bender_context()) -> undefined | context_data().
 get_context_data(Context) ->
     maps:get(<<"context_data">>, Context, #{}).

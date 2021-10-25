@@ -3,7 +3,7 @@
  {<<"bear">>,{pkg,<<"bear">>,<<"0.9.0">>},2},
  {<<"bender_client">>,
   {git,"https://github.com/rbkmoney/bender_client_erlang.git",
-       {ref,"69024efc38167c515d1dc7b7c2bb52262ffe7d0d"}},
+       {ref,"29501d6f6425bc310ef6b37b62790126bdff356b"}},
   0},
  {<<"bender_proto">>,
   {git,"https://github.com/rbkmoney/bender-proto.git",
