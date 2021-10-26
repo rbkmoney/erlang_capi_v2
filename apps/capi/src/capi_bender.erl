@@ -89,7 +89,6 @@ try_gen_snowflake(IdempotentKey, Identity, WoodyContext) ->
 -spec try_gen_snowflake(idempotent_key_params() | undefined, identity(), woody_context(), context_data()) ->
     id().
 try_gen_snowflake(IdempotentKey, Identity, WoodyContext, Context) ->
-    %% handle_result(bender_client:gen_snowflake()).
     IdSchema = {snowflake, #bender_SnowflakeSchema{}},
     try_generate_id(IdSchema, IdempotentKey, Identity, WoodyContext, Context).
 
