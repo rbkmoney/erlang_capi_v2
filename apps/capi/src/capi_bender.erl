@@ -167,14 +167,10 @@ transform_identity_to_deprecated_v2({identity, _NewFeatures, Schema, Data}) ->
 
 %% TODO(ED-287): (see above)
 read_schema(SchemaName) when is_atom(SchemaName) ->
-    capi_feature_schemas:SchemaName();
-read_schema(Schema) ->
-    Schema.
+    capi_feature_schemas:SchemaName().
 
 read_schema_deprecated_v2(SchemaName) when is_atom(SchemaName) ->
-    capi_feature_schemas_legacy:SchemaName();
-read_schema_deprecated_v2(SchemaName) ->
-    error({legacy_schema_from_new, SchemaName}).
+    capi_feature_schemas_legacy:SchemaName().
 
 -spec get_internal_id(idempotent_key_params(), woody_context()) ->
     {ok, binary(), context_data()} | {error, internal_id_not_found}.
