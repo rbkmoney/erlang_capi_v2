@@ -251,4 +251,3 @@ get_customer_payment_methods_ok_test(Config) ->
         },
         maps:get(<<"tokenProviderData">>, ProviderMethod)
     ).
-
