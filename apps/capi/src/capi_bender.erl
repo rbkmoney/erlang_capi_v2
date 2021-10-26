@@ -302,5 +302,6 @@ check_idempotent_conflict_deprecated_v2(ID, Features, SavedBenderCtx, Schema) ->
             {error, {external_id_conflict_legacy, ID, Difference, Schema}}
     end.
 
+-spec get_context_data(bender_context()) -> undefined | context_data().
 get_context_data(Context) ->
     maps:get(<<"context_data">>, Context, #{}).
