@@ -248,6 +248,38 @@ prepare('GetCustomerEvents' = OperationID, Req, Context) ->
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
+prepare('GetCustomerPaymentMethods' = OperationID, Req, Context) ->
+    CustomerID = maps:get(customerID, Req),
+    Customer = map_service_result(get_customer_by_id(CustomerID, Context)),
+    Authorize = fun() ->
+        Prototypes = [
+            {operation, #{id => OperationID, customer => CustomerID}},
+            {payproc, #{customer => Customer}}
+        ],
+        {ok, mask_customer_notfound(capi_auth:authorize_operation(Prototypes, Context))}
+    end,
+    Process = fun() ->
+        capi_handler:respond_if_undefined(Customer, general_error(404, <<"Customer not found">>)),
+        PartyID = Customer#payproc_Customer.owner_id,
+        % В данном контексте - Party не может не существовать
+        {ok, Party} = capi_party:get_party(PartyID, Context),
+        Args = {CustomerID, {revision, Party#domain_Party.revision}},
+        case capi_handler_utils:get_payment_methods(customer_management, Args, Context) of
+            {ok, PaymentMethodRefs} ->
+                PaymentMethods0 = capi_handler_decoder_invoicing:decode_payment_methods(PaymentMethodRefs),
+                PaymentMethods1 = capi_utils:deduplicate_payment_methods(PaymentMethods0),
+                PaymentMethods = capi_handler_utils:emplace_token_provider_data(Customer, PaymentMethods1, Context),
+                {ok, {200, #{}, PaymentMethods}};
+            {exception, Exception} ->
+                case Exception of
+                    #payproc_InvalidUser{} ->
+                        {ok, general_error(404, <<"Customer not found">>)};
+                    #payproc_CustomerNotFound{} ->
+                        {ok, general_error(404, <<"Customer not found">>)}
+                end
+        end
+    end,
+    {ok, #{authorize => Authorize, process => Process}};
 prepare(_OperationID, _Req, _Context) ->
     {error, noimpl}.
 

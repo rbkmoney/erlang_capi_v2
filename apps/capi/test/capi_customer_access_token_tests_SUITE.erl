@@ -1,6 +1,7 @@
 -module(capi_customer_access_token_tests_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
+-include_lib("stdlib/include/assert.hrl").
 
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("capi_dummy_data.hrl").
@@ -22,7 +23,8 @@
     create_binding_expired_test/1,
     get_bindings_ok_test/1,
     get_binding_ok_test/1,
-    get_customer_events_ok_test/1
+    get_customer_events_ok_test/1,
+    get_customer_payment_methods_ok_test/1
 ]).
 
 -type test_case_name() :: atom().
@@ -49,7 +51,8 @@ customer_access_token_tests() ->
         create_binding_expired_test,
         get_bindings_ok_test,
         get_binding_ok_test,
-        get_customer_events_ok_test
+        get_customer_events_ok_test,
+        get_customer_payment_methods_ok_test
     ].
 
 -spec groups() -> [{group_name(), list(), [test_case_name()]}].
@@ -216,3 +219,35 @@ get_customer_events_ok_test(Config) ->
         Config
     ),
     {ok, _} = capi_client_customers:get_customer_events(?config(context, Config), ?STRING, 10).
+
+-spec get_customer_payment_methods_ok_test(config()) -> _.
+get_customer_payment_methods_ok_test(Config) ->
+    _ = capi_ct_helper:mock_services(
+        [
+            {customer_management, fun
+                ('Get', _) -> {ok, ?CUSTOMER};
+                ('ComputeTerms', _) -> {ok, ?TERM_SET}
+            end},
+            {party_management, fun
+                ('GetRevision', _) -> {ok, ?INTEGER};
+                ('Checkout', _) -> {ok, ?PARTY};
+                ('GetShopContract', _) -> {ok, ?SHOP_CONTRACT}
+            end}
+        ],
+        Config
+    ),
+    {ok, Methods} = capi_client_customers:get_customer_payment_methods(?config(context, Config), ?STRING),
+    [ProviderMethod] = lists:filter(
+        fun(Method) ->
+            maps:get(<<"tokenProviderData">>, Method, undefined) /= undefined
+        end,
+        Methods
+    ),
+    ?assertMatch(
+        #{
+            <<"merchantID">> := <<_/binary>>,
+            <<"merchantName">> := ?STRING,
+            <<"realm">> := <<"test">>
+        },
+        maps:get(<<"tokenProviderData">>, ProviderMethod)
+    ).

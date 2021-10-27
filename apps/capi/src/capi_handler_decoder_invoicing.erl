@@ -13,13 +13,13 @@
 -export([decode_invoice_cart/1]).
 -export([decode_invoice_bank_account/1]).
 -export([decode_invoice_line_tax_mode/1]).
+-export([decode_payment_methods/1]).
 -export([decode_payment_status/2]).
 -export([decode_payment_operation_failure/2]).
 -export([decode_refund_status/2]).
 -export([decode_recurrent_parent/1]).
 -export([decode_make_recurrent/1]).
 
--export([construct_payment_methods/3]).
 -export([make_invoice_and_token/2]).
 
 -type processing_context() :: capi_handler:processing_context().
@@ -461,24 +461,10 @@ decode_invoice_line_tax_mode(#{<<"TaxMode">> := {str, TM}}) ->
 decode_invoice_line_tax_mode(_) ->
     undefined.
 
--spec construct_payment_methods(atom(), tuple(), processing_context()) -> {ok, list()} | woody:result().
-construct_payment_methods(ServiceName, Args, Context) ->
-    case compute_terms(ServiceName, Args, Context) of
-        {ok, #domain_TermSet{payments = undefined}} ->
-            {ok, []};
-        {ok, #domain_TermSet{
-            payments = #domain_PaymentsServiceTerms{
-                payment_methods = PaymentMethodRefs
-            }
-        }} ->
-            {ok, decode_payment_methods(PaymentMethodRefs)};
-        Error ->
-            Error
-    end.
-
+-spec decode_payment_methods(undefined | list()) -> list(decode_data()).
 decode_payment_methods(undefined) ->
     [];
-decode_payment_methods({value, PaymentMethodRefs}) ->
+decode_payment_methods(PaymentMethodRefs) ->
     PaymentMethods = [ID || #domain_PaymentMethodRef{id = ID} <- PaymentMethodRefs],
     lists:foldl(
         fun(Method, Acc) ->
@@ -583,8 +569,6 @@ decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
         <<"tokenProviders">> => [genlib:to_binary(TokenProvider)]
     }.
 
-compute_terms(ServiceName, Args, Context) ->
-    capi_handler_utils:service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
 -spec make_invoice_and_token(capi_handler_encoder:encode_data(), processing_context()) ->
     capi_handler_decoder_utils:decode_data().
 make_invoice_and_token(Invoice, ProcessingContext) ->
