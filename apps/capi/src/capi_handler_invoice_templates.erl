@@ -219,8 +219,9 @@ prepare('GetInvoicePaymentMethodsByTemplateID' = OperationID, Req, Context) ->
         % В данном контексте - Party не может не существовать
         {ok, Party} = capi_party:get_party(PartyID, Context),
         Args = {InvoiceTemplateID, Timestamp, {revision, Party#domain_Party.revision}},
-        case capi_handler_decoder_invoicing:construct_payment_methods(invoice_templating, Args, Context) of
-            {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
+        case capi_handler_utils:get_payment_methods(invoice_templating, Args, Context) of
+            {ok, PaymentMethodRefs} ->
+                PaymentMethods0 = capi_handler_decoder_invoicing:decode_payment_methods(PaymentMethodRefs),
                 PaymentMethods1 = capi_utils:deduplicate_payment_methods(PaymentMethods0),
                 PaymentMethods = capi_handler_utils:emplace_token_provider_data(
                     InvoiceTemplate, PaymentMethods1, Context

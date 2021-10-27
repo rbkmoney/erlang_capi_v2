@@ -9,6 +9,7 @@
 -export([get_binding/3]).
 -export([get_customer_events/3]).
 -export([get_customer_events/4]).
+-export([get_customer_payment_methods/2]).
 
 -type context() :: capi_client_lib:context().
 
@@ -113,4 +114,11 @@ get_customer_events_with(Context, CustomerID, Qs) ->
     },
     {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
     Response = swag_client_customers_api:get_customer_events(Url, PreparedParams, Opts),
+    capi_client_lib:handle_response(Response).
+
+-spec get_customer_payment_methods(context(), binary()) -> {ok, term()} | {error, term()}.
+get_customer_payment_methods(Context, CustomerID) ->
+    Params = #{binding => #{<<"customerID">> => CustomerID}},
+    {Url, PreparedParams, Opts} = capi_client_lib:make_request(Context, Params),
+    Response = swag_client_customers_api:get_customer_payment_methods(Url, PreparedParams, Opts),
     capi_client_lib:handle_response(Response).
