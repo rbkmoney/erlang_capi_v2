@@ -36,7 +36,6 @@
 -export([get_invoice_by_id/2]).
 -export([get_payment_by_id/3]).
 -export([get_refund_by_id/4]).
--export([get_realm_by_contract/3]).
 
 -export([create_dsl/3]).
 -export([emplace_token_provider_data/3]).
@@ -307,14 +306,6 @@ get_payment_by_id(InvoiceID, PaymentID, Context) ->
 -spec get_refund_by_id(binary(), binary(), binary(), processing_context()) -> woody:result().
 get_refund_by_id(InvoiceID, PaymentID, RefundID, Context) ->
     service_call_with([user_info], {invoicing, 'GetPaymentRefund', {InvoiceID, PaymentID, RefundID}}, Context).
-
--spec get_realm_by_contract(binary(), binary(), processing_context()) -> {ok, capi_domain:realm()}.
-get_realm_by_contract(PartyID, ContractID, Context) ->
-    {ok, Contract} = capi_party:get_contract(PartyID, ContractID, Context),
-    #domain_Contract{payment_institution = PiRef} = Contract,
-    {ok, Pi} = capi_domain:get_payment_institution(PiRef, Context),
-    #domain_PaymentInstitution{realm = Realm} = Pi,
-    {ok, Realm}.
 
 -spec create_dsl(atom(), map(), map()) -> map().
 create_dsl(QueryType, QueryBody, QueryParams) ->

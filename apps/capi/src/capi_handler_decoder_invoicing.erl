@@ -19,7 +19,6 @@
 -export([decode_recurrent_parent/1]).
 -export([decode_make_recurrent/1]).
 
--export([emplace_token_provider_data/2]).
 -export([construct_payment_methods/3]).
 -export([make_invoice_and_token/2]).
 
@@ -461,18 +460,6 @@ decode_invoice_line_tax_mode(#{<<"TaxMode">> := {str, TM}}) ->
     };
 decode_invoice_line_tax_mode(_) ->
     undefined.
-
--spec emplace_token_provider_data([decode_data()], decode_data()) -> [decode_data()].
-emplace_token_provider_data(PaymentMethods, TokenProviderData) ->
-    lists:map(
-        fun
-            (#{<<"tokenProviders">> := _Providers} = PaymentMethod) ->
-                PaymentMethod#{<<"tokenProviderData">> => TokenProviderData};
-            (PaymentMethod) ->
-                PaymentMethod
-        end,
-        PaymentMethods
-    ).
 
 -spec construct_payment_methods(atom(), tuple(), processing_context()) -> {ok, list()} | woody:result().
 construct_payment_methods(ServiceName, Args, Context) ->
