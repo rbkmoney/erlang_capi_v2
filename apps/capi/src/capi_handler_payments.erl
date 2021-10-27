@@ -6,7 +6,7 @@
 
 -export([prepare/3]).
 
--import(capi_handler_utils, [general_error/2, logic_error/2]).
+-import(capi_handler_utils, [general_error/2, logic_error/1, logic_error/2]).
 
 -define(DEFAULT_PROCESSING_DEADLINE, <<"30m">>).
 
@@ -155,6 +155,7 @@ prepare(OperationID = 'GetPaymentByExternalID', Req, Context) ->
 prepare(OperationID = 'CapturePayment', Req, Context) ->
     InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
+    PartyID = capi_handler_utils:get_party_id(Context),
     Invoice = get_invoice_by_id(InvoiceID, Context),
     Authorize = fun() ->
         Prototypes = [
@@ -166,10 +167,13 @@ prepare(OperationID = 'CapturePayment', Req, Context) ->
     Process = fun() ->
         Params = maps:get('CaptureParams', Req),
         try
+            Allocation = maps:get(<<"allocation">>, Params, undefined),
+            ok = validate_allocation(Allocation),
             CaptureParams = #payproc_InvoicePaymentCaptureParams{
                 reason = maps:get(<<"reason">>, Params),
                 cash = encode_optional_cash(Params, InvoiceID, PaymentID, Context),
-                cart = capi_handler_encoder:encode_invoice_cart(Params)
+                cart = capi_handler_encoder:encode_invoice_cart(Params),
+                allocation = capi_allocation:encode(Allocation, PartyID)
             },
             CallArgs = {InvoiceID, PaymentID, CaptureParams},
             Call = {invoicing, 'CapturePayment', CallArgs},
@@ -211,11 +215,22 @@ prepare(OperationID = 'CapturePayment', Req, Context) ->
                             logic_error(
                                 amountExceededCaptureBalance,
                                 io_lib:format("Max amount: ~p", [PaymentAmount])
-                            )}
+                            )};
+                    #payproc_AllocationNotAllowed{} ->
+                        {ok, logic_error(allocationNotPermitted, <<"Not allowed">>)};
+                    #payproc_AllocationExceededPaymentAmount{} ->
+                        {ok, logic_error(invalidAllocation, <<"Exceeded payment amount">>)};
+                    #payproc_AllocationInvalidTransaction{} = InvalidTransaction ->
+                        Message = capi_allocation:transaction_error(InvalidTransaction),
+                        {ok, logic_error(invalidAllocation, Message)}
                 end
         catch
             throw:invoice_cart_empty ->
-                {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)}
+                {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
+            throw:allocation_wrong_cart ->
+                {ok, logic_error(invalidAllocation, <<"Wrong cart">>)};
+            throw:allocation_duplicate ->
+                {ok, logic_error(invalidAllocation, <<"Duplicate shop">>)}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -264,7 +279,7 @@ prepare(OperationID = 'CancelPayment', Req, Context) ->
     end,
     {ok, #{authorize => Authorize, process => Process}};
 prepare(OperationID = 'CreateRefund', Req, Context) ->
-    InvoiceID = maps:get('invoiceID', Req),
+    InvoiceID = maps:get(invoiceID, Req),
     PaymentID = maps:get(paymentID, Req),
     RefundParams = maps:get('RefundParams', Req),
     Authorize = fun() ->
@@ -275,7 +290,10 @@ prepare(OperationID = 'CreateRefund', Req, Context) ->
         {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
-        try create_refund(InvoiceID, PaymentID, RefundParams, Context, OperationID) of
+        try
+            ok = validate_refund(RefundParams),
+            create_refund(InvoiceID, PaymentID, RefundParams, Context, OperationID)
+        of
             {ok, Refund} ->
                 {ok, {201, #{}, capi_handler_decoder_invoicing:decode_refund(Refund, Context)}};
             {exception, Exception} ->
@@ -328,13 +346,28 @@ prepare(OperationID = 'CreateRefund', Req, Context) ->
                         {ok, ErrorResp};
                     #'InvalidRequest'{errors = Errors} ->
                         FormattedErrors = capi_handler_utils:format_request_errors(Errors),
-                        {ok, logic_error(invalidRequest, FormattedErrors)}
+                        {ok, logic_error(invalidRequest, FormattedErrors)};
+                    #payproc_AllocationNotAllowed{} ->
+                        {ok, logic_error(allocationNotPermitted, <<"Not allowed">>)};
+                    #payproc_AllocationExceededPaymentAmount{} ->
+                        {ok, logic_error(invalidAllocation, <<"Exceeded payment amount">>)};
+                    #payproc_AllocationInvalidTransaction{} = InvalidTransaction ->
+                        Message = capi_allocation:transaction_error(InvalidTransaction),
+                        {ok, logic_error(invalidAllocation, Message)};
+                    #payproc_AllocationNotFound{} ->
+                        {ok, logic_error(invalidAllocation, <<"Not found">>)}
                 end
         catch
             throw:invoice_cart_empty ->
                 {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
             throw:{external_id_conflict, RefundID, ExternalID, _Schema} ->
-                {ok, logic_error(externalIDConflict, {RefundID, ExternalID})}
+                {ok, logic_error(externalIDConflict, {RefundID, ExternalID})};
+            throw:allocation_duplicate ->
+                {ok, logic_error(invalidAllocation, <<"Duplicate shop">>)};
+            throw:allocation_wrong_cart ->
+                {ok, logic_error(invalidAllocation, <<"Wrong cart">>)};
+            throw:refund_cart_conflict ->
+                {ok, logic_error(refundCartConflict, <<"Inconsistent Refund Cart">>)}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -493,6 +526,21 @@ prepare_payment_tool_scope(#{bouncer_data := BouncerData}) ->
     BouncerData.
 
 %%
+validate_allocation(Allocation) ->
+    case capi_allocation:validate(Allocation) of
+        ok -> ok;
+        Error -> throw(Error)
+    end.
+
+validate_refund(Params) ->
+    Allocation = maps:get(<<"allocation">>, Params, undefined),
+    ok = validate_allocation(Allocation),
+    RefundCart = maps:get(<<"cart">>, Params, undefined),
+    case {RefundCart, Allocation} of
+        {undefined, _} -> ok;
+        {_, undefined} -> ok;
+        _ -> throw(refund_cart_conflict)
+    end.
 
 create_payment(Invoice, PaymentParams, Context, OperationID, PaymentTool) ->
     InvoiceID = Invoice#domain_Invoice.id,
@@ -505,14 +553,15 @@ create_payment(Invoice, PaymentParams, Context, OperationID, PaymentTool) ->
 create_payment_id(Invoice, PaymentParams, Context, OperationID, PaymentTool) ->
     InvoiceID = Invoice#domain_Invoice.id,
     PartyID = Invoice#domain_Invoice.owner_id,
-    ShopID = Invoice#domain_Invoice.shop_id,
     Payer = maps:get(<<"payer">>, PaymentParams),
 
     % Temprory decision was made for analytics
     % TODO: delete this after analytics research will be down
-    _ = log_payer_client_url(Payer, PartyID, ShopID, Context),
+    _ = log_payer_client_url(Payer, InvoiceID),
 
-    % При наличии paymentToolToken заменяем его раскодированной структурой paymentTool
+    % TODO При наличии paymentToolToken заменяем его раскодированной структурой paymentTool
+    % В противном случае токены будут оказывать влияние на расчет hash2, удаление paymentToolToken
+    % не потребуется при удалении capi_bender:check_idempotent_conflict_deprecated
     ClearPayer =
         case PaymentTool of
             undefined ->
@@ -522,9 +571,10 @@ create_payment_id(Invoice, PaymentParams, Context, OperationID, PaymentTool) ->
                 Payer0#{<<"paymentTool">> => capi_handler_decoder_party:decode_payment_tool(PaymentTool)}
         end,
 
-    % Помешиваем invoideID и замещаем плательщика
     FullParams = PaymentParams#{
+        % Требуется для последующей кодировки параметров плательщика
         <<"invoiceID">> => InvoiceID,
+        % Заменяем на структуру без токена
         <<"payer">> => ClearPayer
     },
 
@@ -539,27 +589,19 @@ create_payment_id(Invoice, PaymentParams, Context, OperationID, PaymentTool) ->
     CtxData = #{<<"invoice_id">> => InvoiceID},
     capi_bender:try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyCtx, CtxData).
 
-log_payer_client_url(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer, PartyID, ShopID, Context) ->
+log_payer_client_url(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer, InvoiceID) ->
     EncodedSession = maps:get(<<"paymentSession">>, Payer),
     {ClientInfo, _} = capi_handler_utils:unwrap_payment_session(EncodedSession),
     ClientUrl = maps:get(<<"url">>, ClientInfo, undefined),
     ClientIP = maps:get(<<"ip">>, ClientInfo, undefined),
-    ShopLocation = get_shop_location(PartyID, ShopID, Context),
     MetaInfo = genlib_map:compact(#{
-        party_id => PartyID,
-        shop_id => ShopID,
-        shop_location => ShopLocation,
+        invoice_id => InvoiceID,
         ip => ClientIP,
         client_url => ClientUrl
     }),
     logger:info("Request location info.", [], MetaInfo);
-log_payer_client_url(_, _, _, _) ->
+log_payer_client_url(_, _) ->
     skipped.
-
-get_shop_location(PartyID, ShopID, Context) ->
-    {ok, Shop} = capi_party:get_shop(PartyID, ShopID, Context),
-    {url, Url} = Shop#domain_Shop.location,
-    Url.
 
 find_payment_by_id(PaymentID, #payproc_Invoice{payments = Payments}) ->
     Fun = fun(#payproc_InvoicePayment{payment = #domain_InvoicePayment{id = ID}}) ->
@@ -701,15 +743,15 @@ decode_payment_token(#{<<"paymentToolToken">> := Token}) ->
             case capi_utils:deadline_is_reached(ValidUntil) of
                 true ->
                     logger:warning("Payment tool token expired: ~p", [capi_utils:deadline_to_binary(ValidUntil)]),
-                    erlang:throw(invalid_payment_token);
+                    capi_handler:respond(logic_error(invalidPaymentToolToken));
                 _ ->
                     TokenData
             end;
         unrecognized ->
-            erlang:throw(invalid_payment_token);
+            capi_handler:respond(logic_error(invalidPaymentToolToken));
         {error, {decryption_failed, Error}} ->
             logger:warning("Payment tool token decryption failed: ~p", [Error]),
-            erlang:throw(invalid_payment_token)
+            capi_handler:respond(logic_error(invalidPaymentToolToken))
     end;
 decode_payment_token(_Other) ->
     undefined.
@@ -757,7 +799,6 @@ default_processing_deadline() ->
 create_refund(InvoiceID, PaymentID, RefundParams, Context, BenderPrefix) ->
     PartyID = capi_handler_utils:get_party_id(Context),
     RefundParamsFull = RefundParams#{<<"invoiceID">> => InvoiceID, <<"paymentID">> => PaymentID},
-
     ExternalID = maps:get(<<"externalID">>, RefundParams, undefined),
     IdempotentKey = {BenderPrefix, PartyID, ExternalID},
     Identity = {schema, capi_feature_schemas:refund(), RefundParamsFull, RefundParams},
@@ -771,11 +812,14 @@ create_refund(InvoiceID, PaymentID, RefundParams, Context, BenderPrefix) ->
 
 refund_payment(RefundID, InvoiceID, PaymentID, RefundParams, Context) ->
     ExternalID = maps:get(<<"externalID">>, RefundParams, undefined),
+    Allocation = maps:get(<<"allocation">>, RefundParams, undefined),
+    PartyID = capi_handler_utils:get_party_id(Context),
     Params = #payproc_InvoicePaymentRefundParams{
         external_id = ExternalID,
         reason = genlib_map:get(<<"reason">>, RefundParams),
         cash = encode_optional_cash(RefundParams, InvoiceID, PaymentID, Context),
-        cart = capi_handler_encoder:encode_invoice_cart(RefundParams)
+        cart = capi_handler_encoder:encode_invoice_cart(RefundParams),
+        allocation = capi_allocation:encode(Allocation, PartyID)
     },
     CallArgs = {
         InvoiceID,

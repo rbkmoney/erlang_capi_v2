@@ -4,6 +4,7 @@
 -include_lib("damsel/include/dmsl_domain_thrift.hrl").
 
 -export([general_error/2]).
+-export([logic_error/1]).
 -export([logic_error/2]).
 -export([server_error/1]).
 -export([format_request_errors/1]).
@@ -16,14 +17,13 @@
 -export([map_service_result/1]).
 
 -export([get_auth_context/1]).
+-export([get_woody_context/1]).
 -export([get_user_info/1]).
+-export([get_subject_id/1]).
 -export([get_user_id/1]).
 -export([get_party_id/1]).
--export([get_extra_properties/1]).
 
 -export([issue_access_token/2]).
--export([issue_access_token/3]).
-
 -export([merge_and_compact/2]).
 -export([get_time/2]).
 -export([get_split_interval/2]).
@@ -32,7 +32,6 @@
 
 -export([unwrap_payment_session/1]).
 -export([wrap_payment_session/2]).
--export([wrap_merchant_id/3]).
 
 -export([get_invoice_by_id/2]).
 -export([get_payment_by_id/3]).
@@ -40,13 +39,23 @@
 -export([get_realm_by_contract/3]).
 
 -export([create_dsl/3]).
+-export([emplace_token_provider_data/3]).
 
 -type processing_context() :: capi_handler:processing_context().
 -type response() :: capi_handler:response().
+-type entity() ::
+    dmsl_domain_thrift:'Invoice'()
+    | dmsl_payment_processing_thrift:'Customer'()
+    | dmsl_domain_thrift:'InvoiceTemplate'().
+-type token_source() :: capi_auth:token_spec() | entity().
 
 -spec general_error(cowboy:http_status(), binary()) -> response().
 general_error(Code, Message) ->
     create_error_resp(Code, #{<<"message">> => genlib:to_binary(Message)}).
+
+-spec logic_error(term()) -> response().
+logic_error(invalidPaymentToolToken) ->
+    logic_error(invalidPaymentToolToken, <<"Specified payment tool token is invalid">>).
 
 -spec logic_error
     (term(), io_lib:chars() | binary()) -> response();
@@ -115,6 +124,10 @@ map_service_result({exception, _}) ->
 get_auth_context(#{swagger_context := #{auth_context := AuthContext}}) ->
     AuthContext.
 
+-spec get_woody_context(processing_context()) -> any().
+get_woody_context(#{woody_context := WoodyContext}) ->
+    WoodyContext.
+
 -spec get_user_info(processing_context()) -> dmsl_payment_processing_thrift:'UserInfo'().
 get_user_info(Context) ->
     #payproc_UserInfo{
@@ -122,18 +135,21 @@ get_user_info(Context) ->
         type = {external_user, #payproc_ExternalUser{}}
     }.
 
+-spec get_subject_id(processing_context()) -> binary().
+get_subject_id(Context) ->
+    capi_auth:get_subject_id(get_auth_context(Context)).
+
 -spec get_user_id(processing_context()) -> binary().
 get_user_id(Context) ->
-    capi_auth:get_subject_id(get_auth_context(Context)).
+    %% TODO Replace when user ids finally stop being equal to party ids
+    %% capi_auth:get_user_id(get_auth_context(Context)).
+    get_subject_id(Context).
 
 -spec get_party_id(processing_context()) -> binary().
 get_party_id(Context) ->
-    get_user_id(Context).
-
--spec get_extra_properties(processing_context()) -> map().
-get_extra_properties(Context) ->
-    Claims = capi_auth:get_legacy_claims(get_auth_context(Context)),
-    maps:with(capi_auth_legacy:get_extra_properties(), Claims).
+    %% TODO Replace when user ids finally stop being equal to party ids
+    %% capi_auth:get_party_id(get_auth_context(Context)).
+    get_subject_id(Context).
 
 %% Utils
 
@@ -141,15 +157,33 @@ get_extra_properties(Context) ->
 append_to_tuple(Item, Tuple) ->
     list_to_tuple([Item | tuple_to_list(Tuple)]).
 
--spec issue_access_token(binary(), map() | tuple()) -> map().
-issue_access_token(PartyID, TokenSpec) ->
-    issue_access_token(PartyID, TokenSpec, #{}).
-
--spec issue_access_token(binary(), map() | tuple(), map()) -> map().
-issue_access_token(PartyID, {Entity, EntityID}, ExtraProperties) ->
-    issue_access_token(PartyID, #{Entity => EntityID}, ExtraProperties);
-issue_access_token(PartyID, TokenSpec, ExtraProperties) ->
-    #{<<"payload">> => capi_auth_legacy:issue_access_token(PartyID, TokenSpec, ExtraProperties)}.
+-spec issue_access_token(token_source(), processing_context()) -> map().
+issue_access_token(#domain_Invoice{} = Invoice, ProcessingContext) ->
+    TokenSpec = #{
+        party => Invoice#domain_Invoice.owner_id,
+        scope => {invoice, Invoice#domain_Invoice.id},
+        shop => Invoice#domain_Invoice.shop_id
+    },
+    issue_access_token(TokenSpec, ProcessingContext);
+issue_access_token(#payproc_Customer{} = Customer, ProcessingContext) ->
+    TokenSpec = #{
+        party => Customer#payproc_Customer.owner_id,
+        scope => {customer, Customer#payproc_Customer.id},
+        shop => Customer#payproc_Customer.shop_id
+    },
+    issue_access_token(TokenSpec, ProcessingContext);
+issue_access_token(#domain_InvoiceTemplate{} = InvoiceTpl, ProcessingContext) ->
+    TokenSpec = #{
+        party => InvoiceTpl#domain_InvoiceTemplate.owner_id,
+        scope => {invoice_template, InvoiceTpl#domain_InvoiceTemplate.id},
+        shop => InvoiceTpl#domain_InvoiceTemplate.shop_id
+    },
+    issue_access_token(TokenSpec, ProcessingContext);
+issue_access_token(TokenSpec, ProcessingContext) ->
+    #{
+        <<"payload">> =>
+            capi_auth:issue_access_token(TokenSpec, get_woody_context(ProcessingContext))
+    }.
 
 -spec merge_and_compact(map(), map()) -> map().
 merge_and_compact(M1, M2) ->
@@ -260,10 +294,6 @@ wrap_payment_session(ClientInfo, PaymentSession) ->
         <<"paymentSession">> => PaymentSession
     }).
 
--spec wrap_merchant_id(binary(), binary(), binary()) -> binary().
-wrap_merchant_id(RealmMode, PartyID, EntityID) ->
-    <<RealmMode/binary, $:, PartyID/binary, $:, EntityID/binary>>.
-
 -spec get_invoice_by_id(binary(), processing_context()) -> woody:result().
 get_invoice_by_id(InvoiceID, Context) ->
     EventRange = #payproc_EventRange{},
@@ -308,3 +338,43 @@ run_if_party_accessible(UserID, PartyID, Fun) ->
         throw:party_inaccessible ->
             {ok, general_error(404, <<"Party not found">>)}
     end.
+
+-spec emplace_token_provider_data(entity(), list(), processing_context()) -> list().
+emplace_token_provider_data(#domain_Invoice{} = Invoice, PaymentMethods, Context) ->
+    InvoiceID = Invoice#domain_Invoice.id,
+    PartyID = Invoice#domain_Invoice.owner_id,
+    ShopID = Invoice#domain_Invoice.shop_id,
+    TokenProviderData = maps:merge(
+        #{<<"orderID">> => InvoiceID},
+        construct_token_provider_data(PartyID, ShopID, Context)
+    ),
+    emplace_token_provider_data(PaymentMethods, TokenProviderData);
+emplace_token_provider_data(#domain_InvoiceTemplate{} = InvoiceTemplate, PaymentMethods, Context) ->
+    PartyID = InvoiceTemplate#domain_InvoiceTemplate.owner_id,
+    ShopID = InvoiceTemplate#domain_InvoiceTemplate.shop_id,
+    TokenProviderData = construct_token_provider_data(PartyID, ShopID, Context),
+    emplace_token_provider_data(PaymentMethods, TokenProviderData).
+
+emplace_token_provider_data(PaymentMethods, TokenProviderData) ->
+    lists:map(
+        fun
+            (#{<<"tokenProviders">> := _Providers} = PaymentMethod) ->
+                PaymentMethod#{<<"tokenProviderData">> => TokenProviderData};
+            (PaymentMethod) ->
+                PaymentMethod
+        end,
+        PaymentMethods
+    ).
+
+construct_token_provider_data(PartyID, ShopID, Context) ->
+    {ok, ShopContract} = capi_party:get_shop_contract(PartyID, ShopID, Context),
+    ShopName = ShopContract#payproc_ShopContract.shop#domain_Shop.details#domain_ShopDetails.name,
+    PiRef = ShopContract#payproc_ShopContract.contract#domain_Contract.payment_institution,
+    {ok, Pi} = capi_domain:get_payment_institution(PiRef, Context),
+    Realm = Pi#domain_PaymentInstitution.realm,
+    MerchantID = capi_merchant_id:encode(Realm, PartyID, ShopID),
+    #{
+        <<"merchantID">> => MerchantID,
+        <<"merchantName">> => ShopName,
+        <<"realm">> => genlib:to_binary(Realm)
+    }.

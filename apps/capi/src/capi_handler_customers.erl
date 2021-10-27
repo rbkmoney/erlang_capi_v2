@@ -6,11 +6,7 @@
 
 -export([prepare/3]).
 
--import(capi_handler_utils, [
-    general_error/2,
-    logic_error/2,
-    map_service_result/1
-]).
+-import(capi_handler_utils, [general_error/2, logic_error/1, logic_error/2, map_service_result/1]).
 
 -spec prepare(
     OperationID :: capi_handler:operation_id(),
@@ -33,7 +29,7 @@ prepare('CreateCustomer' = OperationID, Req, Context) ->
             Call = {customer_management, 'Create', {EncodedCustomerParams}},
             case capi_handler_utils:service_call(Call, Context) of
                 {ok, Customer} ->
-                    {ok, {201, #{}, make_customer_and_token(Customer, PartyID)}};
+                    {ok, {201, #{}, make_customer_and_token(Customer, Context)}};
                 {exception, #payproc_InvalidUser{}} ->
                     {ok, logic_error(invalidPartyID, <<"Party not found">>)};
                 {exception, #payproc_InvalidPartyStatus{}} ->
@@ -109,9 +105,8 @@ prepare('CreateCustomerAccessToken' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         case Customer of
-            #payproc_Customer{owner_id = PartyID, shop_id = ShopID} ->
-                TokenSpec = #{customer => CustomerID, shop => ShopID},
-                Response = capi_handler_utils:issue_access_token(PartyID, TokenSpec),
+            #payproc_Customer{} ->
+                Response = capi_handler_utils:issue_access_token(Customer, Context),
                 {ok, {201, #{}, Response}};
             undefined ->
                 {ok, general_error(404, <<"Customer not found">>)}
@@ -147,8 +142,6 @@ prepare('CreateBinding' = OperationID, Req, Context) ->
                 Call = {customer_management, 'StartBinding', {CustomerID, EncodedCustomerBindingParams}},
                 capi_handler_utils:service_call(Call, Context)
             catch
-                throw:invalid_payment_token ->
-                    {error, invalid_payment_token};
                 throw:invalid_payment_session ->
                     {error, invalid_payment_session};
                 throw:Error = {external_id_conflict, _, _, _} ->
@@ -169,8 +162,6 @@ prepare('CreateBinding' = OperationID, Req, Context) ->
                 {ok, logic_error(invalidRequest, <<"Invalid contract status">>)};
             {exception, #payproc_OperationNotPermitted{}} ->
                 {ok, logic_error(operationNotPermitted, <<"Operation not permitted">>)};
-            {error, invalid_payment_token} ->
-                {ok, logic_error(invalidPaymentToolToken, <<"Specified payment tool token is invalid">>)};
             {error, invalid_payment_session} ->
                 {ok, logic_error(invalidPaymentSession, <<"Specified payment session is invalid">>)};
             {error, {external_id_conflict, ID, UsedExternalID, _Schema}} ->
@@ -356,7 +347,7 @@ encode_payment_tool_token(Token) ->
             case capi_utils:deadline_is_reached(ValidUntil) of
                 true ->
                     logger:warning("Payment tool token expired: ~p", [capi_utils:deadline_to_binary(ValidUntil)]),
-                    erlang:throw(invalid_payment_token);
+                    capi_handler:respond(logic_error(invalidPaymentToolToken));
                 _ ->
                     PaymentTool
             end;
@@ -364,7 +355,7 @@ encode_payment_tool_token(Token) ->
             encode_legacy_payment_tool_token(Token);
         {error, {decryption_failed, Error}} ->
             logger:warning("Payment tool token decryption failed: ~p", [Error]),
-            erlang:throw(invalid_payment_token)
+            capi_handler:respond(logic_error(invalidPaymentToolToken))
     end.
 
 encode_legacy_payment_tool_token(Token) ->
@@ -372,18 +363,13 @@ encode_legacy_payment_tool_token(Token) ->
         capi_handler_encoder:encode_payment_tool(capi_utils:base64url_to_map(Token))
     catch
         error:badarg ->
-            erlang:throw(invalid_payment_token)
+            capi_handler:respond(logic_error(invalidPaymentToolToken))
     end.
 
-make_customer_and_token(Customer, PartyID) ->
-    TokenSpec = #{
-        customer => Customer#payproc_Customer.id,
-        shop => Customer#payproc_Customer.shop_id
-    },
+make_customer_and_token(Customer, ProcessingContext) ->
     #{
         <<"customer">> => decode_customer(Customer),
-        <<"customerAccessToken">> =>
-            capi_handler_utils:issue_access_token(PartyID, TokenSpec)
+        <<"customerAccessToken">> => capi_handler_utils:issue_access_token(Customer, ProcessingContext)
     }.
 
 decode_customer(Customer) ->

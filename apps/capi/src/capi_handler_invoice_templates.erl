@@ -7,11 +7,7 @@
 
 -export([prepare/3]).
 
--import(capi_handler_utils, [
-    general_error/2,
-    logic_error/2,
-    map_service_result/1
-]).
+-import(capi_handler_utils, [general_error/2, logic_error/2, map_service_result/1]).
 
 -spec prepare(
     OperationID :: capi_handler:operation_id(),
@@ -29,7 +25,6 @@ prepare('CreateInvoiceTemplate' = OperationID, Req, Context) ->
         {ok, Resolution}
     end,
     Process = fun() ->
-        ExtraProperties = capi_handler_utils:get_extra_properties(Context),
         try
             InvoiceTemplateID = generate_invoice_template_id(OperationID, InvoiceTemplateParams, PartyID, Context),
             CallArgs = {encode_invoice_tpl_create_params(InvoiceTemplateID, PartyID, InvoiceTemplateParams)},
@@ -40,7 +35,7 @@ prepare('CreateInvoiceTemplate' = OperationID, Req, Context) ->
             )
         of
             {ok, InvoiceTpl} ->
-                {ok, {201, #{}, make_invoice_tpl_and_token(InvoiceTpl, PartyID, ExtraProperties)}};
+                {ok, {201, #{}, make_invoice_tpl_and_token(InvoiceTpl, Context)}};
             {exception, Exception} ->
                 case Exception of
                     #'InvalidRequest'{errors = Errors} ->
@@ -174,17 +169,10 @@ prepare('CreateInvoiceWithTemplate' = OperationID, Req, Context) ->
     Process = fun() ->
         capi_handler:respond_if_undefined(InvoiceTpl, general_error(404, <<"Invoice template not found">>)),
         InvoiceParams = maps:get('InvoiceParamsWithTemplate', Req),
-        ExtraProperties = capi_handler_utils:get_extra_properties(Context),
         PartyID = InvoiceTpl#domain_InvoiceTemplate.owner_id,
         try create_invoice(PartyID, InvoiceTplID, InvoiceParams, Context, OperationID) of
             {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-                {ok,
-                    {201, #{},
-                        capi_handler_decoder_invoicing:make_invoice_and_token(
-                            Invoice,
-                            Invoice#domain_Invoice.owner_id,
-                            ExtraProperties
-                        )}};
+                {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, Context)}};
             {exception, Reason} ->
                 case Reason of
                     #payproc_InvalidUser{} ->
@@ -234,7 +222,9 @@ prepare('GetInvoicePaymentMethodsByTemplateID' = OperationID, Req, Context) ->
         case capi_handler_decoder_invoicing:construct_payment_methods(invoice_templating, Args, Context) of
             {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
                 PaymentMethods1 = capi_utils:deduplicate_payment_methods(PaymentMethods0),
-                PaymentMethods = emplace_token_provider_data(PaymentMethods1, InvoiceTemplate, Context),
+                PaymentMethods = capi_handler_utils:emplace_token_provider_data(
+                    InvoiceTemplate, PaymentMethods1, Context
+                ),
                 {ok, {200, #{}, PaymentMethods}};
             {exception, E} when
                 E == #payproc_InvalidUser{};
@@ -291,6 +281,7 @@ encode_invoice_tpl_create_params(InvoiceTemplateID, PartyID, Params) ->
         shop_id = genlib_map:get(<<"shopID">>, Params),
         invoice_lifetime = encode_lifetime(Params),
         product = Product,
+        name = genlib_map:get(<<"name">>, Params),
         description = genlib_map:get(<<"description">>, Params),
         details = Details,
         context = capi_handler_encoder:encode_invoice_context(Params)
@@ -302,19 +293,16 @@ encode_invoice_tpl_update_params(Params) ->
     #payproc_InvoiceTemplateUpdateParams{
         invoice_lifetime = encode_lifetime(Params),
         product = Product,
+        name = genlib_map:get(<<"name">>, Params),
         description = genlib_map:get(<<"description">>, Params),
         details = Details,
         context = encode_optional_context(Params)
     }.
 
-make_invoice_tpl_and_token(InvoiceTpl, PartyID, ExtraProperties) ->
+make_invoice_tpl_and_token(InvoiceTpl, ProcessingContext) ->
     #{
         <<"invoiceTemplate">> => decode_invoice_tpl(InvoiceTpl),
-        <<"invoiceTemplateAccessToken">> => capi_handler_utils:issue_access_token(
-            PartyID,
-            {invoice_tpl, InvoiceTpl#domain_InvoiceTemplate.id},
-            ExtraProperties
-        )
+        <<"invoiceTemplateAccessToken">> => capi_handler_utils:issue_access_token(InvoiceTpl, ProcessingContext)
     }.
 
 encode_invoice_tpl_details(#{<<"templateType">> := <<"InvoiceTemplateSingleLine">>} = Details) ->
@@ -409,7 +397,9 @@ decode_invoice_tpl(InvoiceTpl) ->
     genlib_map:compact(#{
         <<"id">> => InvoiceTpl#domain_InvoiceTemplate.id,
         <<"shopID">> => InvoiceTpl#domain_InvoiceTemplate.shop_id,
+        <<"name">> => InvoiceTpl#domain_InvoiceTemplate.name,
         <<"description">> => InvoiceTpl#domain_InvoiceTemplate.description,
+        <<"createdAt">> => InvoiceTpl#domain_InvoiceTemplate.created_at,
         <<"lifetime">> => #{
             <<"days">> => undef_to_zero(DD),
             <<"months">> => undef_to_zero(MM),
@@ -462,23 +452,4 @@ decode_invoice_tpl_line_cost({range, #domain_CashRange{upper = {_, UpperCashBoun
             <<"upperBound">> => UpperBound,
             <<"lowerBound">> => LowerBound
         }
-    }.
-
-emplace_token_provider_data(PaymentMethods, InvoiceTemplate, Context) ->
-    TokenProviderData = construct_token_provider_data(InvoiceTemplate, Context),
-    capi_handler_decoder_invoicing:emplace_token_provider_data(PaymentMethods, TokenProviderData).
-
-construct_token_provider_data(InvoiceTemplate, Context) ->
-    PartyID = InvoiceTemplate#domain_InvoiceTemplate.owner_id,
-    ShopID = InvoiceTemplate#domain_InvoiceTemplate.shop_id,
-    {ok, Shop} = capi_party:get_shop(PartyID, ShopID, Context),
-    ShopName = Shop#domain_Shop.details#domain_ShopDetails.name,
-    ContractID = Shop#domain_Shop.contract_id,
-    {ok, Realm} = capi_handler_utils:get_realm_by_contract(PartyID, ContractID, Context),
-    RealmMode = genlib:to_binary(Realm),
-    MerchantID = capi_handler_utils:wrap_merchant_id(RealmMode, PartyID, ShopID),
-    #{
-        <<"merchantID">> => MerchantID,
-        <<"merchantName">> => ShopName,
-        <<"realm">> => RealmMode
     }.

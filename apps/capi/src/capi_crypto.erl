@@ -9,6 +9,7 @@
     bouncer_data => bouncer_data()
 }.
 -type bouncer_data() :: term().
+
 -type payment_tool() :: dmsl_domain_thrift:'PaymentTool'().
 -type payment_tool_token() :: dmsl_payment_tool_token_thrift:'PaymentToolToken'().
 -type payment_tool_token_payload() :: dmsl_payment_tool_token_thrift:'PaymentToolTokenPayload'().

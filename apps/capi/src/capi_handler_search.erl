@@ -43,9 +43,7 @@ prepare(OperationID, Req, Context) when OperationID =:= 'SearchRefunds' ->
     Process = fun() ->
         Query = make_query(Context, Req),
         Opts = #{
-            %% TODO no special fun for refunds so we can use any
-            %% should be fixed in new magista
-            thrift_fun => 'GetPayments',
+            thrift_fun => 'GetRefunds',
             decode_fun => fun decode_stat_refund/2
         },
         process_search_request(refunds, Query, Req, Context, Opts)
@@ -161,7 +159,8 @@ decode_stat_invoice(Invoice, _Context) ->
             <<"metadata">> => capi_handler_decoder_utils:decode_context(Invoice#merchstat_StatInvoice.context),
             <<"product">> => Invoice#merchstat_StatInvoice.product,
             <<"description">> => Invoice#merchstat_StatInvoice.description,
-            <<"cart">> => capi_handler_decoder_invoicing:decode_invoice_cart(Invoice#merchstat_StatInvoice.cart)
+            <<"cart">> => capi_handler_decoder_invoicing:decode_invoice_cart(Invoice#merchstat_StatInvoice.cart),
+            <<"allocation">> => capi_allocation:decode(Invoice#merchstat_StatInvoice.allocation)
         },
         decode_stat_invoice_status(Invoice#merchstat_StatInvoice.status)
     ).
@@ -187,18 +186,19 @@ decode_stat_payment(Stat, Context) ->
             <<"shopID">> => Stat#merchstat_StatPayment.shop_id,
             <<"createdAt">> => Stat#merchstat_StatPayment.created_at,
             <<"amount">> => Stat#merchstat_StatPayment.amount,
-            <<"flow">> => decode_stat_payment_flow(Stat#merchstat_StatPayment.flow),
             <<"fee">> => Stat#merchstat_StatPayment.fee,
             <<"currency">> => Stat#merchstat_StatPayment.currency_symbolic_code,
             <<"payer">> => decode_stat_payer(Stat#merchstat_StatPayment.payer),
+            <<"flow">> => decode_stat_payment_flow(Stat#merchstat_StatPayment.flow),
             <<"geoLocationInfo">> => decode_geo_location_info(Stat#merchstat_StatPayment.location_info),
             <<"metadata">> => capi_handler_decoder_utils:decode_context(Stat#merchstat_StatPayment.context),
             <<"transactionInfo">> => decode_stat_tx_info(Stat#merchstat_StatPayment.additional_transaction_info),
+            <<"statusChangedAt">> => decode_status_changed_at(Stat#merchstat_StatPayment.status),
             <<"makeRecurrent">> => capi_handler_decoder_invoicing:decode_make_recurrent(
                 Stat#merchstat_StatPayment.make_recurrent
             ),
-            <<"statusChangedAt">> => decode_status_changed_at(Stat#merchstat_StatPayment.status),
-            <<"cart">> => capi_handler_decoder_invoicing:decode_invoice_cart(Stat#merchstat_StatPayment.cart)
+            <<"cart">> => capi_handler_decoder_invoicing:decode_invoice_cart(Stat#merchstat_StatPayment.cart),
+            <<"allocation">> => capi_allocation:decode(Stat#merchstat_StatPayment.allocation)
         },
         decode_stat_payment_status(Stat#merchstat_StatPayment.status, Context)
     ).
@@ -472,13 +472,15 @@ decode_stat_refund(Refund, Context) ->
             <<"invoiceID">> => Refund#merchstat_StatRefund.invoice_id,
             <<"paymentID">> => Refund#merchstat_StatRefund.payment_id,
             <<"id">> => Refund#merchstat_StatRefund.id,
+            <<"externalID">> => Refund#merchstat_StatRefund.external_id,
             <<"createdAt">> => Refund#merchstat_StatRefund.created_at,
             <<"amount">> => Refund#merchstat_StatRefund.amount,
             <<"currency">> => Refund#merchstat_StatRefund.currency_symbolic_code,
             <<"reason">> => Refund#merchstat_StatRefund.reason,
             <<"cart">> => capi_handler_decoder_invoicing:decode_invoice_cart(
                 Refund#merchstat_StatRefund.cart
-            )
+            ),
+            <<"allocation">> => capi_allocation:decode(Refund#merchstat_StatRefund.allocation)
         },
         decode_stat_refund_status(Refund#merchstat_StatRefund.status, Context)
     ).

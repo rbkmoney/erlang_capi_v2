@@ -21,7 +21,7 @@
 
 -export([emplace_token_provider_data/2]).
 -export([construct_payment_methods/3]).
--export([make_invoice_and_token/3]).
+-export([make_invoice_and_token/2]).
 
 -type processing_context() :: capi_handler:processing_context().
 -type decode_data() :: capi_handler_decoder_utils:decode_data().
@@ -160,7 +160,8 @@ decode_invoice_payment(InvoiceID, InvoicePayment = #payproc_InvoicePayment{payme
     capi_handler_utils:merge_and_compact(
         decode_payment(InvoiceID, Payment, Context),
         #{
-            <<"transactionInfo">> => decode_last_tx_info(InvoicePayment#payproc_InvoicePayment.last_transaction_info)
+            <<"transactionInfo">> => decode_last_tx_info(InvoicePayment#payproc_InvoicePayment.last_transaction_info),
+            <<"allocation">> => capi_allocation:decode(InvoicePayment#payproc_InvoicePayment.allocation)
         }
     ).
 
@@ -328,7 +329,8 @@ decode_refund(Refund, Context) ->
             <<"reason">> => Refund#domain_InvoicePaymentRefund.reason,
             <<"amount">> => Amount,
             <<"currency">> => capi_handler_decoder_utils:decode_currency(Currency),
-            <<"externalID">> => Refund#domain_InvoicePaymentRefund.external_id
+            <<"externalID">> => Refund#domain_InvoicePaymentRefund.external_id,
+            <<"allocation">> => capi_allocation:decode(Refund#domain_InvoicePaymentRefund.allocation)
         },
         decode_refund_status(Refund#domain_InvoicePaymentRefund.status, Context)
     ).
@@ -404,7 +406,8 @@ decode_invoice(Invoice) ->
             <<"description">> => Details#domain_InvoiceDetails.description,
             <<"cart">> => decode_invoice_cart(Details#domain_InvoiceDetails.cart),
             <<"bankAccount">> => decode_invoice_bank_account(Details#domain_InvoiceDetails.bank_account),
-            <<"invoiceTemplateID">> => Invoice#domain_Invoice.template_id
+            <<"invoiceTemplateID">> => Invoice#domain_Invoice.template_id,
+            <<"allocation">> => capi_allocation:decode(Invoice#domain_Invoice.allocation)
         },
         decode_invoice_status(Invoice#domain_Invoice.status)
     ).
@@ -422,7 +425,7 @@ decode_invoice_status({Status, StatusInfo}) ->
     }.
 
 -spec decode_invoice_cart(capi_handler_encoder:encode_data() | undefined) ->
-    decode_data() | undefined.
+    [capi_handler_decoder_utils:decode_data()] | undefined.
 decode_invoice_cart(#domain_InvoiceCart{lines = Lines}) ->
     [decode_invoice_line(L) || L <- Lines];
 decode_invoice_cart(undefined) ->
@@ -596,20 +599,12 @@ decode_tokenized_bank_card(TokenProvider, PaymentSystems) ->
 compute_terms(ServiceName, Args, Context) ->
     capi_handler_utils:service_call_with([user_info], {ServiceName, 'ComputeTerms', Args}, Context).
 
--spec make_invoice_and_token(capi_handler_encoder:encode_data(), binary(), map()) ->
-    decode_data().
-make_invoice_and_token(Invoice, PartyID, ExtraProperties) ->
-    TokenSpec = #{
-        invoice => Invoice#domain_Invoice.id,
-        shop => Invoice#domain_Invoice.shop_id
-    },
+-spec make_invoice_and_token(capi_handler_encoder:encode_data(), processing_context()) ->
+    capi_handler_decoder_utils:decode_data().
+make_invoice_and_token(Invoice, ProcessingContext) ->
     #{
         <<"invoice">> => decode_invoice(Invoice),
-        <<"invoiceAccessToken">> => capi_handler_utils:issue_access_token(
-            PartyID,
-            TokenSpec,
-            ExtraProperties
-        )
+        <<"invoiceAccessToken">> => capi_handler_utils:issue_access_token(Invoice, ProcessingContext)
     }.
 
 %%

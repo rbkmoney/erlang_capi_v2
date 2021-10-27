@@ -103,8 +103,7 @@ end_per_suite(C) ->
 -spec init_per_group(group_name(), config()) -> config().
 init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    ExtraProperties = #{<<"ip_replacement_allowed">> => true},
-    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited, ExtraProperties)),
+    Context = capi_ct_helper:get_context(?API_TOKEN),
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Create', _) -> {ok, ?PAYPROC_INVOICE} end},
@@ -130,7 +129,7 @@ init_per_group(operations_by_invoice_access_token_after_invoice_creation, Config
     [{context, capi_ct_helper:get_context(InvAccToken)} | Config];
 init_per_group(operations_by_invoice_access_token_after_token_creation, Config) ->
     MockServiceSup = capi_ct_helper:start_mocked_service_sup(?MODULE),
-    Context = capi_ct_helper:get_context(capi_ct_helper:issue_token(unlimited)),
+    Context = capi_ct_helper:get_context(?API_TOKEN),
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Get', _) -> {ok, ?PAYPROC_INVOICE} end},
@@ -239,8 +238,7 @@ get_invoice_payment_methods_ok_test(Config) ->
             {party_management, fun
                 ('GetRevision', _) -> {ok, ?INTEGER};
                 ('Checkout', _) -> {ok, ?PARTY};
-                ('GetShop', _) -> {ok, ?SHOP};
-                ('GetContract', _) -> {ok, ?CONTRACT}
+                ('GetShopContract', _) -> {ok, ?SHOP_CONTRACT}
             end}
         ],
         Config
@@ -263,7 +261,7 @@ get_invoice_payment_methods_ok_test(Config) ->
     ),
     ?assertMatch(
         #{
-            <<"merchantID">> := <<"test:", _/binary>>,
+            <<"merchantID">> := <<_/binary>>,
             <<"merchantName">> := ?STRING,
             <<"orderID">> := ?STRING,
             <<"realm">> := <<"test">>

@@ -6,11 +6,7 @@
 
 -export([prepare/3]).
 
--import(capi_handler_utils, [
-    general_error/2,
-    logic_error/2,
-    map_service_result/1
-]).
+-import(capi_handler_utils, [general_error/2, logic_error/2, map_service_result/1]).
 
 -spec prepare(
     OperationID :: capi_handler:operation_id(),
@@ -33,16 +29,11 @@ prepare('CreateInvoice' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         try
-            ExtraProperties = capi_handler_utils:get_extra_properties(Context),
+            Allocation = maps:get(<<"allocation">>, InvoiceParams, undefined),
+            ok = validate_allocation(Allocation),
             case create_invoice(PartyID, InvoiceParams, Context, OperationID) of
                 {ok, #'payproc_Invoice'{invoice = Invoice}} ->
-                    {ok,
-                        {201, #{},
-                            capi_handler_decoder_invoicing:make_invoice_and_token(
-                                Invoice,
-                                PartyID,
-                                ExtraProperties
-                            )}};
+                    {ok, {201, #{}, capi_handler_decoder_invoicing:make_invoice_and_token(Invoice, Context)}};
                 {exception, Exception} ->
                     case Exception of
                         #'payproc_InvalidUser'{} ->
@@ -57,16 +48,27 @@ prepare('CreateInvoice' = OperationID, Req, Context) ->
                         #payproc_InvalidShopStatus{} ->
                             {ok, logic_error(invalidShopStatus, <<"Invalid shop status">>)};
                         #payproc_InvoiceTermsViolated{} ->
-                            {ok, logic_error(invoiceTermsViolated, <<"Invoice parameters violate contract terms">>)}
+                            {ok, logic_error(invoiceTermsViolated, <<"Invoice parameters violate contract terms">>)};
+                        #payproc_AllocationNotAllowed{} ->
+                            {ok, logic_error(allocationNotPermitted, <<"Not allowed">>)};
+                        #payproc_AllocationExceededPaymentAmount{} ->
+                            {ok, logic_error(invalidAllocation, <<"Exceeded payment amount">>)};
+                        #payproc_AllocationInvalidTransaction{} = InvalidTransaction ->
+                            Message = capi_allocation:transaction_error(InvalidTransaction),
+                            {ok, logic_error(invalidAllocation, Message)}
                     end
             end
         catch
-            invoice_cart_empty ->
+            throw:invoice_cart_empty ->
                 {ok, logic_error(invalidInvoiceCart, <<"Wrong size. Path to item: cart">>)};
-            invalid_invoice_cost ->
+            throw:invalid_invoice_cost ->
                 {ok, logic_error(invalidInvoiceCost, <<"Invalid invoice amount">>)};
-            {external_id_conflict, InvoiceID, ExternalID, _Schema} ->
-                {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})}
+            throw:{external_id_conflict, InvoiceID, ExternalID, _Schema} ->
+                {ok, logic_error(externalIDConflict, {InvoiceID, ExternalID})};
+            throw:allocation_wrong_cart ->
+                {ok, logic_error(invalidAllocation, <<"Wrong cart">>)};
+            throw:allocation_duplicate ->
+                {ok, logic_error(invalidAllocation, <<"Duplicate shop">>)}
         end
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -83,11 +85,8 @@ prepare('CreateInvoiceAccessToken' = OperationID, Req, Context) ->
     end,
     Process = fun() ->
         capi_handler:respond_if_undefined(ResultInvoice, general_error(404, <<"Invoice not found">>)),
-        ExtraProperties = capi_handler_utils:get_extra_properties(Context),
         Invoice = ResultInvoice#payproc_Invoice.invoice,
-        PartyID = Invoice#domain_Invoice.owner_id,
-        TokenSpec = #{invoice => Invoice#domain_Invoice.id, shop => Invoice#domain_Invoice.shop_id},
-        Response = capi_handler_utils:issue_access_token(PartyID, TokenSpec, ExtraProperties),
+        Response = capi_handler_utils:issue_access_token(Invoice, Context),
         {ok, {201, #{}, Response}}
     end,
     {ok, #{authorize => Authorize, process => Process}};
@@ -262,8 +261,9 @@ prepare('GetInvoicePaymentMethods' = OperationID, Req, Context) ->
         Args = {InvoiceID, {revision, Party#domain_Party.revision}},
         case capi_handler_decoder_invoicing:construct_payment_methods(invoicing, Args, Context) of
             {ok, PaymentMethods0} when is_list(PaymentMethods0) ->
+                #payproc_Invoice{invoice = Invoice} = ResultInvoice,
                 PaymentMethods1 = capi_utils:deduplicate_payment_methods(PaymentMethods0),
-                PaymentMethods = emplace_token_provider_data(PaymentMethods1, ResultInvoice, Context),
+                PaymentMethods = capi_handler_utils:emplace_token_provider_data(Invoice, PaymentMethods1, Context),
                 {ok, {200, #{}, PaymentMethods}};
             {exception, Exception} ->
                 case Exception of
@@ -280,6 +280,12 @@ prepare(_OperationID, _Req, _Context) ->
 
 %%
 
+validate_allocation(Allocation) ->
+    case capi_allocation:validate(Allocation) of
+        ok -> ok;
+        Error -> throw(Error)
+    end.
+
 create_invoice(PartyID, InvoiceParams, Context, BenderPrefix) ->
     #{woody_context := WoodyCtx} = Context,
     ExternalID = maps:get(<<"externalID">>, InvoiceParams, undefined),
@@ -294,6 +300,7 @@ encode_invoice_params(ID, PartyID, InvoiceParams) ->
     Currency = genlib_map:get(<<"currency">>, InvoiceParams),
     Cart = genlib_map:get(<<"cart">>, InvoiceParams),
     ClientInfo = genlib_map:get(<<"clientInfo">>, InvoiceParams),
+    Allocation = genlib_map:get(<<"allocation">>, InvoiceParams),
     #payproc_InvoiceParams{
         id = ID,
         party_id = PartyID,
@@ -303,7 +310,8 @@ encode_invoice_params(ID, PartyID, InvoiceParams) ->
         context = capi_handler_encoder:encode_invoice_context(InvoiceParams),
         shop_id = genlib_map:get(<<"shopID">>, InvoiceParams),
         external_id = genlib_map:get(<<"externalID">>, InvoiceParams, undefined),
-        client_info = encode_client_info(ClientInfo)
+        client_info = encode_client_info(ClientInfo),
+        allocation = capi_allocation:encode(Allocation, PartyID)
     }.
 
 encode_client_info(undefined) ->
@@ -459,28 +467,6 @@ decode_refund_for_event(#domain_InvoicePaymentRefund{cash = undefined} = Refund,
     {ok, #payproc_InvoicePayment{payment = #domain_InvoicePayment{cost = Cash}}} =
         capi_handler_utils:get_payment_by_id(InvoiceID, PaymentID, Context),
     capi_handler_decoder_invoicing:decode_refund(Refund#domain_InvoicePaymentRefund{cash = Cash}, Context).
-
-emplace_token_provider_data(PaymentMethods, PayprocInvoice, Context) ->
-    #payproc_Invoice{invoice = Invoice} = PayprocInvoice,
-    TokenProviderData = construct_token_provider_data(Invoice, Context),
-    capi_handler_decoder_invoicing:emplace_token_provider_data(PaymentMethods, TokenProviderData).
-
-construct_token_provider_data(Invoice, Context) ->
-    InvoiceID = Invoice#domain_Invoice.id,
-    PartyID = Invoice#domain_Invoice.owner_id,
-    ShopID = Invoice#domain_Invoice.shop_id,
-    {ok, Shop} = capi_party:get_shop(PartyID, ShopID, Context),
-    ShopName = Shop#domain_Shop.details#domain_ShopDetails.name,
-    ContractID = Shop#domain_Shop.contract_id,
-    {ok, Realm} = capi_handler_utils:get_realm_by_contract(PartyID, ContractID, Context),
-    RealmMode = genlib:to_binary(Realm),
-    MerchantID = capi_handler_utils:wrap_merchant_id(RealmMode, PartyID, ShopID),
-    #{
-        <<"merchantID">> => MerchantID,
-        <<"merchantName">> => ShopName,
-        <<"orderID">> => InvoiceID,
-        <<"realm">> => RealmMode
-    }.
 
 get_invoice_by_external_id(ExternalID, #{woody_context := WoodyContext} = Context) ->
     PartyID = capi_handler_utils:get_party_id(Context),

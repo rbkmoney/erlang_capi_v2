@@ -15,6 +15,9 @@
 -define(SHA256, <<"94EE059335E587E501CC4BF90613E0814F00A7B08BC7C648FD865A2AF6A22CC2">>).
 -define(TEST_USER_REALM, <<"external">>).
 -define(TEST_RULESET_ID, <<"test/api">>).
+-define(API_TOKEN, <<"letmein">>).
+
+-define(RATIONAL, #'Rational'{p = ?INTEGER, q = ?INTEGER}).
 
 -define(DETAILS, #domain_InvoiceDetails{
     product = ?STRING,
@@ -74,12 +77,14 @@
     external_id = EID
 }).
 
+-define(INVOICE_CART_TAXMODE, #{
+    <<"type">> => <<"InvoiceLineTaxVAT">>,
+    <<"rate">> => <<"10%">>
+}).
+
 -define(INVOICE_CART, [
     #{
-        <<"taxMode">> => #{
-            <<"type">> => <<"InvoiceLineTaxVAT">>,
-            <<"rate">> => <<"10%">>
-        },
+        <<"taxMode">> => ?INVOICE_CART_TAXMODE,
         <<"product">> => ?STRING,
         <<"price">> => ?INTEGER,
         <<"quantity">> => ?INTEGER
@@ -115,6 +120,46 @@
     quantity = ?INTEGER,
     price = ?CASH,
     metadata = #{?STRING := {obj, #{}}}
+}).
+
+-define(ALLOCATION_CART, #domain_InvoiceCart{
+    lines = [
+        #domain_InvoiceLine{
+            product = ?STRING,
+            quantity = ?INTEGER,
+            price = ?CASH,
+            metadata = #{<<"TaxMode">> => {str, <<"10%">>}}
+        }
+    ]
+}).
+
+-define(ALLOCATION, #domain_Allocation{
+    transactions = [
+        #domain_AllocationTransaction{
+            id = ?STRING,
+            target =
+                {shop, #domain_AllocationTransactionTargetShop{
+                    owner_id = ?STRING,
+                    shop_id = ?STRING
+                }},
+            amount = ?CASH,
+            body = #domain_AllocationTransactionBodyTotal{
+                fee_target =
+                    {shop, #domain_AllocationTransactionTargetShop{
+                        owner_id = ?STRING,
+                        shop_id = ?STRING
+                    }},
+                total = ?CASH,
+                fee_amount = ?CASH,
+                fee = #domain_AllocationTransactionFeeShare{
+                    parts = ?RATIONAL
+                }
+            },
+            details = #domain_AllocationTransactionDetails{
+                cart = ?ALLOCATION_CART
+            }
+        }
+    ]
 }).
 
 -define(THRIFT_INVOICE_CART, #domain_InvoiceCart{
@@ -284,7 +329,8 @@
     sessions = [],
     legacy_refunds = Refunds,
     adjustments = Adjustments,
-    last_transaction_info = ?TX_INFO
+    last_transaction_info = ?TX_INFO,
+    allocation = ?ALLOCATION
 }).
 
 -define(PAYPROC_PAYMENT, ?PAYPROC_PAYMENT(?PAYMENT, [?REFUND], [?ADJUSTMENT], [?PAYPROC_CHARGEBACK])).
@@ -388,7 +434,12 @@
     contract_id = ?STRING
 }).
 
--define(SHOP_LOCATION, {url, ?STRING}).
+-define(SHOP_CONTRACT, #payproc_ShopContract{
+    shop = ?SHOP,
+    contract = ?CONTRACT
+}).
+
+-define(SHOP_LOCATION, {url, ?URL}).
 
 -define(SHOP_DETAILS, #domain_ShopDetails{name = ?STRING}).
 
@@ -781,7 +832,7 @@
                     }}
             ])
         }},
-    url = ?STRING,
+    url = ?URL,
     pub_key = ?STRING,
     enabled = true
 }).
@@ -831,7 +882,9 @@
     due = ?TIMESTAMP,
     amount = ?INTEGER,
     currency_symbolic_code = ?RUB,
-    context = ?CONTENT
+    context = ?CONTENT,
+    external_id = ?STRING,
+    allocation = ?ALLOCATION
 }).
 
 -define(STAT_PAYMENT(Payer, Status), #merchstat_StatPayment{
@@ -842,13 +895,15 @@
     created_at = ?TIMESTAMP,
     status = Status,
     amount = ?INTEGER,
-    flow = {instant, #merchstat_InvoicePaymentFlowInstant{}},
     fee = ?INTEGER,
     currency_symbolic_code = ?RUB,
     payer = Payer,
     context = ?CONTENT,
+    flow = {instant, #merchstat_InvoicePaymentFlowInstant{}},
     domain_revision = ?INTEGER,
-    additional_transaction_info = ?ADDITIONAL_TX_INFO
+    additional_transaction_info = ?ADDITIONAL_TX_INFO,
+    external_id = ?STRING,
+    allocation = ?ALLOCATION
 }).
 
 -define(TX_INFO, #domain_TransactionInfo{
@@ -921,7 +976,9 @@
     created_at = ?TIMESTAMP,
     amount = ?INTEGER,
     fee = ?INTEGER,
-    currency_symbolic_code = ?RUB
+    currency_symbolic_code = ?RUB,
+    external_id = ?STRING,
+    allocation = ?ALLOCATION
 }).
 
 -define(STAT_PAYOUT(Type), #merchstat_StatPayout{
@@ -1352,4 +1409,25 @@
     },
     <<"metadata">> => ?JSON,
     <<"processingDeadline">> => <<"5m">>
+}).
+
+-define(ALLOCATION_TARGET, #{
+    <<"allocationTargetType">> => <<"AllocationTargetShop">>,
+    <<"shopID">> => ?STRING
+}).
+
+-define(ALLOCATION_TRANSACTION_PARAMS, #{
+    <<"target">> => ?ALLOCATION_TARGET,
+    <<"allocationBodyType">> => <<"AllocationBodyTotal">>,
+    <<"total">> => ?INTEGER,
+    <<"currency">> => ?USD,
+    <<"fee">> => #{
+        <<"target">> => ?ALLOCATION_TARGET,
+        <<"allocationFeeType">> => <<"AllocationFeeShare">>,
+        <<"amount">> => ?INTEGER,
+        <<"share">> => #{<<"m">> => ?INTEGER, <<"exp">> => ?INTEGER}
+    },
+    <<"cart">> => [
+        #{<<"product">> => ?STRING, <<"quantity">> => ?INTEGER, <<"price">> => ?INTEGER}
+    ]
 }).
