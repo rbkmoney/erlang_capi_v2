@@ -513,17 +513,10 @@ prepare(_OperationID, _Req, _Context) ->
 
 prepare_payment_tool_prototype(undefined) ->
     #{};
-prepare_payment_tool_prototype(PaymentToken) ->
+prepare_payment_tool_prototype(#{bouncer_data := BouncerData}) ->
     #{
-        expiration => prepare_payment_tool_expire(PaymentToken),
-        scope => prepare_payment_tool_scope(PaymentToken)
+        payment_tool_context => BouncerData
     }.
-
-prepare_payment_tool_expire(#{valid_until := ValidUntil}) ->
-    capi_utils:deadline_to_binary(ValidUntil).
-
-prepare_payment_tool_scope(#{bouncer_data := BouncerData}) ->
-    BouncerData.
 
 %%
 validate_allocation(Allocation) ->

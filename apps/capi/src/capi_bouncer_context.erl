@@ -1,7 +1,6 @@
 -module(capi_bouncer_context).
 
 -include_lib("bouncer_proto/include/bouncer_context_v1_thrift.hrl").
-
 -include_lib("damsel/include/dmsl_payment_processing_thrift.hrl").
 -include_lib("damsel/include/dmsl_webhooker_thrift.hrl").
 -include_lib("reporter_proto/include/reporter_reports_thrift.hrl").
@@ -9,11 +8,12 @@
 
 -type fragment() :: bouncer_client:context_fragment().
 -type acc() :: bouncer_context_helpers:context_fragment().
-
+-type payment_tool_context() :: bouncer_context_v1_thrift:'ContextPaymentTool'().
 -type fragments() :: {acc(), _ExternalFragments :: #{_ID => fragment()}}.
 
 -export_type([fragment/0]).
 -export_type([acc/0]).
+-export_type([payment_tool_context/0]).
 -export_type([fragments/0]).
 
 -type prototypes() :: [
@@ -44,9 +44,7 @@
 }.
 
 -type prototype_payment_tool() :: #{
-    invoice => entity_id(),
-    customer => entity_id(),
-    expiration => timestamp()
+    payment_tool_context => payment_tool_context()
 }.
 
 -type prototype_payproc() :: #{
@@ -87,7 +85,6 @@
 -type payout() :: payouts_payout_manager_thrift:'Payout'().
 
 -type entity_id() :: binary().
--type timestamp() :: binary().
 
 -export_type([prototypes/0]).
 -export_type([prototype_operation/0]).
@@ -141,13 +138,7 @@ build(operation, Params = #{id := OperationID}, Acc, _WoodyCtx) ->
     };
 build(payment_tool, Params = #{}, Acc, _WoodyCtx) ->
     Acc#bctx_v1_ContextFragment{
-        payment_tool = #bctx_v1_ContextPaymentTool{
-            scope = #bctx_v1_AuthScope{
-                invoice = maybe_entity(invoice, Params),
-                customer = maybe_entity(customer, Params)
-            },
-            expiration = maps:get(expiration, Params, undefined)
-        }
+        payment_tool = maps:get(payment_tool_context, Params, undefined)
     };
 build(payproc, Params = #{}, Acc, WoodyCtx) ->
     Acc#bctx_v1_ContextFragment{

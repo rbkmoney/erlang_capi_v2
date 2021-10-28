@@ -115,28 +115,33 @@ prepare('CreateCustomerAccessToken' = OperationID, Req, Context) ->
     {ok, #{authorize => Authorize, process => Process}};
 prepare('CreateBinding' = OperationID, Req, Context) ->
     CustomerID = maps:get(customerID, Req),
+    CustomerBindingParams = maps:get('CustomerBindingParams', Req),
+    PaymentToken = decode_payment_token(CustomerBindingParams),
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, customer => CustomerID}},
-            {payproc, #{customer => CustomerID}}
+            {payproc, #{customer => CustomerID}},
+            {payment_tool, prepare_payment_tool_prototype(PaymentToken)}
         ],
         {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
     Process = fun() ->
         Result =
             try
-                CustomerBindingParams = maps:get('CustomerBindingParams', Req),
+                #{payment_tool := PaymentTool} = PaymentToken,
 
                 {CustomerBindingID, RecPaymentToolID} = generate_binding_ids(
                     OperationID,
                     CustomerBindingParams,
+                    PaymentTool,
                     Context
                 ),
 
                 EncodedCustomerBindingParams = encode_customer_binding_params(
                     CustomerBindingID,
                     RecPaymentToolID,
-                    CustomerBindingParams
+                    CustomerBindingParams,
+                    PaymentTool
                 ),
 
                 Call = {customer_management, 'StartBinding', {CustomerID, EncodedCustomerBindingParams}},
@@ -285,6 +290,15 @@ prepare(_OperationID, _Req, _Context) ->
 
 %%
 
+prepare_payment_tool_prototype(#{bouncer_data := BouncerData}) ->
+    #{
+        payment_tool_context => BouncerData
+    };
+prepare_payment_tool_prototype(_Other) ->
+    #{}.
+
+%%
+
 get_customer_by_id(CustomerID, Context) ->
     EventRange = #payproc_EventRange{},
     capi_handler_utils:service_call({customer_management, 'Get', {CustomerID, EventRange}}, Context).
@@ -316,23 +330,17 @@ encode_customer_params(CustomerID, PartyID, Params) ->
 encode_customer_metadata(Meta) ->
     capi_json_marshalling:marshal(Meta).
 
-generate_binding_ids(OperationID, CustomerBindingParams, Context = #{woody_context := WoodyContext}) ->
+generate_binding_ids(OperationID, CustomerBindingParams, PaymentTool, Context = #{woody_context := WoodyContext}) ->
     ExternalID = maps:get(<<"externalID">>, CustomerBindingParams, undefined),
     UserID = capi_handler_utils:get_user_id(Context),
 
     PaymentResource = maps:get(<<"paymentResource">>, CustomerBindingParams),
-    PaymentToolToken = maps:get(<<"paymentToolToken">>, PaymentResource),
-    PaymentTool = capi_handler_decoder_party:decode_payment_tool(encode_payment_tool_token(PaymentToolToken)),
-    CustomerBindingParamsEncrypted =
-        maps:put(
-            <<"paymentResource">>,
-            maps:put(
-                <<"paymentTool">>,
-                PaymentTool,
-                maps:remove(<<"paymentToolToken">>, PaymentResource)
-            ),
-            CustomerBindingParams
-        ),
+    PaymentResourceWoToken = maps:remove(<<"paymentToolToken">>, PaymentResource),
+    CustomerBindingParamsEncrypted = CustomerBindingParams#{
+        <<"paymentResource">> => PaymentResourceWoToken#{
+            <<"paymentTool">> => capi_handler_decoder_party:decode_payment_tool(PaymentTool)
+        }
+    },
 
     Identity = capi_bender:make_identity(
         {schema, capi_feature_schemas:customer_binding(), CustomerBindingParamsEncrypted}
@@ -354,11 +362,9 @@ generate_binding_ids(OperationID, CustomerBindingParams, Context = #{woody_conte
 encode_customer_binding_params(
     CustomerBindingID,
     RecPaymentToolID,
-    #{<<"paymentResource">> := PaymentResource}
+    #{<<"paymentResource">> := PaymentResource},
+    PaymentTool
 ) ->
-    PaymentToolToken = maps:get(<<"paymentToolToken">>, PaymentResource),
-    PaymentTool = encode_payment_tool_token(PaymentToolToken),
-
     {ClientInfo, PaymentSession} =
         capi_handler_utils:unwrap_payment_session(maps:get(<<"paymentSession">>, PaymentResource)),
 
@@ -372,27 +378,34 @@ encode_customer_binding_params(
         }
     }.
 
-encode_payment_tool_token(Token) ->
+decode_payment_token(#{<<"paymentResource">> := PaymentResource}) ->
+    decode_payment_token(PaymentResource);
+decode_payment_token(#{<<"paymentToolToken">> := Token}) ->
     case capi_crypto:decode_token(Token) of
-        {ok, TokenData} ->
-            #{payment_tool := PaymentTool, valid_until := ValidUntil} = TokenData,
+        % TODO #ED-162 Проверка времени жизни будет в bouncer, тут её следует убрать вместе с тестами
+        {ok, #{valid_until := ValidUntil} = TokenData} ->
             case capi_utils:deadline_is_reached(ValidUntil) of
                 true ->
                     logger:warning("Payment tool token expired: ~p", [capi_utils:deadline_to_binary(ValidUntil)]),
                     capi_handler:respond(logic_error(invalidPaymentToolToken));
                 _ ->
-                    PaymentTool
+                    TokenData
             end;
         unrecognized ->
-            encode_legacy_payment_tool_token(Token);
+            % TODO-162: удалить устаревшие токены, заменить их на актуальные и поправить тесты
+            decode_legacy_payment_token(Token);
         {error, {decryption_failed, Error}} ->
             logger:warning("Payment tool token decryption failed: ~p", [Error]),
             capi_handler:respond(logic_error(invalidPaymentToolToken))
-    end.
+    end;
+decode_payment_token(_Other) ->
+    undefined.
 
-encode_legacy_payment_tool_token(Token) ->
+decode_legacy_payment_token(Token) ->
     try
-        capi_handler_encoder:encode_payment_tool(capi_utils:base64url_to_map(Token))
+        #{
+            payment_tool => capi_handler_encoder:encode_payment_tool(capi_utils:base64url_to_map(Token))
+        }
     catch
         error:badarg ->
             capi_handler:respond(logic_error(invalidPaymentToolToken))
