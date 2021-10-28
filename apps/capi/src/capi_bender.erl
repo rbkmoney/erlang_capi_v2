@@ -63,7 +63,7 @@
 -export([make_identity/2]).
 -export([get_internal_id/2]).
 
--define(BENDER_CAPI_NAMESPACE, <<"capi">>).
+-define(BENDER_NAMESPACE, <<"capi">>).
 
 %% deprecated
 -define(SCHEMA_VER2, 2).
@@ -238,7 +238,7 @@ make_idempotent_key({_Prefix, _PartyID, undefined}) ->
     %% If external ID is undefined, no reason to generate it: noone can really use it
     undefined;
 make_idempotent_key({Prefix, PartyID, ExternalID}) ->
-    bender_client:get_idempotent_key(?BENDER_CAPI_NAMESPACE, Prefix, PartyID, ExternalID).
+    bender_client:get_idempotent_key(?BENDER_NAMESPACE, Prefix, PartyID, ExternalID).
 
 bender_generate_id(BenderIdSchema, IdempKey, Identity, WoodyContext, CtxData) ->
     {identity, Features, Schema, _Data} = Identity,
