@@ -563,48 +563,6 @@ create_payment_id(Invoice, PaymentParams0, Context, OperationID, PaymentToolThri
     CtxData = #{<<"invoice_id">> => InvoiceID},
     capi_bender:try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyCtx, CtxData).
 
-%% create_payment(Invoice, PaymentParams0, Context, BenderPrefix) ->
-%%     ExternalID = maps:get(<<"externalID">>, PaymentParams0, undefined),
-%%     #payproc_Invoice{invoice = #domain_Invoice{id = InvoiceID, owner_id = PartyID}} = Invoice,
-%%     IdempotentKey = {BenderPrefix, PartyID, ExternalID},
-%%     {Payer, PaymentToolThrift} = decrypt_payer(maps:get(<<"payer">>, PaymentParams0)),
-
-%%     % Temprory decision was made for analytics
-%%     % TODO: delete this after analytics research will be down
-%%     _ = log_payer_client_url(Payer, InvoiceID),
-
-%%     % TODO При наличии paymentToolToken заменяем его раскодированной структурой paymentTool
-%%     % В противном случае токены будут оказывать влияние на расчет hash2, удаление paymentToolToken
-%%     % не потребуется при удалении capi_bender:check_idempotent_conflict_deprecated
-%%     ClearPayer =
-%%         case PaymentTool of
-%%             undefined ->
-%%                 Payer;
-%%             _ ->
-%%                 Payer0 = maps:without([<<"paymentToolToken">>], Payer),
-%%                 Payer0#{<<"paymentTool">> => capi_handler_decoder_party:decode_payment_tool(PaymentTool)}
-%%         end,
-
-%%     FullParams = PaymentParams#{
-%%         % Требуется для последующей кодировки параметров плательщика
-%%         <<"invoiceID">> => InvoiceID,
-%%         % Заменяем на структуру без токена
-%%         <<"payer">> => ClearPayer
-%%     },
-
-%%     Identity = capi_bender:make_identity({schema, capi_feature_schemas:payment(), FullParams, PaymentParams}),
-%%     ExternalID = maps:get(<<"externalID">>, PaymentParams, undefined),
-%%     BenderPrefix = OperationID,
-%%     IdempotentKey = {BenderPrefix, PartyID, ExternalID},
-
-%%     SequenceID = InvoiceID,
-%%     SequenceParams = #{},
-%%     #{woody_context := WoodyCtx} = Context,
-%%     %% We put `invoice_id` in a context here because `get_payment_by_external_id()` needs it to work
-%%     CtxData = #{<<"invoice_id">> => InvoiceID},
-%%     PaymentID = capi_bender:try_gen_sequence(IdempotentKey, Identity, SequenceID, SequenceParams, WoodyCtx, CtxData),
-%%     start_payment(PaymentID, InvoiceID, ExternalID, PaymentParams, PaymentToolThrift, Context).
-
 log_payer_client_url(#{<<"payerType">> := <<"PaymentResourcePayer">>} = Payer, InvoiceID) ->
     EncodedSession = maps:get(<<"paymentSession">>, Payer),
     {ClientInfo, _} = capi_handler_utils:unwrap_payment_session(EncodedSession),

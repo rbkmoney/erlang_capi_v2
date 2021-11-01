@@ -260,7 +260,7 @@ different_payment_tools_test(Config) ->
             [<<"metadata">>, <<"bla">>, 0],
             [<<"payer">>, <<"contactInfo">>],
             [<<"payer">>, <<"paymentSession">>],
-            [<<"payer">>,<<"paymentToolToken">>],
+            [<<"payer">>, <<"paymentToolToken">>],
             [<<"processingDeadline">>]
         ],
         Unused
