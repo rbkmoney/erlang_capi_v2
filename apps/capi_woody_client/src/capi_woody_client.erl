@@ -92,9 +92,7 @@ get_service_modname(webhook_manager) ->
 get_service_modname(customer_management) ->
     {dmsl_payment_processing_thrift, 'CustomerManagement'};
 get_service_modname(party_management) ->
-    {dmsl_payment_processing_thrift, 'PartyManagement'};
-get_service_modname(bender) ->
-    {bender_thrift, 'Bender'}.
+    {dmsl_payment_processing_thrift, 'PartyManagement'}.
 
 get_service_deadline(ServiceName) ->
     ServiceDeadlines = genlib_app:env(?MODULE, service_deadlines, #{}),

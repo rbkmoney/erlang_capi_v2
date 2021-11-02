@@ -24,6 +24,7 @@
 -export([second_request_without_idempotent_feature_test/1]).
 -export([create_invoice_ok_test/1]).
 -export([create_invoice_legacy_fail_test/1]).
+-export([create_invoice_legacy_ok_test/1]).
 -export([create_invoice_fail_test/1]).
 -export([create_invoice_idemp_cart_ok_test/1]).
 -export([create_invoice_idemp_cart_fail_test/1]).
@@ -77,6 +78,7 @@ groups() ->
         {invoice_creation, [], [
             create_invoice_ok_test,
             create_invoice_legacy_fail_test,
+            create_invoice_legacy_ok_test,
             create_invoice_fail_test,
             create_invoice_idemp_cart_fail_test,
             create_invoice_idemp_cart_ok_test,
@@ -108,15 +110,19 @@ groups() ->
 %% starting/stopping
 %%
 -spec init_per_suite(config()) -> config().
-init_per_suite(Config) ->
-    ExtraEnv = [{idempotence_event_handler, {capi_ct_features_reader_event_handler, #{}}}],
-    capi_ct_helper:init_suite(?MODULE, Config, ExtraEnv).
+init_per_suite(Config0) ->
+    ReplacedEnv =
+        capi_ct_helper:replace_env(
+            #{feat => #{event_handler => {capi_ct_features_reader_event_handler, #{}}}}
+        ),
+    Config = capi_ct_helper:init_suite(?MODULE, Config0),
+    [{replaced_env, ReplacedEnv} | Config].
 
 -spec end_per_suite(config()) -> _.
 end_per_suite(C) ->
     _ = capi_ct_helper:stop_mocked_service_sup(?config(suite_test_sup, C)),
     _ = [application:stop(App) || App <- proplists:get_value(apps, C)],
-    _ = application:unset_env(capi, idempotence_event_handler),
+    ok = capi_ct_helper:restore_env(?config(replaced_env, C)),
     ok.
 
 -spec init_per_group(group_name(), config()) -> config().
@@ -207,12 +213,14 @@ create_payment_ok_test(Config) ->
     ?assertEqual(
         [
             [<<"externalID">>],
-            [<<"metadata">>, <<"bla">>],
+            [<<"metadata">>, <<"bla">>, 0],
+            [<<"payer">>, <<"contactInfo">>],
             [<<"payer">>, <<"paymentSession">>],
             [<<"payer">>, <<"paymentTool">>, <<"bin">>],
             [<<"payer">>, <<"paymentTool">>, <<"cardholder_name">>],
             [<<"payer">>, <<"paymentTool">>, <<"masked_pan">>],
             [<<"payer">>, <<"paymentTool">>, <<"payment_system">>],
+            [<<"payer">>, <<"paymentToolToken">>],
             [<<"processingDeadline">>]
         ],
         Unused
@@ -249,8 +257,10 @@ different_payment_tools_test(Config) ->
     ?assertEqual(
         [
             [<<"externalID">>],
-            [<<"metadata">>, <<"bla">>],
+            [<<"metadata">>, <<"bla">>, 0],
+            [<<"payer">>, <<"contactInfo">>],
             [<<"payer">>, <<"paymentSession">>],
+            [<<"payer">>, <<"paymentToolToken">>],
             [<<"processingDeadline">>]
         ],
         Unused
@@ -314,6 +324,33 @@ create_invoice_ok_test(Config) ->
     ?assertEqual(ExternalID, maps:get(<<"externalID">>, Invoice1)),
     ?assertEqual(Invoice1, Invoice2).
 
+-spec create_invoice_legacy_ok_test(config()) -> _.
+create_invoice_legacy_ok_test(Config) ->
+    BenderKey = <<"bender_key">>,
+    ExternalID = <<"ok_merch_id">>,
+    Req = invoice_params(ExternalID),
+    Unused = [
+        [<<"description">>],
+        [<<"externalID">>],
+        [<<"metadata">>, <<"invoice_dummy_metadata">>]
+    ],
+    Ctx = capi_msgp_marshalling:marshal(#{
+        <<"version">> => 2,
+        <<"features">> => capi_idemp_features_legacy:read(capi_feature_schemas_legacy:invoice(), Req)
+    }),
+    _ = capi_ct_helper:mock_services(
+        [
+            {invoicing, fun('Create', {_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}}) ->
+                {ok, ?PAYPROC_INVOICE_WITH_ID(ID, EID)}
+            end},
+            {bender, fun('GenerateID', _) -> {ok, capi_ct_helper_bender:get_result(BenderKey, Ctx)} end}
+        ],
+        Config
+    ),
+    {{ok, ActualInvoice}, ActualUnused} = create_invoice_(Req, Config),
+    ?assertEqual(Unused, ActualUnused),
+    {{ok, ActualInvoice}, ActualUnused} = create_invoice_(Req, Config).
+
 -spec create_invoice_legacy_fail_test(config()) -> _.
 create_invoice_legacy_fail_test(Config) ->
     BenderKey = <<"bender_key">>,
@@ -325,7 +362,10 @@ create_invoice_legacy_fail_test(Config) ->
         [<<"metadata">>, <<"invoice_dummy_metadata">>]
     ],
     Req2 = Req#{<<"product">> => <<"test_product2">>},
-    Ctx = capi_msgp_marshalling:marshal(#{<<"version">> => 1, <<"params_hash">> => erlang:phash2(Req)}),
+    Ctx = capi_msgp_marshalling:marshal(#{
+        <<"version">> => 2,
+        <<"features">> => capi_idemp_features_legacy:read(capi_feature_schemas_legacy:invoice(), Req)
+    }),
     _ = capi_ct_helper:mock_services(
         [
             {invoicing, fun('Create', {_UserInfo, #payproc_InvoiceParams{id = ID, external_id = EID}}) ->
@@ -618,6 +658,7 @@ create_customer_ok_test(Config) ->
     Req1 = ?CUSTOMER_PARAMS#{<<"externalID">> => genlib:unique()},
     Req2 = Req1#{<<"externalID">> => genlib:unique()},
 
+    UnusedFeatures = [[<<"externalID">>], [<<"metadata">>, <<"text">>, 0], [<<"metadata">>, <<"text">>, 1]],
     Result = create_customers(BenderKey, [Req1, Req2], Config),
 
     [{{ok, #{<<"customer">> := Customer1}}, UnusedFeatures1}, {{ok, #{<<"customer">> := Customer2}}, UnusedFeatures2}] =
@@ -625,7 +666,7 @@ create_customer_ok_test(Config) ->
 
     ?assertEqual(Customer1, Customer2),
     ?assertEqual(UnusedFeatures1, UnusedFeatures2),
-    ?assertEqual(UnusedFeatures1, [[<<"externalID">>], [<<"metadata">>, <<"text">>]]).
+    ?assertEqual(UnusedFeatures1, UnusedFeatures).
 
 -spec create_customer_fail_test(config()) -> _.
 create_customer_fail_test(Config) ->
@@ -637,7 +678,9 @@ create_customer_fail_test(Config) ->
     [CustomerResult1, CustomerResult2] = create_customers(BenderKey, [Req1, Req2], Config),
     ?assertMatch({{ok, _}, _}, CustomerResult1),
     ?assertEqual(
-        {response_error(409, ExternalID, BenderKey), [[<<"externalID">>], [<<"metadata">>, <<"text">>]]},
+        {response_error(409, ExternalID, BenderKey), [
+            [<<"externalID">>], [<<"metadata">>, <<"text">>, 0], [<<"metadata">>, <<"text">>, 1]
+        ]},
         CustomerResult2
     ).
 
@@ -938,7 +981,7 @@ create_invoices_with_templates(BenderKey, Requests, Config) ->
     ).
 
 with_feature_storage(Fun) ->
-    capi_ct_features_reader_event_handler:create_storage(),
+    _ = capi_ct_features_reader_event_handler:create_storage(),
     Result = Fun(),
     UnusedParams = capi_ct_features_reader_event_handler:get_unused_params(),
     capi_ct_features_reader_event_handler:delete_storage(),

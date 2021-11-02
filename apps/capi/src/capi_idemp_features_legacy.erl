@@ -1,6 +1,6 @@
--module(capi_idemp_features).
+-module(capi_idemp_features_legacy).
 
--include("capi_feature_schemas.hrl").
+-include("capi_feature_schemas_legacy.hrl").
 
 -type request_key() :: binary().
 -type request_value() :: integer() | binary() | request() | [request()].

@@ -1,8 +1,8 @@
--module(capi_feature_schemas).
+-module(capi_feature_schemas_legacy).
 
--type schema() :: feat:schema().
+-type schema() :: capi_idemp_features_legacy:schema().
 
--include_lib("feat/include/feat.hrl").
+-include("capi_feature_schemas_legacy.hrl").
 
 -define(id, 1).
 -define(invoice_id, 2).
@@ -63,11 +63,6 @@
 -define(share, 57).
 -define(matisse, 58).
 -define(exponent, 59).
--define(instant, 60).
--define(hold, 61).
--define(vat, 62).
--define(unlimited, 63).
--define(shop, 64).
 
 -export([payment/0]).
 -export([invoice/0]).
@@ -79,183 +74,148 @@
 -spec payment() -> schema().
 payment() ->
     #{
-        ?invoice_id => <<"invoiceID">>,
-        ?make_recurrent => <<"makeRecurrent">>,
-        ?flow => {
+        ?invoice_id => [<<"invoiceID">>],
+        ?make_recurrent => [<<"makeRecurrent">>],
+        ?flow => [
             <<"flow">>,
-            {union, <<"type">>, #{
-                <<"PaymentFlowInstant">> => {?instant, #{}},
-                <<"PaymentFlowHold">> =>
-                    {?hold, #{
-                        ?hold_exp => <<"onHoldExpiration">>
-                    }}
-            }}
-        },
-        ?payer => {
+            #{
+                ?discriminator => [<<"type">>],
+                ?hold_exp => [<<"onHoldExpiration">>]
+            }
+        ],
+        ?payer => [
             <<"payer">>,
-            {union, <<"payerType">>, #{
-                <<"CustomerPayer">> =>
-                    {?customer, #{
-                        ?customer => <<"customerID">>
-                    }},
-                <<"RecurrentPayer">> => {
-                    ?recurrent, #{
-                        ?recurrent => {
-                            <<"recurrentParentPayment">>,
-                            #{
-                                ?invoice => <<"invoiceID">>,
-                                ?payment => <<"paymentID">>
-                            }
-                        }
+            #{
+                ?discriminator => [<<"payerType">>],
+                ?payment_tool => [<<"paymentTool">>, payment_tool_schema()],
+                ?customer => [<<"customerID">>],
+                ?recurrent => [
+                    <<"recurrentParentPayment">>,
+                    #{
+                        ?invoice => [<<"invoiceID">>],
+                        ?payment => [<<"paymentID">>]
                     }
-                },
-                <<"PaymentResourcePayer">> =>
-                    {?payment_resource, #{
-                        ?payment_tool => {<<"paymentTool">>, payment_tool_schema()}
-                    }}
-            }}
-        }
+                ]
+            }
+        ]
     }.
 
 -spec invoice() -> schema().
 invoice() ->
     #{
-        ?shop_id => <<"shopID">>,
-        ?amount => <<"amount">>,
-        ?currency => <<"currency">>,
-        ?product => <<"product">>,
-        ?due_date => <<"dueDate">>,
-        ?cart => {<<"cart">>, {set, cart_line_schema()}},
-        ?bank_account => {<<"bankAccount">>, bank_account_schema()},
-        ?invoice_template_id => <<"invoiceTemplateID">>,
-        ?allocation => {<<"allocation">>, {set, allocation_transaction()}}
+        ?shop_id => [<<"shopID">>],
+        ?amount => [<<"amount">>],
+        ?currency => [<<"currency">>],
+        ?product => [<<"product">>],
+        ?due_date => [<<"dueDate">>],
+        ?cart => [<<"cart">>, {set, cart_line_schema()}],
+        ?bank_account => [<<"bankAccount">>, bank_account_schema()],
+        ?invoice_template_id => [<<"invoiceTemplateID">>],
+        ?allocation => [<<"allocation">>, {set, allocation_transaction()}]
     }.
 
 -spec invoice_template() -> schema().
 invoice_template() ->
     #{
-        ?shop_id => <<"shopID">>,
-        ?lifetime => {<<"lifetime">>, lifetime_schema()},
-        ?details => {<<"details">>, invoice_template_details_schema()}
+        ?shop_id => [<<"shopID">>],
+        ?lifetime => [<<"lifetime">>, lifetime_schema()],
+        ?details => [<<"details">>, invoice_template_details_schema()]
     }.
 
 -spec invoice_template_details_schema() -> schema().
 invoice_template_details_schema() ->
-    {union, <<"templateType">>, #{
-        <<"InvoiceTemplateSingleLine">> =>
-            {?single_line, #{
-                ?product => <<"product">>,
-                ?price => {<<"price">>, invoice_template_line_cost()},
-                ?tax => {<<"taxMode">>, tax_mode_schema()}
-            }},
-        <<"InvoiceTemplateMultiLine">> =>
-            {?multiline, #{
-                ?currency => <<"currency">>,
-                ?cart => {<<"cart">>, {set, cart_line_schema()}}
-            }}
-    }}.
+    #{
+        ?discriminator => [<<"templateType">>],
+        ?single_line => #{
+            ?product => [<<"product">>],
+            ?price => [<<"price">>, invoice_template_line_cost()],
+            ?tax => [<<"taxMode">>, tax_mode_schema()]
+        },
+        ?multiline => #{
+            ?currency => [<<"currency">>],
+            ?cart => [<<"cart">>, {set, cart_line_schema()}]
+        }
+    }.
 
 -spec refund() -> schema().
 refund() ->
     #{
-        ?amount => <<"amount">>,
-        ?currency => <<"currency">>,
-        ?cart => {<<"cart">>, {set, cart_line_schema()}},
-        ?allocation => {<<"allocation">>, {set, allocation_transaction()}}
+        ?amount => [<<"amount">>],
+        ?currency => [<<"currency">>],
+        ?cart => [<<"cart">>, {set, cart_line_schema()}],
+        ?allocation => [<<"allocation">>, {set, allocation_transaction()}]
     }.
 
 -spec customer() -> schema().
 customer() ->
     #{
-        ?shop_id => <<"shopID">>,
-        ?contact_info => {<<"contactInfo">>, contact_info_schema()}
+        ?shop_id => [<<"shopID">>],
+        ?contact_info => [<<"contactInfo">>, contact_info_schema()]
     }.
 
 -spec customer_binding() -> schema().
 customer_binding() ->
     #{
-        ?payment_resource => {
+        ?payment_resource => [
             <<"paymentResource">>,
             #{
-                ?payment_session => <<"paymentSession">>,
-                ?payment_tool => {<<"paymentTool">>, payment_tool_schema()}
+                ?payment_session => [<<"paymentSession">>],
+                ?payment_tool => [<<"paymentTool">>, payment_tool_schema()]
             }
-        }
+        ]
     }.
 
 -spec payment_tool_schema() -> schema().
 payment_tool_schema() ->
-    {union, <<"type">>, #{
-        <<"bank_card">> =>
-            {?bank_card, #{
-                ?token => <<"token">>,
-                ?exp_date => <<"exp_date">>
-            }},
-        <<"payment_terminal">> => {?terminal, #{?terminal_type => <<"terminal_type">>}},
-
-        <<"digital_wallet">> =>
-            {?wallet, #{
-                ?provider => <<"provider">>,
-                ?id => <<"id">>,
-                ?token => <<"token">>
-            }},
-        <<"crypto_wallet">> =>
-            {?crypto, #{
-                ?currency => <<"currency">>
-            }},
-        <<"mobile_commerce">> =>
-            {?mobile_commerce, #{
-                ?operator => <<"operator">>,
-                ?phone => <<"phone">>
-            }}
-    }}.
+    #{
+        ?discriminator => [<<"type">>],
+        ?bank_card => #{
+            ?token => [<<"token">>],
+            ?exp_date => [<<"exp_date">>]
+        },
+        ?terminal => #{
+            ?discriminator => [<<"terminal_type">>]
+        },
+        ?wallet => #{
+            ?provider => [<<"provider">>],
+            ?id => [<<"id">>],
+            ?token => [<<"token">>]
+        },
+        ?crypto => #{
+            ?currency => [<<"currency">>]
+        },
+        ?mobile_commerce => #{
+            ?operator => [<<"operator">>],
+            ?phone => [<<"phone">>]
+        }
+    }.
 
 -spec allocation_transaction() -> schema().
 allocation_transaction() ->
     #{
-        ?target => {<<"target">>, allocation_target()},
-        ?cart => {<<"cart">>, {set, cart_line_schema()}},
-        ?allocation =>
-            {union, <<"allocationBodyType">>, #{
-                <<"AllocationBodyAmount">> =>
-                    {?amount, #{
-                        ?currency => <<"currency">>,
-                        ?amount => <<"amount">>
-                    }},
-                <<"AllocationBodyTotal">> =>
-                    {?total, #{
-                        ?total => <<"total">>,
-                        ?currency => <<"currency">>,
-                        ?fee => {<<"fee">>, allocation_fee()}
-                    }}
-            }}
-    }.
-
--spec allocation_fee() -> schema().
-allocation_fee() ->
-    #{
-        ?target => {<<"target">>, allocation_target()},
-        ?fee =>
-            {union, <<"allocationFeeType">>, #{
-                <<"AllocationFeeFixed">> =>
-                    {?fixed, #{?amount => <<"amount">>}},
-                <<"AllocationFeeShare">> => {
-                    ?share, #{
-                        ?amount => <<"amount">>,
-                        ?share => {<<"share">>, decimal()}
-                    }
-                }
-            }}
+        ?target => [<<"target">>, allocation_target()],
+        ?discriminator => [<<"allocationBodyType">>],
+        ?amount => [<<"amount">>],
+        ?total => [<<"total">>],
+        ?currency => [<<"currency">>],
+        ?fee => [
+            <<"fee">>,
+            #{
+                ?target => [<<"target">>, allocation_target()],
+                ?discriminator => [<<"allocationFeeType">>],
+                ?amount => [<<"amount">>],
+                ?share => [<<"share">>, decimal()]
+            }
+        ],
+        ?cart => [<<"cart">>, {set, cart_line_schema()}]
     }.
 
 -spec allocation_target() -> schema().
 allocation_target() ->
-    {union, <<"allocationTargetType">>, #{
-        <<"AllocationTargetShop">> =>
-            {?shop, #{
-                ?shop_id => <<"shopID">>
-            }}
-    }}.
+    #{
+        ?discriminator => [<<"allocationTargetType">>],
+        ?shop_id => [<<"shopID">>]
+    }.
 
 -spec decimal() -> schema().
 decimal() ->
@@ -267,64 +227,61 @@ decimal() ->
 -spec cart_line_schema() -> schema().
 cart_line_schema() ->
     #{
-        ?product => <<"product">>,
-        ?quantity => <<"quantity">>,
-        ?price => <<"price">>,
-        ?tax => {<<"taxMode">>, tax_mode_schema()}
+        ?product => [<<"product">>],
+        ?quantity => [<<"quantity">>],
+        ?price => [<<"price">>],
+        ?tax => [<<"taxMode">>, tax_mode_schema()]
     }.
 
 -spec tax_mode_schema() -> schema().
 tax_mode_schema() ->
-    {union, <<"type">>, #{
-        <<"InvoiceLineTaxVAT">> => {?vat, #{?rate => <<"rate">>}}
-    }}.
+    #{
+        ?discriminator => [<<"type">>],
+        ?rate => [<<"rate">>]
+    }.
 
 -spec bank_account_schema() -> schema().
 bank_account_schema() ->
-    {union, <<"accountType">>, #{
-        <<"InvoiceRussianBankAccount">> =>
-            {?bank_account, #{
-                ?account => <<"account">>,
-                ?bank_bik => <<"bankBik">>
-            }}
-    }}.
+    #{
+        ?discriminator => [<<"accountType">>],
+        ?account => [<<"account">>],
+        ?bank_bik => [<<"bankBik">>]
+    }.
 
 invoice_template_line_cost() ->
-    {union, <<"costType">>, #{
-        <<"InvoiceTemplateLineCostRange">> => {
-            ?range, #{
-                ?currency => <<"currency">>,
-                ?range => {<<"range">>, cost_amount_range()}
-            }
+    #{
+        ?discriminator => [<<"costType">>],
+        ?range => #{
+            ?currency => [<<"currency">>],
+            ?range => [<<"range">>, cost_amount_range()]
         },
-        <<"InvoiceTemplateLineCostFixed">> =>
-            {?fixed, #{
-                ?currency => <<"currency">>,
-                ?amount => <<"amount">>
-            }},
-        <<"InvoiceTemplateLineCostUnlim">> => {?unlimited, #{}}
-    }}.
+        ?fixed => #{
+            ?currency => [<<"currency">>],
+            ?amount => [<<"amount">>]
+        }
+        %% Unlim has no params and is fully contained in discriminator
+    }.
 
 -spec cost_amount_range() -> schema().
 cost_amount_range() ->
     #{
-        ?upper_bound => <<"upperBound">>,
-        ?lower_bound => <<"lowerBound">>
+        ?upper_bound => [<<"upperBound">>],
+        ?lower_bound => [<<"lowerBound">>]
     }.
 
 -spec lifetime_schema() -> schema().
 lifetime_schema() ->
     #{
-        ?days => <<"days">>,
-        ?months => <<"months">>,
-        ?years => <<"years">>
+        ?days => [<<"days">>],
+        ?months => [<<"months">>],
+        ?years => [<<"years">>]
     }.
 
 -spec contact_info_schema() -> schema().
 contact_info_schema() ->
     #{
-        ?email => <<"email">>,
-        ?phone_number => <<"phoneNumber">>
+        ?email => [<<"email">>],
+        ?phone_number => [<<"phoneNumber">>]
     }.
 
 -ifdef(TEST).
@@ -348,16 +305,16 @@ deep_fetch(Map, Keys) ->
     lists:foldl(fun(K, M) -> maps:get(K, M) end, Map, Keys).
 
 hash(Term) ->
-    feat:hash(Term).
+    capi_idemp_features_legacy:hash(Term).
 
 read(Schema, Request) ->
-    feat:read(Schema, Request).
+    capi_idemp_features_legacy:read(Schema, Request).
 
 compare(Features1, Features2) ->
-    feat:compare(Features1, Features2).
+    capi_idemp_features_legacy:compare(Features1, Features2).
 
 list_diff_fields(Schema, Diff) ->
-    feat:list_diff_fields(Schema, Diff).
+    capi_idemp_features_legacy:list_diff_fields(Schema, Diff).
 
 -spec test() -> _.
 
@@ -389,20 +346,33 @@ read_payment_features_test() ->
     Payer = #{
         ?invoice_id => undefined,
         ?make_recurrent => undefined,
-        ?flow => [?hold, #{?hold_exp => undefined}],
-        ?payer => [
-            ?payment_resource,
-            #{
-                ?payment_tool =>
-                    [
-                        ?bank_card,
-                        #{
-                            ?exp_date => hash(ExpDate),
-                            ?token => hash(Token)
-                        }
-                    ]
+        ?flow => #{
+            ?discriminator => hash(Flow),
+            ?hold_exp => undefined
+        },
+        ?payer => #{
+            ?discriminator => hash(PayerType),
+            ?customer => undefined,
+            ?recurrent => undefined,
+            ?payment_tool => #{
+                ?discriminator => hash(ToolType),
+                ?bank_card => #{
+                    ?exp_date => hash(ExpDate),
+                    ?token => hash(Token)
+                },
+                ?crypto => #{?currency => undefined},
+                ?mobile_commerce => #{
+                    ?operator => undefined,
+                    ?phone => undefined
+                },
+                ?terminal => #{?discriminator => undefined},
+                ?wallet => #{
+                    ?id => undefined,
+                    ?provider => undefined,
+                    ?token => hash(Token)
+                }
             }
-        ]
+        }
     },
     Features = read(payment(), Request),
     ?assertEqual(Payer, Features).
@@ -426,7 +396,7 @@ compare_payment_bank_card_test() ->
 
 -spec compare_different_payment_tool_test() -> _.
 compare_different_payment_tool_test() ->
-    ToolType2 = <<"digital_wallet">>,
+    ToolType2 = <<"wallet">>,
     Token2 = <<"wallet token">>,
     PaymentTool1 = bank_card(),
     PaymentTool2 = #{
@@ -436,7 +406,50 @@ compare_different_payment_tool_test() ->
     Request1 = payment_params(PaymentTool1),
     Request2 = payment_params(PaymentTool2),
 
-    common_compare_tests(payment(), Request1, Request2, [<<"payer">>]).
+    common_compare_tests(payment(), Request1, Request2, [<<"payer.paymentTool">>]).
+
+-spec feature_multi_accessor_test() -> _.
+feature_multi_accessor_test() ->
+    Request1 = #{
+        <<"payer">> => #{
+            <<"payerType">> => <<"PaymentResourcePayer">>,
+            <<"paymentTool">> => #{
+                <<"wrapper">> => bank_card()
+            }
+        }
+    },
+    Request2 = deep_merge(Request1, #{
+        <<"payer">> => #{
+            <<"paymentTool">> => #{
+                <<"wrapper">> => #{
+                    <<"token">> => <<"cds token 2">>,
+                    <<"cardholder_name">> => <<"Cake">>
+                }
+            }
+        }
+    }),
+    Schema = #{
+        <<"payer">> => [
+            <<"payer">>,
+            #{
+                <<"type">> => [<<"payerType">>],
+                <<"tool">> => [
+                    <<"paymentTool">>,
+                    <<"wrapper">>,
+                    #{
+                        <<"$type">> => [<<"type">>],
+                        <<"bank_card">> => #{
+                            <<"token">> => [<<"token">>],
+                            <<"exp_date">> => [<<"exp_date">>]
+                        }
+                    }
+                ]
+            }
+        ]
+    },
+    common_compare_tests(Schema, Request1, Request2, [
+        <<"payer.paymentTool.wrapper.token">>
+    ]).
 
 -spec read_payment_customer_features_value_test() -> _.
 read_payment_customer_features_value_test() ->
@@ -454,7 +467,12 @@ read_payment_customer_features_value_test() ->
             ?invoice_id => undefined,
             ?make_recurrent => undefined,
             ?flow => undefined,
-            ?payer => [?customer, #{?customer => hash(CustomerID)}]
+            ?payer => #{
+                ?discriminator => hash(PayerType),
+                ?customer => hash(CustomerID),
+                ?recurrent => undefined,
+                ?payment_tool => undefined
+            }
         },
         Features
     ).
@@ -479,13 +497,11 @@ read_invoice_features_test() ->
         ?product => hash(Prod2),
         ?price => hash(Price2)
     },
-    BankAccount = [
-        ?bank_account,
-        #{
-            ?account => hash(<<"12345678901234567890">>),
-            ?bank_bik => hash(<<"123456789">>)
-        }
-    ],
+    BankAccount = #{
+        ?discriminator => hash(<<"InvoiceRussianBankAccount">>),
+        ?account => hash(<<"12345678901234567890">>),
+        ?bank_bik => hash(<<"123456789">>)
+    },
     Invoice = #{
         ?amount => undefined,
         ?currency => hash(Cur),
@@ -561,7 +577,6 @@ compare_invoices_features_test() ->
             Product#{
                 <<"price">> => Price2,
                 <<"taxMode">> => #{
-                    <<"type">> => <<"InvoiceLineTaxVAT">>,
                     <<"rate">> => <<"18%">>
                 }
             }
@@ -571,7 +586,14 @@ compare_invoices_features_test() ->
     InvoiceWithFullCart = read(Schema, Request3),
     ?assertEqual(
         {false, #{
-            ?cart => ?difference
+            ?cart => #{
+                0 => #{
+                    ?price => ?difference,
+                    ?product => ?difference,
+                    ?quantity => ?difference,
+                    ?tax => ?difference
+                }
+            }
         }},
         compare(Invoice2, Invoice1)
     ),
@@ -588,7 +610,7 @@ compare_invoices_features_test() ->
 
     {false, Diff} = compare(Invoice1, InvoiceChg1),
     ?assertEqual(
-        [<<"cart.0.price">>, <<"cart.0.taxMode">>],
+        [<<"cart.0.price">>, <<"cart.0.taxMode.rate">>],
         list_diff_fields(Schema, Diff)
     ),
     ?assert(compare(Invoice1, Invoice1#{?cart => undefined})).
@@ -628,7 +650,11 @@ compare_customer_features_test() ->
         Request,
         RequestSame,
         RequestDifferent,
-        all
+        [
+            <<"shopID">>,
+            <<"contactInfo.email">>,
+            <<"contactInfo.phoneNumber">>
+        ]
     ).
 
 -spec read_customer_binding_features_test() -> _.
@@ -639,13 +665,29 @@ read_customer_binding_features_test() ->
     Features = #{
         ?payment_resource => #{
             ?payment_session => hash(Session),
-            ?payment_tool => [
-                ?bank_card,
-                #{
+            ?payment_tool => #{
+                ?discriminator => hash(<<"bank_card">>),
+                ?bank_card => #{
                     ?token => hash(<<"TOKEN">>),
                     ?exp_date => hash(<<"12/2012">>)
+                },
+
+                ?terminal => #{
+                    ?discriminator => undefined
+                },
+                ?wallet => #{
+                    ?provider => undefined,
+                    ?id => undefined,
+                    ?token => hash(<<"TOKEN">>)
+                },
+                ?crypto => #{
+                    ?currency => undefined
+                },
+                ?mobile_commerce => #{
+                    ?operator => undefined,
+                    ?phone => undefined
                 }
-            ]
+            }
         }
     },
 
@@ -686,9 +728,14 @@ read_invoice_template_features_test() ->
             ?months => hash(2),
             ?years => hash(3)
         },
-        ?details => [
-            ?multiline,
-            #{
+        ?details => #{
+            ?discriminator => hash(<<"InvoiceTemplateMultiLine">>),
+            ?single_line => #{
+                ?product => undefined,
+                ?price => undefined,
+                ?tax => undefined
+            },
+            ?multiline => #{
                 ?currency => hash(<<"RUB">>),
                 ?cart => [
                     [
@@ -697,7 +744,7 @@ read_invoice_template_features_test() ->
                             ?product => hash(?STRING),
                             ?quantity => hash(42),
                             ?price => hash(?INTEGER),
-                            ?tax => [?vat, #{?rate => hash(<<"18%">>)}]
+                            ?tax => #{?discriminator => hash(<<"InvoiceLineTaxVAT">>), ?rate => hash(<<"18%">>)}
                         }
                     ],
                     [
@@ -711,7 +758,7 @@ read_invoice_template_features_test() ->
                     ]
                 ]
             }
-        ]
+        }
     },
 
     ?assertEqual(
@@ -743,43 +790,34 @@ compare_invoice_template_features_test() ->
     common_compare_tests(invoice_template(), Request1, Request2, [
         <<"shopID">>,
         <<"lifetime.years">>,
-        <<"details">>
+        <<"details.currency">>,
+        <<"details.cart">>
     ]).
 
 -spec read_allocation_transaction_test_() -> _.
 read_allocation_transaction_test_() ->
     Request1 = ?ALLOCATION_TRANSACTION_PARAMS,
-    AllocationParams = #{
+    Features1 = #{
+        ?target => #{
+            ?discriminator => hash(<<"AllocationTargetShop">>),
+            ?shop_id => hash(?STRING)
+        },
+        ?discriminator => hash(<<"AllocationBodyTotal">>),
+        ?amount => undefined,
         ?total => hash(?INTEGER),
         ?currency => hash(?USD),
         ?fee => #{
-            ?target =>
-                [
-                    ?shop,
-                    #{
-                        ?shop_id => hash(?STRING)
-                    }
-                ],
-            ?fee => [
-                ?share,
-                #{
-                    ?amount => hash(?INTEGER),
-                    ?share => #{
-                        ?matisse => hash(?INTEGER),
-                        ?exponent => hash(?INTEGER)
-                    }
-                }
-            ]
-        }
-    },
-    Features1 = #{
-        ?target =>
-            [
-                ?shop,
-                #{
-                    ?shop_id => hash(?STRING)
-                }
-            ],
+            ?target => #{
+                ?discriminator => hash(<<"AllocationTargetShop">>),
+                ?shop_id => hash(?STRING)
+            },
+            ?discriminator => hash(<<"AllocationFeeShare">>),
+            ?amount => hash(?INTEGER),
+            ?share => #{
+                ?matisse => hash(?INTEGER),
+                ?exponent => hash(?INTEGER)
+            }
+        },
         ?cart => [
             [
                 0,
@@ -790,8 +828,7 @@ read_allocation_transaction_test_() ->
                     ?tax => undefined
                 }
             ]
-        ],
-        ?allocation => [?total, AllocationParams]
+        ]
     },
     Request2 = Request1#{
         <<"fee">> => #{
@@ -801,22 +838,15 @@ read_allocation_transaction_test_() ->
         }
     },
     Features2 = Features1#{
-        ?allocation =>
-            [
-                ?total,
-                AllocationParams#{
-                    ?fee => #{
-                        ?target =>
-                            [
-                                ?shop,
-                                #{
-                                    ?shop_id => hash(?STRING)
-                                }
-                            ],
-                        ?fee => [?fixed, #{?amount => hash(1024)}]
-                    }
-                }
-            ]
+        ?fee => #{
+            ?target => #{
+                ?discriminator => hash(<<"AllocationTargetShop">>),
+                ?shop_id => hash(?STRING)
+            },
+            ?discriminator => hash(<<"AllocationFeeFixed">>),
+            ?amount => hash(1024),
+            ?share => undefined
+        }
     },
     [
         ?_assertEqual(Features1, read(allocation_transaction(), Request1)),
@@ -836,15 +866,15 @@ compare_allocation_transaction_test() ->
             <<"share">> => undefined
         }
     },
-    %% Request3 = #{
-    %%     <<"target">> => ?ALLOCATION_TARGET#{<<"shopID">> => <<"SomeShop">>},
-    %%     <<"allocationBodyType">> => <<"AllocationBodyAmount">>,
-    %%     <<"amount">> => ?INTEGER,
-    %%     <<"currency">> => ?RUB,
-    %%     <<"cart">> => [
-    %%         #{<<"product">> => ?STRING, <<"quantity">> => 1, <<"price">> => ?INTEGER}
-    %%     ]
-    %% },
+    Request3 = #{
+        <<"target">> => ?ALLOCATION_TARGET#{<<"shopID">> => <<"SomeShop">>},
+        <<"allocationBodyType">> => <<"AllocationBodyAmount">>,
+        <<"amount">> => ?INTEGER,
+        <<"currency">> => ?RUB,
+        <<"cart">> => [
+            #{<<"product">> => ?STRING, <<"quantity">> => 1, <<"price">> => ?INTEGER}
+        ]
+    },
     Request4 = Request1#{
         <<"fee">> => deep_merge(maps:get(<<"fee">>, Request1), #{
             <<"amount">> => 1024,
@@ -852,10 +882,14 @@ compare_allocation_transaction_test() ->
         })
     },
     common_compare_tests(allocation_transaction(), Request1, Request2, [
-        <<"fee">>, <<"total">>
+        <<"amount">>, <<"total">>, <<"fee">>
     ]),
-    %% common_compare_tests(allocation_transaction(), Request1, Request3, all),
-    common_compare_tests(allocation_transaction(), Request1, Request4, [<<"fee">>]).
+    common_compare_tests(allocation_transaction(), Request1, Request3, [
+        <<"target.shopID">>, <<"allocationBodyType">>, <<"currency">>, <<"amount">>, <<"cart.0.quantity">>
+    ]),
+    common_compare_tests(allocation_transaction(), Request1, Request4, [
+        <<"fee.amount">>, <<"fee.share.m">>, <<"fee.share.exp">>
+    ]).
 
 -spec demo_compare_allocation_transaction_test() -> _.
 demo_compare_allocation_transaction_test() ->
@@ -863,18 +897,17 @@ demo_compare_allocation_transaction_test() ->
     Request2 = #{
         <<"allocationBodyType">> => <<"AllocationBodyAmount">>
     },
-    %% Request3 = #{
-    %%     <<"fee">> => deep_merge(maps:get(<<"fee">>, Request1), #{
-    %%         <<"allocationFeeType">> => <<"AllocationFeeFixed">>
-    %%     })
-    %% },
-    common_compare_tests(allocation_transaction(), Request1, Request2, all)
-%% common_compare_tests(allocation_transaction(), Request1, Request3, [
-%%     <<"fee">>
-%% ])
-.
-
-%%
+    Request3 = #{
+        <<"fee">> => deep_merge(maps:get(<<"fee">>, Request1), #{
+            <<"allocationFeeType">> => <<"AllocationFeeFixed">>
+        })
+    },
+    common_compare_tests(allocation_transaction(), Request1, Request2, [
+        <<"allocationBodyType">>
+    ]),
+    common_compare_tests(allocation_transaction(), Request1, Request3, [
+        <<"fee">>
+    ]).
 
 payment_resource(Session, Tool) ->
     #{
@@ -884,19 +917,18 @@ payment_resource(Session, Tool) ->
         }
     }.
 
-payment_params(PaymentTool) ->
-    deep_merge(
-        payment_params(<<"EID">>, <<"Jwe">>, #{}, false),
-        #{<<"payer">> => #{<<"paymentTool">> => PaymentTool}}
-    ).
-
-payment_params(ExternalID, Jwe, ContactInfo, MakeRecurrent) ->
+payment_params(ExternalID, MakeRecurrent) ->
     genlib_map:compact(#{
         <<"externalID">> => ExternalID,
         <<"flow">> => #{<<"type">> => <<"PaymentFlowInstant">>},
         <<"makeRecurrent">> => MakeRecurrent,
         <<"metadata">> => #{<<"bla">> => <<"*">>},
-        <<"processingDeadline">> => <<"5m">>,
+        <<"processingDeadline">> => <<"5m">>
+    }).
+
+payment_params(ExternalID, Jwe, ContactInfo, MakeRecurrent) ->
+    Params = payment_params(ExternalID, MakeRecurrent),
+    genlib_map:compact(Params#{
         <<"payer">> => #{
             <<"payerType">> => <<"PaymentResourcePayer">>,
             <<"paymentSession">> => <<"payment.session">>,
@@ -904,6 +936,11 @@ payment_params(ExternalID, Jwe, ContactInfo, MakeRecurrent) ->
             <<"contactInfo">> => ContactInfo
         }
     }).
+
+payment_params(PaymentTool) ->
+    Params = payment_params(<<"EID">>, <<"Jwe">>, #{}, false),
+    PaymentParams = deep_merge(Params, #{<<"payer">> => #{<<"paymentTool">> => PaymentTool}}),
+    PaymentParams.
 
 bank_card() ->
     #{
@@ -924,38 +961,24 @@ lifetime_dummy(Days, Months, Years) ->
         <<"years">> => Years
     }.
 
-%% compare_equal_test(Schema, Request, AnotherRequest) ->
-%%     Features = read(Schema, Request),
-%%     AnotherFeatures = read(Schema, AnotherRequest),
-%%     ?assertEqual(true, compare(Features, AnotherFeatures)).
-
 common_compare_tests(Schema, Request, RequestDifferent, DiffFeatures) ->
     common_compare_tests(Schema, Request, Request, RequestDifferent, DiffFeatures).
 
 common_compare_tests(Schema, Request, RequestWithIgnoredFields, RequestDifferent, DiffFeatures) ->
     Features = read(Schema, Request),
+    FeaturesIgnored = read(Schema, RequestWithIgnoredFields),
+    FeaturesDifferent = read(Schema, RequestDifferent),
+
     %% Equal to self
     ?assertEqual(true, compare(Features, Features)),
-
     %% Equal to feature-wise same request
-    case Request =:= RequestWithIgnoredFields of
-        true ->
-            ok;
-        false ->
-            FeaturesIgnored = read(Schema, RequestWithIgnoredFields),
-            ?assertEqual(true, compare(Features, FeaturesIgnored))
-    end,
+    ?assertEqual(true, compare(Features, FeaturesIgnored)),
 
     %% Has correct diff with different request
-    FeaturesDifferent = read(Schema, RequestDifferent),
     Result = compare(Features, FeaturesDifferent),
     ?assertMatch({false, _}, Result),
 
     {false, Diff} = Result,
-    ActualDiffFeatures = list_diff_fields(Schema, Diff),
+    ?assertEqual(lists:sort(DiffFeatures), lists:sort(list_diff_fields(Schema, Diff))).
 
-    case ActualDiffFeatures =:= all orelse DiffFeatures =:= all of
-        true -> ?assertEqual(DiffFeatures, ActualDiffFeatures);
-        false -> ?assertEqual(lists:sort(DiffFeatures), lists:sort(ActualDiffFeatures))
-    end.
 -endif.
