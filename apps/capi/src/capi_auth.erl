@@ -18,7 +18,7 @@
 
 -type token_type() :: bearer.
 -type preauth_context() :: {unauthorized, {token_type(), token_keeper_client:token()}}.
--type auth_context() :: {authorized, token_keeper_auth_data:auth_data()}.
+-type auth_context() :: {authorized, token_keeper_client:auth_data()}.
 -type resolution() :: allowed | forbidden.
 -type consumer() :: client | merchant | provider.
 -type token_spec() :: #{
@@ -26,7 +26,7 @@
     scope := {invoice | invoice_template | customer, binary()},
     shop => binary(),
     lifetime => pos_integer() | unlimited,
-    metadata => token_keeper_auth_data:metadata()
+    metadata => token_keeper_client:metadata()
 }.
 
 -export_type([preauth_context/0]).
@@ -54,20 +54,20 @@ get_subject_id(AuthContext) ->
     end.
 
 -spec get_party_id(auth_context()) -> binary() | undefined.
-get_party_id(?authorized(AuthData)) ->
-    get_metadata(get_metadata_mapped_key(party_id), token_keeper_auth_data:get_metadata(AuthData)).
+get_party_id(?authorized(#{metadata := Metadata})) ->
+    get_metadata(get_metadata_mapped_key(party_id), Metadata).
 
 -spec get_user_id(auth_context()) -> binary() | undefined.
-get_user_id(?authorized(AuthData)) ->
-    get_metadata(get_metadata_mapped_key(user_id), token_keeper_auth_data:get_metadata(AuthData)).
+get_user_id(?authorized(#{metadata := Metadata})) ->
+    get_metadata(get_metadata_mapped_key(user_id), Metadata).
 
 -spec get_user_email(auth_context()) -> binary() | undefined.
-get_user_email(?authorized(AuthData)) ->
-    get_metadata(get_metadata_mapped_key(user_email), token_keeper_auth_data:get_metadata(AuthData)).
+get_user_email(?authorized(#{metadata := Metadata})) ->
+    get_metadata(get_metadata_mapped_key(user_email), Metadata).
 
 -spec get_consumer(auth_context()) -> consumer().
-get_consumer(?authorized(AuthData)) ->
-    case get_metadata(get_metadata_mapped_key(token_consumer), token_keeper_auth_data:get_metadata(AuthData)) of
+get_consumer(?authorized(#{metadata := Metadata})) ->
+    case get_metadata(get_metadata_mapped_key(token_consumer), Metadata) of
         <<"merchant">> -> merchant;
         <<"client">> -> client;
         <<"provider">> -> provider;
@@ -85,7 +85,7 @@ preauthorize_api_key(ApiKey) ->
             {error, Error}
     end.
 
--spec authorize_api_key(preauth_context(), token_keeper_client:source_context(), woody_context:ctx()) ->
+-spec authorize_api_key(preauth_context(), token_keeper_client:token_context(), woody_context:ctx()) ->
     {ok, auth_context()} | {error, _Reason}.
 authorize_api_key(?unauthorized({TokenType, Token}), TokenContext, WoodyContext) ->
     authorize_token_by_type(TokenType, Token, TokenContext, WoodyContext).
@@ -113,9 +113,12 @@ authorize_operation(Prototypes, ProcessingContext) ->
 issue_access_token(TokenSpec, WoodyContext) ->
     ContextFragment = create_context_fragment(TokenSpec),
     Metadata = create_metadata(TokenSpec),
-    %%TODO InvoiceTemplateAccessTokens are technically not ephemeral and should become so in the future
-    AuthData = token_keeper_client:create_ephemeral(ContextFragment, Metadata, WoodyContext),
-    token_keeper_auth_data:get_token(AuthData).
+    AuthorityID = get_authority_id(TokenSpec),
+    %% @TODO for now access tokens are only ephemeral, fix this for compact stuff
+    % %%TODO InvoiceTemplateAccessTokens are technically not ephemeral and should become so in the future
+    AuthClient = token_keeper_client:ephemeral_authority(AuthorityID, WoodyContext),
+    {ok, #{token := Token}} = token_keeper_authority_ephemeral:create(ContextFragment, Metadata, AuthClient),
+    Token.
 
 %%
 %% Internal functions
@@ -194,14 +197,22 @@ create_metadata(TokenSpec) ->
     Metadata1 = put_metadata(get_metadata_mapped_key(party_id), PartyID, Metadata0),
     put_metadata(get_metadata_mapped_key(token_consumer), <<"client">>, Metadata1).
 
+get_authority_id(#{scope := {invoice, _}}) ->
+    access_invoice;
+get_authority_id(#{scope := {invoice_template, _}}) ->
+    access_invoice_template;
+get_authority_id(#{scope := {customer, _}}) ->
+    access_customer.
+
 extract_auth_context(#{swagger_context := #{auth_context := AuthContext}}) ->
     AuthContext.
 
-get_token_keeper_fragment(?authorized(AuthData)) ->
-    token_keeper_auth_data:get_context_fragment(AuthData).
+get_token_keeper_fragment(?authorized(#{context := Context})) ->
+    Context.
 
 authorize_token_by_type(bearer, Token, TokenContext, WoodyContext) ->
-    case token_keeper_client:get_by_token(Token, TokenContext, WoodyContext) of
+    Authenticator = token_keeper_client:authenticator(WoodyContext),
+    case token_keeper_authenticator:authenticate(Token, TokenContext, Authenticator) of
         {ok, AuthData} ->
             {ok, ?authorized(AuthData)};
         {error, TokenKeeperError} ->

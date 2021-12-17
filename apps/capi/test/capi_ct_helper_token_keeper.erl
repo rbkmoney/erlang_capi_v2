@@ -12,7 +12,7 @@
 
 -type sup_or_config() :: capi_ct_helper:sup_or_config().
 -type app_name() :: capi_ct_helper:app_name().
--type token_handler() :: fun(('GetByToken', tuple()) -> term() | no_return()).
+-type token_handler() :: fun(('Authenticate' | 'Create', tuple()) -> term() | no_return()).
 
 -export([mock_token/2]).
 -export([mock_not_found/1]).
@@ -21,7 +21,6 @@
 -export([mock_invoice_access_token/3]).
 -export([mock_invoice_template_access_token/3]).
 -export([mock_customer_access_token/3]).
--export([make_token_handler/1]).
 
 -spec mock_token(token_handler(), sup_or_config()) -> list(app_name()).
 mock_token(HandlerFun, SupOrConfig) ->
@@ -29,9 +28,14 @@ mock_token(HandlerFun, SupOrConfig) ->
         capi_ct_helper:mock_services_(
             [
                 {
-                    token_keeper,
-                    {tk_token_keeper_thrift, 'TokenKeeper'},
+                    token_authenticator,
+                    {tk_token_keeper_thrift, 'TokenAuthenticator'},
                     HandlerFun
+                },
+                {
+                    ephememeral_token_authority,
+                    {tk_token_keeper_thrift, 'EphemeralTokenAuthority'},
+                    make_authority_handler()
                 }
             ],
             SupOrConfig
@@ -40,8 +44,24 @@ mock_token(HandlerFun, SupOrConfig) ->
 
 start_client(ServiceURLs) ->
     capi_ct_helper:start_app(token_keeper_client, [
-        {service_client, #{
-            url => maps:get(token_keeper, ServiceURLs)
+        {service_clients, #{
+            authenticator => #{
+                url => maps:get(token_authenticator, ServiceURLs)
+            },
+            authorities => #{
+                ephemeral => #{
+                    access_customer => #{
+                        url => maps:get(ephememeral_token_authority, ServiceURLs)
+                    },
+                    access_invoice => #{
+                        url => maps:get(ephememeral_token_authority, ServiceURLs)
+                    },
+                    access_invoice_template => #{
+                        url => maps:get(ephememeral_token_authority, ServiceURLs)
+                    }
+                },
+                offline => #{}
+            }
         }}
     ]).
 
@@ -49,11 +69,11 @@ start_client(ServiceURLs) ->
 
 -spec mock_not_found(sup_or_config()) -> list(app_name()).
 mock_not_found(SupOrConfig) ->
-    mock_token(fun('GetByToken', {_, _}) -> {throwing, #token_keeper_AuthDataNotFound{}} end, SupOrConfig).
+    mock_token(fun('Authenticate', {_, _}) -> {throwing, #token_keeper_AuthDataNotFound{}} end, SupOrConfig).
 
 -spec mock_user_session_token(sup_or_config()) -> list(app_name()).
 mock_user_session_token(SupOrConfig) ->
-    Handler = make_token_handler(fun() ->
+    Handler = make_authenticator_handler(fun() ->
         UserParams = #{
             id => ?USER_ID,
             realm => #{id => <<"external">>},
@@ -70,7 +90,7 @@ mock_user_session_token(SupOrConfig) ->
 
 -spec mock_api_key_token(binary(), sup_or_config()) -> list(app_name()).
 mock_api_key_token(PartyID, SupOrConfig) ->
-    Handler = make_token_handler(fun() ->
+    Handler = make_authenticator_handler(fun() ->
         AuthParams = #{
             method => <<"ApiKeyToken">>,
             token => #{id => ?STRING},
@@ -82,7 +102,7 @@ mock_api_key_token(PartyID, SupOrConfig) ->
 
 -spec mock_invoice_access_token(binary(), binary(), sup_or_config()) -> list(app_name()).
 mock_invoice_access_token(PartyID, InvoiceID, SupOrConfig) ->
-    Handler = make_token_handler(fun() ->
+    Handler = make_authenticator_handler(fun() ->
         AuthParams = #{
             method => <<"InvoiceAccessToken">>,
             expiration => posix_to_rfc3339(lifetime_to_expiration(?TOKEN_LIFETIME)),
@@ -97,7 +117,7 @@ mock_invoice_access_token(PartyID, InvoiceID, SupOrConfig) ->
 
 -spec mock_invoice_template_access_token(binary(), binary(), sup_or_config()) -> list(app_name()).
 mock_invoice_template_access_token(PartyID, InvoiceTemplateID, SupOrConfig) ->
-    Handler = make_token_handler(fun() ->
+    Handler = make_authenticator_handler(fun() ->
         AuthParams = #{
             method => <<"InvoiceAccessToken">>,
             expiration => posix_to_rfc3339(unlimited),
@@ -110,7 +130,7 @@ mock_invoice_template_access_token(PartyID, InvoiceTemplateID, SupOrConfig) ->
 
 -spec mock_customer_access_token(binary(), binary(), sup_or_config()) -> list(app_name()).
 mock_customer_access_token(PartyID, CustomerID, SupOrConfig) ->
-    Handler = make_token_handler(fun() ->
+    Handler = make_authenticator_handler(fun() ->
         AuthParams = #{
             method => <<"CustomerAccessToken">>,
             expiration => posix_to_rfc3339(lifetime_to_expiration(?TOKEN_LIFETIME)),
@@ -123,28 +143,31 @@ mock_customer_access_token(PartyID, CustomerID, SupOrConfig) ->
 
 %%
 
--spec make_token_handler(function()) -> token_handler().
-make_token_handler(Handler) ->
-    fun
-        ('GetByToken', {Token, _}) ->
-            {Authority, ContextFragment, Metadata} = Handler(),
-            AuthData = #token_keeper_AuthData{
-                token = Token,
-                status = active,
-                context = ContextFragment,
-                authority = Authority,
-                metadata = combine_metadata(Metadata)
-            },
-            {ok, AuthData};
-        ('CreateEphemeral', {ContextFragment, Metadata}) ->
-            AuthData = #token_keeper_AuthData{
-                token = ?API_TOKEN,
-                status = active,
-                context = ContextFragment,
-                authority = ?TK_AUTHORITY_APIKEYMGMT,
-                metadata = Metadata
-            },
-            {ok, AuthData}
+-spec make_authenticator_handler(function()) -> token_handler().
+make_authenticator_handler(Handler) ->
+    fun('Authenticate', {Token, _}) ->
+        {Authority, ContextFragment, Metadata} = Handler(),
+        AuthData = #token_keeper_AuthData{
+            token = Token,
+            status = active,
+            context = ContextFragment,
+            authority = Authority,
+            metadata = combine_metadata(Metadata)
+        },
+        {ok, AuthData}
+    end.
+
+-spec make_authority_handler() -> token_handler().
+make_authority_handler() ->
+    fun('Create', {ContextFragment, Metadata}) ->
+        AuthData = #token_keeper_AuthData{
+            token = ?API_TOKEN,
+            status = active,
+            context = ContextFragment,
+            authority = ?TK_AUTHORITY_APIKEYMGMT,
+            metadata = Metadata
+        },
+        {ok, AuthData}
     end.
 
 %%
