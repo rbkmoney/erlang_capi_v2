@@ -134,7 +134,7 @@
   1},
  {<<"token_keeper_client">>,
   {git,"https://github.com/rbkmoney/token-keeper-client.git",
-       {ref,"971489c05325bd42825de4ee8c5debccae795e76"}},
+       {ref,"d3673e72c4c3480b4b8ddff85f1450a6ffd5dd34"}},
   0},
  {<<"token_keeper_proto">>,
   {git,"https://github.com/rbkmoney/token-keeper-proto.git",
