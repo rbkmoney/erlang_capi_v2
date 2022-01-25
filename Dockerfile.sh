@@ -1,11 +1,8 @@
 #!/bin/bash
 cat <<EOF
 FROM $BASE_IMAGE
-MAINTAINER Artem Ocheredko <a.ocheredko@rbkmoney.com>
+
 COPY ./_build/prod/rel/capi /opt/capi
-WORKDIR /opt/capi
-CMD /opt/capi/bin/capi foreground
-EXPOSE 8080
 # A bit of magic below to get a proper branch name
 # even when the HEAD is detached (Hey Jenkins!
 # BRANCH_NAME is available in Jenkins env).
@@ -23,4 +20,8 @@ LABEL com.rbkmoney.$SERVICE_NAME.parent=$BASE_IMAGE_NAME \
         else \
           echo $(git name-rev --name-only HEAD); \
         fi)
+
+EXPOSE 8080
+WORKDIR /opt/capi
+CMD /opt/capi/bin/capi foreground
 EOF
