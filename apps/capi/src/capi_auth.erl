@@ -194,8 +194,16 @@ verify_token_lifetime(#{scope := {invoice_template, _}}, _LifeTime) -> ok.
 create_metadata(TokenSpec) ->
     PartyID = maps:get(party, TokenSpec),
     Metadata0 = maps:get(metadata, TokenSpec, #{}),
-    Metadata1 = put_metadata(get_metadata_mapped_key(party_id), PartyID, Metadata0),
-    put_metadata(get_metadata_mapped_key(token_consumer), <<"client">>, Metadata1).
+    Metadata1 = put_token_link_metadata(TokenSpec, Metadata0),
+    Metadata2 = put_metadata(get_metadata_mapped_key(party_id), PartyID, Metadata1),
+    put_metadata(get_metadata_mapped_key(token_consumer), <<"client">>, Metadata2).
+
+put_token_link_metadata(#{scope := {invoice, EntityID}}, Meta) ->
+    put_metadata(<<"invoice_link">>, EntityID, Meta);
+put_token_link_metadata(#{scope := {customer, EntityID}}, Meta) ->
+    put_metadata(<<"customer_link">>, EntityID, Meta);
+put_token_link_metadata(_, Meta) ->
+    Meta.
 
 get_authority_id(#{scope := {invoice, _}}) ->
     access_invoice;

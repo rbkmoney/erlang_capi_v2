@@ -22,7 +22,8 @@ prepare(OperationID = 'CreatePayment', Req, Context) ->
     Authorize = fun() ->
         Prototypes = [
             {operation, #{id => OperationID, invoice => InvoiceID}},
-            {payproc, #{invoice => Invoice}}
+            {payproc, #{invoice => Invoice}},
+            {payment_tool, prepare_payment_tool_prototype(PaymentToken)}
         ],
         {ok, capi_auth:authorize_operation(Prototypes, Context)}
     end,
@@ -508,6 +509,14 @@ prepare(_OperationID, _Req, _Context) ->
 
 %%
 
+prepare_payment_tool_prototype(undefined) ->
+    #{};
+prepare_payment_tool_prototype(#{bouncer_data := BouncerData}) ->
+    #{
+        payment_tool_context => BouncerData
+    }.
+
+%%
 validate_allocation(Allocation) ->
     case capi_allocation:validate(Allocation) of
         ok -> ok;
